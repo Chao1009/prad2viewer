@@ -36,6 +36,9 @@ else()
     message(STATUS "ROOT: not found – Fadc250Data ClassDef will be a no-op")
 endif()
 
+# Show download/clone progress for FetchContent
+set(FETCHCONTENT_QUIET OFF CACHE BOOL "Show FetchContent progress" FORCE)
+
 # --- evio -----------------------------------------------------------------
 if(EVIO_SOURCE STREQUAL "fetch")
     include(FetchContent)
@@ -43,6 +46,7 @@ if(EVIO_SOURCE STREQUAL "fetch")
     FetchContent_Declare(evio
         GIT_REPOSITORY https://github.com/JeffersonLab/evio.git
         GIT_TAG        evio-6.0
+        GIT_PROGRESS   TRUE
     )
     FetchContent_MakeAvailable(evio)
     message(STATUS "evio: building from source (FetchContent)")
@@ -72,6 +76,7 @@ if(ET_SOURCE STREQUAL "fetch")
     FetchContent_Declare(et
         GIT_REPOSITORY https://github.com/JeffersonLab/et.git
         GIT_TAG        main
+        GIT_PROGRESS   TRUE
     )
     FetchContent_MakeAvailable(et)
     message(STATUS "et: building from source (FetchContent)")

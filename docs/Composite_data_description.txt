@@ -1,0 +1,10 @@
+The composite evio bank description is the following.
+      <dictEntry name="FADC250 Window Raw Data (mode 1 packed/compressed)" tag="0xe126" num="0" type="composite">
+            <description format="c,m(c,ms)">
+                  c     "slot number"
+                  m     "number of channels fired"
+                  c     "channel number"
+                  m     "number of shorts in packed array"
+                  s     "packed fadc bytes"
+            </description>
+      </dictEntry>

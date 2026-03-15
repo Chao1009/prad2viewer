@@ -1,86 +1,39 @@
 #pragma once
+//=============================================================================
+// Fadc250Data.h — decoded FADC250 data structures
+//=============================================================================
 
 #include <vector>
 #include <cstdint>
-#include <cstring>
+#include <utility>
 
-#define FADC250_MAX_NPEAKS 4
-#define FADC250_MAX_NSAMPLES 256
-
-// data structures
 namespace fdec
 {
 
-class Peak {
-public:
-    double height, integral, time;
-    uint32_t pos, left, right;
-    bool overflow;
-
-    Peak(double h = 0., double i = 0., double t = 0., uint32_t p = 0, uint32_t l = 0, uint32_t r = 0, bool o = false)
-        : pos(p), left(l), right(r), height(h), integral(i), time(t), overflow(o)
-    {}
-
-    bool Inside(uint32_t i) {
-        return (i >= pos - left) && (i <= pos + right);
-    }
+struct Peak {
+    double height = 0, integral = 0, time = 0;
+    uint32_t pos = 0, left = 0, right = 0;
+    bool overflow = false;
 };
 
-class Pedestal {
-public:
-    double mean, err;
-    Pedestal(double m = 0., double e = 0.) : mean(m), err(e) {}
+struct Pedestal {
+    double mean = 0, err = 0;
 };
 
-class Fadc250Data
-{
-public:
+// raw waveform for one channel
+struct ChannelData {
+    uint8_t  channel = 0;
     Pedestal ped;
-    std::vector<Peak> peaks;
-    std::vector<uint16_t> raw;
-
-    Fadc250Data(): ped(0., 0.)
-    {
-        peaks.reserve(FADC250_MAX_NPEAKS);
-        raw.reserve(FADC250_MAX_NSAMPLES);
-    }
-
-    void Clear() { ped = Pedestal(0., 0.), peaks.clear(), raw.clear(); }
+    std::vector<Peak>     peaks;
+    std::vector<uint16_t> samples;
 };
 
-// Decoded composite slot: format "c,i,l,N(c,Ns)"
-// One per slot within a composite bank payload.
-struct CompositeSlot
-{
-    uint8_t  slot;
-    int32_t  trigger;
-    int64_t  timestamp;
-    // channels[i].first = channel number, channels[i].second = sample data
-    std::vector<std::pair<uint8_t, Fadc250Data>> channels;
-
-    void Clear() { slot = 0; trigger = 0; timestamp = 0; channels.clear(); }
+// one slot from composite format "c,i,l,N(c,Ns)"
+struct SlotData {
+    uint8_t  slot = 0;
+    int32_t  trigger = 0;
+    int64_t  timestamp = 0;
+    std::vector<ChannelData> channels;
 };
 
-// Legacy event structure (kept for backward compat with raw FADC250 words)
-class Fadc250Event
-{
-public:
-    uint32_t number, mode;
-    std::vector<uint32_t> time;
-    std::vector<Fadc250Data> channels;
-
-    Fadc250Event(uint32_t n = 0, uint32_t nch = 16)
-        : number(n), mode(0)
-    {
-        channels.resize(nch);
-    }
-
-    void Clear()
-    {
-        mode = 0;
-        time.clear();
-        for (auto &ch : channels) { ch.Clear(); }
-    }
-};
-
-}; // namespace fdec
+} // namespace fdec

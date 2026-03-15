@@ -1,208 +1,122 @@
-//=============================================================================
-// EvStruct                                                                  ||
-// Basic information about CODA evio file format                             ||
-//                                                                           ||
-// Developer:                                                                ||
-// Chao Peng                                                                 ||
-// 09/07/2020                                                                ||
-//                                                                           ||
-// Updated: 2025 - Added TagSegmentHeader and CompositeHeader for            ||
-//          composite bank support (tag 0xe126)                              ||
-//=============================================================================
 #pragma once
+//=============================================================================
+// EvStruct.h — evio data structures and tree node
+//=============================================================================
 
 #include <cstdint>
 #include <cstddef>
-
+#include <string>
+#include <vector>
 
 namespace evc
 {
 
-// evio bank data type
-enum DataType {
-    DATA_UNKNOWN32    =  (0x0),
-    DATA_UINT32       =  (0x1),
-    DATA_FLOAT32      =  (0x2),
-    DATA_CHARSTAR8    =  (0x3),
-    DATA_SHORT16      =  (0x4),
-    DATA_USHORT16     =  (0x5),
-    DATA_CHAR8        =  (0x6),
-    DATA_UCHAR8       =  (0x7),
-    DATA_DOUBLE64     =  (0x8),
-    DATA_LONG64       =  (0x9),
-    DATA_ULONG64      =  (0xa),
-    DATA_INT32        =  (0xb),
-    DATA_TAGSEGMENT   =  (0xc),
-    DATA_ALSOSEGMENT  =  (0xd),
-    DATA_ALSOBANK     =  (0xe),
-    DATA_COMPOSITE    =  (0xf),
-    DATA_BANK         =  (0x10),
-    DATA_SEGMENT      =  (0x20)
+// --- evio content type codes ------------------------------------------------
+enum DataType : uint32_t {
+    DATA_UNKNOWN32   = 0x0,
+    DATA_UINT32      = 0x1,
+    DATA_FLOAT32     = 0x2,
+    DATA_CHARSTAR8   = 0x3,
+    DATA_SHORT16     = 0x4,
+    DATA_USHORT16    = 0x5,
+    DATA_CHAR8       = 0x6,
+    DATA_UCHAR8      = 0x7,
+    DATA_DOUBLE64    = 0x8,
+    DATA_LONG64      = 0x9,
+    DATA_ULONG64     = 0xa,
+    DATA_INT32       = 0xb,
+    DATA_TAGSEGMENT  = 0xc,
+    DATA_SEGMENT     = 0xd,
+    DATA_BANK2       = 0xe,
+    DATA_COMPOSITE   = 0xf,
+    DATA_BANK        = 0x10,
+    DATA_SEGMENT2    = 0x20,
 };
 
-// data word definitions
-enum WordDefinition {
-    BLOCK_HEADER = 0,
-    BLOCK_TRAILER = 1,
-    EVENT_HEADER = 2,
-};
-
-/* 32 bit bank header structure
- * ----------------------------------
- * |          length:32             |
- * ----------------------------------
- * |   tag:16   |:2| type:6 | num:8 |
- * ----------------------------------
- */
-struct BankHeader
+inline bool IsContainer(uint32_t type)
 {
-    uint32_t length, num, type, tag;
+    return type == DATA_BANK  || type == DATA_BANK2 ||
+           type == DATA_SEGMENT || type == DATA_SEGMENT2 ||
+           type == DATA_TAGSEGMENT;
+}
 
-    BankHeader() : length(0) {}
-    BankHeader(const uint32_t *buf)
-    {
-        length = buf[0];
-        uint32_t word = buf[1];
-        tag = (word >> 16) & 0xFFFF;
-        type = (word >> 8) & 0x3F;
-        num = (word & 0xFF);
+inline const char *TypeName(uint32_t type)
+{
+    switch (type) {
+    case DATA_UNKNOWN32:  return "UNKNOWN32";
+    case DATA_UINT32:     return "UINT32";
+    case DATA_FLOAT32:    return "FLOAT32";
+    case DATA_CHARSTAR8:  return "STRING";
+    case DATA_SHORT16:    return "SHORT16";
+    case DATA_USHORT16:   return "USHORT16";
+    case DATA_CHAR8:      return "CHAR8";
+    case DATA_UCHAR8:     return "UCHAR8";
+    case DATA_DOUBLE64:   return "DOUBLE64";
+    case DATA_LONG64:     return "LONG64";
+    case DATA_ULONG64:    return "ULONG64";
+    case DATA_INT32:      return "INT32";
+    case DATA_TAGSEGMENT: return "TAGSEG";
+    case DATA_SEGMENT:    return "SEG";
+    case DATA_BANK2:      return "BANK";
+    case DATA_COMPOSITE:  return "COMPOSITE";
+    case DATA_BANK:       return "BANK";
+    case DATA_SEGMENT2:   return "SEG";
+    default:              return "???";
     }
+}
 
-    static size_t size() { return 2; }
+// --- evio header parsers (read-only, zero-copy) -----------------------------
+
+struct BankHeader {
+    uint32_t length, tag, type, num;
+    BankHeader() : length(0), tag(0), type(0), num(0) {}
+    BankHeader(const uint32_t *p)
+        : length(p[0]),
+          tag((p[1] >> 16) & 0xFFFF),
+          type((p[1] >> 8) & 0x3F),
+          num(p[1] & 0xFF) {}
+    static constexpr size_t size() { return 2; }
+    size_t data_words() const { return length >= 1 ? length - 1 : 0; }
 };
 
-struct SegmentHeader
-{
-    uint32_t num, type, tag;
-
-    SegmentHeader() {}
-    SegmentHeader(const uint32_t *buf)
-    {
-        uint32_t word = buf[0];
-        tag = (word >> 24) & 0xFF;
-        type = (word >> 16) & 0x3F;
-        num = (word & 0xFFFF);
-    }
-
-    static size_t size() { return 1; }
+struct SegmentHeader {
+    uint32_t tag, type, length;   // length in words
+    SegmentHeader() : tag(0), type(0), length(0) {}
+    SegmentHeader(const uint32_t *p)
+        : tag((p[0] >> 24) & 0xFF),
+          type((p[0] >> 16) & 0x3F),
+          length(p[0] & 0xFFFF) {}
+    static constexpr size_t size() { return 1; }
 };
 
-/* TagSegment header (used inside composite data):
- * ----------------------------------
- * | tag:12 | type:4 | length:16    |
- * ----------------------------------
- * Note: no padding field in tagsegments.
- */
-struct TagSegmentHeader
-{
-    uint32_t length, type, tag;
-
-    TagSegmentHeader() : length(0), type(0), tag(0) {}
-    TagSegmentHeader(const uint32_t *buf)
-    {
-        uint32_t word = buf[0];
-        tag    = (word >> 20) & 0xFFF;
-        type   = (word >> 16) & 0xF;
-        length = (word & 0xFFFF);
-    }
-
-    static size_t size() { return 1; }
+struct TagSegmentHeader {
+    uint32_t tag, type, length;   // length in words
+    TagSegmentHeader() : tag(0), type(0), length(0) {}
+    TagSegmentHeader(const uint32_t *p)
+        : tag((p[0] >> 20) & 0xFFF),
+          type((p[0] >> 16) & 0xF),
+          length(p[0] & 0xFFFF) {}
+    static constexpr size_t size() { return 1; }
 };
 
-/* Composite data envelope:
- *   [TagSegment header]   -- contains format string (type = DATA_CHARSTAR8)
- *   [format string words] -- padded to 32-bit boundary
- *   [Bank header]         -- contains the actual data payload
- *   [data payload words]
- *
- * CompositeHeader parses both the tagsegment and inner bank headers
- * from a pointer to the start of the composite data (i.e. the first
- * word after the outer bank header whose type == DATA_COMPOSITE).
- */
-struct CompositeHeader
-{
-    TagSegmentHeader ts_header;    // tagsegment with format string
-    BankHeader       data_header;  // inner bank with actual data
+// --- EvNode: one node in the scanned event tree -----------------------------
+// Points into the raw buffer — no data is copied.
+// The tree is stored as a flat vector; parent/depth give the structure.
 
-    // offsets in 32-bit words from the start of the composite data
-    size_t format_offset;    // where the format string bytes start
-    size_t data_offset;      // where the data payload starts (after inner bank header)
-    size_t data_nwords;      // number of payload words
+struct EvNode {
+    uint32_t tag;
+    uint32_t type;
+    uint32_t num;           // bank num field (0 for segments)
+    int      depth;         // nesting depth (0 = top-level event)
+    int      parent;        // index of parent in the node vector (-1 = root)
 
-    CompositeHeader() : format_offset(0), data_offset(0), data_nwords(0) {}
-    CompositeHeader(const uint32_t *buf)
-    {
-        // parse tagsegment header
-        ts_header = TagSegmentHeader(buf);
-        format_offset = TagSegmentHeader::size();
+    // location of this node's DATA (not header) in the raw buffer
+    size_t   data_begin;    // word index where data starts
+    size_t   data_words;    // number of data words
 
-        // skip past the format string (ts_header.length words)
-        size_t inner_bank_start = TagSegmentHeader::size() + ts_header.length;
-
-        // parse the inner bank header
-        data_header = BankHeader(buf + inner_bank_start);
-        data_offset = inner_bank_start + BankHeader::size();
-        data_nwords = data_header.length - 1; // length is exclusive of the second header word
-    }
-
-    // total size of the composite envelope + data in 32-bit words
-    size_t total_words() const
-    {
-        return TagSegmentHeader::size() + ts_header.length + BankHeader::size() + data_nwords;
-    }
-};
-
-struct BlockHeader
-{
-    bool valid;
-    uint32_t nevents, number, module, slot;
-
-    BlockHeader() : valid(false) {}
-    BlockHeader(const uint32_t *buf)
-    {
-        uint32_t word = buf[0];
-        valid = (word & 0x80000000) && (((word >> 27) & 0xF) == BLOCK_HEADER);
-        slot = (word >> 22) & 0x1F;
-        module = (word >> 18) & 0xF;
-        number = (word >> 8) & 0x3FF;
-        nevents = (word & 0xFF);
-    }
-
-    static size_t size() { return 1; }
-};
-
-struct BlockTrailer
-{
-    bool valid;
-    uint32_t nwords, slot;
-
-    BlockTrailer() : valid(false) {}
-    BlockTrailer(const uint32_t *buf)
-    {
-        uint32_t word = buf[0];
-        valid = (word & 0x80000000) && (((word >> 27) & 0xF) == BLOCK_TRAILER);
-        slot = (word >> 22) & 0x1F;
-        nwords = (word & 0x3FFFFF);
-    }
-
-    static size_t size() { return 1; }
-};
-
-struct EventHeader
-{
-    bool valid;
-    uint32_t number, slot;
-
-    EventHeader() : valid(false) {}
-    EventHeader(const uint32_t *buf)
-    {
-        uint32_t word = buf[0];
-        valid = (word & 0x80000000) && (((word >> 27) & 0xF) == EVENT_HEADER);
-        slot = (word >> 22) & 0x1F;
-        number = (word & 0x3FFFFF);
-    }
-
-    static size_t size() { return 1; }
+    // child range in the flat node vector
+    size_t   child_first;   // index of first child
+    size_t   child_count;   // number of direct children
 };
 
 } // namespace evc

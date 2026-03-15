@@ -31,7 +31,7 @@ if(EVIO_SOURCE STREQUAL "fetch")
     include(FetchContent)
     FetchContent_Declare(evio
         GIT_REPOSITORY https://github.com/JeffersonLab/evio.git
-        GIT_TAG        v6.0
+        GIT_TAG        evio-6.0
     )
     FetchContent_MakeAvailable(evio)
     message(STATUS "evio: building from source (FetchContent)")

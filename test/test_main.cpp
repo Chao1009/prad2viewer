@@ -1,6 +1,5 @@
 // test/test_main.cpp
 // Usage: evc_test <evio_file> [max_events] [-v]
-//   -v  verbose: print all sample values
 
 #include "EvChannel.h"
 #include "Fadc250Data.h"
@@ -33,14 +32,24 @@ int main(int argc, char *argv[])
     }
 
     fdec::EventData event;
-    int total = 0;
+    int total = 0, nread = 0;
 
     while (ch.Read() == status::success) {
-        if (!ch.Scan()) continue;
-        auto hdr = ch.GetEvHeader();
-
-        if (hdr.tag != 0xfe && !(hdr.tag >= 0xFF50 && hdr.tag <= 0xFF8F))
+        ++nread;
+        if (!ch.Scan()) {
+            std::cerr << "Read " << nread << ": Scan failed\n";
             continue;
+        }
+
+        auto hdr = ch.GetEvHeader();
+        std::cout << "Read " << nread
+                  << "  tag=0x" << std::hex << hdr.tag << std::dec
+                  << "  type=0x" << std::hex << hdr.type << std::dec
+                  << "  num=" << hdr.num
+                  << "  length=" << hdr.length
+                  << "  nevents=" << ch.GetNEvents() << "\n";
+
+        if (ch.GetNEvents() == 0) continue;
 
         int nevt = ch.GetNEvents();
         for (int i = 0; i < nevt; ++i) {
@@ -84,7 +93,7 @@ int main(int argc, char *argv[])
         }
     }
 done:
-    std::cout << "Done. " << total << " event(s) decoded.\n";
+    std::cout << "Read " << nread << " buffers, decoded " << total << " event(s).\n";
     ch.Close();
     return 0;
 }

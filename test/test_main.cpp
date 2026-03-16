@@ -1,5 +1,7 @@
 // test/test_main.cpp
-// Usage: evc_test <evio_file> [max_events] [-v]
+// Usage: evc_test <evio_file> [max_events] [-v] [-t]
+//   -v  verbose: print all sample values
+//   -t  tree: print bank tree for each buffer
 
 #include "EvChannel.h"
 #include "Fadc250Data.h"
@@ -13,15 +15,16 @@ using namespace evc;
 int main(int argc, char *argv[])
 {
     if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <evio_file> [max_events] [-v]\n";
+        std::cerr << "Usage: " << argv[0] << " <evio_file> [max_events] [-v] [-t]\n";
         return 1;
     }
 
     const char *filename = argv[1];
     int max_ev = 0;
-    bool verbose = false;
+    bool verbose = false, tree = false;
     for (int a = 2; a < argc; ++a) {
         if (std::strcmp(argv[a], "-v") == 0) verbose = true;
+        else if (std::strcmp(argv[a], "-t") == 0) tree = true;
         else max_ev = std::atoi(argv[a]);
     }
 
@@ -36,18 +39,16 @@ int main(int argc, char *argv[])
 
     while (ch.Read() == status::success) {
         ++nread;
-        if (!ch.Scan()) {
-            std::cerr << "Read " << nread << ": Scan failed\n";
-            continue;
-        }
+        if (!ch.Scan()) continue;
 
         auto hdr = ch.GetEvHeader();
-        std::cout << "Read " << nread
+        std::cout << "--- Read " << nread
                   << "  tag=0x" << std::hex << hdr.tag << std::dec
-                  << "  type=0x" << std::hex << hdr.type << std::dec
                   << "  num=" << hdr.num
                   << "  length=" << hdr.length
-                  << "  nevents=" << ch.GetNEvents() << "\n";
+                  << "  nevents=" << ch.GetNEvents() << " ---\n";
+
+        if (tree) ch.PrintTree(std::cout);
 
         if (ch.GetNEvents() == 0) continue;
 

@@ -43,10 +43,19 @@ bool EvChannel::Scan()
 
     scanBank(0, 0, -1);
 
-    // number of events = num field from top-level bank header
-    nevents = (evh.tag == 0xfe || (evh.tag >= 0xFF50 && evh.tag <= 0xFF8F))
-            ? std::max<int>(evh.num, 1)
-            : 0;
+    // Determine number of events in this buffer.
+    // Control events have 0. Standard physics events use num field.
+    // For other tags (ROC raw, etc.), assume 1 until we parse deeper.
+    bool is_control = (evh.tag >= 0x11 && evh.tag <= 0x14)
+                   || (evh.tag >= 0xFFD0 && evh.tag <= 0xFFDF);
+    if (is_control) {
+        nevents = 0;
+    } else if (evh.tag == 0xfe || (evh.tag >= 0xFF50 && evh.tag <= 0xFF8F)) {
+        nevents = std::max<int>(evh.num, 1);
+    } else {
+        // ROC raw or other data — contains composite banks, treat as 1 event
+        nevents = 1;
+    }
 
     return true;
 }

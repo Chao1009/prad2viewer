@@ -49,6 +49,9 @@ status EtChannel::Connect(const std::string &ip, int port, const std::string &et
     char *fname = strdup(et_file.c_str());
     auto status = et_open(&et_id, fname, conf.configure().get());
     free(fname);
+    if (status != ET_OK) {
+        et_id = nullptr;  // et_open may leave et_id in an invalid state on failure
+    }
     return et_status(status, true);
 }
 

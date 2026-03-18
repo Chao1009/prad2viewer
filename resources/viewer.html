@@ -32,9 +32,12 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .main { display:flex; height:calc(100vh - 40px); }
 
 .geo-panel {
-    flex:3; display:flex; flex-direction:column;
-    border-right:1px solid var(--border); min-width:400px;
+    flex:none; width:65%; display:flex; flex-direction:column; min-width:300px;
 }
+.divider {
+    flex:none; width:5px; cursor:col-resize; background:var(--border);
+}
+.divider:hover, .divider.active { background:var(--accent); }
 .geo-toolbar {
     display:flex; align-items:center; gap:8px; padding:5px 10px;
     background:var(--panel); border-bottom:1px solid var(--border); font-size:12px; flex-shrink:0;
@@ -54,7 +57,7 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 
 /* --- detail panel (right) --- */
 .detail-panel {
-    flex:2; display:flex; flex-direction:column; min-width:320px; max-width:600px;
+    flex:1; display:flex; flex-direction:column; min-width:280px; overflow:hidden;
 }
 .detail-header {
     padding:6px 10px; background:var(--panel); border-bottom:1px solid var(--border);
@@ -103,8 +106,8 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 </div>
 
 <div class="main">
-    <!-- geo view (left, large) -->
-    <div class="geo-panel">
+    <!-- geo view (left) -->
+    <div class="geo-panel" id="geo-panel">
         <div class="geo-toolbar">
             <label>Color:</label>
             <select id="color-metric">
@@ -126,8 +129,11 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
         </div>
     </div>
 
-    <!-- detail panel (right, narrower) -->
-    <div class="detail-panel">
+    <!-- draggable divider -->
+    <div class="divider" id="divider"></div>
+
+    <!-- detail panel (right) -->
+    <div class="detail-panel" id="detail-panel">
         <div class="detail-header" id="detail-header">
             <div class="empty-msg">Click a module to view waveform</div>
         </div>
@@ -369,6 +375,36 @@ function init() {
 
     // create an empty plot so Plotly.react always has a valid target
     Plotly.newPlot('waveform-div', [], PLOT_LAYOUT, PLOT_CFG);
+
+    // --- draggable divider ---
+    const divider = document.getElementById('divider');
+    const geoPanel = document.getElementById('geo-panel');
+    let dragging = false;
+
+    divider.addEventListener('mousedown', e => {
+        dragging = true;
+        divider.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        const main = document.querySelector('.main');
+        const rect = main.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const min = 300, max = rect.width - 280;
+        geoPanel.style.width = Math.max(min, Math.min(max, x)) + 'px';
+        resizeGeo();
+        Plotly.Plots.resize('waveform-div');
+    });
+    document.addEventListener('mouseup', () => {
+        if (!dragging) return;
+        dragging = false;
+        divider.classList.remove('active');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
 
     document.getElementById('btn-prev').onclick = () => { if (currentEvent>1) loadEvent(currentEvent-1); };
     document.getElementById('btn-next').onclick = () => { if (currentEvent<totalEvents) loadEvent(currentEvent+1); };

@@ -1,7 +1,11 @@
 // src/evc_viewer.cpp — HyCal event viewer
 //
 // Usage:
-//   evc_viewer <evio_file> [-p port] [-H] [-c config.json] [-d /path/to/data]
+//   evc_viewer [evio_file] [-p port] [-H] [-c config.json] [-d /path/to/data]
+//   evc_viewer -d /data/stage6 -H              # browse and pick from GUI
+//   evc_viewer data.evio -H                    # open file directly
+//   evc_viewer data.evio -H -d /data/stage6    # open file + enable browsing
+//   evc_viewer                                 # empty viewer, no file browser
 //
 // -d enables file browsing: the viewer shows a file picker limited to
 // .evio files under that directory tree. Selecting a new file triggers
@@ -495,6 +499,7 @@ static json buildConfig()
     cfg["total_events"] = data ? (int)data->index.size() : 0;
     cfg["current_file"] = data ? data->filepath : "";
     cfg["data_dir_enabled"] = !g_data_dir.empty();
+    cfg["data_dir"] = g_data_dir;
     cfg["hist_enabled"] = g_hist_enabled;
     // always include hist config so the client can use ranges for coloring
     cfg["hist"] = {
@@ -659,15 +664,12 @@ int main(int argc, char *argv[])
         case 'd': g_data_dir = optarg; break;
         default:
             std::cerr << "Usage: " << argv[0]
-                      << " <evio_file> [-p port] [-H] [-c hist_config.json] [-d data_dir]\n";
+                      << " [evio_file] [-p port] [-H] [-c hist_config.json] [-d data_dir]\n";
             return 1;
         }
     }
-    if (optind >= argc) {
-        std::cerr << "Error: evio_file required\n";
-        return 1;
-    }
-    evio_file = argv[optind];
+    if (optind < argc)
+        evio_file = argv[optind];
 
     std::string db_dir  = DATABASE_DIR;
     std::string res_dir = RESOURCE_DIR;
@@ -723,8 +725,9 @@ int main(int argc, char *argv[])
     if (!g_data_dir.empty())
         std::cerr << "Data dir  : " << g_data_dir << "\n";
 
-    // load initial file (blocking)
-    loadFileAsync(evio_file);
+    // load initial file if provided (blocking)
+    if (!evio_file.empty())
+        loadFileAsync(evio_file);
 
     // start server
     WsServer server;

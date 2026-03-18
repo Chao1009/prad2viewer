@@ -347,13 +347,32 @@ function clearHistograms() {
 let allFiles = [];
 
 function openFileDialog() {
+    const hdr = document.querySelector('.file-dialog-header span');
+    const list = document.getElementById('file-list');
+    const filter = document.getElementById('file-filter');
+    const opts = document.querySelector('.file-dialog-options');
+
+    document.getElementById('file-dialog').classList.add('open');
+    document.getElementById('file-backdrop').classList.add('open');
+
+    if (!g_dataDirEnabled) {
+        hdr.textContent = 'Open EVIO File';
+        filter.style.display = 'none';
+        if (opts) opts.style.display = 'none';
+        list.innerHTML = '<div style="padding:20px;color:var(--dim);text-align:center">'
+            + 'No data folder configured.<br>Start with <code>--data-dir /path</code></div>';
+        return;
+    }
+
+    hdr.textContent = `Open EVIO File — ${g_dataDir}`;
+    filter.style.display = '';
+    if (opts) opts.style.display = '';
+    filter.value = '';
+
     fetch('/api/files').then(r => r.json()).then(data => {
         allFiles = data.files || [];
         renderFileList('');
-        document.getElementById('file-dialog').classList.add('open');
-        document.getElementById('file-backdrop').classList.add('open');
-        document.getElementById('file-filter').value = '';
-        document.getElementById('file-filter').focus();
+        filter.focus();
     });
 }
 
@@ -386,7 +405,9 @@ function renderFileList(filter) {
 }
 
 let g_currentFile = '';
-let g_histCheckbox = false;  // tracks the "Process histograms" checkbox
+let g_histCheckbox = false;
+let g_dataDirEnabled = false;
+let g_dataDir = '';  // tracks the "Process histograms" checkbox
 
 function loadNewFile(relpath) {
     g_histCheckbox = document.getElementById('hist-checkbox').checked;
@@ -635,6 +656,8 @@ function init(){
         histConfig=data.hist||{};
         mode=data.mode||'file';
         g_currentFile=data.current_file||'';
+        g_dataDirEnabled=data.data_dir_enabled||false;
+        g_dataDir=data.data_dir||'';
         g_histCheckbox=histEnabled;
 
         // init histogram checkbox
@@ -645,9 +668,8 @@ function init(){
         document.getElementById('nav-file').style.display   = mode==='file'?'flex':'none';
         document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
 
-        // show file browser button if data-dir is enabled
-        if(data.data_dir_enabled)
-            document.getElementById('btn-open').style.display='';
+        // always show file browser button
+        document.getElementById('btn-open').style.display='';
 
         if(mode==='file'){
             document.getElementById('ev-total').textContent=`/ ${totalEvents}`;

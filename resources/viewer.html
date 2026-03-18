@@ -66,11 +66,15 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .detail-header .mod-name { color:var(--accent); font-weight:600; }
 .detail-header .mod-daq { color:var(--dim); font-size:11px; }
 
-.waveform-wrap { flex:1; min-height:200px; }
+.waveform-wrap { flex:none; height:55%; min-height:150px; }
+
+.hdivider {
+    flex:none; height:5px; cursor:row-resize; background:var(--border);
+}
+.hdivider:hover, .hdivider.active { background:var(--accent); }
 
 .peaks-table-wrap {
-    flex-shrink:0; max-height:40vh; overflow-y:auto;
-    border-top:1px solid var(--border); font-size:12px;
+    flex:1; overflow-y:auto; font-size:12px; min-height:80px;
 }
 .peaks-table { width:100%; border-collapse:collapse; }
 .peaks-table th {
@@ -80,8 +84,6 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .peaks-table th:first-child, .peaks-table td:first-child { text-align:center; }
 .peaks-table td { padding:3px 8px; text-align:right; border-bottom:1px solid #1a1a2e; }
 .peaks-table tr:hover { background:rgba(0,180,216,0.08); }
-.peaks-table .ped-row { color:var(--dim); }
-.peaks-table .ped-row td { border-bottom:1px solid var(--border); }
 
 .color-bar { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--dim); }
 .status-bar {
@@ -138,6 +140,7 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
             <div class="empty-msg">Click a module to view waveform</div>
         </div>
         <div class="waveform-wrap" id="waveform-div"></div>
+        <div class="hdivider" id="hdivider"></div>
         <div class="peaks-table-wrap" id="peaks-wrap">
             <table class="peaks-table">
                 <thead><tr>
@@ -265,10 +268,11 @@ function showWaveform(mod) {
     const key = `${mod.roc}_${mod.sl}_${mod.ch}`;
     const d = eventChannels[key];
 
-    // header
+    // header: module info + pedestal
+    const pedInfo = d ? ` &nbsp; Ped: ${d.pm.toFixed(1)} ± ${d.pr.toFixed(1)}` : '';
     document.getElementById('detail-header').innerHTML =
         `<span class="mod-name">${mod.n}</span> `
-        + `<span class="mod-daq">ROC 0x${mod.roc.toString(16)} &middot; slot ${mod.sl} &middot; ch ${mod.ch}</span>`;
+        + `<span class="mod-daq">ROC 0x${mod.roc.toString(16)} &middot; slot ${mod.sl} &middot; ch ${mod.ch}${pedInfo}</span>`;
 
     if (!d || !d.s) {
         Plotly.react('waveform-div', [], {
@@ -290,12 +294,10 @@ function showWaveform(mod) {
         { x:[0,samples.length-1], y:[d.pm,d.pm], type:'scatter', mode:'lines',
           name:`Pedestal`, line:{color:'#555', width:1, dash:'dash'} },
     ];
-    // threshold
     const thr = d.pm + Math.max(5*d.pr, 3);
     traces.push({ x:[0,samples.length-1], y:[thr,thr], type:'scatter', mode:'lines',
         line:{color:'#333', width:1, dash:'dot'}, showlegend:false });
 
-    // peak regions
     peaks.forEach((p,i) => {
         const col = PC[i%PC.length], px=[], py=[];
         for (let j=p.l; j<=p.r; j++) { px.push(j); py.push(samples[j]); }
@@ -310,13 +312,8 @@ function showWaveform(mod) {
         title:{text:`${mod.n} — Event ${currentEvent}`, font:{size:12, color:'#ccc'}},
     }, PLOT_CFG);
 
-    // --- peaks table ---
+    // --- peaks table (only peak rows, no pedestal row) ---
     let rows = '';
-    // pedestal row first
-    rows += `<tr class="ped-row"><td>—</td><td colspan="2">Pedestal</td>`
-          + `<td>${d.pm.toFixed(1)} ± ${d.pr.toFixed(1)}</td>`
-          + `<td colspan="4"></td></tr>`;
-    // each peak
     peaks.forEach((p,i) => {
         const col = PC[i%PC.length];
         rows += `<tr style="border-left:3px solid ${col}">`
@@ -326,7 +323,7 @@ function showWaveform(mod) {
               + `<td style="text-align:center">${p.o?'⚠':''}</td></tr>`;
     });
     if (peaks.length === 0) {
-        rows += `<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No peaks found</td></tr>`;
+        rows += `<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No peaks</td></tr>`;
     }
     document.getElementById('peaks-tbody').innerHTML = rows;
     drawGeo();
@@ -402,6 +399,36 @@ function init() {
         if (!dragging) return;
         dragging = false;
         divider.classList.remove('active');
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+    });
+
+    // --- horizontal divider (between waveform and table) ---
+    const hdivider = document.getElementById('hdivider');
+    const wfDiv = document.getElementById('waveform-div');
+    let hdragging = false;
+
+    hdivider.addEventListener('mousedown', e => {
+        hdragging = true;
+        hdivider.classList.add('active');
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', e => {
+        if (!hdragging) return;
+        const panel = document.getElementById('detail-panel');
+        const rect = panel.getBoundingClientRect();
+        const hdr = document.getElementById('detail-header').offsetHeight;
+        const y = e.clientY - rect.top - hdr;
+        const min = 100, max = rect.height - hdr - 80;
+        wfDiv.style.height = Math.max(min, Math.min(max, y)) + 'px';
+        Plotly.Plots.resize('waveform-div');
+    });
+    document.addEventListener('mouseup', () => {
+        if (!hdragging) return;
+        hdragging = false;
+        hdivider.classList.remove('active');
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
     });

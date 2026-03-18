@@ -77,10 +77,11 @@ evchan_test <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
 ```json
 {
     "hist": {
-        "time_min": 170, "time_max": 190,
+        "time_min": 160, "time_max": 220,
         "bin_min": 0, "bin_max": 20000, "bin_step": 100,
-        "threshold": 3.0,
-        "pos_min": 0, "pos_max": 400, "pos_step": 4
+        "threshold": 10.0,
+        "pos_min": 0, "pos_max": 400, "pos_step": 4,
+        "min_peak_ratio": 0.3
     }
 }
 ```
@@ -101,6 +102,7 @@ evchan_test <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
 | `bin_min/max/step` | Integral histogram binning |
 | `pos_min/max/step` | Peak position histogram binning (ns) |
 | `threshold` | Min peak height (ADC above pedestal) for histograms/occupancy |
+| `min_peak_ratio` | Secondary peak on a tail must rise ≥ this fraction of the main peak (0 to disable) |
 
 ## Project Structure
 

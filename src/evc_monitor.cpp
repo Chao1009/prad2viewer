@@ -62,6 +62,7 @@ struct HistConfig {
     float pos_min   = 0;
     float pos_max   = 400;
     float pos_step  = 4;
+    float min_peak_ratio = 0.3f;
 };
 
 struct Histogram {
@@ -278,6 +279,7 @@ static void etReaderThread()
     EtChannel ch;
     fdec::EventData event;
     fdec::WaveAnalyzer ana;
+    ana.cfg.min_peak_ratio = g_hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
 
     while (g_running) {
@@ -514,6 +516,7 @@ int main(int argc, char *argv[])
             if (h.contains("pos_min"))   g_hist_cfg.pos_min   = h["pos_min"];
             if (h.contains("pos_max"))   g_hist_cfg.pos_max   = h["pos_max"];
             if (h.contains("pos_step"))  g_hist_cfg.pos_step  = h["pos_step"];
+            if (h.contains("min_peak_ratio")) g_hist_cfg.min_peak_ratio = h["min_peak_ratio"];
         }
         std::cerr << "Config: " << config_file << "\n";
     } else {

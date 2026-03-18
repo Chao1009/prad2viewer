@@ -164,6 +164,11 @@ let eventChannels = {};
 let selectedModule = null, hoveredModule = null;
 let geoCanvas, geoCtx, geoWrap, scale = 1, offsetX = 0, offsetY = 0, canvasW, canvasH;
 const PC = ['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997','#f06595'];
+const CRATE_NAME = {
+    0x80:'adchycal1', 0x82:'adchycal2', 0x84:'adchycal3', 0x86:'adchycal4',
+    0x88:'adchycal5', 0x8a:'adchycal6', 0x8c:'adchycal7',
+};
+function crateName(roc) { return CRATE_NAME[roc] || `ROC 0x${roc.toString(16)}`; }
 
 // =========================================================================
 // Color scale
@@ -272,7 +277,7 @@ function showWaveform(mod) {
     const pedInfo = d ? ` &nbsp; Ped: ${d.pm.toFixed(1)} ± ${d.pr.toFixed(1)}` : '';
     document.getElementById('detail-header').innerHTML =
         `<span class="mod-name">${mod.n}</span> `
-        + `<span class="mod-daq">ROC 0x${mod.roc.toString(16)} &middot; slot ${mod.sl} &middot; ch ${mod.ch}${pedInfo}</span>`;
+        + `<span class="mod-daq">${crateName(mod.roc)} &middot; slot ${mod.sl} &middot; ch ${mod.ch}${pedInfo}</span>`;
 
     if (!d || !d.s) {
         Plotly.react('waveform-div', [], {
@@ -450,7 +455,7 @@ function init() {
         if (m!==hoveredModule) { hoveredModule=m; drawGeo(); }
         if (m) {
             const d = eventChannels[`${m.roc}_${m.sl}_${m.ch}`];
-            let t = `${m.n}  (${m.t==='G'?'PbGlass':'PbWO₄'})\nROC 0x${m.roc.toString(16)}  slot ${m.sl}  ch ${m.ch}`;
+            let t = `${m.n}  (${m.t==='G'?'PbGlass':'PbWO₄'})\n${crateName(m.roc)}  slot ${m.sl}  ch ${m.ch}`;
             if (d && d.pk && d.pk.length)
                 t += `\nPed ${d.pm.toFixed(1)}  Peak ${d.pk[0].h.toFixed(0)}  Int ${d.pk[0].i.toFixed(0)}`;
             else if (d) t += `\nPed ${d.pm.toFixed(1)}  (no peaks)`;

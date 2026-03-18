@@ -91,17 +91,18 @@ int main(int argc, char* argv[])
         if (++count % PROGRESS_COUNT == 0) {
             std::cout << "Received " << count << " events.\r" << std::flush;
         }
-        auto &et_buf = et_chan.GetRawBufferVec();
         auto ev_buf = ev_chan.GetRawBuffer();
-        std::cout << "Event " << count << ": ET size=" << et_buf.size()
-                  << ", ET[0]+1=" << et_buf[0] + 1
-                  << ", EV[0]+1=" << ev_buf[0] + 1 << "\n";
+        auto et_buf = et_chan.GetRawBuffer();
+        size_t et_len = et_buf[0] + 1;
+        size_t ev_len = ev_buf[0] + 1;
+        std::cout << "Event " << count << ": ET len=" << et_len
+                  << ", EV len=" << ev_len << "\n";
 
         std::cout << std::hex << std::setfill('0');
-        for (size_t i = 0; (i < ev_buf[0] + 1) || (i < et_buf[0] + 1); ++i) {
+        for (size_t i = 0; i < std::max(ev_len, et_len); ++i) {
             std::cout << "0x" << std::setw(8);
-            if (i < et_buf.size()) { std::cout << et_buf[i]; }
-            if (i < ev_buf[0] + 1) { std::cout << ", 0x" << std::setw(8) << ev_buf[i]; }
+            if (i < et_len) { std::cout << et_buf[i]; }
+            if (i < ev_len) { std::cout << ", 0x" << std::setw(8) << ev_buf[i]; }
             std::cout << "\n";
         }
         std::cout << std::dec;

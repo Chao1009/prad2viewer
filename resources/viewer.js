@@ -17,6 +17,7 @@ let lastEventFetch=0, lastHistFetch=0;  // throttle timestamps
 // occupancy data (fetched once per file load when histograms enabled)
 let occData={}, occTcutData={}, occTotal=0;
 let currentWaveform=null;  // {x:[], y:[]} for copy button
+let currentHist={};  // {divId: {x:[], y:[]}} for histogram copy
 
 // color range: null = auto from data, number = user-set or hist-synced
 let rangeMin=null, rangeMax=null;
@@ -209,15 +210,22 @@ function showWaveform(mod){
 // =========================================================================
 function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
     if(!histEnabled){
+        currentHist[divId]=null;
         Plotly.react(divId,[],{...PL,title:{text:'--hist not enabled',font:{size:10,color:'#444'}}},PC2);
         return;
     }
     fetch(url).then(r=>r.json()).then(data=>{
         if(data.error||!data.bins||!data.bins.length){
+            currentHist[divId]=null;
             Plotly.react(divId,[],{...PL,title:{text:`${title} — No data`,font:{size:10,color:'#555'}}},PC2);
             return;
         }
         const x=data.bins.map((_,i)=>binMin+(i+0.5)*binStep);
+        // store non-zero bins for copy
+        const cx=[], cy=[];
+        for(let i=0;i<data.bins.length;i++){if(data.bins[i]>0){cx.push(x[i]);cy.push(data.bins[i]);}}
+        currentHist[divId]={x:cx,y:cy};
+
         const entries=data.bins.reduce((a,b)=>a+b,0)+data.underflow+data.overflow;
         const stats=`${data.events} evts | Entries: ${entries}  Under: ${data.underflow}  Over: ${data.overflow}`;
         Plotly.react(divId,[{
@@ -228,6 +236,7 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
             xaxis:{...PL.xaxis,title:xTitle},yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
         },PC2);
     }).catch(()=>{
+        currentHist[divId]=null;
         Plotly.react(divId,[],{...PL,title:{text:'Fetch error',font:{size:10,color:'#f66'}}},PC2);
     });
 }
@@ -521,15 +530,21 @@ function init(){
     Plotly.newPlot('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
     Plotly.newPlot('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:'#555'}}},PC2);
 
-    // --- copy waveform data ---
-    document.getElementById('btn-copy-wf').onclick=()=>{
-        if(!currentWaveform){return;}
-        const text=`x: [${currentWaveform.x.join(', ')}]\ny: [${currentWaveform.y.join(', ')}]`;
-        navigator.clipboard.writeText(text).then(()=>{
-            const btn=document.getElementById('btn-copy-wf');
-            btn.textContent='✓'; setTimeout(()=>{btn.textContent='copy';},1000);
-        });
-    };
+    // --- copy data buttons ---
+    function setupCopyBtn(btnId, getData) {
+        document.getElementById(btnId).onclick=()=>{
+            const d=getData();
+            if(!d) return;
+            const text=`x: [${d.x.join(', ')}]\ny: [${d.y.join(', ')}]`;
+            navigator.clipboard.writeText(text).then(()=>{
+                const btn=document.getElementById(btnId);
+                btn.textContent='✓'; setTimeout(()=>{btn.textContent='copy';},1000);
+            });
+        };
+    }
+    setupCopyBtn('btn-copy-wf', ()=>currentWaveform);
+    setupCopyBtn('btn-copy-inthist', ()=>currentHist['inthist-div']);
+    setupCopyBtn('btn-copy-poshist', ()=>currentHist['poshist-div']);
 
     // --- dividers ---
     // 1. main vertical: geo ↔ detail
@@ -545,7 +560,7 @@ function init(){
         120, 120, resizeAllPlots);
     // 3. horizontal inside top-panel: inthist ↔ poshist
     setupDivider('div-hist','y',
-        ()=>document.getElementById('inthist-div'),
+        ()=>document.getElementById('inthist-div').parentElement,
         ()=>document.getElementById('top-panel'),
         ()=>0, 60, 60, resizeAllPlots);
     // 4. vertical inside bottom-panel: table ↔ waveform

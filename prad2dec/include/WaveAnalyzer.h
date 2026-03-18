@@ -34,6 +34,7 @@ struct WaveConfig {
     float    threshold     = 5.0f;    // peak threshold in pedestal RMS units
     float    min_threshold = 3.0f;    // absolute floor (ADC counts above pedestal)
     float    min_peak_ratio = 0.3f;   // new peak must be ≥ this fraction of a nearby peak
+    float    int_tail_ratio = 0.1f;  // stop integration when signal drops below this fraction of peak height
     int      ped_nsamples  = 30;      // max samples for pedestal window
     float    ped_flatness  = 1.0f;    // max RMS for a "flat" pedestal region
     int      ped_max_iter  = 3;       // outlier rejection iterations

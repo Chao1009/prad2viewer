@@ -69,6 +69,9 @@ void WaveAnalyzer::findPeaks(const uint16_t *raw, const float *buf, int n,
     result.npeaks = 0;
     if (n < 3) return;
 
+    // track peak-finding ranges (left/right) separately from integration bounds
+    int pk_range[MAX_PEAKS][2];  // [i][0]=left, [i][1]=right
+
     // trend: +1 rising, -1 falling, 0 flat
     auto trend = [](float a, float b) -> int {
         float d = a - b;
@@ -115,19 +118,20 @@ void WaveAnalyzer::findPeaks(const uint16_t *raw, const float *buf, int n,
         float ped_height = buf[peak_pos] - ped_mean;
         if (ped_height < thr || ped_height < 3.0f * ped_rms) { i = right; continue; }
 
-        // --- integrate: walk outward from peak, stop at baseline crossing ---
+        // --- integrate: walk outward from peak, stop at baseline or tail cutoff ---
         float integral = buf[peak_pos] - ped_mean;
+        float tail_cut = ped_height * cfg.int_tail_ratio;  // stop when signal drops below this
         int int_left = peak_pos, int_right = peak_pos;
 
         for (int j = peak_pos - 1; j >= left; --j) {
             float v = buf[j] - ped_mean;
-            if (v < ped_rms || v * ped_height < 0) { int_left = j; break; }
+            if (v < tail_cut || v < ped_rms || v * ped_height < 0) { int_left = j; break; }
             integral += v;
             int_left = j;
         }
         for (int j = peak_pos + 1; j <= right; ++j) {
             float v = buf[j] - ped_mean;
-            if (v < ped_rms || v * ped_height < 0) { int_right = j; break; }
+            if (v < tail_cut || v < ped_rms || v * ped_height < 0) { int_right = j; break; }
             integral += v;
             int_right = j;
         }
@@ -148,13 +152,13 @@ void WaveAnalyzer::findPeaks(const uint16_t *raw, const float *buf, int n,
         }
 
         // --- reject if overlapping a previous peak and local height too small ---
+        // Use peak-finding range (left/right), not integration bounds, for overlap test.
         // smooth_height is the height above the line connecting left/right edges,
         // i.e., how much this peak rises above the tail it sits on.
         bool rejected = false;
         for (int k = 0; k < result.npeaks; ++k) {
-            auto &prev = result.peaks[k];
-            if (int_left <= prev.right && int_right >= prev.left) {
-                if (smooth_height < prev.height * cfg.min_peak_ratio) {
+            if (left <= pk_range[k][1] && right >= pk_range[k][0]) {
+                if (smooth_height < result.peaks[k].height * cfg.min_peak_ratio) {
                     rejected = true;
                     break;
                 }
@@ -171,6 +175,8 @@ void WaveAnalyzer::findPeaks(const uint16_t *raw, const float *buf, int n,
         p.integral = integral;
         p.time     = raw_pos * 1e3f / cfg.clk_mhz;  // ns
         p.overflow = (raw[raw_pos] >= cfg.overflow);
+        pk_range[result.npeaks][0] = left;
+        pk_range[result.npeaks][1] = right;
         result.npeaks++;
 
         // skip past this peak's range to avoid double-counting

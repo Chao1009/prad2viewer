@@ -310,12 +310,13 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
             return;
         }
         const x=data.bins.map((_,i)=>binMin+(i+0.5)*binStep);
-        const sub=(data.underflow?` UF:${data.underflow}`:'')+(data.overflow?` OF:${data.overflow}`:'');
+        const entries=data.bins.reduce((a,b)=>a+b,0)+data.underflow+data.overflow;
+        const stats=`${data.events} evts | Entries: ${entries}  Under: ${data.underflow}  Over: ${data.overflow}`;
         Plotly.react(divId,[{
             x,y:data.bins,type:'bar',marker:{color:barColor,line:{width:0}},
             hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
         }],{...PL,
-            title:{text:`${title} (${data.events} evts${sub})`,font:{size:10,color:'#ccc'}},
+            title:{text:`${title}<br><span style="font-size:9px;color:#888">${stats}</span>`,font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,title:xTitle},yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
         },PC2);
     }).catch(()=>{

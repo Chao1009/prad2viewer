@@ -1,0 +1,20 @@
+{
+    "et": {
+        "host": "localhost",
+        "port": 11111,
+        "et_file": "/tmp/et_sys_prad2",
+        "station": "prad2_monitor"
+    },
+    "ring_buffer_size": 20,
+    "hist": {
+        "time_min": 170,
+        "time_max": 190,
+        "bin_min": 0,
+        "bin_max": 20000,
+        "bin_step": 100,
+        "threshold": 3.0,
+        "pos_min": 0,
+        "pos_max": 400,
+        "pos_step": 4
+    }
+}

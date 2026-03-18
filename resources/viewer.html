@@ -94,11 +94,16 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 
 <div class="header">
     <h1>PRad2 HyCal Viewer</h1>
-    <div class="nav">
+    <div class="nav" id="nav-file">
         <button id="btn-prev" title="← key">◀</button>
         <input type="number" id="ev-input" value="1" min="1">
         <span style="color:var(--dim);font-size:12px" id="ev-total">/ 0</span>
         <button id="btn-next" title="→ key">▶</button>
+    </div>
+    <div class="nav" id="nav-online" style="display:none">
+        <span id="et-status" style="font-size:12px;color:#f66">● Disconnected</span>
+        <select id="ring-select" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:3px;font-family:inherit;font-size:12px;min-width:120px"></select>
+        <button id="btn-clear-hist" title="Clear all histograms">Clear Hist</button>
     </div>
     <div class="info" id="header-info"></div>
 </div>
@@ -171,6 +176,10 @@ const PC=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997',
 const CRATE_NAME={0x80:'adchycal1',0x82:'adchycal2',0x84:'adchycal3',0x86:'adchycal4',0x88:'adchycal5',0x8a:'adchycal6',0x8c:'adchycal7'};
 function crateName(r){return CRATE_NAME[r]||`ROC 0x${r.toString(16)}`;}
 let histEnabled=false, histConfig={};
+let mode='file';    // 'file' or 'online'
+let ws=null;        // WebSocket connection (online mode)
+let autoFollow=true; // auto-load latest event
+let lastEventFetch=0, lastHistFetch=0;  // throttle timestamps
 
 // =========================================================================
 // Color scale
@@ -325,6 +334,12 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
 }
 
 function showHistograms(mod){
+    // in online mode, throttle histogram fetches to ~1 Hz
+    if (mode === 'online') {
+        const now = Date.now();
+        if (now - lastHistFetch < 1000) return;
+        lastHistFetch = now;
+    }
     const key=`${mod.roc}_${mod.sl}_${mod.ch}`;
     const h=histConfig;
     fetchAndPlotHist('inthist-div',`/api/hist/${key}`,
@@ -336,21 +351,98 @@ function showHistograms(mod){
 }
 
 // =========================================================================
-// Event loading
+// Event loading (works for both file and online mode)
 // =========================================================================
-function loadEvent(evnum){
-    currentEvent=evnum;
-    document.getElementById('ev-input').value=evnum;
-    document.getElementById('status-bar').textContent=`Loading event ${evnum}...`;
-    fetch(`/api/event/${evnum}`).then(r=>r.json()).then(data=>{
-        if(data.error){document.getElementById('status-bar').textContent=data.error;return;}
-        eventChannels=data.channels||{};
-        const nch=Object.keys(eventChannels).length;
-        const npk=Object.values(eventChannels).reduce((s,c)=>s+(c.pk||[]).length,0);
-        document.getElementById('status-bar').textContent=`Event ${evnum}: ${nch} channels, ${npk} peaks`;
-        drawGeo();
-        if(selectedModule)showWaveform(selectedModule);
-    }).catch(err=>{document.getElementById('status-bar').textContent=`Error: ${err}`;});
+function loadEventData(data) {
+    if (data.error) { document.getElementById('status-bar').textContent = data.error; return; }
+    currentEvent = data.event;
+    eventChannels = data.channels || {};
+    const nch = Object.keys(eventChannels).length;
+    const npk = Object.values(eventChannels).reduce((s,c) => s + (c.pk||[]).length, 0);
+    const modeTag = mode === 'online' ? ' [LIVE]' : '';
+    document.getElementById('status-bar').textContent = `Event ${currentEvent}: ${nch} channels, ${npk} peaks${modeTag}`;
+    drawGeo();
+    if (selectedModule) showWaveform(selectedModule);
+}
+
+function loadEvent(evnum) {
+    currentEvent = evnum;
+    if (mode === 'file') document.getElementById('ev-input').value = evnum;
+    document.getElementById('status-bar').textContent = `Loading event ${evnum}...`;
+    fetch(`/api/event/${evnum}`).then(r => r.json()).then(loadEventData)
+        .catch(err => { document.getElementById('status-bar').textContent = `Error: ${err}`; });
+}
+
+function loadLatestEvent() {
+    fetch('/api/event/latest').then(r => r.json()).then(loadEventData)
+        .catch(err => { document.getElementById('status-bar').textContent = `Error: ${err}`; });
+}
+
+// =========================================================================
+// Online mode: WebSocket + ring buffer
+// =========================================================================
+function updateRingSelector() {
+    fetch('/api/ring').then(r => r.json()).then(data => {
+        const sel = document.getElementById('ring-select');
+        const prev = sel.value;
+        sel.innerHTML = '';
+        const ring = data.ring || [];
+        for (let i = ring.length - 1; i >= 0; i--) {
+            const o = document.createElement('option');
+            o.value = ring[i];
+            o.textContent = `Event ${ring[i]}` + (i === ring.length - 1 ? ' (latest)' : '');
+            sel.appendChild(o);
+        }
+        // keep selection if not auto-following
+        if (!autoFollow && prev && ring.includes(parseInt(prev))) sel.value = prev;
+        else if (ring.length) sel.value = ring[ring.length - 1];
+    });
+}
+
+function setEtStatus(connected) {
+    const el = document.getElementById('et-status');
+    el.textContent = connected ? '● Connected' : '● Disconnected';
+    el.style.color = connected ? '#51cf66' : '#f66';
+}
+
+function connectWebSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}`);
+
+    ws.onopen = () => { console.log('WS connected'); };
+    ws.onclose = () => {
+        console.log('WS disconnected, reconnecting in 2s');
+        setTimeout(connectWebSocket, 2000);
+    };
+    ws.onmessage = (evt) => {
+        try {
+            const msg = JSON.parse(evt.data);
+            if (msg.type === 'new_event') {
+                const now = Date.now();
+                // throttle event display to ~5 Hz
+                if (autoFollow && now - lastEventFetch > 200) {
+                    lastEventFetch = now;
+                    loadLatestEvent();
+                }
+                // throttle ring selector update to ~2 Hz
+                if (now - lastHistFetch > 500) {
+                    lastHistFetch = now;
+                    updateRingSelector();
+                }
+            } else if (msg.type === 'status') {
+                setEtStatus(msg.connected);
+            } else if (msg.type === 'hist_cleared') {
+                if (selectedModule) showHistograms(selectedModule);
+            }
+        } catch (e) {}
+    };
+}
+
+function clearHistograms() {
+    fetch('/api/hist/clear').then(r => r.json()).then(data => {
+        document.getElementById('status-bar').textContent = 'Histograms cleared';
+        if (selectedModule) showHistograms(selectedModule);
+    });
 }
 
 // =========================================================================
@@ -412,12 +504,19 @@ function init(){
         ()=>document.getElementById('bottom-panel'),
         ()=>0, 150, 200, resizeAllPlots);
 
-    // nav
+    // --- file mode nav ---
     document.getElementById('btn-prev').onclick=()=>{if(currentEvent>1)loadEvent(currentEvent-1);};
     document.getElementById('btn-next').onclick=()=>{if(currentEvent<totalEvents)loadEvent(currentEvent+1);};
     document.getElementById('ev-input').onchange=e=>{const v=parseInt(e.target.value);if(v>=1&&v<=totalEvents)loadEvent(v);};
     document.getElementById('color-metric').onchange=drawGeo;
     document.getElementById('log-scale').onchange=drawGeo;
+
+    // --- online mode nav ---
+    document.getElementById('ring-select').onchange=e=>{
+        autoFollow=false;
+        loadEvent(parseInt(e.target.value));
+    };
+    document.getElementById('btn-clear-hist').onclick=clearHistograms;
 
     // geo mouse
     const tip=document.getElementById('geo-tooltip');
@@ -436,12 +535,25 @@ function init(){
     geoCanvas.addEventListener('click',e=>{const r=geoCanvas.getBoundingClientRect(),m=hitTest(e.clientX-r.left,e.clientY-r.top);if(m)showWaveform(m);});
     geoCanvas.addEventListener('mouseleave',()=>{hoveredModule=null;tip.style.display='none';drawGeo();});
     document.addEventListener('keydown',e=>{
-        if(e.target.tagName==='INPUT')return;
-        if(e.key==='ArrowLeft'&&currentEvent>1)loadEvent(currentEvent-1);
-        if(e.key==='ArrowRight'&&currentEvent<totalEvents)loadEvent(currentEvent+1);
+        if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+        if(mode==='file'){
+            if(e.key==='ArrowLeft'&&currentEvent>1)loadEvent(currentEvent-1);
+            if(e.key==='ArrowRight'&&currentEvent<totalEvents)loadEvent(currentEvent+1);
+        } else {
+            if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
+                // navigate ring buffer
+                const sel=document.getElementById('ring-select');
+                const opts=[...sel.options].map(o=>parseInt(o.value));
+                const cur=parseInt(sel.value);
+                const idx=opts.indexOf(cur);
+                if(e.key==='ArrowRight'&&idx>0){sel.value=opts[idx-1];autoFollow=false;loadEvent(opts[idx-1]);}
+                if(e.key==='ArrowLeft'&&idx<opts.length-1){sel.value=opts[idx+1];autoFollow=false;loadEvent(opts[idx+1]);}
+            }
+            if(e.key==='f'||e.key==='F'){autoFollow=true;loadLatestEvent();}  // F = follow latest
+        }
     });
 
-    // load config
+    // load config and init mode
     fetch('/api/config').then(r=>r.json()).then(data=>{
         const crateRoc=data.crate_roc||{};
         const rawMods=data.modules||[],rawDaq=data.daq||[];
@@ -456,11 +568,27 @@ function init(){
         totalEvents=data.total_events||0;
         histEnabled=data.hist_enabled||false;
         histConfig=data.hist||{};
-        document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
-        const hi=histEnabled?` · hist [${histConfig.time_min}-${histConfig.time_max} ns]`:'';
-        document.getElementById('header-info').textContent=`${modules.length} modules · ${totalEvents} events${hi}`;
-        resizeGeo();
-        if(totalEvents>0)loadEvent(1);
+        mode=data.mode||'file';
+
+        // show/hide mode-specific UI
+        document.getElementById('nav-file').style.display   = mode==='file'?'flex':'none';
+        document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
+
+        if(mode==='file'){
+            document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
+            const hi=histEnabled?` · hist [${histConfig.time_min}-${histConfig.time_max} ns]`:'';
+            document.getElementById('header-info').textContent=`${modules.length} modules · ${totalEvents} events${hi}`;
+            resizeGeo();
+            if(totalEvents>0)loadEvent(1);
+        } else {
+            setEtStatus(data.et_connected||false);
+            document.getElementById('header-info').textContent=
+                `${modules.length} modules · ONLINE · ring ${data.ring_buffer_size||20}`;
+            resizeGeo();
+            connectWebSocket();
+            updateRingSelector();
+            loadLatestEvent();
+        }
     });
 }
 window.addEventListener('DOMContentLoaded',init);

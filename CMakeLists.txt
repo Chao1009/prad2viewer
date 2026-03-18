@@ -160,6 +160,24 @@ target_link_libraries(evc_viewer PRIVATE
 set_target_properties(evc_viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---------------------------------------------------------------------------
+# Online monitor (ET reader + WebSocket push)
+# ---------------------------------------------------------------------------
+add_executable(evc_monitor src/evc_monitor.cpp)
+
+target_compile_definitions(evc_monitor PRIVATE
+    DATABASE_DIR="${DATABASE_DIR}"
+    RESOURCE_DIR="${RESOURCE_DIR}"
+)
+
+target_link_libraries(evc_monitor PRIVATE
+    prad2dec
+    nlohmann_json::nlohmann_json
+    websocketpp_lib
+    pthread
+)
+set_target_properties(evc_monitor PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# ---------------------------------------------------------------------------
 # Install
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)

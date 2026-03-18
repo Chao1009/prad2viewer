@@ -68,11 +68,41 @@ Example `hist_config.json`:
 
 | Field | Description |
 |-------|-------------|
-| `time_min`, `time_max` | Sample range to search for peaks |
+| `time_min`, `time_max` | Peak time range in nanoseconds |
 | `bin_min`, `bin_max`, `bin_step` | Histogram axis range and bin width |
 | `threshold` | Minimum peak height (ADC above pedestal) to count |
 
 Without `--hist`, the histogram panel in the GUI shows empty.
+
+### Online monitor (ET)
+```bash
+./bin/evc_monitor [port] [--config online_config.json]
+# Open http://localhost:5051
+```
+
+Connects to an ET system and monitors events in real time. The viewer auto-discovers `database/online_config.json` at the compile-time `DATABASE_DIR` path.
+
+Features:
+- Background thread reads events from ET continuously
+- Histograms accumulate until the user clicks **Clear Hist** in the GUI
+- Latest N events stored in a ring buffer (default 20, configurable)
+- WebSocket push notifies the viewer on each new event
+- Viewer auto-follows the latest event; select older events from the dropdown
+- Arrow keys navigate the ring buffer; press **F** to resume auto-follow
+
+Example `online_config.json`:
+```json
+{
+    "et": {
+        "host": "localhost",
+        "port": 11111,
+        "et_file": "/tmp/et_sys_prad2",
+        "station": "prad2_monitor"
+    },
+    "ring_buffer_size": 20,
+    "hist": { ... same fields as hist_config.json ... }
+}
+```
 
 ## Project Structure
 
@@ -81,7 +111,8 @@ CMakeLists.txt
 database/
     daq_map.json              DAQ channel map (crate/slot/channel → module)
     hycal_modules.json        Module geometry (name, type, position, size)
-    hist_config.json          Histogram accumulation settings (optional)
+    hist_config.json          Histogram settings for file viewer (optional)
+    online_config.json        ET + histogram settings for online monitor
 prad2dec/                     Static library: libprad2dec.a
     include/
         EvStruct.h            Evio header parsers and EvNode tree structure
@@ -97,9 +128,10 @@ prad2dec/                     Static library: libprad2dec.a
         Fadc250Decoder.cpp
         WaveAnalyzer.cpp
 resources/
-    viewer.html               Web-based event display (Plotly.js + Canvas)
+    viewer.html               Web-based event display (file + online modes)
 src/
-    evc_viewer.cpp            HTTP server (websocketpp/asio)
+    evc_viewer.cpp            File viewer HTTP server (websocketpp/asio)
+    evc_monitor.cpp           Online monitor: ET reader + WebSocket push
 test/
     test_main.cpp             CLI test and channel counting tool
 ```

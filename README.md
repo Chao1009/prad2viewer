@@ -1,4 +1,4 @@
-# PRad2 Decoder
+# PRad2 Event Viewer
 
 FADC250 waveform decoder and event viewer for PRad-II at Jefferson Lab.
 

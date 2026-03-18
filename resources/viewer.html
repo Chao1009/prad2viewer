@@ -81,7 +81,18 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .peaks-table td { padding:3px 8px; text-align:right; border-bottom:1px solid #1a1a2e; }
 .peaks-table tr:hover { background:rgba(0,180,216,0.08); }
 
-.color-bar { display:flex; align-items:center; gap:4px; font-size:11px; color:var(--dim); }
+.color-bar { display:flex; align-items:center; gap:3px; font-size:11px; color:var(--dim); }
+.range-val { cursor:default; min-width:24px; text-align:center; }
+.range-edit {
+    display:none; width:56px; background:var(--bg); border:1px solid var(--accent); color:var(--text);
+    padding:1px 4px; border-radius:3px; font-family:inherit; font-size:11px; text-align:center;
+}
+.range-edit.active { display:inline-block; }
+.range-btn {
+    cursor:pointer; font-size:11px; color:var(--dim); user-select:none; padding:0 1px;
+}
+.range-btn:hover { color:var(--accent); }
+.range-btn.editing { color:var(--accent); }
 .status-bar {
     position:fixed; bottom:0; left:0; right:0;
     padding:3px 12px; background:var(--panel); border-top:1px solid var(--border);
@@ -115,12 +126,19 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
             <select id="color-metric">
                 <option value="integral">Peak Integral</option>
                 <option value="height">Peak Height</option>
+                <option value="time">Peak Time</option>
                 <option value="pedestal">Pedestal</option>
             </select>
             <label>Log</label>
             <input type="checkbox" id="log-scale" checked>
             <div class="color-bar">
-                <span>0</span><canvas id="colorbar-canvas" width="120" height="12"></canvas><span id="colorbar-max">max</span>
+                <span class="range-val" id="range-min-show">0</span>
+                <input class="range-edit" id="range-min-edit" type="number" step="any">
+                <span class="range-btn" id="range-min-btn" title="Edit min">✎</span>
+                <canvas id="colorbar-canvas" width="120" height="12"></canvas>
+                <span class="range-btn" id="range-max-btn" title="Edit max">✎</span>
+                <input class="range-edit" id="range-max-edit" type="number" step="any">
+                <span class="range-val" id="range-max-show">max</span>
             </div>
         </div>
         <div class="geo-canvas-wrap" id="geo-wrap">
@@ -181,6 +199,9 @@ let ws=null;        // WebSocket connection (online mode)
 let autoFollow=true; // auto-load latest event
 let lastEventFetch=0, lastHistFetch=0;  // throttle timestamps
 
+// color range: null = auto from data, number = user-set or hist-synced
+let rangeMin=null, rangeMax=null;
+
 // =========================================================================
 // Color scale
 // =========================================================================
@@ -189,6 +210,27 @@ function viridis(t){
     return `rgb(${Math.round(255*Math.min(1,Math.max(0,-0.87+4.26*t-4.85*t*t+2.5*t*t*t)))},${Math.round(255*Math.min(1,Math.max(0,-0.03+0.77*t+1.32*t*t-1.87*t*t*t)))},${Math.round(255*Math.min(1,Math.max(0,0.33+1.74*t-4.26*t*t+3.17*t*t*t)))})`;
 }
 function drawColorBar(){const c=document.getElementById('colorbar-canvas'),x=c.getContext('2d');for(let i=0;i<c.width;i++){x.fillStyle=viridis(i/c.width);x.fillRect(i,0,1,c.height);}}
+
+// sync color range from histogram config when a matching metric is selected
+function syncRangeFromHist(){
+    const mt=document.getElementById('color-metric').value;
+    const h=histConfig;
+    if(mt==='integral' && h.bin_min!==undefined){
+        rangeMin=h.bin_min; rangeMax=h.bin_max;
+    } else if(mt==='time' && h.pos_min!==undefined){
+        rangeMin=h.pos_min; rangeMax=h.pos_max;
+    } else {
+        rangeMin=null; rangeMax=null;
+    }
+    updateRangeDisplay();
+}
+
+function updateRangeDisplay(){
+    const minEl=document.getElementById('range-min-show');
+    const maxEl=document.getElementById('range-max-show');
+    minEl.textContent=(rangeMin!==null)?rangeMin.toFixed(0):'auto';
+    maxEl.textContent=(rangeMax!==null)?rangeMax.toFixed(0):'auto';
+}
 
 // =========================================================================
 // Geo canvas
@@ -216,20 +258,43 @@ function d2c(x,y){return[x*scale+offsetX,-y*scale+offsetY];}
 function c2d(cx,cy){return[(cx-offsetX)/scale,-(cy-offsetY)/scale];}
 function modVal(m){
     const d=eventChannels[`${m.roc}_${m.sl}_${m.ch}`];
-    if(!d)return 0;const mt=document.getElementById('color-metric').value;
-    if(mt==='pedestal')return d.pm||0;if(!d.pk||!d.pk.length)return 0;
+    if(!d)return null;
+    const mt=document.getElementById('color-metric').value;
+    if(mt==='pedestal')return d.pm||0;
+    if(!d.pk||!d.pk.length)return null;
     if(mt==='height')return Math.max(...d.pk.map(p=>p.h));
-    return d.pk.reduce((s,p)=>s+p.i,0);
+    if(mt==='time'){
+        // time of the peak with maximum height
+        let best=d.pk[0];
+        for(let i=1;i<d.pk.length;i++) if(d.pk[i].h>best.h) best=d.pk[i];
+        return best.t;
+    }
+    return d.pk.reduce((s,p)=>s+p.i,0); // integral
 }
 function drawGeo(){
     if(!geoCtx)return;const ctx=geoCtx;ctx.clearRect(0,0,canvasW,canvasH);
     const useLog=document.getElementById('log-scale').checked;
-    const vals=modules.map(modVal),vmax=Math.max(...vals,1);
-    document.getElementById('colorbar-max').textContent=vmax.toFixed(0);
+    const vals=modules.map(modVal);
+    const numVals=vals.filter(v=>v!==null);
+    const autoMin=numVals.length?Math.min(...numVals):0;
+    const autoMax=numVals.length?Math.max(...numVals):1;
+    const vmin=rangeMin!==null?rangeMin:0;
+    const vmax=rangeMax!==null?rangeMax:Math.max(autoMax,1);
+    const span=vmax-vmin||1;
+
+    // update display if auto
+    if(rangeMin===null) document.getElementById('range-min-show').textContent=vmin.toFixed(0);
+    if(rangeMax===null) document.getElementById('range-max-show').textContent=vmax.toFixed(0);
+
     for(let i=0;i<modules.length;i++){
         const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale,v=vals[i];
-        const t=vmax>0?(useLog?Math.log1p(v)/Math.log1p(vmax):v/vmax):0;
-        ctx.fillStyle=v>0?viridis(t):(m.t==='G'?'#1a1a2e':'#12122a');
+        let t=0;
+        if(v!==null){
+            const clamped=Math.max(vmin,Math.min(vmax,v));
+            if(useLog) t=Math.log1p(clamped-vmin)/Math.log1p(span);
+            else t=(clamped-vmin)/span;
+        }
+        ctx.fillStyle=(v!==null)?viridis(t):(m.t==='G'?'#1a1a2e':'#12122a');
         ctx.fillRect(cx-w/2,cy-h/2,w,h);
         const sel=selectedModule&&selectedModule.n===m.n,hov=hoveredModule&&hoveredModule.n===m.n;
         ctx.strokeStyle=sel?'#fff':hov?'#00b4d8':'#333';ctx.lineWidth=sel?2.5:hov?1.5:0.5;
@@ -508,8 +573,36 @@ function init(){
     document.getElementById('btn-prev').onclick=()=>{if(currentEvent>1)loadEvent(currentEvent-1);};
     document.getElementById('btn-next').onclick=()=>{if(currentEvent<totalEvents)loadEvent(currentEvent+1);};
     document.getElementById('ev-input').onchange=e=>{const v=parseInt(e.target.value);if(v>=1&&v<=totalEvents)loadEvent(v);};
-    document.getElementById('color-metric').onchange=drawGeo;
+    document.getElementById('color-metric').onchange=()=>{syncRangeFromHist();drawGeo();};
     document.getElementById('log-scale').onchange=drawGeo;
+
+    // --- range editing ---
+    function setupRangeEdit(btnId, editId, showId, isMax) {
+        const btn=document.getElementById(btnId);
+        const edit=document.getElementById(editId);
+        const show=document.getElementById(showId);
+        let editing=false;
+
+        function startEdit() {
+            editing=true; btn.classList.add('editing'); btn.textContent='✓';
+            edit.classList.add('active'); show.style.display='none';
+            edit.value=(isMax?rangeMax:rangeMin)||'';
+            edit.focus(); edit.select();
+        }
+        function applyEdit() {
+            editing=false; btn.classList.remove('editing'); btn.textContent='✎';
+            edit.classList.remove('active'); show.style.display='';
+            const v=parseFloat(edit.value);
+            if(isMax) rangeMax=isNaN(v)?null:v; else rangeMin=isNaN(v)?null:v;
+            updateRangeDisplay(); drawGeo();
+        }
+
+        btn.onclick=()=>{ if(editing) applyEdit(); else startEdit(); };
+        edit.addEventListener('keydown',e=>{ if(e.key==='Enter') applyEdit(); if(e.key==='Escape'){editing=false;btn.classList.remove('editing');btn.textContent='✎';edit.classList.remove('active');show.style.display='';} });
+        edit.addEventListener('blur',()=>{ if(editing) applyEdit(); });
+    }
+    setupRangeEdit('range-min-btn','range-min-edit','range-min-show',false);
+    setupRangeEdit('range-max-btn','range-max-edit','range-max-show',true);
 
     // --- online mode nav ---
     document.getElementById('ring-select').onchange=e=>{
@@ -526,7 +619,10 @@ function init(){
         if(m){
             const d=eventChannels[`${m.roc}_${m.sl}_${m.ch}`];
             let t=`${m.n}  (${m.t==='G'?'PbGlass':'PbWO₄'})\n${crateName(m.roc)}  slot ${m.sl}  ch ${m.ch}`;
-            if(d&&d.pk&&d.pk.length)t+=`\nPed ${d.pm.toFixed(1)}  Peak ${d.pk[0].h.toFixed(0)}  Int ${d.pk[0].i.toFixed(0)}`;
+            if(d&&d.pk&&d.pk.length){
+                let best=d.pk[0]; for(let j=1;j<d.pk.length;j++) if(d.pk[j].h>best.h) best=d.pk[j];
+                t+=`\nPed ${d.pm.toFixed(1)}  H ${best.h.toFixed(0)}  Int ${best.i.toFixed(0)}  T ${best.t.toFixed(0)}ns`;
+            }
             else if(d)t+=`\nPed ${d.pm.toFixed(1)}  (no peaks)`;
             tip.textContent=t;tip.style.display='block';
             tip.style.left=(e.clientX-r.left+14)+'px';tip.style.top=(e.clientY-r.top-8)+'px';

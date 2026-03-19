@@ -25,7 +25,8 @@ struct DaqConfig
     // Built-trigger mode: 0xFF50-0xFF8F (num = event count)
     std::vector<uint32_t> physics_tags = {0x00B1, 0x00FE};
 
-    // control event tags
+    // control event tags (CODA2/JLab legacy — confirmed in PRad-II data)
+    // CODA3 uses 0xFFD0-0xFFD4, recognized via is_control() range check
     uint32_t prestart_tag     = 0x11;
     uint32_t go_tag           = 0x12;
     uint32_t end_tag          = 0x14;
@@ -41,11 +42,8 @@ struct DaqConfig
     // FADC250 composite data bank tag
     uint32_t fadc_composite_tag = 0xE101;
 
-    // Trigger Interface (TI) data bank tag (present in every ROC)
+    // Trigger Interface (TI) data bank tag (present in every ROC data block)
     uint32_t ti_bank_tag        = 0xE10A;
-
-    // Trigger/event number bank (top-level child)
-    uint32_t trigger_bank_tag   = 0xC000;
 
     // Run info bank (in TI master crate only)
     uint32_t run_info_tag       = 0xE10F;
@@ -56,7 +54,7 @@ struct DaqConfig
     // EPICS data bank tag (within EPICS events)
     uint32_t epics_bank_tag     = 0xE114;
 
-    // --- TI data format -----------------------------------------------------
+    // --- TI data format (fallback for single-event / non-CODA3 data) --------
     // TI bank layout: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high
     int ti_trigger_word   = 1;
     int ti_time_low_word  = 2;      // lower 32 bits of 48-bit timestamp
@@ -71,10 +69,6 @@ struct DaqConfig
     int ti_trigger_type_word  = 0;
     int ti_trigger_type_shift = 24;
     uint32_t ti_trigger_type_mask = 0xFF;
-
-    // --- trigger bank format (tag 0xC000) -----------------------------------
-    int trig_event_number_word = 0;
-    int trig_event_type_word   = 1;
 
     // --- run info bank format (tag 0xE10F, in TI master crate) --------------
     int ri_run_number_word     = 1;
@@ -97,17 +91,38 @@ struct DaqConfig
         // single-event tags
         for (auto t : physics_tags)
             if (tag == t) return true;
-        // built-trigger range
+        // built-trigger range (0xFF50-0xFF8F: PEB, SEB, streaming)
         return (tag >= 0xFF50 && tag <= 0xFF8F);
     }
 
     bool is_control(uint32_t tag) const
     {
+        // CODA3 control event range (0xFFD0-0xFFD4)
+        if (tag >= 0xFFD0 && tag <= 0xFFD4) return true;
+        // configured tags (may be legacy CODA2: 0x11, 0x12, 0x14)
         return tag == prestart_tag || tag == go_tag || tag == end_tag;
     }
 
-    bool is_sync(uint32_t tag) const { return tag == sync_tag; }
+    bool is_sync(uint32_t tag) const
+    {
+        return tag == sync_tag || tag == 0xFFD0;
+    }
+
     bool is_epics(uint32_t tag) const { return tag == epics_tag; }
+
+    // CODA trigger bank identification (spec pages 21, 26, 31)
+    // Built trigger bank: 0xFF20-0xFF2F (created by Event Builder)
+    // Raw trigger bank:   0xFF10-0xFF1F (from ROC, before event building)
+    static bool is_built_trigger_bank(uint32_t tag) { return tag >= 0xFF20 && tag <= 0xFF2F; }
+    static bool is_raw_trigger_bank(uint32_t tag)   { return tag >= 0xFF10 && tag <= 0xFF1F; }
+    static bool is_trigger_bank(uint32_t tag)       { return tag >= 0xFF10 && tag <= 0xFF4F; }
+
+    // Trigger bank tag encodes what data is present (page 26):
+    //   bit 0: has timestamps
+    //   bit 1: has run number & run type
+    //   bit 2: NO run-specific data (inverted)
+    static bool trigger_bank_has_timestamps(uint32_t tag) { return (tag & 0x01) != 0; }
+    static bool trigger_bank_has_run_info(uint32_t tag)   { return (tag & 0x02) != 0; }
 };
 
 // --- event type enum --------------------------------------------------------
@@ -124,13 +139,14 @@ enum class EventType : uint8_t {
 
 inline EventType classify_event(uint32_t tag, const DaqConfig &cfg)
 {
-    if (tag == cfg.prestart_tag) return EventType::Prestart;
-    if (tag == cfg.go_tag)       return EventType::Go;
-    if (tag == cfg.end_tag)      return EventType::End;
-    if (cfg.is_sync(tag))        return EventType::Sync;
-    if (cfg.is_epics(tag))       return EventType::Epics;
-    if (cfg.is_physics(tag))     return EventType::Physics;
-    if (cfg.is_control(tag))     return EventType::Control;
+    // CODA3 control events (0xFFD0-0xFFD4)
+    if (tag == 0xFFD1 || tag == cfg.prestart_tag) return EventType::Prestart;
+    if (tag == 0xFFD2 || tag == cfg.go_tag)       return EventType::Go;
+    if (tag == 0xFFD4 || tag == cfg.end_tag)      return EventType::End;
+    if (cfg.is_sync(tag))                         return EventType::Sync;
+    if (cfg.is_epics(tag))                        return EventType::Epics;
+    if (cfg.is_physics(tag))                      return EventType::Physics;
+    if (cfg.is_control(tag))                      return EventType::Control;
     return EventType::Unknown;
 }
 

@@ -175,19 +175,142 @@ const uint8_t *EvChannel::GetCompositePayload(const EvNode &n, size_t &nbytes) c
     return reinterpret_cast<const uint8_t*>(&buffer[inner.data_begin]);
 }
 
-// === Trigger bank, TI timestamp, and run info extraction ====================
+// === CODA built trigger bank decoding (spec pages 21, 26, 31) ===============
+//
+// Physics Event structure:
+//   Top-level bank (tag 0xFFXX, type 0x10, num = M events)
+//     Built Trigger Bank (tag 0xFF2X, type 0x20 = bank of segments, num = N ROCs)
+//       Segment 1 (tag=EB_id, type=0xa ULONG64): first_event_number(64), [avg_ts(64)]xM, [run_info(64)]
+//       Segment 2 (tag=EB_id, type=0x05 USHORT16): event_type[0..M-1]
+//       ROC segment (tag=roc_id, type=0x01 UINT32): [ts_low, ts_high, misc] per event
+//     Data Bank 1 (ROC 1 data)
+//     ...
+//
+// Trigger bank tag encodes content (page 26):
+//   bit 0: has timestamps, bit 1: has run#/type, bit 2: no run-specific data
+
+bool EvChannel::decodeTriggerBank(int event_idx, fdec::EventInfo &info) const
+{
+    // find the built trigger bank at depth 1 (direct child of top-level event)
+    const EvNode *tb = nullptr;
+    for (auto &n : nodes) {
+        if (n.depth == 1 && DaqConfig::is_built_trigger_bank(n.tag)) {
+            tb = &n;
+            break;
+        }
+    }
+    // fallback: try raw trigger bank (0xFF1X) from ROC raw data
+    if (!tb) {
+        for (auto &n : nodes) {
+            if (n.depth == 1 && DaqConfig::is_raw_trigger_bank(n.tag)) {
+                tb = &n;
+                break;
+            }
+        }
+    }
+    if (!tb || tb->child_count < 1) return false;
+
+    uint32_t tb_tag = tb->tag;
+    bool is_built = DaqConfig::is_built_trigger_bank(tb_tag);
+    bool has_timestamps = DaqConfig::trigger_bank_has_timestamps(tb_tag);
+    bool has_run_info   = DaqConfig::trigger_bank_has_run_info(tb_tag);
+
+    if (is_built) {
+        // --- Built trigger bank (0xFF2X) per page 31 ---
+        if (tb->child_count < 2) return false;
+
+        // Segment 1: common data (type 0xa = ULONG64)
+        // Contains: first_event_number(64-bit), [avg_timestamps(64-bit) x M], [run#_type(64-bit)]
+        auto &seg1 = nodes[tb->child_first];
+        if (seg1.type == DATA_ULONG64 && seg1.data_words >= 2) {
+            const uint32_t *d = GetData(seg1);
+
+            // 64-bit first event number (low word first)
+            uint64_t first_event = (uint64_t)d[0] | ((uint64_t)d[1] << 32);
+            info.event_number = static_cast<int32_t>(first_event + event_idx);
+
+            size_t pos = 2; // past event number (2 words for 64-bit)
+
+            if (has_timestamps) {
+                // M average timestamps, each 64-bit (2 words)
+                size_t ts_off = pos + 2 * event_idx;
+                if (ts_off + 1 < seg1.data_words) {
+                    uint64_t ts_low  = d[ts_off];
+                    uint64_t ts_high = d[ts_off + 1];
+                    info.timestamp = ts_low | (ts_high << 32);
+                }
+                pos += 2 * nevents;
+            }
+
+            if (has_run_info && pos + 1 < seg1.data_words) {
+                // 64-bit value: run# in high 32, run type in low 32
+                info.run_number = d[pos + 1];  // high word = run number
+                // d[pos] = run type (low word), not stored currently
+            }
+        }
+
+        // Segment 2: event types (type 0x05 = USHORT16)
+        // Packed as unsigned shorts: 2 per 32-bit word, low 16 first
+        auto &seg2 = nodes[tb->child_first + 1];
+        if (seg2.type == DATA_USHORT16 && seg2.data_words > 0) {
+            const uint32_t *d = GetData(seg2);
+            int word_idx = event_idx / 2;
+            int shift    = (event_idx & 1) * 16;
+            if (static_cast<size_t>(word_idx) < seg2.data_words) {
+                info.trigger_bits = static_cast<uint8_t>((d[word_idx] >> shift) & 0xFF);
+            }
+        }
+
+        // ROC segments (type 0x01 = UINT32): per-ROC timestamps
+        // These start at child_first + 2 (after the 2 common segments)
+        // Each ROC segment has: [ts_low, ts_high, misc] per event
+        // We can use these for more precise per-ROC timestamps if avg is missing
+        if (!has_timestamps && tb->child_count > 2) {
+            auto &roc_seg = nodes[tb->child_first + 2]; // first ROC
+            if (roc_seg.type == DATA_UINT32) {
+                const uint32_t *d = GetData(roc_seg);
+                // words per event: at least 2 (ts_low, ts_high), possibly more (misc)
+                size_t words_per_evt = (nevents > 0) ? roc_seg.data_words / nevents : 0;
+                if (words_per_evt >= 2) {
+                    size_t off = words_per_evt * event_idx;
+                    if (off + 1 < roc_seg.data_words) {
+                        uint64_t ts_low  = d[off];
+                        uint64_t ts_high = d[off + 1] & 0xFFFF; // upper 16 bits of 48-bit ts
+                        info.timestamp = ts_low | (ts_high << 32);
+                    }
+                }
+            }
+        }
+
+    } else {
+        // --- Raw trigger bank (0xFF1X) per page 21 ---
+        // Children are segments, one per event:
+        //   segment tag = event ID / trigger type
+        //   segment data: event_number, [ts_low, ts_high], [misc]
+        if (event_idx >= static_cast<int>(tb->child_count)) return false;
+
+        auto &seg = nodes[tb->child_first + event_idx];
+        info.trigger_bits = static_cast<uint8_t>(seg.tag); // trigger type in segment tag
+
+        const uint32_t *d = GetData(seg);
+        size_t nw = seg.data_words;
+        if (nw >= 1)
+            info.event_number = static_cast<int32_t>(d[0]);
+        if (has_timestamps && nw >= 3) {
+            uint64_t ts_low  = d[1];
+            uint64_t ts_high = d[2] & 0xFFFF; // bits 47-32
+            info.timestamp = ts_low | (ts_high << 32);
+        }
+    }
+
+    return true;
+}
+
+// === JLab TI bank fallback (0xE10A) =========================================
+// Used when no CODA trigger bank is present (single-event mode, legacy data)
 
 bool EvChannel::decodeTI(fdec::EventInfo &info) const
 {
-    // --- trigger bank (0xC000): event number and type -----------------------
-    if (auto *tb = FindFirstByTag(config.trigger_bank_tag)) {
-        const uint32_t *d = GetData(*tb);
-        size_t nw = tb->data_words;
-        if (config.trig_event_number_word >= 0 &&
-            static_cast<size_t>(config.trig_event_number_word) < nw)
-            info.event_number = static_cast<int32_t>(d[config.trig_event_number_word]);
-    }
-
     // --- TI data bank (0xE10A): trigger type, trigger number, timestamp -----
     auto *ti = FindFirstByTag(config.ti_bank_tag);
     if (ti) {
@@ -250,8 +373,9 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt) const
     evt.info.event_tag = evh.tag;
     evt.info.type      = static_cast<uint8_t>(evtype);
 
-    // extract TI timestamp (best-effort, may not be present)
-    decodeTI(evt.info);
+    // Try CODA trigger bank first (0xFF2X / 0xFF1X), then fall back to JLab TI
+    if (!decodeTriggerBank(i, evt.info))
+        decodeTI(evt.info);
 
     // find all FADC composite banks matching configured tag
     int roc_idx = 0;

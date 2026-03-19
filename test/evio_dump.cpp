@@ -32,15 +32,35 @@ static std::string hex(uint32_t v)
 
 static std::string tag_label(uint32_t tag)
 {
-    // known CODA tags
+    // CODA3 physics events (page 27/29)
+    if (tag == 0xFF50) return "PHYSICS(PEB)";
+    if (tag == 0xFF58) return "PHYSICS(PEB+sync)";
+    if (tag == 0xFF70) return "PHYSICS(SEB)";
+    if (tag == 0xFF78) return "PHYSICS(SEB+sync)";
     if (tag >= 0xFF50 && tag <= 0xFF8F) return "PHYSICS";
-    if (tag == 0x11) return "PRESTART";
-    if (tag == 0x12) return "GO";
-    if (tag == 0x14) return "END";
-    if (tag == 0x20) return "END2";
-    if (tag == 0xC1 || tag == 0xc1) return "SYNC";
-    if (tag == 0x1F || tag == 0x1f) return "EPICS";
+
+    // CODA3 trigger banks (page 26)
+    if (tag >= 0xFF10 && tag <= 0xFF1F) return "TRIGGER(raw)";
+    if (tag >= 0xFF20 && tag <= 0xFF2F) return "TRIGGER(built)";
+    if (tag == 0xFF4F) return "TRIGGER(bad)";
+
+    // CODA3 control events (page 20/29)
+    if (tag == 0xFFD0) return "SYNC";
+    if (tag == 0xFFD1) return "PRESTART";
+    if (tag == 0xFFD2) return "GO";
+    if (tag == 0xFFD3) return "PAUSE";
+    if (tag == 0xFFD4) return "END";
     if (tag >= 0xFFD0 && tag <= 0xFFDF) return "CONTROL";
+
+    // Legacy CODA2 tags (may appear in older data)
+    if (tag == 0x11) return "PRESTART(legacy)";
+    if (tag == 0x12) return "GO(legacy)";
+    if (tag == 0x14) return "END(legacy)";
+    if (tag == 0xC1) return "SYNC(legacy)";
+
+    // EPICS
+    if (tag == 0x1F) return "EPICS";
+
     return "";
 }
 

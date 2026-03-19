@@ -58,7 +58,6 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
         auto &bt = j["bank_tags"];
         if (bt.contains("fadc_composite")) cfg.fadc_composite_tag = parse_hex(bt["fadc_composite"]);
         if (bt.contains("ti_data"))        cfg.ti_bank_tag        = parse_hex(bt["ti_data"]);
-        if (bt.contains("trigger_bank"))   cfg.trigger_bank_tag   = parse_hex(bt["trigger_bank"]);
         if (bt.contains("run_info"))       cfg.run_info_tag       = parse_hex(bt["run_info"]);
         if (bt.contains("daq_config"))     cfg.daq_config_tag     = parse_hex(bt["daq_config"]);
         if (bt.contains("epics_data"))     cfg.epics_bank_tag     = parse_hex(bt["epics_data"]);
@@ -71,13 +70,6 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
         if (ti.contains("time_high_word"))  cfg.ti_time_high_word  = ti["time_high_word"].get<int>();
         if (ti.contains("time_high_mask"))  cfg.ti_time_high_mask  = parse_hex(ti["time_high_mask"]);
         if (ti.contains("time_high_shift")) cfg.ti_time_high_shift = ti["time_high_shift"].get<int>();
-    }
-
-    // trigger bank format
-    if (j.contains("trigger_bank")) {
-        auto &tb = j["trigger_bank"];
-        if (tb.contains("event_number_word")) cfg.trig_event_number_word = tb["event_number_word"].get<int>();
-        if (tb.contains("event_type_word"))   cfg.trig_event_type_word   = tb["event_type_word"].get<int>();
     }
 
     // run info format

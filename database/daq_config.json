@@ -1,8 +1,8 @@
 {
-    "_comment": "DAQ configuration for prad2decoder — derived from prad_023109.evio analysis",
+    "_comment": "DAQ configuration for prad2decoder — CODA3 format per EVIO spec",
 
     "event_tags": {
-        "_comment": "JLab CODA single-event tags: 0xB1 or 0xFE. Built-trigger 0xFF50-0xFF8F handled automatically.",
+        "_comment": "CODA2/JLab legacy control tags (confirmed in PRad-II data). Built-trigger 0xFF50+ auto-detected.",
         "physics":      ["0xB1", "0xFE"],
         "prestart":     "0x11",
         "go":           "0x12",
@@ -12,26 +12,20 @@
     },
 
     "bank_tags": {
+        "_comment": "Trigger bank (0xFF2X) auto-detected by tag range, not configured here",
         "fadc_composite":  "0xE101",
         "ti_data":         "0xE10A",
-        "trigger_bank":    "0xC000",
         "run_info":        "0xE10F",
         "daq_config":      "0xE10E",
         "epics_data":      "0xE114"
     },
 
     "ti_format": {
-        "_comment": "TI data: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high_shifted",
+        "_comment": "JLab TI data bank (0xE10A) fallback: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high_shifted",
         "time_low_word":  2,
         "time_high_word": 3,
         "time_high_mask": "0xFFFF0000",
         "time_high_shift": 16
-    },
-
-    "trigger_bank": {
-        "_comment": "0xC000 bank: 3 UINT32 words per event",
-        "event_number_word": 0,
-        "event_type_word":   1
     },
 
     "run_info": {

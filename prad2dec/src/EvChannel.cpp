@@ -43,17 +43,17 @@ bool EvChannel::Scan()
 
     scanBank(0, 0, -1);
 
+    // Classify event type using DaqConfig
+    evtype = classify_event(evh.tag, config);
+
     // Determine number of events in this buffer.
-    // Control events: 0. Standard CODA built physics (0xFF50-0xFF8F): num = event count.
-    // Everything else (0xfe, 0x81, ROC raw, etc.): num is the CODA ID, not event count.
-    bool is_control = (evh.tag >= 0x11 && evh.tag <= 0x14)
-                   || (evh.tag >= 0xFFD0 && evh.tag <= 0xFFDF);
-    if (is_control) {
+    if (config.is_control(evh.tag)) {
         nevents = 0;
-    } else if (evh.tag >= 0xFF50 && evh.tag <= 0xFF8F) {
+    } else if (config.is_physics(evh.tag)) {
         nevents = std::max<int>(evh.num, 1);
     } else {
-        nevents = 1;
+        // EPICS, sync, and other non-physics events: single "event"
+        nevents = (evtype == EventType::Epics || evtype == EventType::Sync) ? 1 : 0;
     }
 
     return true;
@@ -163,21 +163,60 @@ const uint8_t *EvChannel::GetCompositePayload(const EvNode &n, size_t &nbytes) c
     return reinterpret_cast<const uint8_t*>(&buffer[inner.data_begin]);
 }
 
+// === TI timestamp extraction ================================================
+
+bool EvChannel::decodeTI(fdec::EventInfo &info) const
+{
+    auto ti_nodes = FindByTag(config.ti_bank_tag);
+    if (ti_nodes.empty()) return false;
+
+    const EvNode &ti = *ti_nodes[0];
+    const uint32_t *data = GetData(ti);
+    size_t nwords = ti.data_words;
+
+    // extract 48-bit timestamp: high 16 bits + low 32 bits
+    int lo = config.ti_time_low_word;
+    int hi = config.ti_time_high_word;
+
+    if (lo < 0 || hi < 0 ||
+        static_cast<size_t>(lo) >= nwords ||
+        static_cast<size_t>(hi) >= nwords)
+        return false;
+
+    uint64_t time_low  = data[lo];
+    uint64_t time_high = data[hi] & config.ti_time_high_mask;
+
+    info.timestamp = (time_high << 32) | time_low;
+
+    // trigger number from first word (common TI format)
+    if (nwords > 0)
+        info.trigger_number = static_cast<int32_t>(data[0]);
+
+    return true;
+}
+
 // === DecodeEvent ============================================================
-// For now, supports single-event mode (nevents=1, i=0).
-// Multi-event blocks (num>1) require splitting the composite payload by
-// tracking byte offsets per slot per event — to be added when needed.
 
 bool EvChannel::DecodeEvent(int i, fdec::EventData &evt) const
 {
     evt.clear();
     if (i < 0 || i >= nevents) return false;
 
-    // find all composite banks with tag 0xe101
+    BankHeader evh(&buffer[0]);
+
+    // fill event info
+    evt.info.event_tag = evh.tag;
+    evt.info.type      = static_cast<uint8_t>(evtype);
+
+    // extract TI timestamp (best-effort, may not be present)
+    decodeTI(evt.info);
+
+    // find all FADC composite banks matching configured tag
     int roc_idx = 0;
     for (size_t ni = 0; ni < nodes.size() && roc_idx < fdec::MAX_ROCS; ++ni) {
         auto &n = nodes[ni];
-        if (n.tag != 0xe101 || n.type != DATA_COMPOSITE) continue;
+        if (n.tag != config.fadc_composite_tag || n.type != DATA_COMPOSITE)
+            continue;
 
         size_t nbytes;
         auto *payload = GetCompositePayload(n, nbytes);
@@ -198,6 +237,40 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt) const
     }
     evt.nrocs = roc_idx;
     return roc_idx > 0;
+}
+
+// === EPICS text extraction ==================================================
+
+std::string EvChannel::ExtractEpicsText() const
+{
+    // look for the EPICS bank by configured tag
+    auto epics_nodes = FindByTag(config.epics_bank_tag);
+
+    // fallback: if no bank with epics_bank_tag, try string-type banks
+    // at depth 1 (direct children of the event)
+    if (epics_nodes.empty()) {
+        for (auto &n : nodes) {
+            if (n.depth == 1 &&
+                (n.type == DATA_CHARSTAR8 || n.type == DATA_CHAR8) &&
+                n.data_words > 0)
+            {
+                epics_nodes.push_back(&n);
+            }
+        }
+    }
+
+    if (epics_nodes.empty()) return {};
+
+    // extract text from the first matching node
+    const EvNode &n = *epics_nodes[0];
+    const char *raw = reinterpret_cast<const char*>(&buffer[n.data_begin]);
+    size_t max_len = n.data_words * sizeof(uint32_t);
+
+    // find actual string length (may be null-padded)
+    size_t len = 0;
+    while (len < max_len && raw[len] != '\0') ++len;
+
+    return std::string(raw, len);
 }
 
 // === PrintTree ==============================================================

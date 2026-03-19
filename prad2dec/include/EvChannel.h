@@ -3,23 +3,32 @@
 // EvChannel.h — read evio events, scan bank tree, decode FADC data
 //
 // Usage:
+//   DaqConfig cfg;                           // default tags, or load from JSON
 //   EvChannel ch;
+//   ch.SetConfig(cfg);
 //   ch.Open("file.evio");
 //   while (ch.Read() == status::success) {
 //       if (!ch.Scan()) continue;
-//       auto hdr = ch.GetEvHeader();
-//       if (hdr.tag != 0xfe) continue;       // skip non-physics
+//       auto etype = ch.GetEventType();
 //
-//       int nevt = ch.GetNEvents();           // events in this block
-//       for (int i = 0; i < nevt; ++i) {
-//           ch.DecodeEvent(i, event);         // fills pre-allocated EventData
-//           // ... use event.rocs[r].slots[s].channels[c].samples[] ...
+//       if (etype == EventType::Physics) {
+//           int nevt = ch.GetNEvents();
+//           for (int i = 0; i < nevt; ++i) {
+//               ch.DecodeEvent(i, event);
+//               // event.info has timestamp, trigger number, event type
+//               // event.rocs[r].slots[s].channels[c].samples[]
+//           }
+//       }
+//       else if (etype == EventType::Epics) {
+//           std::string text = ch.ExtractEpicsText();
+//           // parse "value  channel_name" lines
 //       }
 //   }
 //=============================================================================
 
 #include "EvStruct.h"
 #include "Fadc250Data.h"
+#include "DaqConfig.h"
 #include <string>
 #include <vector>
 
@@ -35,12 +44,19 @@ public:
     EvChannel(const EvChannel &) = delete;
     EvChannel &operator=(const EvChannel &) = delete;
 
+    // --- configuration ------------------------------------------------------
+    void SetConfig(const DaqConfig &cfg) { config = cfg; }
+    const DaqConfig &GetConfig() const   { return config; }
+
     virtual status Open(const std::string &path);
     virtual void   Close();
     virtual status Read();
 
     // --- scan the current event into a flat tree ----------------------------
     bool Scan();
+
+    // --- event type (valid after Scan) --------------------------------------
+    EventType GetEventType() const { return evtype; }
 
     // --- tree accessors -----------------------------------------------------
     BankHeader                  GetEvHeader() const { return BankHeader(&buffer[0]); }
@@ -64,18 +80,30 @@ public:
     int GetNEvents() const { return nevents; }
 
     // Decode the i-th event (0-based) into the pre-allocated EventData.
-    // For single-event blocks (nevents=1), i must be 0.
+    // Populates EventInfo (type, trigger, timestamp) and FADC ROC data.
     // Returns true on success.
     bool DecodeEvent(int i, fdec::EventData &evt) const;
+
+    // --- EPICS extraction (call when GetEventType() == Epics) ---------------
+
+    // Extract raw EPICS text from the current event buffer.
+    // Returns the text payload (lines of "value  channel_name").
+    // Returns empty string if no EPICS data found.
+    std::string ExtractEpicsText() const;
 
     // debug
     void PrintTree(std::ostream &os) const;
 
 protected:
+    DaqConfig config;
     int fHandle;
     std::vector<uint32_t> buffer;
     std::vector<EvNode>   nodes;
     int nevents = 0;
+    EventType evtype = EventType::Unknown;
+
+    // TI timestamp extraction
+    bool decodeTI(fdec::EventInfo &info) const;
 
     size_t scanBank      (size_t off, int depth, int parent);
     size_t scanSegment   (size_t off, int depth, int parent);

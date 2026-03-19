@@ -28,6 +28,11 @@ get_filename_component(RESOURCE_DIR "${RESOURCE_DIR}" ABSOLUTE)
 add_subdirectory(prad2dec)
 
 # ---------------------------------------------------------------------------
+# Analysis library (clustering, reconstruction)
+# ---------------------------------------------------------------------------
+add_subdirectory(prad2ana)
+
+# ---------------------------------------------------------------------------
 # Web server dependencies (json, websocketpp, asio)
 # ---------------------------------------------------------------------------
 include(FetchContent)
@@ -87,6 +92,7 @@ target_compile_definitions(evc_viewer PRIVATE
 )
 target_link_libraries(evc_viewer PRIVATE
     prad2dec
+    prad2ana
     nlohmann_json::nlohmann_json
     websocketpp_lib
     pthread
@@ -103,6 +109,7 @@ target_compile_definitions(evc_monitor PRIVATE
 )
 target_link_libraries(evc_monitor PRIVATE
     prad2dec
+    prad2ana
     nlohmann_json::nlohmann_json
     websocketpp_lib
     pthread

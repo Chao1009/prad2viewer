@@ -63,14 +63,32 @@ struct RocData {
     }
 };
 
+// --- event-level information (extracted from TI bank + event header) --------
+struct EventInfo {
+    uint8_t  type;              // evc::EventType cast to uint8_t
+    uint32_t event_tag;         // top-level bank tag (raw)
+    int32_t  trigger_number;    // trigger/event number
+    uint64_t timestamp;         // absolute 48-bit timestamp from TI
+
+    void clear()
+    {
+        type = 0;
+        event_tag = 0;
+        trigger_number = 0;
+        timestamp = 0;
+    }
+};
+
 // --- full event data --------------------------------------------------------
 struct EventData {
+    EventInfo info;                         // event-level metadata
     int      nrocs;                        // count of active ROCs
     int      roc_index[MAX_ROCS];          // maps i -> ROC index in rocs[]
     RocData  rocs[MAX_ROCS];
 
     void clear()
     {
+        info.clear();
         nrocs = 0;
         for (int i = 0; i < MAX_ROCS; ++i)
             rocs[i].clear();

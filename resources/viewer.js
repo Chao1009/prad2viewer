@@ -308,12 +308,13 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
 
         const entries=data.bins.reduce((a,b)=>a+b,0)+data.underflow+data.overflow;
         const stats=`${data.events} evts | Entries: ${entries}  Under: ${data.underflow}  Over: ${data.overflow}`;
+        const xMin=binMin, xMax=binMin+data.bins.length*binStep;
         Plotly.react(divId,[{
             x,y:data.bins,type:'bar',marker:{color:barColor,line:{width:0}},
             hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
         }],{...PL,
             title:{text:`${title}<br><span style="font-size:9px;color:#888">${stats}</span>`,font:{size:10,color:'#ccc'}},
-            xaxis:{...PL.xaxis,title:xTitle},yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
+            xaxis:{...PL.xaxis,title:xTitle,range:[xMin,xMax]},yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
         },PC2);
     }).catch(()=>{
         currentHist[divId]=null;

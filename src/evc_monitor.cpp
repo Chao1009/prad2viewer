@@ -225,21 +225,17 @@ static void fillHist(fdec::EventData &event, fdec::WaveAnalyzer &ana,
 
                 bool has_peak = false, has_peak_tcut = false;
 
-                // integral histogram: largest peak within time cut
-                float best = -1;
+                // integral histogram: all peaks within time cut
                 for (int p = 0; p < wres.npeaks; ++p) {
                     auto &pk = wres.peaks[p];
                     if (pk.height < g_hist_cfg.threshold) continue;
                     has_peak = true;
                     if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max) {
                         has_peak_tcut = true;
-                        if (pk.integral > best) best = pk.integral;
+                        auto &h = g_histograms[key];
+                        if (h.bins.empty()) h.init(g_hist_nbins);
+                        h.fill(pk.integral, g_hist_cfg.bin_min, g_hist_cfg.bin_step);
                     }
-                }
-                if (best >= 0) {
-                    auto &h = g_histograms[key];
-                    if (h.bins.empty()) h.init(g_hist_nbins);
-                    h.fill(best, g_hist_cfg.bin_min, g_hist_cfg.bin_step);
                 }
 
                 // position histogram
@@ -386,13 +382,16 @@ static void etReaderThread()
 // -------------------------------------------------------------------------
 // Histogram JSON helper
 // -------------------------------------------------------------------------
-static json getHist(const std::map<std::string, Histogram> &hmap, const std::string &key)
+static json getHist(const std::map<std::string, Histogram> &hmap, int nbins,
+                    const std::string &key)
 {
     std::lock_guard<std::mutex> lk(g_hist_mtx);
     auto it = hmap.find(key);
-    if (it == hmap.end())
-        return {{"bins", json::array()}, {"underflow", 0}, {"overflow", 0},
+    if (it == hmap.end()) {
+        // return zero-filled histogram with correct bin count for proper axis range
+        return {{"bins", std::vector<int>(nbins, 0)}, {"underflow", 0}, {"overflow", 0},
                 {"events", g_events_processed.load()}};
+    }
     auto &h = it->second;
     return {{"bins", h.bins}, {"underflow", h.underflow}, {"overflow", h.overflow},
             {"events", g_events_processed.load()}};
@@ -477,12 +476,12 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
 
     // /api/hist/<key>
     if (uri.rfind("/api/hist/", 0) == 0) {
-        reply(getHist(g_histograms, uri.substr(10)).dump()); return;
+        reply(getHist(g_histograms, g_hist_nbins, uri.substr(10)).dump()); return;
     }
 
     // /api/poshist/<key>
     if (uri.rfind("/api/poshist/", 0) == 0) {
-        reply(getHist(g_pos_histograms, uri.substr(13)).dump()); return;
+        reply(getHist(g_pos_histograms, g_pos_nbins, uri.substr(13)).dump()); return;
     }
 
     con->set_status(websocketpp::http::status_code::not_found);

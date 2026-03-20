@@ -529,9 +529,7 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         con->append_header("Content-Type", ct);
     };
 
-    if (uri == "/" || uri == "/viewer.css" || uri == "/viewer.js") {
-        if (serveResource(uri, con)) return;
-    }
+    if (serveResource(uri, con)) return;
 
     if (uri == "/api/config") { reply(buildConfig().dump()); return; }
 

@@ -14,6 +14,8 @@
 #include "EvChannel.h"
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
+#include "HyCalSystem.h"
+#include "HyCalCluster.h"
 
 #include <nlohmann/json.hpp>
 
@@ -139,6 +141,11 @@ static std::string g_data_dir;            // sandboxed data directory (empty = d
 static std::string g_res_dir;             // resources directory (viewer.html, .css, .js)
 static json g_base_config;                // config without per-file fields
 static Progress g_progress;
+
+static fdec::HyCalSystem g_hycal;
+static fdec::ClusterConfig g_cluster_cfg;
+static float g_adc_to_mev = 1.0f;
+static std::unordered_map<int, int> g_roc_to_crate;  // ROC tag → crate index
 
 // -------------------------------------------------------------------------
 // Helpers
@@ -397,30 +404,38 @@ static void loadFileAsync(const std::string &filepath)
 }
 
 // -------------------------------------------------------------------------
+// Decode raw event from file (shared by decodeEvent and computeClusters)
+// Returns empty string on success, error message on failure.
+// -------------------------------------------------------------------------
+static std::string decodeRawEvent(int ev1, fdec::EventData &event)
+{
+    std::shared_ptr<FileData> data;
+    { std::lock_guard<std::mutex> lk(g_data_mtx); data = g_data; }
+    if (!data) return "no file loaded";
+
+    int idx = ev1 - 1;
+    if (idx < 0 || idx >= (int)data->index.size()) return "event out of range";
+
+    auto &ei = data->index[idx];
+    EvChannel ch;
+    if (ch.Open(data->filepath) != status::success) return "cannot open file";
+
+    for (int b = 0; b < ei.buffer_num; ++b)
+        if (ch.Read() != status::success) { ch.Close(); return "read error"; }
+    if (!ch.Scan()) { ch.Close(); return "scan error"; }
+    if (!ch.DecodeEvent(ei.sub_event, event)) { ch.Close(); return "decode error"; }
+    ch.Close();
+    return "";
+}
+
+// -------------------------------------------------------------------------
 // Decode one event → JSON (from current g_data)
 // -------------------------------------------------------------------------
 static json decodeEvent(int ev1)
 {
-    std::shared_ptr<FileData> data;
-    { std::lock_guard<std::mutex> lk(g_data_mtx); data = g_data; }
-    if (!data) return {{"error", "no file loaded"}};
-
-    int idx = ev1 - 1;
-    if (idx < 0 || idx >= (int)data->index.size())
-        return {{"error", "event out of range"}};
-
-    auto &ei = data->index[idx];
-    EvChannel ch;
-    if (ch.Open(data->filepath) != status::success)
-        return {{"error", "cannot open file"}};
-
-    for (int b = 0; b < ei.buffer_num; ++b)
-        if (ch.Read() != status::success) { ch.Close(); return {{"error", "read error"}}; }
-    if (!ch.Scan()) { ch.Close(); return {{"error", "scan error"}}; }
-
     fdec::EventData event;
-    if (!ch.DecodeEvent(ei.sub_event, event)) { ch.Close(); return {{"error", "decode error"}}; }
-    ch.Close();
+    std::string err = decodeRawEvent(ev1, event);
+    if (!err.empty()) return {{"error", err}};
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_hist_cfg.min_peak_ratio;
@@ -468,6 +483,109 @@ static json decodeEvent(int ev1)
         }
     }
     return {{"event", ev1}, {"channels", channels}};
+}
+
+// -------------------------------------------------------------------------
+// Compute clusters for one event
+// -------------------------------------------------------------------------
+static json computeClusters(int ev1)
+{
+    fdec::EventData event;
+    std::string err = decodeRawEvent(ev1, event);
+    if (!err.empty()) return {{"error", err}};
+
+    fdec::WaveAnalyzer ana;
+    ana.cfg.min_peak_ratio = g_hist_cfg.min_peak_ratio;
+    fdec::WaveResult wres;
+
+    // per-request clusterer (lightweight, no mutex needed)
+    fdec::HyCalCluster clusterer(g_hycal);
+    clusterer.SetConfig(g_cluster_cfg);
+
+    // collect per-module energies
+    int nmod = g_hycal.module_count();
+    std::vector<float> mod_energy(nmod, 0.f);
+
+    for (int r = 0; r < event.nrocs; ++r) {
+        auto &roc = event.rocs[r];
+        if (!roc.present) continue;
+        auto cit = g_roc_to_crate.find(roc.tag);
+        if (cit == g_roc_to_crate.end()) continue;
+        int crate = cit->second;
+
+        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+            if (!roc.slots[s].present) continue;
+            auto &slot = roc.slots[s];
+            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                if (!(slot.channel_mask & (1u << c))) continue;
+                auto &cd = slot.channels[c];
+                if (cd.nsamples <= 0) continue;
+
+                ana.Analyze(cd.samples, cd.nsamples, wres);
+
+                // best peak integral in time window
+                float best = -1;
+                for (int p = 0; p < wres.npeaks; ++p) {
+                    auto &pk = wres.peaks[p];
+                    if (pk.height < g_hist_cfg.threshold) continue;
+                    if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max) {
+                        if (pk.integral > best) best = pk.integral;
+                    }
+                }
+                if (best <= 0) continue;
+
+                const auto *mod = g_hycal.module_by_daq(crate, s, c);
+                if (!mod || !mod->is_hycal()) continue;
+
+                float energy = best * g_adc_to_mev;
+                mod_energy[mod->index] = energy;
+                clusterer.AddHit(mod->index, energy);
+            }
+        }
+    }
+
+    clusterer.FormClusters();
+
+    // build hits map (module index → energy, only non-zero)
+    json hits_j = json::object();
+    for (int i = 0; i < nmod; ++i) {
+        if (mod_energy[i] > 0.f)
+            hits_j[std::to_string(i)] = std::round(mod_energy[i] * 100) / 100;
+    }
+
+    // build cluster array
+    std::vector<fdec::ClusterHit> reco_hits;
+    clusterer.ReconstructHits(reco_hits);
+    auto &clusters = clusterer.GetClusters();
+
+    json cl_arr = json::array();
+    for (size_t ci = 0; ci < clusters.size(); ++ci) {
+        auto &cl = clusters[ci];
+        auto &rh = reco_hits[ci];
+        auto &cmod = g_hycal.module(cl.center.index);
+
+        json indices = json::array();
+        for (auto &h : cl.hits)
+            indices.push_back(h.index);
+
+        cl_arr.push_back({
+            {"id", (int)ci},
+            {"center", cmod.name},
+            {"center_id", cmod.id},
+            {"x", std::round(rh.x * 10) / 10},
+            {"y", std::round(rh.y * 10) / 10},
+            {"energy", std::round(rh.energy * 10) / 10},
+            {"nblocks", rh.nblocks},
+            {"npos", rh.npos},
+            {"modules", indices},
+        });
+    }
+
+    return {
+        {"event", ev1},
+        {"hits", hits_j},
+        {"clusters", cl_arr},
+    };
 }
 
 // -------------------------------------------------------------------------
@@ -537,6 +655,12 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     if (uri.rfind("/api/event/", 0) == 0) {
         int evnum = std::atoi(uri.c_str() + 11);
         reply(decodeEvent(evnum).dump()); return;
+    }
+
+    // /api/clusters/<num>
+    if (uri.rfind("/api/clusters/", 0) == 0) {
+        int evnum = std::atoi(uri.c_str() + 14);
+        reply(computeClusters(evnum).dump()); return;
     }
 
     // /api/hist/<key>
@@ -708,10 +832,13 @@ int main(int argc, char *argv[])
     if (readFile(g_res_dir + "/viewer.html").empty())
         std::cerr << "Warning: viewer.html not found in " << g_res_dir << "\n";
 
+    std::string modules_file = findFile("hycal_modules.json", db_dir);
+    std::string daq_file    = findFile("daq_map.json", db_dir);
+
     json modules_j = json::array(), daq_j = json::array();
-    { std::string s = readFile(findFile("hycal_modules.json", db_dir));
+    { std::string s = readFile(modules_file);
       if (!s.empty()) modules_j = json::parse(s, nullptr, false); }
-    { std::string s = readFile(findFile("daq_map.json", db_dir));
+    { std::string s = readFile(daq_file);
       if (!s.empty()) daq_j = json::parse(s, nullptr, false); }
 
     // base config (file-independent fields)
@@ -721,6 +848,42 @@ int main(int argc, char *argv[])
         {"crate_roc", {{"0",0x80},{"1",0x82},{"2",0x84},{"3",0x86},{"4",0x88},{"5",0x8a},{"6",0x8c}}},
         {"mode", "file"},
     };
+
+    // build ROC tag → crate index inverse map
+    for (auto &[k, v] : g_base_config["crate_roc"].items())
+        g_roc_to_crate[v.get<int>()] = std::stoi(k);
+
+    // initialize HyCal geometry + neighbor system
+    if (!modules_file.empty() && !daq_file.empty()) {
+        if (g_hycal.Init(modules_file, daq_file))
+            std::cerr << "HyCal     : " << g_hycal.module_count() << " modules\n";
+        else
+            std::cerr << "Warning: HyCal system initialization failed\n";
+    }
+
+    // load reconstruction config (clustering + calibration)
+    std::string reco_file = findFile("reconstruction.json", db_dir);
+    std::string reco_str = readFile(reco_file);
+    if (!reco_str.empty()) {
+        auto rcfg = json::parse(reco_str, nullptr, false);
+        if (rcfg.contains("hycal_cluster")) {
+            auto &hc = rcfg["hycal_cluster"];
+            if (hc.contains("min_module_energy"))  g_cluster_cfg.min_module_energy  = hc["min_module_energy"];
+            if (hc.contains("min_center_energy"))  g_cluster_cfg.min_center_energy  = hc["min_center_energy"];
+            if (hc.contains("min_cluster_energy")) g_cluster_cfg.min_cluster_energy = hc["min_cluster_energy"];
+            if (hc.contains("min_cluster_size"))    g_cluster_cfg.min_cluster_size   = hc["min_cluster_size"];
+            if (hc.contains("corner_conn"))         g_cluster_cfg.corner_conn        = hc["corner_conn"];
+            if (hc.contains("split_iter"))          g_cluster_cfg.split_iter         = hc["split_iter"];
+            if (hc.contains("least_split"))         g_cluster_cfg.least_split        = hc["least_split"];
+            if (hc.contains("log_weight_thres"))    g_cluster_cfg.log_weight_thres   = hc["log_weight_thres"];
+        }
+        if (rcfg.contains("calibration")) {
+            auto &cal = rcfg["calibration"];
+            if (cal.contains("adc_to_mev")) g_adc_to_mev = cal["adc_to_mev"];
+        }
+        std::cerr << "Reco      : " << reco_file
+                  << " (adc_to_mev=" << g_adc_to_mev << ")\n";
+    }
 
     std::cerr << "Database  : " << db_dir << "\n"
               << "Resources : " << res_dir << "\n";

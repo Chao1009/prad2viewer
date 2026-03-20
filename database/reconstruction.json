@@ -1,0 +1,15 @@
+{
+    "hycal_cluster": {
+        "min_module_energy": 0.0,
+        "min_center_energy": 10.0,
+        "min_cluster_energy": 50.0,
+        "min_cluster_size": 1,
+        "corner_conn": false,
+        "split_iter": 6,
+        "least_split": 0.01,
+        "log_weight_thres": 3.6
+    },
+    "calibration": {
+        "adc_to_mev": 0.078
+    }
+}

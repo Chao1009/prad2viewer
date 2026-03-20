@@ -439,4 +439,37 @@ const Module *HyCalSystem::module_by_daq(int crate, int slot, int ch) const
     return (it != daq_map_.end()) ? &modules_[it->second] : nullptr;
 }
 
+int HyCalSystem::LoadCalibration(const std::string &calib_path)
+{
+    std::ifstream f(calib_path);
+    if (!f.is_open()) {
+        std::cerr << "HyCalSystem::LoadCalibration: cannot open " << calib_path << "\n";
+        return -1;
+    }
+
+    json j;
+    try { j = json::parse(f, nullptr, true, true); }
+    catch (const json::parse_error &e) {
+        std::cerr << "HyCalSystem::LoadCalibration: parse error: " << e.what() << "\n";
+        return -1;
+    }
+
+    int matched = 0;
+    for (auto &entry : j) {
+        std::string name = entry.value("name", "");
+        if (name.empty()) continue;
+
+        const Module *m = module_by_name(name);
+        if (!m) continue;
+
+        Module &mod = modules_[m->index];
+        mod.cal_factor      = entry.value("factor", 0.0);
+        mod.cal_base_energy = entry.value("base_energy", 0.0);
+        mod.cal_non_linear  = entry.value("non_linear", 0.0);
+        ++matched;
+    }
+
+    return matched;
+}
+
 } // namespace fdec

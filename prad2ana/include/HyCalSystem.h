@@ -114,6 +114,14 @@ struct Module {
     // DAQ mapping
     DaqAddr     daq;
 
+    // calibration (per-module)
+    double      cal_factor      = 0.;   // MeV per ADC count (or per integral unit)
+    double      cal_base_energy = 0.;   // calibration beam energy (MeV)
+    double      cal_non_linear  = 0.;   // non-linear correction coefficient
+
+    // convert ADC value (pedestal-subtracted) to energy in MeV
+    double energize(double adc) const { return (adc < 0.) ? 0. : cal_factor * adc; }
+
     // pre-computed neighbors (filled by InitLayout)
     int         neighbor_count = 0;
     NeighborInfo neighbors[MAX_NEIGHBORS];
@@ -149,6 +157,11 @@ public:
     // daq_path:     daq_map.json (crate/slot/channel mapping)
     // Returns false on error.
     bool Init(const std::string &modules_path, const std::string &daq_path);
+
+    // Load per-module calibration from JSON file.
+    // Format: [{"name":"W735","factor":0.37,"base_energy":2138.67,"non_linear":0.006}, ...]
+    // Returns number of modules matched, or -1 on error.
+    int LoadCalibration(const std::string &calib_path);
 
     // --- module access (all O(1)) -------------------------------------------
     int             module_count()                     const { return n_modules_; }

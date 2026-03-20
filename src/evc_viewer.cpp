@@ -505,6 +505,8 @@ static json computeClusters(int ev1)
     std::string err = decodeRawEvent(ev1, event);
     if (!err.empty()) return {{"error", err}};
 
+    bool is_adc1881m = (g_daq_cfg.adc_format == "adc1881m");
+
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
@@ -532,23 +534,33 @@ static json computeClusters(int ev1)
                 auto &cd = slot.channels[c];
                 if (cd.nsamples <= 0) continue;
 
-                ana.Analyze(cd.samples, cd.nsamples, wres);
-
-                // best peak integral in time window
-                float best = -1;
-                for (int p = 0; p < wres.npeaks; ++p) {
-                    auto &pk = wres.peaks[p];
-                    if (pk.height < g_hist_cfg.threshold) continue;
-                    if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max) {
-                        if (pk.integral > best) best = pk.integral;
-                    }
-                }
-                if (best <= 0) continue;
-
                 const auto *mod = g_hycal.module_by_daq(crate, s, c);
                 if (!mod || !mod->is_hycal()) continue;
 
-                float energy = best * g_adc_to_mev;
+                float adc_val = 0;
+                if (is_adc1881m) {
+                    // ADC1881M: single raw ADC value (hardware integral)
+                    adc_val = cd.samples[0];
+                } else {
+                    // FADC250: use best peak integral in time window
+                    ana.Analyze(cd.samples, cd.nsamples, wres);
+                    float best = -1;
+                    for (int p = 0; p < wres.npeaks; ++p) {
+                        auto &pk = wres.peaks[p];
+                        if (pk.height < g_hist_cfg.threshold) continue;
+                        if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max) {
+                            if (pk.integral > best) best = pk.integral;
+                        }
+                    }
+                    adc_val = best;
+                }
+                if (adc_val <= 0) continue;
+
+                // per-module calibration if available, otherwise global factor
+                float energy = (mod->cal_factor > 0.)
+                    ? static_cast<float>(mod->energize(adc_val))
+                    : adc_val * g_adc_to_mev;
+
                 mod_energy[mod->index] = energy;
                 clusterer.AddHit(mod->index, energy);
             }
@@ -925,6 +937,12 @@ int main(int argc, char *argv[])
         if (rcfg.contains("calibration")) {
             auto &cal = rcfg["calibration"];
             if (cal.contains("adc_to_mev")) g_adc_to_mev = cal["adc_to_mev"];
+            if (cal.contains("calibration_file")) {
+                std::string calib_file = findFile(cal["calibration_file"].get<std::string>(), db_dir);
+                int nmatched = g_hycal.LoadCalibration(calib_file);
+                if (nmatched >= 0)
+                    std::cerr << "Calibration: " << calib_file << " (" << nmatched << " modules)\n";
+            }
         }
         std::cerr << "Reco      : " << reco_file
                   << " (adc_to_mev=" << g_adc_to_mev << ")\n";

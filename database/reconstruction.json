@@ -10,6 +10,7 @@
         "log_weight_thres": 3.6
     },
     "calibration": {
-        "adc_to_mev": 0.078
+        "adc_to_mev": 0.078,
+        "calibration_file": "calibration_prad.json"
     }
 }

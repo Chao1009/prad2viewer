@@ -320,19 +320,11 @@ bool EvChannel::decodeTI(fdec::EventInfo &info) const
             info.event_number = static_cast<int32_t>(d[config.trig_event_number_word]);
     }
 
-    // --- TI data bank (0xE10A): trigger type, trigger number, timestamp -----
+    // --- TI data bank (0xE10A) from any ROC: trigger number, timestamp ------
     auto *ti = FindFirstByTag(config.ti_bank_tag);
     if (ti) {
         const uint32_t *d = GetData(*ti);
         size_t nw = ti->data_words;
-
-        // raw trigger bits
-        if (config.ti_trigger_type_word >= 0 &&
-            static_cast<size_t>(config.ti_trigger_type_word) < nw)
-        {
-            info.trigger_bits = (d[config.ti_trigger_type_word] >> config.ti_trigger_type_shift)
-                                & config.ti_trigger_type_mask;
-        }
 
         if (config.ti_trigger_word >= 0 &&
             static_cast<size_t>(config.ti_trigger_word) < nw)
@@ -352,18 +344,38 @@ bool EvChannel::decodeTI(fdec::EventInfo &info) const
         }
     }
 
-    // --- run info bank (0xE10F, in TI master crate) -------------------------
-    if (auto *ri = FindFirstByTag(config.run_info_tag)) {
-        const uint32_t *d = GetData(*ri);
-        size_t nw = ri->data_words;
-
-        if (config.ri_run_number_word >= 0 &&
-            static_cast<size_t>(config.ri_run_number_word) < nw)
-            info.run_number = d[config.ri_run_number_word];
-
-        if (config.ri_unix_time_word >= 0 &&
-            static_cast<size_t>(config.ri_unix_time_word) < nw)
-            info.unix_time = d[config.ri_unix_time_word];
+    // --- TI master crate (tag 0x27): trigger bits + run info ----------------
+    // The TI master has a 7-word 0xE10A bank with FP trigger bits in word[5].
+    // Regular ROC TI banks are only 4 words and don't have trigger bits.
+    for (auto &n : nodes) {
+        if (n.depth == 1 && n.tag == config.ti_master_tag) {
+            // find 0xE10A inside this crate
+            for (size_t ci = 0; ci < n.child_count; ++ci) {
+                auto &child = nodes[n.child_first + ci];
+                if (child.tag == config.ti_bank_tag) {
+                    const uint32_t *d = GetData(child);
+                    size_t nw = child.data_words;
+                    if (config.ti_trigger_type_word >= 0 &&
+                        static_cast<size_t>(config.ti_trigger_type_word) < nw)
+                    {
+                        info.trigger_bits = (d[config.ti_trigger_type_word]
+                                             >> config.ti_trigger_type_shift)
+                                            & config.ti_trigger_type_mask;
+                    }
+                }
+                if (child.tag == config.run_info_tag) {
+                    const uint32_t *d = GetData(child);
+                    size_t nw = child.data_words;
+                    if (config.ri_run_number_word >= 0 &&
+                        static_cast<size_t>(config.ri_run_number_word) < nw)
+                        info.run_number = d[config.ri_run_number_word];
+                    if (config.ri_unix_time_word >= 0 &&
+                        static_cast<size_t>(config.ri_unix_time_word) < nw)
+                        info.unix_time = d[config.ri_unix_time_word];
+                }
+            }
+            break;
+        }
     }
 
     return ti != nullptr;

@@ -65,13 +65,13 @@ struct DaqConfig
     uint32_t ti_time_high_mask  = 0xFFFF0000;
     int      ti_time_high_shift = 16;   // right-shift before combining
 
-    // --- trigger type extraction from TI bank --------------------------------
-    // PRad-I: trigger bits in TI data[2] >> 24 (old format with 2 extra headers)
-    // PRad-II: likely TI word[0] >> 24 (header encodes event/trigger type)
-    // Set to -1 to disable trigger type extraction.
-    int ti_trigger_type_word  = 0;
-    int ti_trigger_type_shift = 24;
-    uint32_t ti_trigger_type_mask = 0xFF;
+    // --- trigger bits extraction (from TI master's 7-word TI bank) -----------
+    // Per Sergey B.: 32 FP trigger bits are in word[5] of the TI master's
+    // 0xE10A bank. Bits 16-31 = v1495 triggers, bit 16 = LMS.
+    // Only the TI master crate (7-word bank) has this; ROC TI banks (4-word) don't.
+    int ti_trigger_type_word  = 5;
+    int ti_trigger_type_shift = 0;
+    uint32_t ti_trigger_type_mask = 0xFFFFFFFF;
 
     // --- JLab trigger bank format (tag 0xC000, single-event mode) -----------
     // 3 words: event_number, event_tag, reserved

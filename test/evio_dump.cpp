@@ -294,7 +294,7 @@ static int doEvent(EvChannel &ch, int target)
                           << ": event#=" << evt.info.event_number
                           << " trigger#=" << evt.info.trigger_number
                           << " trigger_bits=0x" << std::hex
-                          << (int)evt.info.trigger_bits << std::dec
+                          << evt.info.trigger_bits << std::dec
                           << " timestamp=" << evt.info.timestamp
                           << " run=" << evt.info.run_number
                           << " unix_time=" << evt.info.unix_time
@@ -362,7 +362,7 @@ static int doTriggers(EvChannel &ch)
 {
     fdec::EventData evt;
     int record = 0, decoded = 0;
-    std::map<uint8_t, int> trig_counts;
+    std::map<uint32_t, int> trig_counts;
 
     std::cout << std::setw(8) << "event#"
               << std::setw(10) << "trigger#"
@@ -384,8 +384,8 @@ static int doTriggers(EvChannel &ch)
 
             std::cout << std::setw(8) << evt.info.event_number
                       << std::setw(10) << evt.info.trigger_number
-                      << "        0x" << std::hex << std::setw(2)
-                      << std::setfill('0') << (int)evt.info.trigger_bits
+                      << "    0x" << std::hex << std::setw(8)
+                      << std::setfill('0') << evt.info.trigger_bits
                       << std::dec << std::setfill(' ')
                       << std::setw(18) << evt.info.timestamp
                       << std::setw(8) << evt.nrocs
@@ -395,9 +395,8 @@ static int doTriggers(EvChannel &ch)
 
     std::cout << "\n=== Trigger Bits Summary (" << decoded << " events) ===\n";
     for (auto &[bits, cnt] : trig_counts) {
-        std::cout << "  0x" << std::hex << std::setw(2) << std::setfill('0')
-                  << (int)bits << std::dec << std::setfill(' ')
-                  << "  (" << std::bitset<8>(bits) << ")"
+        std::cout << "  0x" << std::hex << std::setw(8) << std::setfill('0')
+                  << bits << std::dec << std::setfill(' ')
                   << "  count=" << cnt << "\n";
     }
 

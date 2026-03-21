@@ -150,9 +150,17 @@ void AppState::init(const std::string &db_dir,
             if (lm.contains("warn_threshold")) lms_warn_thresh   = lm["warn_threshold"];
             if (lm.contains("max_history"))    lms_max_history   = lm["max_history"];
             lms_trigger_mask = (1u << lms_trigger_bit);
+            if (lm.contains("reference_channels")) {
+                for (auto &name : lm["reference_channels"]) {
+                    std::string n = name.get<std::string>();
+                    const auto *mod = hycal.module_by_name(n);
+                    lms_ref_channels.push_back({n, mod ? mod->index : -1});
+                }
+            }
             std::cerr << "LMS       : trigger_bit=" << lms_trigger_bit
                       << " mask=0x" << std::hex << lms_trigger_mask << std::dec
-                      << " warn=" << lms_warn_thresh << "\n";
+                      << " warn=" << lms_warn_thresh
+                      << " refs=" << lms_ref_channels.size() << "\n";
         }
 
         if (rcfg.contains("calibration")) {
@@ -408,45 +416,101 @@ json AppState::apiOccupancy() const
     return {{"occ", jocc}, {"occ_tcut", jtcut}, {"total", events_processed.load()}};
 }
 
-json AppState::apiLmsSummary() const
+// Helper: build a time→value map for a reference channel (for normalization)
+// Returns empty map if ref_index is invalid or has no data.
+static std::map<double, float> buildRefMap(
+    const std::map<int, std::vector<LmsEntry>> &lms_history,
+    const std::vector<AppState::LmsRefChannel> &refs, int ref_index)
+{
+    std::map<double, float> ref_map;
+    if (ref_index < 0 || ref_index >= static_cast<int>(refs.size())) return ref_map;
+    int ri = refs[ref_index].module_index;
+    if (ri < 0) return ref_map;
+    auto it = lms_history.find(ri);
+    if (it == lms_history.end()) return ref_map;
+    for (auto &e : it->second)
+        ref_map[e.time_sec] = e.integral;
+    return ref_map;
+}
+
+// Normalize a value by the reference channel at the same timestamp.
+// Returns val / ref_val, or -1 if ref not found for this time.
+static float normalizeByRef(float val, double time_sec,
+                            const std::map<double, float> &ref_map)
+{
+    if (ref_map.empty()) return val;
+    auto it = ref_map.find(time_sec);
+    if (it == ref_map.end() || it->second <= 0) return -1.f;
+    return val / it->second;
+}
+
+json AppState::apiLmsSummary(int ref_index) const
 {
     std::lock_guard<std::mutex> lk(lms_mtx);
+    auto ref_map = buildRefMap(lms_history, lms_ref_channels, ref_index);
+
     json mods = json::object();
     for (auto &[idx, hist] : lms_history) {
         if (hist.empty()) continue;
         double sum = 0, sum2 = 0;
-        for (auto &e : hist) { sum += e.integral; sum2 += e.integral * e.integral; }
-        double mean = sum / hist.size();
-        double var = sum2 / hist.size() - mean * mean;
+        int count = 0;
+        for (auto &e : hist) {
+            float v = normalizeByRef(e.integral, e.time_sec, ref_map);
+            if (v < 0) continue;
+            sum += v; sum2 += v * v;
+            count++;
+        }
+        if (count == 0) continue;
+        double mean = sum / count;
+        double var = sum2 / count - mean * mean;
         double rms = var > 0 ? std::sqrt(var) : 0;
         bool warn = (mean > 0 && rms / mean > lms_warn_thresh);
         if (idx >= 0 && idx < hycal.module_count()) {
             auto &mod = hycal.module(idx);
             mods[std::to_string(idx)] = {
-                {"name", mod.name}, {"mean", std::round(mean * 10) / 10},
-                {"rms", std::round(rms * 100) / 100},
-                {"count", (int)hist.size()}, {"warn", warn}};
+                {"name", mod.name}, {"mean", std::round(mean * 1000) / 1000},
+                {"rms", std::round(rms * 10000) / 10000},
+                {"count", count}, {"warn", warn}};
         }
     }
     return {{"modules", mods}, {"events", lms_events.load()},
-            {"trigger_bit", lms_trigger_bit}};
+            {"trigger_bit", lms_trigger_bit},
+            {"ref_index", ref_index}};
 }
 
-json AppState::apiLmsModule(int mod_idx) const
+json AppState::apiLmsModule(int mod_idx, int ref_index) const
 {
     std::lock_guard<std::mutex> lk(lms_mtx);
     auto it = lms_history.find(mod_idx);
     if (it == lms_history.end() || it->second.empty())
         return {{"time", json::array()}, {"integral", json::array()}, {"events", 0}};
 
+    auto ref_map = buildRefMap(lms_history, lms_ref_channels, ref_index);
+
     auto &hist = it->second;
     json t_arr = json::array(), v_arr = json::array();
     for (auto &e : hist) {
+        float v = normalizeByRef(e.integral, e.time_sec, ref_map);
+        if (v < 0) continue;
         t_arr.push_back(std::round(e.time_sec * 100) / 100);
-        v_arr.push_back(std::round(e.integral * 10) / 10);
+        v_arr.push_back(std::round(v * 1000) / 1000);
     }
     std::string name = (mod_idx >= 0 && mod_idx < hycal.module_count())
         ? hycal.module(mod_idx).name : "";
     return {{"name", name}, {"time", t_arr}, {"integral", v_arr},
-            {"events", (int)hist.size()}};
+            {"events", (int)t_arr.size()},
+            {"ref_index", ref_index}};
+}
+
+json AppState::apiLmsRefChannels() const
+{
+    json arr = json::array();
+    for (size_t i = 0; i < lms_ref_channels.size(); ++i) {
+        arr.push_back({
+            {"index", (int)i},
+            {"name", lms_ref_channels[i].name},
+            {"module_index", lms_ref_channels[i].module_index},
+        });
+    }
+    return arr;
 }

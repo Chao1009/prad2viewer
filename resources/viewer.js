@@ -1044,11 +1044,13 @@ function plotClHist(){
 // LMS monitoring
 // =========================================================================
 let g_lmsWarnThresh=0.1;
+let g_lmsRefIndex=-1;  // -1 = None (no normalization)
 let lmsSummaryData=null;  // {modules:{idx:{name,mean,rms,count,warn}}, events}
 let lmsSelectedModule=-1;
 
 function fetchLmsSummary(){
-    fetch('/api/lms/summary').then(r=>r.json()).then(data=>{
+    const refQ=g_lmsRefIndex>=0?`?ref=${g_lmsRefIndex}`:'';
+    fetch(`/api/lms/summary${refQ}`).then(r=>r.json()).then(data=>{
         lmsSummaryData=data;
         drawLmsGeo();
         updateLmsTable();
@@ -1058,7 +1060,8 @@ function fetchLmsSummary(){
 }
 
 function fetchLmsHistory(modIdx, modName){
-    fetch(`/api/lms/${modIdx}`).then(r=>r.json()).then(data=>{
+    const refQ=g_lmsRefIndex>=0?`?ref=${g_lmsRefIndex}`:'';
+    fetch(`/api/lms/${modIdx}${refQ}`).then(r=>r.json()).then(data=>{
         if(!data.time||!data.time.length){
             Plotly.react('lms-plot',[],{...PL,
                 title:{text:`${modName} — No LMS data`,font:{size:10,color:'#555'}}},PC2);
@@ -1080,9 +1083,9 @@ function fetchLmsHistory(modIdx, modName){
             {x:tRange, y:[warnLo,warnLo],
              type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
         ],{...PL,
-            title:{text:`LMS — ${modName} (${data.events} pts)`,font:{size:10,color:'#ccc'}},
+            title:{text:`LMS — ${modName} (${data.events} pts)${g_lmsRefIndex>=0?' [normalized]':''}`,font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,title:'Time (s)'},
-            yaxis:{...PL.yaxis,title:'Integral'},
+            yaxis:{...PL.yaxis,title:g_lmsRefIndex>=0?'Signal / Ref':'Integral'},
             legend:{x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}},
             margin:{...PL.margin,t:28,b:28},
         },PC2);
@@ -1273,6 +1276,15 @@ function init(){
         80, 80, ()=>{try{Plotly.Plots.resize('lms-plot');}catch(e){}});
     document.getElementById('lms-color-metric').onchange=drawLmsGeo;
     document.getElementById('lms-log-scale').onchange=drawLmsGeo;
+    document.getElementById('lms-ref-select').onchange=e=>{
+        g_lmsRefIndex=parseInt(e.target.value);
+        fetchLmsSummary();
+        if(lmsSelectedModule>=0){
+            const name=lmsSummaryData&&lmsSummaryData.modules&&lmsSummaryData.modules[String(lmsSelectedModule)]
+                ?lmsSummaryData.modules[String(lmsSelectedModule)].name:'';
+            fetchLmsHistory(lmsSelectedModule, name);
+        }
+    };
 
     // --- file mode nav ---
     document.getElementById('btn-prev').onclick=()=>{if(currentEvent>1)loadEvent(currentEvent-1);};
@@ -1449,7 +1461,20 @@ function init(){
             clHistStep=data.cluster_hist.step||10;
         }
         initClHist();
-        if(data.lms) g_lmsWarnThresh=data.lms.warn_threshold||0.1;
+        if(data.lms){
+            g_lmsWarnThresh=data.lms.warn_threshold||0.1;
+            // populate ref channel dropdown
+            const sel=document.getElementById('lms-ref-select');
+            sel.innerHTML='<option value="-1">None</option>';
+            if(data.lms.ref_channels){
+                for(const rc of data.lms.ref_channels){
+                    const o=document.createElement('option');
+                    o.value=rc.index;
+                    o.textContent=rc.name;
+                    sel.appendChild(o);
+                }
+            }
+        }
         updateTimeCutLabel();
         mode=data.mode||'file';
         g_currentFile=data.current_file||'';

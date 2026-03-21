@@ -42,6 +42,13 @@ struct AppState {
     int      lms_max_history  = 5000;
     uint32_t lms_trigger_mask = 0;
 
+    // LMS reference channels (for normalization)
+    struct LmsRefChannel {
+        std::string name;
+        int module_index = -1;
+    };
+    std::vector<LmsRefChannel> lms_ref_channels;
+
     // cluster config
     uint32_t cluster_skip_mask = 0;
     float    adc_to_mev        = 1.0f;
@@ -100,6 +107,7 @@ struct AppState {
     nlohmann::json apiHist(bool integral, const std::string &key) const;
     nlohmann::json apiClusterHist() const;
     nlohmann::json apiOccupancy() const;
-    nlohmann::json apiLmsSummary() const;
-    nlohmann::json apiLmsModule(int module_index) const;
+    nlohmann::json apiLmsSummary(int ref_index = -1) const;
+    nlohmann::json apiLmsModule(int module_index, int ref_index = -1) const;
+    nlohmann::json apiLmsRefChannels() const;
 };

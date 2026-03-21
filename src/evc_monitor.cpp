@@ -296,6 +296,7 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
             {"trigger_bit", g_app.lms_trigger_bit},
             {"warn_threshold", g_app.lms_warn_thresh},
             {"events", g_app.lms_events.load()},
+            {"ref_channels", g_app.apiLmsRefChannels()},
         };
         reply(cfg.dump()); return;
     }
@@ -350,17 +351,27 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         reply(g_app.apiHist(false, uri.substr(13)).dump()); return;
     }
 
+    // /api/lms/refs
+    if (uri == "/api/lms/refs") { reply(g_app.apiLmsRefChannels().dump()); return; }
+
     // /api/lms/*
     if (uri.rfind("/api/lms/", 0) == 0) {
-        std::string sub = uri.substr(9);
-        if (sub == "clear") {
+        // parse ref= query param
+        int ref = -1;
+        auto qpos = uri.find('?');
+        std::string path_part = (qpos != std::string::npos) ? uri.substr(9, qpos - 9) : uri.substr(9);
+        if (qpos != std::string::npos) {
+            std::string q = uri.substr(qpos + 1);
+            if (q.rfind("ref=", 0) == 0) ref = std::atoi(q.c_str() + 4);
+        }
+        if (path_part == "clear") {
             g_app.clearLms();
             reply("{\"cleared\":true}");
             wsBroadcast("{\"type\":\"lms_cleared\"}");
             return;
         }
-        if (sub == "summary") { reply(g_app.apiLmsSummary().dump()); return; }
-        reply(g_app.apiLmsModule(std::atoi(sub.c_str())).dump()); return;
+        if (path_part == "summary") { reply(g_app.apiLmsSummary(ref).dump()); return; }
+        reply(g_app.apiLmsModule(std::atoi(path_part.c_str()), ref).dump()); return;
     }
 
     con->set_status(websocketpp::http::status_code::not_found);

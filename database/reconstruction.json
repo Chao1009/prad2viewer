@@ -18,7 +18,8 @@
     "lms_monitor": {
         "trigger_bit": 16,
         "warn_threshold": 0.1,
-        "max_history": 5000
+        "max_history": 5000,
+        "reference_channels": ["LMS1", "LMS2", "LMS3"]
     },
     "calibration": {
         "adc_to_mev": 0.078,

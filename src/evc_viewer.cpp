@@ -451,6 +451,7 @@ static json buildConfig() {
         {"trigger_bit", g_app.lms_trigger_bit},
         {"warn_threshold", g_app.lms_warn_thresh},
         {"events", g_app.lms_events.load()},
+        {"ref_channels", g_app.apiLmsRefChannels()},
     };
     return cfg;
 }
@@ -503,11 +504,21 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl) {
     // /api/occupancy
     if (uri == "/api/occupancy") { reply(g_app.apiOccupancy().dump()); return; }
 
-    // /api/lms/*
+    // /api/lms/refs — list reference channels
+    if (uri == "/api/lms/refs") { reply(g_app.apiLmsRefChannels().dump()); return; }
+
+    // /api/lms/summary?ref=N or /api/lms/<idx>?ref=N
     if (uri.rfind("/api/lms/", 0) == 0) {
-        std::string sub = uri.substr(9);
-        if (sub == "summary") { reply(g_app.apiLmsSummary().dump()); return; }
-        reply(g_app.apiLmsModule(std::atoi(sub.c_str())).dump()); return;
+        // parse ref= query param
+        int ref = -1;
+        auto qpos = uri.find('?');
+        std::string path_part = (qpos != std::string::npos) ? uri.substr(9, qpos - 9) : uri.substr(9);
+        if (qpos != std::string::npos) {
+            std::string q = uri.substr(qpos + 1);
+            if (q.rfind("ref=", 0) == 0) ref = std::atoi(q.c_str() + 4);
+        }
+        if (path_part == "summary") { reply(g_app.apiLmsSummary(ref).dump()); return; }
+        reply(g_app.apiLmsModule(std::atoi(path_part.c_str()), ref).dump()); return;
     }
 
     // /api/files

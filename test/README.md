@@ -64,7 +64,7 @@ evc_test -m et -H localhost -P 11111 -f /tmp/et -S mon  # read from ET
 Replays an EVIO file into an ET system event-by-event at a configurable rate.
 
 ```bash
-et_feeder <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
+et_feeder <evio_file> [options]
 ```
 
 | Option | Description |
@@ -73,10 +73,13 @@ et_feeder <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
 | `-p` | ET port (default: 11111) |
 | `-f` | ET system file (default: /tmp/et_feeder) |
 | `-i` | Interval between events in ms (default: 100) |
+| `-s` | Start event number, 1-based (default: 1) |
+| `-n` | Number of events to feed (default: all) |
 
-Example:
+Examples:
 ```bash
-et_feeder data.evio -f /tmp/et_sys_prad -i 50      # feed at 20 Hz
+et_feeder data.evio -f /tmp/et_sys_prad -i 50       # feed all at 20 Hz
+et_feeder data.evio -f /tmp/et_sys -s 1000 -n 500   # feed events 1000-1499
 ```
 
 ## evchan_test

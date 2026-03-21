@@ -1,6 +1,6 @@
 // test/et_feeder.cpp — Feed an evio file to an ET system event-by-event
 //
-// Usage: et_feeder <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
+// Usage: et_feeder <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms] [-s start] [-n num]
 
 #include "EtConfigWrapper.h"
 #include "EvChannel.h"
@@ -21,7 +21,14 @@ volatile std::sig_atomic_t gSignalStatus;
 void signal_handler(int signal) { gSignalStatus = signal; }
 
 static void usage(const char *prog) {
-    std::cerr << "Usage: " << prog << " <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]\n";
+    std::cerr << "Usage: " << prog << " <evio_file> [options]\n\n"
+              << "Options:\n"
+              << "  -h <host>     ET host (default: localhost)\n"
+              << "  -p <port>     ET port (default: 11111)\n"
+              << "  -f <file>     ET system file (default: /tmp/et_feeder)\n"
+              << "  -i <ms>       Interval between events in ms (default: 100)\n"
+              << "  -s <N>        Start event number, 1-based (default: 1)\n"
+              << "  -n <N>        Number of events to feed (default: all)\n";
 }
 
 int main(int argc, char* argv[])
@@ -30,14 +37,18 @@ int main(int argc, char* argv[])
     int port = 11111;
     std::string et_file = "/tmp/et_feeder";
     int interval = 100;
+    int start_ev = 1;
+    int max_events = 0;  // 0 = all
 
     int opt;
-    while ((opt = getopt(argc, argv, "h:p:f:i:")) != -1) {
+    while ((opt = getopt(argc, argv, "h:p:f:i:s:n:")) != -1) {
         switch (opt) {
         case 'h': host = optarg; break;
         case 'p': port = std::atoi(optarg); break;
         case 'f': et_file = optarg; break;
         case 'i': interval = std::atoi(optarg); break;
+        case 's': start_ev = std::atoi(optarg); break;
+        case 'n': max_events = std::atoi(optarg); break;
         default:  usage(argv[0]); return 1;
         }
     }
@@ -78,18 +89,26 @@ int main(int argc, char* argv[])
 
     // install signal handler
     std::signal(SIGINT, signal_handler);
-    int count = 0;
+    int total = 0, fed = 0;
     et_event *ev;
     while ((chan.Read() == evc::status::success) && et_alive(et_id)) {
         if (gSignalStatus == SIGINT) {
             std::cout << "Received control-C, exiting...\n";
             break;
         }
-        system_clock::time_point start(system_clock::now());
-        system_clock::time_point next(start + std::chrono::milliseconds(interval));
+        ++total;
 
-        if (++count % PROGRESS_COUNT == 0) {
-            std::cout << "Read and fed " << count << " events to ET.\r" << std::flush;
+        // skip to start event
+        if (total < start_ev) continue;
+
+        // check max events
+        if (max_events > 0 && fed >= max_events) break;
+
+        system_clock::time_point t0(system_clock::now());
+        system_clock::time_point next(t0 + std::chrono::milliseconds(interval));
+
+        if (++fed % PROGRESS_COUNT == 0) {
+            std::cout << "Fed " << fed << " events (from #" << start_ev << ") to ET.\r" << std::flush;
         }
 
         uint32_t *buf = chan.GetRawBuffer();
@@ -113,7 +132,7 @@ int main(int argc, char* argv[])
 
         std::this_thread::sleep_until(next);
     }
-    std::cout << "Read and fed " << count << " events to ET\n";
+    std::cout << "Fed " << fed << " events (starting from #" << start_ev << ") to ET\n";
 
     chan.Close();
     return 0;

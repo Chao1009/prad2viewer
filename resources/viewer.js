@@ -869,7 +869,7 @@ function updateClusterTable(){
 function showClusterDetail(){
     const hdr=document.getElementById('cl-detail-header');
     if(selectedCluster<0 || !clusterData || !clusterData.clusters[selectedCluster]){
-        hdr.innerHTML='<div class="empty-msg">Click a module or select a cluster</div>';
+        hdr.innerHTML='<span class="cl-info-text">Click a module or select a cluster</span>';
         return;
     }
     const cl=clusterData.clusters[selectedCluster];

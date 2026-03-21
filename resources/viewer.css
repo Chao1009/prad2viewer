@@ -32,11 +32,11 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .tab:hover { color:var(--text); }
 .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
 
-.main { display:flex; height:calc(100vh - 66px); }
+.main { display:flex; height:calc(100vh - 66px - 22px); }
 
 /* --- clustering panel --- */
 .cl-hist-panel { flex:none; height:40%; min-height:100px; position:relative; }
-.cluster-info-wrap { flex:1; overflow-y:auto; }
+.cluster-info-wrap { flex:1; overflow-y:auto; min-height:0; }
 .cl-table-row.selected { background:rgba(0,180,216,0.15); }
 .cl-table-row:hover { background:rgba(0,180,216,0.08); cursor:pointer; }
 
@@ -73,16 +73,16 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 /* --- detail panel (right) --- */
 .detail-panel { flex:1; display:flex; flex-direction:column; min-width:350px; overflow:hidden; }
 .detail-header {
-    padding:6px 10px; background:var(--panel); border-bottom:1px solid var(--border);
-    font-size:13px; flex-shrink:0;
+    padding:4px 10px; background:var(--panel); border-bottom:1px solid var(--border);
+    font-size:13px; flex:0 0 24px; line-height:16px;
 }
 #cl-detail-header {
-    border-bottom:none; border-top:1px solid var(--border);
-    padding:4px 10px; font-size:12px;
+    flex:0 0 24px; padding:4px 10px; font-size:12px;
+    border-top:1px solid var(--border); background:var(--panel);
 }
-#cl-detail-header .empty-msg {
-    padding:0; font-size:12px; text-align:left; color:var(--dim);
-}
+.cl-info-text { color:var(--dim); }
+#cl-detail-header .mod-name { color:var(--accent); font-weight:600; }
+#cl-detail-header .mod-daq { color:var(--dim); font-size:11px; }
 .detail-header .mod-name { color:var(--accent); font-weight:600; }
 .detail-header .mod-daq { color:var(--dim); font-size:11px; }
 
@@ -127,7 +127,8 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
     padding:3px 12px; background:var(--panel); border-top:1px solid var(--border);
     font-size:11px; color:var(--dim); z-index:20;
 }
-.empty-msg { padding:20px; color:var(--dim); text-align:center; font-size:13px; }
+.empty-msg { color:var(--dim); font-size:12px; }
+.detail-header .empty-msg { padding:0; }
 
 /* file browser */
 .file-dialog {

@@ -153,7 +153,9 @@ static std::string encodeEvent(fdec::EventData &event, int seq,
             }
         }
     }
-    return json({{"event", seq}, {"channels", channels}}).dump();
+    return json({{"event", seq}, {"channels", channels},
+                  {"event_number", event.info.event_number},
+                  {"trigger_bits", event.info.trigger_bits}}).dump();
 }
 
 // -------------------------------------------------------------------------

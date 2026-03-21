@@ -471,7 +471,9 @@ function loadEventData(reqId, data) {
     const nch = Object.keys(eventChannels).length;
     const npk = Object.values(eventChannels).reduce((s,c) => s + (c.pk||[]).length, 0);
     const modeTag = mode === 'online' ? ' [LIVE]' : '';
-    document.getElementById('status-bar').textContent = `Event ${currentEvent}: ${nch} channels, ${npk} peaks${modeTag}`;
+    const evNum = data.event_number !== undefined ? ` (DAQ #${data.event_number})` : '';
+    const trigBits = data.trigger_bits !== undefined ? ` trig=0x${data.trigger_bits.toString(16)}` : '';
+    document.getElementById('status-bar').textContent = `Event ${currentEvent}${evNum}: ${nch} channels, ${npk} peaks${trigBits}${modeTag}`;
     if(activeTab==='cluster'){
         clusterEvent=-1; // invalidate cache
         loadClusterData(currentEvent);

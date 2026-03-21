@@ -330,7 +330,9 @@ static json decodeEvent(int ev1) {
             }
         }
     }
-    return {{"event", ev1}, {"channels", channels}};
+    return {{"event", ev1}, {"channels", channels},
+            {"event_number", event.info.event_number},
+            {"trigger_bits", event.info.trigger_bits}};
 }
 
 // -------------------------------------------------------------------------

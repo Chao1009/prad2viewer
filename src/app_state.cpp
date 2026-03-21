@@ -349,6 +349,16 @@ void AppState::clusterEvent(fdec::EventData &event,
 void AppState::processLms(fdec::EventData &event,
                           fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
+    // debug: log first few trigger bits seen
+    static int dbg_count = 0;
+    if (dbg_count < 20) {
+        std::cerr << "LMS check: trig_bits=0x" << std::hex << event.info.trigger_bits
+                  << " mask=0x" << lms_trigger_mask << std::dec
+                  << " match=" << ((event.info.trigger_bits & lms_trigger_mask) ? "YES" : "NO")
+                  << "\n";
+        dbg_count++;
+    }
+
     if (lms_trigger_mask == 0 ||
         !(event.info.trigger_bits & lms_trigger_mask)) return;
 

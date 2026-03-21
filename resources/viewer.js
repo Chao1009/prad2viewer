@@ -141,7 +141,9 @@ function updateRangeDisplay(){
 // Geo canvas
 // =========================================================================
 let geoViewInit=false;  // has fitView been called at least once?
-let geoDragging=false, geoDragX=0, geoDragY=0;
+let geoDragging=false, geoDragStartX=0, geoDragStartY=0, geoDragX=0, geoDragY=0;
+let geoDragMoved=false;  // true if drag exceeded click threshold
+const GEO_DRAG_THRESHOLD=4;  // pixels — movement below this is treated as click, not drag
 
 function initGeo(){
     geoWrap=document.getElementById('geo-wrap');
@@ -156,38 +158,59 @@ function initGeo(){
         const r=geoCanvas.getBoundingClientRect();
         const cx=e.clientX-r.left, cy=e.clientY-r.top;
         const factor=e.deltaY<0?1.15:1/1.15;
-        // zoom around cursor position
         offsetX=cx-(cx-offsetX)*factor;
         offsetY=cy-(cy-offsetY)*factor;
         scale*=factor;
         redrawGeo();
     },{passive:false});
 
-    // pan with mouse drag
+    // pan with left-click drag (with threshold to distinguish from click)
     geoCanvas.addEventListener('mousedown',e=>{
-        if(e.button===1||(e.button===0&&e.shiftKey)){
-            // middle-click or shift+left-click to pan
-            geoDragging=true; geoDragX=e.clientX; geoDragY=e.clientY;
-            geoCanvas.style.cursor='grabbing';
+        if(e.button===0){
+            geoDragging=true; geoDragMoved=false;
+            geoDragStartX=e.clientX; geoDragStartY=e.clientY;
+            geoDragX=e.clientX; geoDragY=e.clientY;
             e.preventDefault();
         }
     });
     window.addEventListener('mousemove',e=>{
         if(!geoDragging) return;
+        const dx=e.clientX-geoDragStartX, dy=e.clientY-geoDragStartY;
+        if(!geoDragMoved && Math.abs(dx)<GEO_DRAG_THRESHOLD && Math.abs(dy)<GEO_DRAG_THRESHOLD) return;
+        if(!geoDragMoved){ geoDragMoved=true; geoCanvas.style.cursor='grabbing'; }
         offsetX+=e.clientX-geoDragX;
         offsetY+=e.clientY-geoDragY;
         geoDragX=e.clientX; geoDragY=e.clientY;
         redrawGeo();
     });
     window.addEventListener('mouseup',e=>{
-        if(geoDragging){ geoDragging=false; geoCanvas.style.cursor=''; }
+        if(!geoDragging) return;
+        geoDragging=false;
+        geoCanvas.style.cursor='';
+        // if not dragged beyond threshold, treat as a click
+        if(!geoDragMoved){
+            const r=geoCanvas.getBoundingClientRect();
+            geoHandleClick(e.clientX-r.left, e.clientY-r.top);
+        }
     });
 
     // double-click to reset view
     geoCanvas.addEventListener('dblclick',e=>{
+        e.preventDefault();
         if(modules.length) fitView();
         redrawGeo();
     });
+
+    // reset view button
+    document.getElementById('btn-reset-view').onclick=()=>{
+        if(modules.length) fitView();
+        redrawGeo();
+    };
+}
+
+function resetGeoView(){
+    if(modules.length) fitView();
+    redrawGeo();
 }
 function resizeGeo(){
     canvasW=geoWrap.clientWidth; canvasH=geoWrap.clientHeight;
@@ -204,6 +227,30 @@ function fitView(){
 }
 function redrawGeo(){
     if(activeTab==='cluster') drawClusterGeo(); else drawGeo();
+}
+function geoHandleClick(cx,cy){
+    const m=hitTest(cx,cy);
+    if(!m) return;
+    if(activeTab==='cluster'){
+        selectedModule=null;
+        if(!clusterData || !clusterData.clusters || !clusterData.clusters.length){
+            selectedCluster=-1;
+            drawClusterGeo(); updateClusterTable(); showClusterDetail();
+            return;
+        }
+        const idx=modules.indexOf(m);
+        const clusters=clusterData.clusters;
+        let found=-1;
+        for(let ci=0;ci<clusters.length;ci++){
+            if(clusters[ci].modules&&clusters[ci].modules.includes(idx)){ found=ci; break; }
+        }
+        if(found<0) selectedCluster=-1;
+        else selectedCluster=(selectedCluster===found)?-1:found;
+        document.getElementById('cl-select').value=selectedCluster>=0?selectedCluster:'all';
+        drawClusterGeo(); updateClusterTable(); showClusterDetail();
+    } else {
+        showWaveform(m);
+    }
 }
 function d2c(x,y){return[x*scale+offsetX,-y*scale+offsetY];}
 function c2d(cx,cy){return[(cx-offsetX)/scale,-(cy-offsetY)/scale];}
@@ -1177,35 +1224,7 @@ function init(){
             tip.style.left=(e.clientX-r.left+14)+'px';tip.style.top=(e.clientY-r.top-8)+'px';
         }else tip.style.display='none';
     });
-    geoCanvas.addEventListener('click',e=>{
-        const r=geoCanvas.getBoundingClientRect(),m=hitTest(e.clientX-r.left,e.clientY-r.top);
-        if(!m) return;
-        if(activeTab==='cluster'){
-            selectedModule=null;  // clear DQ selection
-            if(!clusterData || !clusterData.clusters || !clusterData.clusters.length){
-                selectedCluster=-1;
-                drawClusterGeo(); updateClusterTable(); showClusterDetail();
-                return;
-            }
-            // find cluster for this module
-            const idx=modules.indexOf(m);
-            const clusters=clusterData.clusters;
-            let found=-1;
-            for(let ci=0;ci<clusters.length;ci++){
-                if(clusters[ci].modules&&clusters[ci].modules.includes(idx)){ found=ci; break; }
-            }
-            if(found<0){
-                // clicked outside any cluster — deselect
-                selectedCluster=-1;
-            } else {
-                selectedCluster=(selectedCluster===found)?-1:found;
-            }
-            document.getElementById('cl-select').value=selectedCluster>=0?selectedCluster:'all';
-            drawClusterGeo(); updateClusterTable(); showClusterDetail();
-        } else {
-            showWaveform(m);
-        }
-    });
+    // click is now handled via geoHandleClick (called from mouseup when drag threshold not exceeded)
     geoCanvas.addEventListener('mouseleave',()=>{
         hoveredModule=null;tip.style.display='none';
         if(activeTab==='cluster') drawClusterGeo(); else drawGeo();

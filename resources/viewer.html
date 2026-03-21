@@ -82,6 +82,7 @@
                 <input class="range-edit" id="range-max-edit" type="number" step="any">
                 <span class="range-btn" id="range-max-btn" title="Edit max">✎</span>
             </div>
+            <button id="btn-reset-view" class="geo-reset-btn" title="Reset view (double-click also works)">Reset</button>
         </div>
         <div class="geo-toolbar" id="geo-toolbar-cl" style="display:none">
             <label>Cluster:</label>
@@ -98,6 +99,7 @@
                 <span class="range-btn" id="cl-range-max-btn" title="Edit max">&#x270E;</span>
             </div>
             <span style="margin-left:auto;color:var(--dim);font-size:11px" id="cl-summary"></span>
+            <button class="geo-reset-btn" onclick="resetGeoView()" title="Reset view (double-click also works)">Reset</button>
         </div>
         <div class="geo-canvas-wrap" id="geo-wrap">
             <canvas id="geo-canvas"></canvas>

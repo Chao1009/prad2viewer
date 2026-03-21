@@ -51,6 +51,11 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
     background:var(--bg); border:1px solid var(--border); color:var(--text);
     padding:2px 6px; border-radius:3px; font-family:inherit; font-size:12px;
 }
+.geo-reset-btn {
+    background:var(--border); border:none; color:var(--dim); padding:1px 8px;
+    border-radius:3px; cursor:pointer; font-family:inherit; font-size:11px; margin-left:auto;
+}
+.geo-reset-btn:hover { background:var(--accent); color:#000; }
 .geo-canvas-wrap { flex:1; position:relative; overflow:hidden; }
 .geo-canvas-wrap canvas { position:absolute; top:0; left:0; }
 .geo-tooltip {

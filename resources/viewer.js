@@ -403,7 +403,7 @@ function showWaveform(mod){
 // =========================================================================
 // Histograms
 // =========================================================================
-function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
+function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor, logXId, logYId){
     if(!histEnabled){
         currentHist[divId]=null;
         Plotly.react(divId,[],{...PL,title:{text:'--hist not enabled',font:{size:10,color:'#444'}}},PC2);
@@ -429,7 +429,11 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor){
             hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
         }],{...PL,
             title:{text:`${title}<br><span style="font-size:9px;color:#888">${stats}</span>`,font:{size:10,color:'#ccc'}},
-            xaxis:{...PL.xaxis,title:xTitle,range:[xMin,xMax]},yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
+            xaxis:{...PL.xaxis,title:xTitle,range:[xMin,xMax],
+                type:logXId&&document.getElementById(logXId).checked?'log':'linear'},
+            yaxis:{...PL.yaxis,title:'Counts',
+                type:logYId&&document.getElementById(logYId).checked?'log':'linear'},
+            bargap:0.05,
         },PC2);
     }).catch(()=>{
         currentHist[divId]=null;
@@ -448,7 +452,7 @@ function showHistograms(mod){
     const h=histConfig;
     fetchAndPlotHist('inthist-div',`/api/hist/${key}`,
         `${mod.n} Integral [${h.time_min||170}-${h.time_max||190} ns]`,
-        'Peak Integral', h.bin_min||0, h.bin_step||100, '#00b4d8');
+        'Peak Integral', h.bin_min||0, h.bin_step||100, '#00b4d8', 'inthist-logx', 'inthist-logy');
     fetchAndPlotHist('poshist-div',`/api/poshist/${key}`,
         `${mod.n} Peak Position`,
         'Time (ns)', h.pos_min||0, h.pos_step||4, '#51cf66');
@@ -1056,8 +1060,11 @@ function plotClHist(){
         hovertemplate:'%{x:.0f} MeV: %{y}<extra></extra>',
     }],{...PL,
         title:{text:`Cluster Energy<br><span style="font-size:9px;color:#888">${clHistEvents} evts | ${entries} clusters</span>`,font:{size:10,color:'#ccc'}},
-        xaxis:{...PL.xaxis,title:'Energy (MeV)',range:[clHistMin,clHistMax]},
-        yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
+        xaxis:{...PL.xaxis,title:'Energy (MeV)',range:[clHistMin,clHistMax],
+            type:document.getElementById('clhist-logx').checked?'log':'linear'},
+        yaxis:{...PL.yaxis,title:'Counts',
+            type:document.getElementById('clhist-logy').checked?'log':'linear'},
+        bargap:0.05,
     },PC2);
 }
 
@@ -1296,6 +1303,12 @@ function init(){
     // cluster energy histogram
     Plotly.newPlot('cl-energy-hist',[],{...PL,title:{text:'Cluster Energy',font:{size:10,color:'#555'}}},PC2);
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
+
+    // histogram log-scale toggles
+    document.getElementById('inthist-logx').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };
+    document.getElementById('inthist-logy').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };
+    document.getElementById('clhist-logx').onchange=plotClHist;
+    document.getElementById('clhist-logy').onchange=plotClHist;
     setupCopyBtn('btn-copy-lms', ()=>currentLmsData);
 
     // cluster panel divider: histogram ↔ table

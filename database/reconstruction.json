@@ -16,7 +16,7 @@
         }
     },
     "lms_monitor": {
-        "trigger_bit": 16,
+        "trigger_bit": 4,
         "warn_threshold": 0.1,
         "warn_min_mean": 100,
         "max_history": 5000,

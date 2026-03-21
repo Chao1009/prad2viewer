@@ -54,6 +54,12 @@ let clusterEvent=-1;  // event number for cached cluster data
 let clHistBins=null, clHistEvents=0;
 let clHistMin=0, clHistMax=3000, clHistStep=10;
 let currentClHist=null;  // {x:[], y:[]} for copy button
+let currentNclustHist=null, currentNblocksHist=null;
+
+// cluster count histograms
+let nclustBins=null, nblocksBins=null;
+const NCLUST_MIN=0, NCLUST_MAX=20, NCLUST_STEP=1;
+const NBLOCKS_MIN=0, NBLOCKS_MAX=40, NBLOCKS_STEP=2;
 
 // DQ tab working range (set by syncDqRange, used by drawGeo)
 let rangeMin=null, rangeMax=null;
@@ -337,7 +343,7 @@ const PL={paper_bgcolor:'#1a1a2e',plot_bgcolor:'#11112a',font:{family:'Consolas,
 const PC2={responsive:true,displayModeBar:false};
 
 function resizeAllPlots(){
-    for(const id of['waveform-div','inthist-div','poshist-div','cl-energy-hist','lms-plot'])
+    for(const id of['waveform-div','inthist-div','poshist-div','cl-energy-hist','cl-nclust-hist','cl-nblocks-hist','lms-plot'])
         try{Plotly.Plots.resize(id);}catch(e){}
 }
 
@@ -609,7 +615,7 @@ function connectWebSocket() {
                 setEtStatus(msg.connected, msg.waiting, msg.retries);
             } else if (msg.type === 'hist_cleared') {
                 occData={}; occTcutData={}; occTotal=0;
-                initClHist(); plotClHist();
+                initClHist(); plotClHist(); plotClStatHists();
                 if (selectedModule) showHistograms(selectedModule);
                 drawGeo();
             } else if (msg.type === 'lms_event') {
@@ -740,7 +746,7 @@ function pollProgress() {
                     clHistMax=cfg.cluster_hist.max||3000;
                     clHistStep=cfg.cluster_hist.step||10;
                 }
-                initClHist(); plotClHist();
+                initClHist(); plotClHist(); plotClStatHists();
                 updateTimeCutLabel();
                 g_histCheckbox = histEnabled;
                 const hcb = document.getElementById('hist-checkbox');
@@ -832,7 +838,9 @@ function switchTab(tab){
         loadClusterData(currentEvent);
         setTimeout(()=>{
             try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}
-            plotClHist();
+            try{Plotly.Plots.resize('cl-nclust-hist');}catch(e){}
+            try{Plotly.Plots.resize('cl-nblocks-hist');}catch(e){}
+            plotClHist(); plotClStatHists();
         }, 50);
     } else if(tab==='lms') {
         fetchLmsSummary();
@@ -864,7 +872,7 @@ function loadClusterData(evnum){
         // accumulate energy histogram from per-event cluster data
         if(data.clusters && data.clusters.length>0){
             fillClHist(data.clusters);
-            plotClHist();
+            plotClHist(); plotClStatHists();
         }
         updateStatusBar();
     }).catch(err=>{ document.getElementById('status-bar').textContent=`Error: ${err}`; });
@@ -1031,8 +1039,12 @@ function initClHist(){
     clHistBins=new Array(nbins).fill(0);
     clHistEvents=0;
     currentClHist=null;
+    nclustBins=new Array(Math.ceil((NCLUST_MAX-NCLUST_MIN)/NCLUST_STEP)).fill(0);
+    nblocksBins=new Array(Math.ceil((NBLOCKS_MAX-NBLOCKS_MIN)/NBLOCKS_STEP)).fill(0);
+    currentNclustHist=null;
+    currentNblocksHist=null;
 }
-function clearClHist(){ initClHist(); plotClHist(); }
+function clearClHist(){ initClHist(); plotClHist(); plotClStatHists(); }
 
 function fetchClHist(){
     fetch('/api/cluster_hist').then(r=>r.json()).then(data=>{
@@ -1043,16 +1055,27 @@ function fetchClHist(){
         if(data.step!==undefined) clHistStep=data.step;
         clHistBins=data.bins;
         clHistEvents=data.events||0;
-        plotClHist();
+        plotClHist(); plotClStatHists();
     }).catch(()=>{});
 }
 
 function fillClHist(clusters){
     if(!clHistBins) initClHist();
     if(!clusters||!clusters.length) return;
+    // energy histogram
     for(const cl of clusters){
         const b=Math.floor((cl.energy-clHistMin)/clHistStep);
         if(b>=0 && b<clHistBins.length) clHistBins[b]++;
+    }
+    // number of clusters per event
+    const nc=clusters.length;
+    const nb1=Math.floor((nc-NCLUST_MIN)/NCLUST_STEP);
+    if(nclustBins && nb1>=0 && nb1<nclustBins.length) nclustBins[nb1]++;
+    // number of blocks per cluster
+    for(const cl of clusters){
+        const nbl=cl.nblocks||0;
+        const nb2=Math.floor((nbl-NBLOCKS_MIN)/NBLOCKS_STEP);
+        if(nblocksBins && nb2>=0 && nb2<nblocksBins.length) nblocksBins[nb2]++;
     }
     clHistEvents++;
 }
@@ -1082,6 +1105,32 @@ function plotClHist(){
             type:document.getElementById('clhist-logy').checked?'log':'linear'},
         bargap:0.05,
     },PC2);
+}
+
+function plotClStatHists(){
+    // number of clusters histogram
+    function plotStat(divId, bins, bmin, bstep, title, xTitle, color, copyVar){
+        if(!bins||!bins.length){
+            return null;
+        }
+        const x=bins.map((_,i)=>bmin+(i+0.5)*bstep);
+        const entries=bins.reduce((a,b)=>a+b,0);
+        const cx=[],cy=[];
+        for(let i=0;i<bins.length;i++){if(bins[i]>0){cx.push(x[i]);cy.push(bins[i]);}}
+        Plotly.react(divId,[{
+            x,y:bins,type:'bar',marker:{color,line:{width:0}},
+            hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
+        }],{...PL,
+            title:{text:`${title}<br><span style="font-size:9px;color:#888">${entries} entries</span>`,font:{size:10,color:'#ccc'}},
+            xaxis:{...PL.xaxis,title:xTitle,range:[bmin,bmin+bins.length*bstep]},
+            yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
+        },PC2);
+        return {x:cx,y:cy};
+    }
+    currentNclustHist=plotStat('cl-nclust-hist',nclustBins,NCLUST_MIN,NCLUST_STEP,
+        'Clusters per Event','# Clusters','#00b4d8');
+    currentNblocksHist=plotStat('cl-nblocks-hist',nblocksBins,NBLOCKS_MIN,NBLOCKS_STEP,
+        'Blocks per Cluster','# Blocks','#51cf66');
 }
 
 // =========================================================================
@@ -1319,6 +1368,21 @@ function init(){
     // cluster energy histogram
     Plotly.newPlot('cl-energy-hist',[],{...PL,title:{text:'Cluster Energy',font:{size:10,color:'#555'}}},PC2);
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
+    setupCopyBtn('btn-copy-nclust', ()=>currentNclustHist);
+    setupCopyBtn('btn-copy-nblocks', ()=>currentNblocksHist);
+
+    // cluster stat histograms init
+    Plotly.newPlot('cl-nclust-hist',[],{...PL,title:{text:'Clusters per Event',font:{size:10,color:'#555'}}},PC2);
+    Plotly.newPlot('cl-nblocks-hist',[],{...PL,title:{text:'Blocks per Cluster',font:{size:10,color:'#555'}}},PC2);
+
+    // cluster stat row column divider
+    setupDivider('div-cl-stat','x',
+        ()=>document.querySelector('.cl-stat-cell'),
+        ()=>document.querySelector('.cl-stat-row'),
+        ()=>0, 80, 80, ()=>{
+            try{Plotly.Plots.resize('cl-nclust-hist');}catch(e){}
+            try{Plotly.Plots.resize('cl-nblocks-hist');}catch(e){}
+        });
 
     // histogram log-scale toggles
     document.getElementById('inthist-logx').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };
@@ -1465,7 +1529,7 @@ function init(){
         });
     };
     document.getElementById('btn-clear-cl').onclick=()=>{
-        initClHist(); plotClHist();
+        initClHist(); plotClHist(); plotClStatHists();
         fetch('/api/hist/clear').then(r=>r.json()).then(()=>{
             fetchClHist();
             document.getElementById('status-bar').textContent='Cluster histogram cleared';

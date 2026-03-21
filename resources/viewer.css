@@ -35,7 +35,9 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .main { display:flex; height:calc(100vh - 66px - 22px); }
 
 /* --- clustering panel --- */
-.cl-hist-panel { flex:none; height:40%; min-height:100px; position:relative; }
+.cl-hist-panel { flex:none; height:35%; min-height:80px; position:relative; }
+.cl-stat-row { flex:none; height:25%; min-height:60px; display:flex; flex-direction:row; }
+.cl-stat-cell { flex:1; min-width:0; position:relative; }
 .cluster-info-wrap { flex:1; overflow-y:auto; min-height:0; font-size:12px; }
 .cl-table-row.selected { background:rgba(0,180,216,0.15); }
 .cl-table-row:hover { background:rgba(0,180,216,0.08); cursor:pointer; }

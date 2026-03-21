@@ -9,6 +9,8 @@
 #include "EtChannel.h"
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
+#include "HyCalSystem.h"
+#include "load_daq_config.h"
 
 #include <nlohmann/json.hpp>
 
@@ -21,6 +23,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <unordered_map>
 #include <set>
 #include <deque>
 #include <mutex>
@@ -114,6 +117,27 @@ static std::atomic<bool> g_running{true};
 static std::atomic<bool> g_et_connected{false};
 static std::string g_res_dir;
 static json g_config;
+
+// HyCal system for module lookup (LMS + clustering)
+static fdec::HyCalSystem g_hycal;
+static std::unordered_map<int, int> g_roc_to_crate;
+static evc::DaqConfig g_daq_cfg;
+
+// LMS monitoring
+struct LmsEntry {
+    double time_sec;
+    float  integral;
+};
+static std::map<int, std::vector<LmsEntry>> g_lms_history;  // module_index → entries
+static std::atomic<int> g_lms_events{0};
+static uint64_t g_lms_first_ts = 0;
+static std::mutex g_lms_mtx;
+
+// LMS config
+static int      g_lms_trigger_bit = 16;
+static float    g_lms_warn_thresh = 0.1f;
+static int      g_lms_max_history = 5000;
+static uint32_t g_lms_trigger_mask = 0;
 
 // -------------------------------------------------------------------------
 // Helpers
@@ -356,6 +380,61 @@ static void etReaderThread()
                     fillHist(event, ana, wres);
                 }
 
+                // LMS monitoring
+                if (g_lms_trigger_mask != 0 &&
+                    (event.info.trigger_bits & g_lms_trigger_mask))
+                {
+                    std::lock_guard<std::mutex> lk(g_lms_mtx);
+                    if (g_lms_first_ts == 0) g_lms_first_ts = event.info.timestamp;
+                    double time_sec = static_cast<double>(event.info.timestamp - g_lms_first_ts) * 4e-9;
+
+                    bool is_adc1881m = (g_daq_cfg.adc_format == "adc1881m");
+
+                    for (int r = 0; r < event.nrocs; ++r) {
+                        auto &roc = event.rocs[r];
+                        if (!roc.present) continue;
+                        auto cit = g_roc_to_crate.find(roc.tag);
+                        if (cit == g_roc_to_crate.end()) continue;
+                        int crate = cit->second;
+
+                        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+                            if (!roc.slots[s].present) continue;
+                            auto &slot = roc.slots[s];
+                            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                                if (!(slot.channel_mask & (1ull << c))) continue;
+                                auto &cd = slot.channels[c];
+                                if (cd.nsamples <= 0) continue;
+
+                                const auto *mod = g_hycal.module_by_daq(crate, s, c);
+                                if (!mod || !mod->is_hycal()) continue;
+
+                                float val = 0;
+                                if (is_adc1881m) {
+                                    val = cd.samples[0];
+                                } else {
+                                    // use wres from encodeEvent above
+                                    ana.Analyze(cd.samples, cd.nsamples, wres);
+                                    float best = -1;
+                                    for (int p = 0; p < wres.npeaks; ++p) {
+                                        auto &pk = wres.peaks[p];
+                                        if (pk.height < g_hist_cfg.threshold) continue;
+                                        if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max)
+                                            if (pk.integral > best) best = pk.integral;
+                                    }
+                                    val = best;
+                                }
+                                if (val <= 0) continue;
+
+                                auto &hist = g_lms_history[mod->index];
+                                if (static_cast<int>(hist.size()) < g_lms_max_history)
+                                    hist.push_back({time_sec, val});
+                            }
+                        }
+                    }
+                    g_lms_events++;
+                    wsBroadcast("{\"type\":\"lms_event\",\"count\":" + std::to_string(g_lms_events.load()) + "}");
+                }
+
                 // push to ring buffer
                 {
                     std::lock_guard<std::mutex> lk(g_ring_mtx);
@@ -419,6 +498,11 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         // update live fields before sending
         g_config["total_events"] = g_events_processed.load();
         g_config["et_connected"] = g_et_connected.load();
+        g_config["lms"] = {
+            {"trigger_bit", g_lms_trigger_bit},
+            {"warn_threshold", g_lms_warn_thresh},
+            {"events", g_lms_events.load()},
+        };
         reply(g_config.dump()); return;
     }
 
@@ -482,6 +566,67 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     // /api/poshist/<key>
     if (uri.rfind("/api/poshist/", 0) == 0) {
         reply(getHist(g_pos_histograms, g_pos_nbins, uri.substr(13)).dump()); return;
+    }
+
+    // /api/lms/<module_index> or /api/lms/summary or /api/lms/clear
+    if (uri.rfind("/api/lms/", 0) == 0) {
+        std::string sub = uri.substr(9);
+
+        if (sub == "clear") {
+            {
+                std::lock_guard<std::mutex> lk(g_lms_mtx);
+                g_lms_history.clear();
+                g_lms_events = 0;
+                g_lms_first_ts = 0;
+            }
+            reply("{\"cleared\":true}");
+            wsBroadcast("{\"type\":\"lms_cleared\"}");
+            return;
+        }
+
+        if (sub == "summary") {
+            std::lock_guard<std::mutex> lk(g_lms_mtx);
+            json mods = json::object();
+            for (auto &[idx, hist] : g_lms_history) {
+                if (hist.empty()) continue;
+                double sum = 0, sum2 = 0;
+                for (auto &e : hist) { sum += e.integral; sum2 += e.integral * e.integral; }
+                double mean = sum / hist.size();
+                double var = sum2 / hist.size() - mean * mean;
+                double rms = var > 0 ? std::sqrt(var) : 0;
+                bool warn = (mean > 0 && rms / mean > g_lms_warn_thresh);
+                if (idx >= 0 && idx < g_hycal.module_count()) {
+                    auto &mod = g_hycal.module(idx);
+                    mods[std::to_string(idx)] = {
+                        {"name", mod.name}, {"mean", std::round(mean * 10) / 10},
+                        {"rms", std::round(rms * 100) / 100},
+                        {"count", (int)hist.size()}, {"warn", warn}};
+                }
+            }
+            reply(json({{"modules", mods}, {"events", g_lms_events.load()},
+                         {"trigger_bit", g_lms_trigger_bit}}).dump());
+            return;
+        }
+
+        // /api/lms/<module_index>
+        int mod_idx = std::atoi(sub.c_str());
+        std::lock_guard<std::mutex> lk(g_lms_mtx);
+        auto it = g_lms_history.find(mod_idx);
+        if (it == g_lms_history.end() || it->second.empty()) {
+            reply(json({{"time", json::array()}, {"integral", json::array()}, {"events", 0}}).dump());
+            return;
+        }
+        auto &hist = it->second;
+        json t_arr = json::array(), v_arr = json::array();
+        for (auto &e : hist) {
+            t_arr.push_back(std::round(e.time_sec * 100) / 100);
+            v_arr.push_back(std::round(e.integral * 10) / 10);
+        }
+        std::string name = (mod_idx >= 0 && mod_idx < g_hycal.module_count())
+            ? g_hycal.module(mod_idx).name : "";
+        reply(json({{"name", name}, {"time", t_arr}, {"integral", v_arr},
+                     {"events", (int)hist.size()}}).dump());
+        return;
     }
 
     con->set_status(websocketpp::http::status_code::not_found);
@@ -569,6 +714,25 @@ int main(int argc, char *argv[])
     g_pos_nbins = std::max(1, (int)std::ceil(
         (g_hist_cfg.pos_max - g_hist_cfg.pos_min) / g_hist_cfg.pos_step));
 
+    // load reconstruction config (LMS monitoring)
+    std::string reco_file = findFile("reconstruction.json", db_dir);
+    std::string reco_str = readFile(reco_file);
+    if (!reco_str.empty()) {
+        auto rcfg = json::parse(reco_str, nullptr, false);
+        if (rcfg.contains("lms_monitor")) {
+            auto &lm = rcfg["lms_monitor"];
+            if (lm.contains("trigger_bit"))    g_lms_trigger_bit   = lm["trigger_bit"];
+            if (lm.contains("warn_threshold")) g_lms_warn_thresh   = lm["warn_threshold"];
+            if (lm.contains("max_history"))    g_lms_max_history   = lm["max_history"];
+            g_lms_trigger_mask = (1u << g_lms_trigger_bit);
+        }
+        std::cerr << "Reco config: " << reco_file << "\n";
+        if (g_lms_trigger_mask)
+            std::cerr << "LMS       : trigger_bit=" << g_lms_trigger_bit
+                      << " mask=0x" << std::hex << g_lms_trigger_mask << std::dec
+                      << " warn=" << g_lms_warn_thresh << "\n";
+    }
+
     // resources directory (viewer.html, viewer.css, viewer.js)
     g_res_dir = res_dir;
     if (readFile(g_res_dir + "/viewer.html").empty())
@@ -582,10 +746,21 @@ int main(int argc, char *argv[])
     { std::string s = readFile(mod_file); if (!s.empty()) modules_j = json::parse(s, nullptr, false); }
     { std::string s = readFile(daq_file); if (!s.empty()) daq_j     = json::parse(s, nullptr, false); }
 
+    // initialize HyCal system for module lookup (LMS monitoring)
+    if (!mod_file.empty() && !daq_file.empty()) {
+        if (g_hycal.Init(mod_file, daq_file))
+            std::cerr << "HyCal     : " << g_hycal.module_count() << " modules\n";
+    }
+
+    // build ROC tag → crate map from DAQ config
+    json crate_roc_j = {{"0",0x80},{"1",0x82},{"2",0x84},{"3",0x86},{"4",0x88},{"5",0x8a},{"6",0x8c}};
+    for (auto &[k, v] : crate_roc_j.items())
+        g_roc_to_crate[v.get<int>()] = std::stoi(k);
+
     g_config = {
         {"modules", modules_j},
         {"daq", daq_j},
-        {"crate_roc", {{"0",0x80},{"1",0x82},{"2",0x84},{"3",0x86},{"4",0x88},{"5",0x8a},{"6",0x8c}}},
+        {"crate_roc", crate_roc_j},
         {"total_events", 0},
         {"mode", "online"},
         {"hist_enabled", true},

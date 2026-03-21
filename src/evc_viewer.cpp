@@ -88,6 +88,14 @@ struct Histogram {
 };
 
 // -------------------------------------------------------------------------
+// LMS monitoring entry: one measurement per module per LMS event
+// -------------------------------------------------------------------------
+struct LmsEntry {
+    double time_sec;    // seconds since first event (from TI timestamp)
+    float  integral;    // peak integral within timing cut (or raw ADC for ADC1881M)
+};
+
+// -------------------------------------------------------------------------
 // Data container: holds everything for one loaded file
 // -------------------------------------------------------------------------
 struct FileData {
@@ -102,6 +110,11 @@ struct FileData {
     // cluster energy histogram (prebuilt during --hist)
     Histogram cluster_energy_hist;
     int cluster_events_processed = 0;  // events that passed trigger filter
+
+    // LMS monitoring: per-module history of (time, integral)
+    std::map<int, std::vector<LmsEntry>> lms_history;  // module_index → entries
+    int lms_events = 0;
+    uint64_t lms_first_ts = 0;  // first LMS timestamp (for time offset)
 };
 
 // -------------------------------------------------------------------------
@@ -150,6 +163,12 @@ static json g_base_config;                // config without per-file fields
 static Progress g_progress;
 
 static evc::DaqConfig g_daq_cfg;              // DAQ configuration (default = PRad-II)
+
+// LMS monitoring config
+static int      g_lms_trigger_bit = 16;      // trigger bit for LMS events
+static float    g_lms_warn_thresh = 0.1f;    // fractional deviation to warn
+static int      g_lms_max_history = 5000;    // max entries per module
+static uint32_t g_lms_trigger_mask = 0;      // computed from trigger_bit
 
 static fdec::HyCalSystem g_hycal;
 static fdec::ClusterConfig g_cluster_cfg;
@@ -473,6 +492,59 @@ static void buildHistograms(const std::string &path, FileData &fd,
                     fd.cluster_energy_hist.fill(rh.energy, g_cl_hist_min, g_cl_hist_step);
                 fd.cluster_events_processed++;
             }
+
+            // --- LMS monitoring for this event ---
+            if (g_lms_trigger_mask != 0 &&
+                (event.info.trigger_bits & g_lms_trigger_mask))
+            {
+                // compute time offset from first LMS event
+                if (fd.lms_first_ts == 0) fd.lms_first_ts = event.info.timestamp;
+                double time_sec = static_cast<double>(event.info.timestamp - fd.lms_first_ts) * 4e-9;  // 4ns per tick
+
+                bool is_adc1881m_lms = (g_daq_cfg.adc_format == "adc1881m");
+
+                for (int r = 0; r < event.nrocs; ++r) {
+                    auto &roc = event.rocs[r];
+                    if (!roc.present) continue;
+                    auto cit = g_roc_to_crate.find(roc.tag);
+                    if (cit == g_roc_to_crate.end()) continue;
+                    int crate = cit->second;
+
+                    for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+                        if (!roc.slots[s].present) continue;
+                        auto &slot = roc.slots[s];
+                        for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                            if (!(slot.channel_mask & (1ull << c))) continue;
+                            auto &cd = slot.channels[c];
+                            if (cd.nsamples <= 0) continue;
+
+                            const auto *mod = g_hycal.module_by_daq(crate, s, c);
+                            if (!mod || !mod->is_hycal()) continue;
+
+                            float val = 0;
+                            if (is_adc1881m_lms) {
+                                val = cd.samples[0];
+                            } else {
+                                // FADC250: best peak integral in time window
+                                float best = -1;
+                                for (int p = 0; p < wres.npeaks; ++p) {
+                                    auto &pk = wres.peaks[p];
+                                    if (pk.height < g_hist_cfg.threshold) continue;
+                                    if (pk.time >= g_hist_cfg.time_min && pk.time <= g_hist_cfg.time_max)
+                                        if (pk.integral > best) best = pk.integral;
+                                }
+                                val = best;
+                            }
+                            if (val <= 0) continue;
+
+                            auto &hist = fd.lms_history[mod->index];
+                            if (static_cast<int>(hist.size()) < g_lms_max_history)
+                                hist.push_back({time_sec, val});
+                        }
+                    }
+                }
+                fd.lms_events++;
+            }
         }
     }
     ch.Close();
@@ -505,7 +577,8 @@ static void loadFileAsync(const std::string &filepath)
         buildHistograms(filepath, *data, g_progress);
         std::cerr << "  Histograms: " << data->hist_events_processed << " events, "
                   << data->histograms.size() << " channels"
-                  << ", clusters: " << data->cluster_events_processed << " events\n";
+                  << ", clusters: " << data->cluster_events_processed << " events"
+                  << ", LMS: " << data->lms_events << " events\n";
     }
 
     // atomic swap
@@ -801,6 +874,11 @@ static json buildConfig()
     cfg["cluster_hist"] = {
         {"min", g_cl_hist_min}, {"max", g_cl_hist_max}, {"step", g_cl_hist_step},
     };
+    cfg["lms"] = {
+        {"trigger_bit", g_lms_trigger_bit},
+        {"warn_threshold", g_lms_warn_thresh},
+        {"events", data ? data->lms_events : 0},
+    };
     return cfg;
 }
 
@@ -859,6 +937,56 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
                      {"events", data->cluster_events_processed},
                      {"min", g_cl_hist_min}, {"max", g_cl_hist_max},
                      {"step", g_cl_hist_step}}).dump());
+        return;
+    }
+
+    // /api/lms/<module_index> — LMS integral vs time for one module
+    if (uri.rfind("/api/lms/", 0) == 0) {
+        std::string sub = uri.substr(9);
+
+        // /api/lms/summary — per-module mean, rms, warn status
+        if (sub == "summary") {
+            std::shared_ptr<FileData> data;
+            { std::lock_guard<std::mutex> lk(g_data_mtx); data = g_data; }
+            json mods = json::object();
+            if (data) {
+                for (auto &[idx, hist] : data->lms_history) {
+                    if (hist.empty()) continue;
+                    double sum = 0, sum2 = 0;
+                    for (auto &e : hist) { sum += e.integral; sum2 += e.integral * e.integral; }
+                    double mean = sum / hist.size();
+                    double var = sum2 / hist.size() - mean * mean;
+                    double rms = var > 0 ? std::sqrt(var) : 0;
+                    bool warn = (mean > 0 && rms / mean > g_lms_warn_thresh);
+                    auto &mod = g_hycal.module(idx);
+                    mods[std::to_string(idx)] = {
+                        {"name", mod.name}, {"mean", std::round(mean * 10) / 10},
+                        {"rms", std::round(rms * 100) / 100},
+                        {"count", (int)hist.size()}, {"warn", warn}};
+                }
+            }
+            reply(json({{"modules", mods}, {"events", data ? data->lms_events : 0},
+                         {"trigger_bit", g_lms_trigger_bit}}).dump());
+            return;
+        }
+
+        // /api/lms/<module_index> — time series
+        int mod_idx = std::atoi(sub.c_str());
+        std::shared_ptr<FileData> data;
+        { std::lock_guard<std::mutex> lk(g_data_mtx); data = g_data; }
+        if (!data || data->lms_history.find(mod_idx) == data->lms_history.end()) {
+            reply(json({{"time", json::array()}, {"integral", json::array()}, {"events", 0}}).dump());
+            return;
+        }
+        auto &hist = data->lms_history.at(mod_idx);
+        json t_arr = json::array(), v_arr = json::array();
+        for (auto &e : hist) {
+            t_arr.push_back(std::round(e.time_sec * 100) / 100);
+            v_arr.push_back(std::round(e.integral * 10) / 10);
+        }
+        auto &mod = g_hycal.module(mod_idx);
+        reply(json({{"name", mod.name}, {"time", t_arr}, {"integral", v_arr},
+                     {"events", (int)hist.size()}}).dump());
         return;
     }
 
@@ -1142,6 +1270,16 @@ int main(int argc, char *argv[])
                       << " skip_mask=0x" << std::hex << g_cluster_skip_mask << std::dec
                       << " hist=[" << g_cl_hist_min << "," << g_cl_hist_max
                       << "]/" << g_cl_hist_step << "\n";
+        }
+        if (rcfg.contains("lms_monitor")) {
+            auto &lm = rcfg["lms_monitor"];
+            if (lm.contains("trigger_bit"))    g_lms_trigger_bit   = lm["trigger_bit"];
+            if (lm.contains("warn_threshold")) g_lms_warn_thresh   = lm["warn_threshold"];
+            if (lm.contains("max_history"))    g_lms_max_history   = lm["max_history"];
+            g_lms_trigger_mask = (1u << g_lms_trigger_bit);
+            std::cerr << "LMS       : trigger_bit=" << g_lms_trigger_bit
+                      << " mask=0x" << std::hex << g_lms_trigger_mask << std::dec
+                      << " warn=" << g_lms_warn_thresh << "\n";
         }
         if (rcfg.contains("calibration")) {
             auto &cal = rcfg["calibration"];

@@ -15,6 +15,11 @@
             "step": 10
         }
     },
+    "lms_monitor": {
+        "trigger_bit": 16,
+        "warn_threshold": 0.1,
+        "max_history": 5000
+    },
     "calibration": {
         "adc_to_mev": 0.078,
         "calibration_file": "prad1/prad_calibration.json"

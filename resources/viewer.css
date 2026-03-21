@@ -81,6 +81,7 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
     border-top:1px solid var(--border); background:var(--panel);
 }
 .cl-info-text { color:var(--dim); }
+.cl-lms-panel { flex:0 0 150px; position:relative; border-top:1px solid var(--border); }
 #cl-detail-header .mod-name { color:var(--accent); font-weight:600; }
 #cl-detail-header .mod-daq { color:var(--dim); font-size:11px; }
 .detail-header .mod-name { color:var(--accent); font-weight:600; }

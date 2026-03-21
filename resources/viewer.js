@@ -233,21 +233,23 @@ function geoHandleClick(cx,cy){
     if(!m) return;
     if(activeTab==='cluster'){
         selectedModule=null;
-        if(!clusterData || !clusterData.clusters || !clusterData.clusters.length){
-            selectedCluster=-1;
-            drawClusterGeo(); updateClusterTable(); showClusterDetail();
-            return;
-        }
+        // find cluster
         const idx=modules.indexOf(m);
-        const clusters=clusterData.clusters;
-        let found=-1;
-        for(let ci=0;ci<clusters.length;ci++){
-            if(clusters[ci].modules&&clusters[ci].modules.includes(idx)){ found=ci; break; }
+        if(clusterData && clusterData.clusters && clusterData.clusters.length){
+            const clusters=clusterData.clusters;
+            let found=-1;
+            for(let ci=0;ci<clusters.length;ci++){
+                if(clusters[ci].modules&&clusters[ci].modules.includes(idx)){ found=ci; break; }
+            }
+            if(found<0) selectedCluster=-1;
+            else selectedCluster=(selectedCluster===found)?-1:found;
+        } else {
+            selectedCluster=-1;
         }
-        if(found<0) selectedCluster=-1;
-        else selectedCluster=(selectedCluster===found)?-1:found;
         document.getElementById('cl-select').value=selectedCluster>=0?selectedCluster:'all';
         drawClusterGeo(); updateClusterTable(); showClusterDetail();
+        // fetch LMS history for this module
+        fetchLmsHistory(idx, m.n);
     } else {
         showWaveform(m);
     }
@@ -333,7 +335,7 @@ const PL={paper_bgcolor:'#1a1a2e',plot_bgcolor:'#11112a',font:{family:'Consolas,
 const PC2={responsive:true,displayModeBar:false};
 
 function resizeAllPlots(){
-    for(const id of['waveform-div','inthist-div','poshist-div','cl-energy-hist'])
+    for(const id of['waveform-div','inthist-div','poshist-div','cl-energy-hist','cl-lms-plot'])
         try{Plotly.Plots.resize(id);}catch(e){}
 }
 
@@ -1025,6 +1027,44 @@ function plotClHist(){
     },PC2);
 }
 
+// =========================================================================
+// LMS monitoring
+// =========================================================================
+function fetchLmsHistory(modIdx, modName){
+    const panel=document.getElementById('cl-lms-panel');
+    fetch(`/api/lms/${modIdx}`).then(r=>r.json()).then(data=>{
+        if(!data.time||!data.time.length){
+            panel.style.display='none';
+            return;
+        }
+        panel.style.display='';
+        // compute mean for reference line
+        const vals=data.integral;
+        const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+        const warnHi=mean*(1+g_lmsWarnThresh);
+        const warnLo=mean*(1-g_lmsWarnThresh);
+
+        Plotly.react('cl-lms-plot',[
+            {x:data.time, y:data.integral, type:'scatter', mode:'markers',
+             marker:{color:'#ff922b',size:3}, name:'LMS integral'},
+            {x:[data.time[0],data.time[data.time.length-1]], y:[mean,mean],
+             type:'scatter', mode:'lines', line:{color:'#51cf66',width:1,dash:'dash'}, name:`Mean ${mean.toFixed(0)}`},
+            {x:[data.time[0],data.time[data.time.length-1]], y:[warnHi,warnHi],
+             type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
+            {x:[data.time[0],data.time[data.time.length-1]], y:[warnLo,warnLo],
+             type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
+        ],{...PL,
+            title:{text:`LMS — ${modName} (${data.events} pts)`,font:{size:10,color:'#ccc'}},
+            xaxis:{...PL.xaxis,title:'Time (s)'},
+            yaxis:{...PL.yaxis,title:'Integral'},
+            legend:{x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}},
+            margin:{...PL.margin,t:28,b:28},
+        },PC2);
+    }).catch(()=>{ panel.style.display='none'; });
+}
+
+let g_lmsWarnThresh=0.1;
+
 // Init
 // =========================================================================
 function init(){
@@ -1270,6 +1310,7 @@ function init(){
             clHistStep=data.cluster_hist.step||10;
         }
         initClHist();
+        if(data.lms) g_lmsWarnThresh=data.lms.warn_threshold||0.1;
         updateTimeCutLabel();
         mode=data.mode||'file';
         g_currentFile=data.current_file||'';

@@ -33,7 +33,8 @@ struct AppState {
     fdec::ClusterConfig cluster_cfg;
 
     std::unordered_map<int, int> roc_to_crate;  // ROC tag → crate index
-    nlohmann::json crate_roc_json;              // JSON for /api/config
+    nlohmann::json crate_roc_json;              // crate→ROC tag JSON
+    nlohmann::json base_config;                 // modules, daq, crate_roc for /api/config
 
     // LMS config
     int      lms_trigger_bit  = 16;

@@ -1406,7 +1406,7 @@ function init(){
     // click is now handled via geoHandleClick (called from mouseup when drag threshold not exceeded)
     geoCanvas.addEventListener('mouseleave',()=>{
         hoveredModule=null;tip.style.display='none';
-        if(activeTab==='cluster') drawClusterGeo(); else drawGeo();
+        redrawGeo();
     });
     document.addEventListener('keydown',e=>{
         if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;

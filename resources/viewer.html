@@ -82,8 +82,7 @@
                 <input class="range-edit" id="range-max-edit" type="number" step="any">
                 <span class="range-btn" id="range-max-btn" title="Edit max">✎</span>
             </div>
-            <button id="btn-clear-dq" class="geo-reset-btn" title="Clear DQ histograms and occupancy">Clear</button>
-            <button id="btn-reset-view" class="geo-reset-btn" title="Reset view (double-click also works)">Reset</button>
+            <button id="btn-clear-dq" class="geo-clear-btn" title="Clear DQ histograms and occupancy">Clear</button>
         </div>
         <div class="geo-toolbar" id="geo-toolbar-cl" style="display:none">
             <label>Cluster:</label>
@@ -99,9 +98,8 @@
                 <input class="range-edit" id="cl-range-max-edit" type="number" step="any">
                 <span class="range-btn" id="cl-range-max-btn" title="Edit max">&#x270E;</span>
             </div>
-            <span style="margin-left:auto;color:var(--dim);font-size:11px" id="cl-summary"></span>
-            <button id="btn-clear-cl" class="geo-reset-btn" title="Clear cluster histogram">Clear</button>
-            <button class="geo-reset-btn" onclick="resetGeoView()" title="Reset view (double-click also works)">Reset</button>
+            <span style="color:var(--dim);font-size:11px" id="cl-summary"></span>
+            <button id="btn-clear-cl" class="geo-clear-btn" title="Clear cluster histogram">Clear</button>
         </div>
         <div class="geo-toolbar" id="geo-toolbar-lms" style="display:none">
             <label>Ref:</label>
@@ -123,12 +121,11 @@
                 <input class="range-edit" id="lms-range-max-edit" type="number" step="any">
                 <span class="range-btn" id="lms-range-max-btn" title="Edit max">&#x270E;</span>
             </div>
-            <span style="margin-left:auto;color:var(--dim);font-size:11px" id="lms-summary-text"></span>
-            <button id="btn-clear-lms" class="geo-reset-btn" title="Clear all LMS data">Clear LMS</button>
-            <button class="geo-reset-btn" onclick="resetGeoView()" title="Reset view">Reset</button>
+            <button id="btn-clear-lms" class="geo-clear-btn" title="Clear LMS data">Clear</button>
         </div>
         <div class="geo-canvas-wrap" id="geo-wrap">
             <canvas id="geo-canvas"></canvas>
+            <button id="btn-reset-view" class="geo-view-reset" title="Reset view (double-click also works)">Reset</button>
             <div class="geo-tooltip" id="geo-tooltip"></div>
         </div>
     </div>

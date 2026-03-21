@@ -51,11 +51,20 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
     background:var(--bg); border:1px solid var(--border); color:var(--text);
     padding:2px 6px; border-radius:3px; font-family:inherit; font-size:12px;
 }
-.geo-reset-btn {
+/* clear button — right-aligned in toolbar */
+.geo-clear-btn {
     background:var(--border); border:none; color:var(--dim); padding:1px 8px;
     border-radius:3px; cursor:pointer; font-family:inherit; font-size:11px; margin-left:auto;
 }
-.geo-reset-btn:hover { background:var(--accent); color:#000; }
+.geo-clear-btn:hover { background:var(--accent); color:#000; }
+
+/* reset view button — overlay inside geo canvas */
+.geo-view-reset {
+    position:absolute; top:6px; right:6px; z-index:5;
+    background:rgba(15,52,96,0.8); border:1px solid var(--border); color:var(--dim);
+    padding:2px 8px; border-radius:3px; cursor:pointer; font-family:inherit; font-size:11px;
+}
+.geo-view-reset:hover { background:var(--accent); color:#000; border-color:var(--accent); }
 .geo-canvas-wrap { flex:1; position:relative; overflow:hidden; }
 .geo-canvas-wrap canvas { position:absolute; top:0; left:0; }
 .geo-tooltip {

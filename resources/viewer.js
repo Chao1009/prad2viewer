@@ -1073,8 +1073,6 @@ function fetchLmsSummary(){
         lmsSummaryData=data;
         drawLmsGeo();
         updateLmsTable();
-        document.getElementById('lms-summary-text').textContent=
-            `${data.events||0} LMS events, ${Object.keys(data.modules||{}).length} modules`;
     }).catch(()=>{});
 }
 

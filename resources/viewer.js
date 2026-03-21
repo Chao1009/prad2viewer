@@ -480,10 +480,12 @@ function loadEventData(reqId, data) {
     if(activeTab==='cluster'){
         clusterEvent=-1; // invalidate cache
         loadClusterData(currentEvent);
+    } else if(activeTab==='lms'){
+        // LMS geo doesn't change per event — no redraw needed
     } else {
         drawGeo();
     }
-    if (selectedModule) showWaveform(selectedModule);
+    if (activeTab==='dq' && selectedModule) showWaveform(selectedModule);
 }
 
 function loadEvent(evnum) {

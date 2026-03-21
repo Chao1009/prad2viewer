@@ -1,6 +1,6 @@
 # PRad2 Event Viewer
 
-FADC250 waveform decoder and event viewer for PRad-II at Jefferson Lab.
+FADC250 waveform decoder and event viewer for PRad-II at Jefferson Lab. Also supports original PRad (ADC1881M) via DAQ configuration.
 
 ## Building
 
@@ -10,14 +10,18 @@ cmake ..
 make -j$(nproc)
 ```
 
-CMake ≥ 3.14, C++17. Dependencies (`evio`, `et`, `nlohmann/json`, `websocketpp`, `asio`) fetched automatically. For prebuilt CODA libraries:
+CMake >= 3.14, C++17. Dependencies (`evio`, `et`, `nlohmann/json`, `websocketpp`, `asio`) fetched automatically. To speed up rebuilds, set a persistent fetch cache:
 
+```bash
+export FETCHCONTENT_BASE_DIR=$HOME/.cmake/fetchcontent
+```
+
+For prebuilt CODA libraries:
 ```bash
 cmake .. -DEVIO_SOURCE=prebuilt -DET_SOURCE=prebuilt
 ```
 
 To build the Qt5 WebEngine monitor client:
-
 ```bash
 cmake .. -DBUILD_GUI=ON
 ```
@@ -25,119 +29,127 @@ cmake .. -DBUILD_GUI=ON
 ## Event Viewer
 
 ```bash
-evc_viewer [evio_file] [-p port] [-H] [-c hist_config.json] [-d data_dir]
+evc_viewer [evio_file] [-p port] [-H] [-c hist_config.json] [-d data_dir] [-D daq_config.json]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `-p` | Server port (default 5050) |
-| `-H, --hist` | Build per-channel histograms and occupancy on startup |
-| `-c, --hist-config` | Histogram config file (implies `-H`, default: `database/hist_config.json`) |
-| `-d, --data-dir` | Enable in-browser file picker sandboxed to this directory |
+| `-H` | Build per-channel histograms and occupancy on startup |
+| `-c` | Histogram config file (implies `-H`) |
+| `-d` | Enable in-browser file picker sandboxed to this directory |
+| `-D` | DAQ configuration file (for PRad: `database/prad1/prad_daq_config.json`) |
 
-The evio file is optional. Without it, the viewer starts empty and you pick a file from the GUI. Examples:
-
+Examples:
 ```bash
-evc_viewer data.evio -H                     # open file with histograms
-evc_viewer -d /data/stage6 -H               # browse and pick from GUI
-evc_viewer data.evio -H -d /data/stage6     # open file + enable browsing
-evc_viewer -p 8080                           # empty viewer on port 8080
+evc_viewer data.evio -H                            # PRad-II with histograms
+evc_viewer prad.evio -D database/prad1/prad_daq_config.json -H  # PRad
+evc_viewer -d /data/stage6 -H                      # browse and pick from GUI
 ```
 
-Open `http://localhost:5050` in a browser.
+Open `http://localhost:5050`. Three tabs:
 
-**GUI layout:**
+- **Data Quality** — HyCal geometry colored by peak metrics, waveform display, per-channel histograms
+- **Clustering** — Island clustering with energy histogram, cluster table, per-event reconstruction
+- **LMS Monitoring** — Per-module LMS signal vs time, reference channel normalization, drift warnings
 
-Left panel is a HyCal geometry view. Color metric is selectable (peak integral, height, time, pedestal, occupancy) with editable range. Right panel has two histogram plots on top (integral with time cut, peak position), and a peaks table + waveform plot on the bottom. All dividers are draggable.
-
-When `--data-dir` is set, the 📂 Open button lets you switch files from the browser. A "Process histograms" checkbox controls whether the new file gets a full histogram pass. Loading happens in the background with a progress bar.
+Geo view supports scroll-wheel zoom, left-drag pan, double-click or Reset button to restore.
 
 ## Online Monitor
 
 ```bash
-evc_monitor [-p port] [-c online_config.json] [-H hist_config.json]
+evc_monitor [-p port] [-c online_config.json] [-H hist_config.json] [-D daq_config.json]
 ```
 
-Connects to a running ET system. Same GUI as the file viewer, plus:
+Connects to a running ET system. Same GUI as the viewer, plus:
 
 - ET connection status indicator
-- Ring buffer of recent events (default 20) with dropdown selector
+- Ring buffer of recent events with dropdown selector
 - **Clear Hist** button resets histograms and occupancy
 - Auto-follows latest event; press **F** to resume after browsing
-
-Events arrive via a background reader thread. The browser gets WebSocket push notifications, throttled to avoid flooding.
+- LMS monitoring runs continuously regardless of client connections
 
 ## Monitor Client (Qt)
 
-A lightweight Qt5 WebEngine wrapper — just a dedicated browser window for the viewer or monitor.
+A lightweight Qt5 WebEngine wrapper.
 
 ```bash
-prad2_monitor                        # http://localhost:5051
-prad2_monitor -H clonpc19            # http://clonpc19:5051
-prad2_monitor -H clonpc19 -p 8080   # http://clonpc19:8080
+prad2qtmon                        # http://localhost:5051
+prad2qtmon -H clonpc19 -p 8080   # http://clonpc19:8080
 ```
 
-Requires Qt5 Widgets and WebEngineWidgets. Only built when `-DBUILD_GUI=ON` is set.
+Requires `-DBUILD_GUI=ON`.
 
 ## Test Tools
 
-```bash
-evc_test <evio_file> [-v] [-t]          # decode and count channels
-et_feeder <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
-evchan_test <evio_file> [-h host] [-p port] [-f et_file] [-i interval_ms]
-```
-
-`et_feeder` replays an evio file into ET event-by-event at a configurable rate. `evchan_test` reads the same file from both an ET station and disk, printing a word-by-word comparison.
+See [test/README.md](test/README.md) for detailed usage of `evio_dump`, `evc_test`, `et_feeder`, `evchan_test`, and `ped_calc`.
 
 ## Configuration
 
-`database/hist_config.json`:
-```json
-{
-    "hist": {
-        "time_min": 160, "time_max": 220,
-        "bin_min": 0, "bin_max": 20000, "bin_step": 100,
-        "threshold": 10.0,
-        "pos_min": 0, "pos_max": 400, "pos_step": 4,
-        "min_peak_ratio": 0.3
-    }
-}
-```
+### `database/hist_config.json`
 
-`database/online_config.json` (ET connection only):
-```json
-{
-    "et": { "host": "localhost", "port": 11111,
-            "et_file": "/tmp/et_sys_prad2", "station": "prad2_monitor" },
-    "ring_buffer_size": 20
-}
-```
-
-Both `evc_viewer` and `evc_monitor` read histogram settings from `hist_config.json`.
+Histogram and waveform analysis settings (shared by viewer and monitor):
 
 | Field | Description |
 |-------|-------------|
 | `time_min/max` | Time window (ns) for integral histogram and time-cut occupancy |
 | `bin_min/max/step` | Integral histogram binning |
 | `pos_min/max/step` | Peak position histogram binning (ns) |
-| `threshold` | Min peak height (ADC above pedestal) for histograms/occupancy |
-| `min_peak_ratio` | Secondary peak on a tail must rise ≥ this fraction of the main peak (0 to disable) |
+| `threshold` | Min peak height (ADC above pedestal) |
+| `min_peak_ratio` | Secondary peak must rise >= this fraction of main peak |
+
+### `database/reconstruction.json`
+
+Clustering, LMS monitoring, and calibration:
+
+| Section | Key fields |
+|---------|------------|
+| `clustering` | `min_module_energy`, `min_cluster_energy`, `skip_trigger_bits`, `energy_hist` |
+| `lms_monitor` | `trigger_bit`, `warn_threshold`, `max_history`, `reference_channels` |
+| `calibration` | `adc_to_mev`, `calibration_file` |
+
+### `database/online_config.json`
+
+ET connection settings (monitor only):
+
+```json
+{
+    "et": { "host": "localhost", "port": 11111,
+            "et_file": "/tmp/et_sys_prad2", "station": "prad2qtmon" },
+    "ring_buffer_size": 20
+}
+```
+
+### PRad Support
+
+PRad-specific data files are in `database/prad1/`:
+
+| File | Description |
+|------|-------------|
+| `prad_daq_config.json` | DAQ config: event tags, ROC IDs, TI format, bank tags, pedestal/DAQ map refs |
+| `adc1881m_pedestals.json` | Per-channel pedestals (1733 channels) |
+| `prad_daq_map.json` | HyCal DAQ mapping for Fastbus ADC1881M |
+| `prad_calibration.json` | Per-module calibration constants |
+
+Use `-D database/prad1/prad_daq_config.json` with both viewer and monitor.
 
 ## Project Structure
 
 ```
 CMakeLists.txt
 database/
-    daq_map.json  hycal_modules.json  hist_config.json  online_config.json
-prad2dec/                     → libprad2dec.a (see prad2dec/README.md)
+    hist_config.json  reconstruction.json  online_config.json
+    daq_map.json  hycal_modules.json  daq_config.json
+    prad1/                  PRad-specific config and calibration
+prad2dec/                   libprad2dec.a (EVIO decoder library)
+prad2ana/                   libprad2ana.a (HyCal clustering + analysis)
 resources/
     viewer.html  viewer.css  viewer.js
 src/
-    evc_viewer.cpp            File viewer (HTTP + evio decoder)
-    evc_monitor.cpp           Online monitor (ET + WebSocket)
-prad2_monitor/                → Qt5 WebEngine client (optional, -DBUILD_GUI=ON)
-test/
-    test_main.cpp             CLI decode/count tool
-    et_feeder.cpp             Replay evio → ET
-    evchan_test.cpp           EvChannel vs EtChannel comparison
+    evc_viewer.cpp          File viewer (HTTP server)
+    evc_monitor.cpp         Online monitor (ET + WebSocket)
+    app_state.h/cpp         Shared state between viewer and monitor
+    viewer_utils.h          Common types and helpers
+test/                       Diagnostic tools (see test/README.md)
+prad2qtmon/              Qt5 WebEngine client (optional)
 ```

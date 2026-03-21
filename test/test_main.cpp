@@ -1,8 +1,10 @@
-// src/test_main.cpp
+// test/test_main.cpp
 // Basic smoke-test for the evc library.
+//
 // Usage:
-//   evc_test <evio_file>            -- read from file
-//   evc_test --et <ip> <port> <file> <station>  -- read from ET system
+//   evc_test <evio_file>                          read buffers
+//   evc_test <evio_file> -m scan [-s N] [-n N]    per-event details
+//   evc_test -m et -H <host> -P <port> -f <et_file> -S <station>
 
 #include "EvChannel.h"
 #include "EtChannel.h"
@@ -13,13 +15,14 @@
 #include <string>
 #include <cstdlib>
 #include <cstdint>
+#include <getopt.h>
 
 static void usage(const char *prog)
 {
     std::cerr << "Usage:\n"
-              << "  " << prog << " <evio_file>                                       -- read buffers\n"
-              << "  " << prog << " --scan <evio_file> [--start N] [--num N]           -- per-event details\n"
-              << "  " << prog << " --et <ip> <port> <et_file> <station>               -- read from ET\n";
+              << "  " << prog << " <evio_file>                                  Read buffers\n"
+              << "  " << prog << " <evio_file> -m scan [-s start] [-n num]      Per-event details\n"
+              << "  " << prog << " -m et -H <host> -P <port> -f <file> -S <station>  ET system\n";
 }
 
 // ---- scan mode: per-event details + duplicate detection ------------------
@@ -154,25 +157,33 @@ static int testET(const std::string &ip, int port,
 // --------------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-    if (argc < 2) { usage(argv[0]); return 1; }
+    std::string mode;
+    std::string et_host = "localhost", et_file, et_station;
+    int et_port = 11111;
+    int start = 1, num = 50;
 
-    std::string first = argv[1];
-
-    if (first == "--et") {
-        if (argc < 6) { usage(argv[0]); return 1; }
-        return testET(argv[2], std::atoi(argv[3]), argv[4], argv[5]);
-    }
-
-    if (first == "--scan") {
-        if (argc < 3) { usage(argv[0]); return 1; }
-        std::string path = argv[2];
-        int start = 1, num = 50;
-        for (int i = 3; i < argc; ++i) {
-            if (std::string(argv[i]) == "--start" && i+1 < argc) start = std::atoi(argv[++i]);
-            else if (std::string(argv[i]) == "--num" && i+1 < argc) num = std::atoi(argv[++i]);
+    int opt;
+    while ((opt = getopt(argc, argv, "m:s:n:H:P:f:S:h")) != -1) {
+        switch (opt) {
+        case 'm': mode = optarg; break;
+        case 's': start = std::atoi(optarg); break;
+        case 'n': num = std::atoi(optarg); break;
+        case 'H': et_host = optarg; break;
+        case 'P': et_port = std::atoi(optarg); break;
+        case 'f': et_file = optarg; break;
+        case 'S': et_station = optarg; break;
+        default:  usage(argv[0]); return 1;
         }
-        return scanFile(path, start, num);
     }
 
-    return testFile(first);
+    if (mode == "et") {
+        if (et_file.empty() || et_station.empty()) { usage(argv[0]); return 1; }
+        return testET(et_host, et_port, et_file, et_station);
+    }
+
+    if (optind >= argc) { usage(argv[0]); return 1; }
+    std::string path = argv[optind];
+
+    if (mode == "scan") return scanFile(path, start, num);
+    return testFile(path);
 }

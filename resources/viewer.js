@@ -1083,9 +1083,9 @@ function fetchLmsHistory(modIdx, modName){
             {x:tRange, y:[warnLo,warnLo],
              type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
         ],{...PL,
-            title:{text:`LMS — ${modName} (${data.events} pts)${g_lmsRefIndex>=0?' [normalized]':''}`,font:{size:10,color:'#ccc'}},
+            title:{text:`LMS — ${modName} (${data.events} pts)${g_lmsRefIndex>=0?' [ref corrected]':''}`,font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,title:'Time (s)'},
-            yaxis:{...PL.yaxis,title:g_lmsRefIndex>=0?'Signal / Ref':'Integral'},
+            yaxis:{...PL.yaxis,title:g_lmsRefIndex>=0?'Corrected Integral':'Integral'},
             legend:{x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}},
             margin:{...PL.margin,t:28,b:28},
         },PC2);

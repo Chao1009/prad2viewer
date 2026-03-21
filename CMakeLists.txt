@@ -129,7 +129,7 @@ set_target_properties(evc_monitor PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BI
 # ---------------------------------------------------------------------------
 option(BUILD_GUI "Build the Qt5 WebEngine monitor client" OFF)
 if(BUILD_GUI)
-    add_subdirectory(prad2_monitor)
+    add_subdirectory(prad2qtmon)
 endif()
 
 # ---------------------------------------------------------------------------

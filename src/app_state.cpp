@@ -416,38 +416,49 @@ json AppState::apiOccupancy() const
     return {{"occ", jocc}, {"occ_tcut", jtcut}, {"total", events_processed.load()}};
 }
 
-// Helper: build a time→value map for a reference channel (for normalization)
-// Returns empty map if ref_index is invalid or has no data.
-static std::map<double, float> buildRefMap(
+// Reference correction: builds time→value map and computes mean for correction factor.
+// Correction: corrected = signal * (ref_mean / ref_signal_at_time)
+// This removes LMS-own fluctuation while keeping values in original units.
+struct RefCorrection {
+    std::map<double, float> ref_map;  // time → ref signal
+    float ref_mean = 0.f;             // mean of all ref signals
+    bool active = false;
+};
+
+static RefCorrection buildRefCorrection(
     const std::map<int, std::vector<LmsEntry>> &lms_history,
     const std::vector<AppState::LmsRefChannel> &refs, int ref_index)
 {
-    std::map<double, float> ref_map;
-    if (ref_index < 0 || ref_index >= static_cast<int>(refs.size())) return ref_map;
+    RefCorrection rc;
+    if (ref_index < 0 || ref_index >= static_cast<int>(refs.size())) return rc;
     int ri = refs[ref_index].module_index;
-    if (ri < 0) return ref_map;
+    if (ri < 0) return rc;
     auto it = lms_history.find(ri);
-    if (it == lms_history.end()) return ref_map;
-    for (auto &e : it->second)
-        ref_map[e.time_sec] = e.integral;
-    return ref_map;
+    if (it == lms_history.end() || it->second.empty()) return rc;
+
+    double sum = 0;
+    for (auto &e : it->second) {
+        rc.ref_map[e.time_sec] = e.integral;
+        sum += e.integral;
+    }
+    rc.ref_mean = static_cast<float>(sum / it->second.size());
+    rc.active = (rc.ref_mean > 0);
+    return rc;
 }
 
-// Normalize a value by the reference channel at the same timestamp.
-// Returns val / ref_val, or -1 if ref not found for this time.
-static float normalizeByRef(float val, double time_sec,
-                            const std::map<double, float> &ref_map)
+// Apply correction: returns signal * (ref_mean / ref_at_time), or -1 if ref missing.
+static float applyRefCorrection(float val, double time_sec, const RefCorrection &rc)
 {
-    if (ref_map.empty()) return val;
-    auto it = ref_map.find(time_sec);
-    if (it == ref_map.end() || it->second <= 0) return -1.f;
-    return val / it->second;
+    if (!rc.active) return val;
+    auto it = rc.ref_map.find(time_sec);
+    if (it == rc.ref_map.end() || it->second <= 0) return -1.f;
+    return val * (rc.ref_mean / it->second);
 }
 
 json AppState::apiLmsSummary(int ref_index) const
 {
     std::lock_guard<std::mutex> lk(lms_mtx);
-    auto ref_map = buildRefMap(lms_history, lms_ref_channels, ref_index);
+    auto rc = buildRefCorrection(lms_history, lms_ref_channels, ref_index);
 
     json mods = json::object();
     for (auto &[idx, hist] : lms_history) {
@@ -455,7 +466,7 @@ json AppState::apiLmsSummary(int ref_index) const
         double sum = 0, sum2 = 0;
         int count = 0;
         for (auto &e : hist) {
-            float v = normalizeByRef(e.integral, e.time_sec, ref_map);
+            float v = applyRefCorrection(e.integral, e.time_sec, rc);
             if (v < 0) continue;
             sum += v; sum2 += v * v;
             count++;
@@ -468,14 +479,15 @@ json AppState::apiLmsSummary(int ref_index) const
         if (idx >= 0 && idx < hycal.module_count()) {
             auto &mod = hycal.module(idx);
             mods[std::to_string(idx)] = {
-                {"name", mod.name}, {"mean", std::round(mean * 1000) / 1000},
-                {"rms", std::round(rms * 10000) / 10000},
+                {"name", mod.name}, {"mean", std::round(mean * 10) / 10},
+                {"rms", std::round(rms * 100) / 100},
                 {"count", count}, {"warn", warn}};
         }
     }
     return {{"modules", mods}, {"events", lms_events.load()},
             {"trigger_bit", lms_trigger_bit},
-            {"ref_index", ref_index}};
+            {"ref_index", ref_index},
+            {"ref_mean", rc.ref_mean}};
 }
 
 json AppState::apiLmsModule(int mod_idx, int ref_index) const
@@ -485,15 +497,15 @@ json AppState::apiLmsModule(int mod_idx, int ref_index) const
     if (it == lms_history.end() || it->second.empty())
         return {{"time", json::array()}, {"integral", json::array()}, {"events", 0}};
 
-    auto ref_map = buildRefMap(lms_history, lms_ref_channels, ref_index);
+    auto rc = buildRefCorrection(lms_history, lms_ref_channels, ref_index);
 
     auto &hist = it->second;
     json t_arr = json::array(), v_arr = json::array();
     for (auto &e : hist) {
-        float v = normalizeByRef(e.integral, e.time_sec, ref_map);
+        float v = applyRefCorrection(e.integral, e.time_sec, rc);
         if (v < 0) continue;
         t_arr.push_back(std::round(e.time_sec * 100) / 100);
-        v_arr.push_back(std::round(v * 1000) / 1000);
+        v_arr.push_back(std::round(v * 10) / 10);
     }
     std::string name = (mod_idx >= 0 && mod_idx < hycal.module_count())
         ? hycal.module(mod_idx).name : "";

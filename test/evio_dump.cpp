@@ -410,30 +410,35 @@ static void usage(const char *prog)
     std::cerr
         << "EVIO file structure diagnostic tool\n\n"
         << "Usage:\n"
-        << "  " << prog << " <file>                      Summary: count events by tag\n"
-        << "  " << prog << " <file> --tree [--num N]      Print bank tree (default N=5)\n"
-        << "  " << prog << " <file> --tags                List all unique bank tags with stats\n"
-        << "  " << prog << " <file> --epics               Dump all EPICS event text\n"
-        << "  " << prog << " <file> --event N             Detailed dump of record N (1-based)\n"
-        << "  " << prog << " <file> --triggers            List trigger info for all events\n"
-        << "\nOptions:\n"
-        << "  -D <daq_config.json>    Load DAQ configuration (for PRad etc.)\n";
+        << "  " << prog << " <file> [options]\n\n"
+        << "Modes (default: summary):\n"
+        << "  -m tree       Print bank tree\n"
+        << "  -m tags       List all unique bank tags with stats\n"
+        << "  -m epics      Dump all EPICS event text\n"
+        << "  -m event      Detailed dump of a single record\n"
+        << "  -m triggers   List trigger info for all events\n\n"
+        << "Options:\n"
+        << "  -D <file>     Load DAQ configuration (for PRad etc.)\n"
+        << "  -n <N>        Number of events (tree mode, default 5) or event number (event mode)\n";
 }
 
 int main(int argc, char *argv[])
 {
-    if (argc < 2) { usage(argv[0]); return 1; }
-
-    std::string path = argv[1];
-    std::string mode;
     std::string daq_config_file;
+    std::string mode;
+    int num = 5;
 
-    // parse args: file, mode, and optional -D
-    for (int i = 2; i < argc; ++i) {
-        std::string a = argv[i];
-        if (a == "-D" && i + 1 < argc) { daq_config_file = argv[++i]; }
-        else if (mode.empty()) { mode = a; }
+    int opt;
+    while ((opt = getopt(argc, argv, "D:m:n:h")) != -1) {
+        switch (opt) {
+        case 'D': daq_config_file = optarg; break;
+        case 'm': mode = optarg; break;
+        case 'n': num = std::atoi(optarg); break;
+        default:  usage(argv[0]); return 1;
+        }
     }
+    if (optind >= argc) { usage(argv[0]); return 1; }
+    std::string path = argv[optind];
 
     evc::DaqConfig daq_cfg;
     if (!daq_config_file.empty()) {
@@ -452,31 +457,12 @@ int main(int argc, char *argv[])
     }
 
     int rc;
-    if (mode == "--tree") {
-        int num = 5;
-        for (int i = 3; i < argc; ++i)
-            if (std::string(argv[i]) == "--num" && i + 1 < argc) num = std::atoi(argv[++i]);
-        rc = doTree(ch, num);
-    }
-    else if (mode == "--tags") {
-        rc = doTags(ch);
-    }
-    else if (mode == "--epics") {
-        rc = doEpics(ch);
-    }
-    else if (mode == "--triggers") {
-        rc = doTriggers(ch);
-    }
-    else if (mode == "--event") {
-        int evnum = 1;
-        for (int i = 2; i < argc; ++i)
-            if (argv[i][0] != '-' && std::string(argv[i]) != path && std::string(argv[i]) != "--event")
-                evnum = std::atoi(argv[i]);
-        rc = doEvent(ch, evnum);
-    }
-    else {
-        rc = doSummary(ch);
-    }
+    if      (mode == "tree")     rc = doTree(ch, num);
+    else if (mode == "tags")     rc = doTags(ch);
+    else if (mode == "epics")    rc = doEpics(ch);
+    else if (mode == "triggers") rc = doTriggers(ch);
+    else if (mode == "event")    rc = doEvent(ch, num);
+    else                         rc = doSummary(ch);
 
     ch.Close();
     return rc;

@@ -823,6 +823,8 @@ function pollProgress() {
                 updateHeaderInfo(cfg);
                 updateHeaderStats();
                 if (histEnabled) { fetchOccupancy(); fetchClHist(); }
+                fetchEpicsChannels(); fetchEpicsLatest();
+                if(activeTab==='epics') fetchAllEpicsSlots();
                 syncDqRange();
                 drawGeo();
                 if (totalEvents > 0) loadEvent(1);
@@ -2020,6 +2022,8 @@ function init(){
             updateHeaderInfo(data);
             updateHeaderStats();
             if(histEnabled) { fetchOccupancy(); fetchClHist(); }
+            fetchEpicsChannels(); fetchEpicsLatest();
+            if(activeTab==='epics') fetchAllEpicsSlots();
             syncDqRange();
             geoViewInit=false; resizeGeo();
             if(totalEvents>0)loadEvent(1);
@@ -2027,6 +2031,7 @@ function init(){
             setEtStatus(data.et_connected||false);
             syncDqRange();
             fetchOccupancy();
+            fetchEpicsChannels(); fetchEpicsLatest();
             resizeGeo();
             connectWebSocket();
             updateRingSelector();

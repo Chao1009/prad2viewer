@@ -343,21 +343,23 @@ function b64toBlob(b64,type){
 
 async function downloadReport(){
     const runNumber=prompt('DAQ Run Number (optional):','');
+    if(runNumber===null) return;  // user cancelled
     const reportBy=prompt('Report by (your name, optional):','');
+    if(reportBy===null) return;
     const report=await generateReport(reportBy||'',runNumber||'');
     if(!report) return;
     const statusBar=document.getElementById('status-bar');
-    const ts=new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+    const prefix=runNumber?String(runNumber).padStart(6,'0')+'_':'';
 
     // download .md file
     downloadBlob(new Blob([report.md],{type:'text/markdown'}),
-        `prad2_report_${ts}.md`);
+        `${prefix}prad2_report.md`);
 
     // download each image with delay to avoid browser blocking
     for(let i=0;i<report.attachments.length;i++){
         const a=report.attachments[i];
         await new Promise(r=>setTimeout(r,500));
-        downloadBlob(b64toBlob(a.data,a.type),a.filename);
+        downloadBlob(b64toBlob(a.data,a.type),`${prefix}${a.filename}`);
     }
     statusBar.textContent=`Report saved (${1+report.attachments.length} files)`;
     setTimeout(()=>{statusBar.textContent='Ready';},3000);

@@ -323,8 +323,11 @@ function downloadBlob(blob,filename){
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);
     a.download=filename;
+    a.style.display='none';
+    document.body.appendChild(a);
     a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+    // delay removal and revoke to let browser finish saving
+    setTimeout(()=>{a.remove();URL.revokeObjectURL(a.href);},30000);
 }
 
 function b64toBlob(b64,type){
@@ -344,10 +347,10 @@ async function downloadReport(){
     downloadBlob(new Blob([report.md],{type:'text/markdown'}),
         `prad2_report_${ts}.md`);
 
-    // download each image with small delay to avoid browser blocking
+    // download each image with delay to avoid browser blocking
     for(let i=0;i<report.attachments.length;i++){
         const a=report.attachments[i];
-        await new Promise(r=>setTimeout(r,200));
+        await new Promise(r=>setTimeout(r,500));
         downloadBlob(b64toBlob(a.data,a.type),a.filename);
     }
     statusBar.textContent=`Report saved (${1+report.attachments.length} files)`;

@@ -1076,12 +1076,20 @@ function clearClHist(){ initClHist(); plotClHist(); plotClStatHists(); }
 function fetchClHist(){
     fetch('/api/cluster_hist').then(r=>r.json()).then(data=>{
         if(!data.bins||!data.bins.length) return;
-        // use server config if available
         if(data.min!==undefined) clHistMin=data.min;
         if(data.max!==undefined) clHistMax=data.max;
         if(data.step!==undefined) clHistStep=data.step;
         clHistBins=data.bins;
         clHistEvents=data.events||0;
+        // nclusters/nblocks from server
+        if(data.nclusters&&data.nclusters.bins&&data.nclusters.bins.length){
+            nclustMin=data.nclusters.min||0; nclustMax=data.nclusters.max||20;
+            nclustStep=data.nclusters.step||1; nclustBins=data.nclusters.bins;
+        }
+        if(data.nblocks&&data.nblocks.bins&&data.nblocks.bins.length){
+            nblocksMin=data.nblocks.min||0; nblocksMax=data.nblocks.max||40;
+            nblocksStep=data.nblocks.step||1; nblocksBins=data.nblocks.bins;
+        }
         plotClHist(); plotClStatHists();
     }).catch(()=>{});
 }

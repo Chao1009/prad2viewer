@@ -268,9 +268,11 @@ void AppState::init(const std::string &db_dir,
                   << " (adc_to_mev=" << adc_to_mev << ")\n";
     }
 
-    // init cluster energy histogram
+    // init cluster histograms
     int cl_nbins = std::max(1, (int)std::ceil((cl_hist_max - cl_hist_min) / cl_hist_step));
     cluster_energy_hist.init(cl_nbins);
+    nclusters_hist.init(std::max(1, (nclusters_hist_max - nclusters_hist_min) / nclusters_hist_step));
+    nblocks_hist.init(std::max(1, (nblocks_hist_max - nblocks_hist_min) / nblocks_hist_step));
 }
 
 //=============================================================================
@@ -375,8 +377,11 @@ void AppState::clusterEvent(fdec::EventData &event,
     clusterer.FormClusters();
     std::vector<fdec::ClusterHit> reco_hits;
     clusterer.ReconstructHits(reco_hits);
-    for (auto &rh : reco_hits)
+    for (auto &rh : reco_hits) {
         cluster_energy_hist.fill(rh.energy, cl_hist_min, cl_hist_step);
+        nblocks_hist.fill(rh.nblocks, nblocks_hist_min, nblocks_hist_step);
+    }
+    nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
     cluster_events_processed++;
 }
 
@@ -596,6 +601,8 @@ void AppState::clearHistograms()
     occupancy_tcut.clear();
     events_processed = 0;
     cluster_energy_hist.clear();
+    nclusters_hist.clear();
+    nblocks_hist.clear();
     cluster_events_processed = 0;
 }
 
@@ -638,14 +645,20 @@ json AppState::apiHist(bool integral, const std::string &key) const
 json AppState::apiClusterHist() const
 {
     std::lock_guard<std::mutex> lk(data_mtx);
-    if (cluster_energy_hist.bins.empty())
-        return {{"bins", json::array()}, {"underflow", 0}, {"overflow", 0},
-                {"events", 0}, {"min", cl_hist_min}, {"max", cl_hist_max},
-                {"step", cl_hist_step}};
-    auto &h = cluster_energy_hist;
-    return {{"bins", h.bins}, {"underflow", h.underflow}, {"overflow", h.overflow},
-            {"events", cluster_events_processed},
-            {"min", cl_hist_min}, {"max", cl_hist_max}, {"step", cl_hist_step}};
+    auto histJson = [](const Histogram &h, float mn, float mx, float st) -> json {
+        if (h.bins.empty())
+            return {{"bins", json::array()}, {"underflow", 0}, {"overflow", 0},
+                    {"min", mn}, {"max", mx}, {"step", st}};
+        return {{"bins", h.bins}, {"underflow", h.underflow}, {"overflow", h.overflow},
+                {"min", mn}, {"max", mx}, {"step", st}};
+    };
+    json r = histJson(cluster_energy_hist, cl_hist_min, cl_hist_max, cl_hist_step);
+    r["events"] = cluster_events_processed;
+    r["nclusters"] = histJson(nclusters_hist,
+        (float)nclusters_hist_min, (float)nclusters_hist_max, (float)nclusters_hist_step);
+    r["nblocks"] = histJson(nblocks_hist,
+        (float)nblocks_hist_min, (float)nblocks_hist_max, (float)nblocks_hist_step);
+    return r;
 }
 
 json AppState::apiOccupancy() const

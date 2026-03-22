@@ -42,11 +42,9 @@ async function captureGeoForTab(tab){
 
 // Capture a geo view, register as attachment, return markdown image reference.
 async function captureGeo(tab,caption,filename){
-    try{
-        const img=await captureGeoForTab(tab);
-        addAttachment(img,filename,caption);
-        return `![${caption}](${filename})\n\n`;
-    }catch(e){ return ''; }
+    const img=await captureGeoForTab(tab);
+    addAttachment(img,filename,caption);
+    return `![${caption}](${filename})\n\n`;
 }
 
 // Render a Plotly chart off-screen, capture as PNG data URL.
@@ -133,14 +131,15 @@ function findRefIndex(name){
 // --- Occupancy ---
 registerReportSection({id:'occupancy',title:'Occupancy',order:10,
     generate:async()=>{
-        // capture occupancy geo view
         const prevMetric=document.getElementById('color-metric').value;
         document.getElementById('color-metric').value='occupancy';
-        syncDqRange(); // recalculate range for occupancy metric
+        syncDqRange();
         let md='## Occupancy\n\n';
         if(occTotal>0) md+=`Total events: ${occTotal}\n\n`;
+        // report color range and scale
+        const useLog=document.getElementById('log-scale').checked;
+        md+=`Color range: ${rangeMin??0} – ${rangeMax??'auto'} | Scale: ${useLog?'log':'linear'}\n\n`;
         md+=await captureGeo('dq','Occupancy','occupancy.png');
-        // restore
         document.getElementById('color-metric').value=prevMetric;
         syncDqRange();
         return md;
@@ -171,10 +170,8 @@ registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
         // fetch with LMS3 reference
         const lms3Ref=findRefIndex('LMS3');
         const refQ=lms3Ref>=0?`?ref=${lms3Ref}`:'';
-        try{
-            const d=await fetch(`/api/lms/summary${refQ}`).then(r=>r.json());
-            lmsSummaryData=d;
-        }catch(e){}
+        const d=await fetch(`/api/lms/summary${refQ}`).then(r=>r.json());
+        lmsSummaryData=d;
         if(!lmsSummaryData||!lmsSummaryData.modules) return null;
         const allEntries=Object.entries(lmsSummaryData.modules)
             .map(([idx,m])=>({idx:parseInt(idx),...m}));
@@ -185,11 +182,11 @@ registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
         g_lmsRefIndex=lms3Ref;
 
         let md='## LMS Monitoring\n\n';
-        const refLabel=lms3Ref>=0?` (ref: LMS3)`:'';
+        const refLabel=lms3Ref>=0?' (ref: LMS3)':'';
         md+=`LMS events: ${lmsSummaryData.events||0} | `;
         md+=`Modules: ${allEntries.length}${refLabel}\n\n`;
 
-        // LMS Mean geo view
+        // LMS Mean geo view — errors propagate (no silent catch)
         md+=await captureLmsGeo('mean','LMS Mean','lms_mean.png');
         // RMS/Mean geo view
         md+=await captureLmsGeo('rms_frac','RMS / Mean','lms_rms_frac.png');
@@ -243,6 +240,14 @@ async function refreshDataForReport(){
             if(d.max!==undefined) clHistMax=d.max;
             if(d.step!==undefined) clHistStep=d.step;
             clHistBins=d.bins; clHistEvents=d.events||0;
+        }
+        if(d.nclusters&&d.nclusters.bins&&d.nclusters.bins.length){
+            nclustMin=d.nclusters.min||0; nclustMax=d.nclusters.max||20;
+            nclustStep=d.nclusters.step||1; nclustBins=d.nclusters.bins;
+        }
+        if(d.nblocks&&d.nblocks.bins&&d.nblocks.bins.length){
+            nblocksMin=d.nblocks.min||0; nblocksMax=d.nblocks.max||40;
+            nblocksStep=d.nblocks.step||1; nblocksBins=d.nblocks.bins;
         }
     }).catch(()=>{}));
     // LMS section fetches its own data with LMS3 ref

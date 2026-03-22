@@ -87,6 +87,8 @@ struct AppState {
     std::atomic<int>                 events_processed{0};
 
     Histogram cluster_energy_hist;
+    Histogram nclusters_hist;
+    Histogram nblocks_hist;
     int       cluster_events_processed = 0;
 
     // ---- LMS data (guarded by lms_mtx) -------------------------------------

@@ -1,18 +1,16 @@
-// report.js — Report generation, PDF download, and elog posting
+// report.js — Report generation: markdown + images
 //
-// Depends on globals from viewer.js: modules, mode, sampleCount, totalEvents,
-// currentEventNumber, activeTab, geoCanvas, canvasW, canvasH, scale, offsetX,
-// offsetY, fitView, redrawGeo, occData, occTcutData, occTotal, clHistBins,
-// clHistMin, clHistMax, clHistStep, clHistEvents, nclustBins, nclustMin,
-// nclustStep, nblocksBins, nblocksMin, nblocksStep, clusterData,
-// lmsSummaryData, g_lmsRefIndex
+// Produces markdown text + PNG image attachments.
+// Used by both "Download Report" (.md file) and "Post to Elog" (text + attachments).
+//
+// Depends on globals from viewer.js (accessed at runtime, not load time).
 
 // =========================================================================
 // Registry
 // =========================================================================
 const reportRegistry=[];
 let elogConfig={url:'',logbook:'',author:'',tags:[]};
-let reportAttachments=[];
+let reportAttachments=[];  // [{data (base64), filename, caption, type}]
 
 function registerReportSection(section){
     reportRegistry.push(section);
@@ -23,7 +21,7 @@ function registerReportSection(section){
 // Capture helpers
 // =========================================================================
 
-// Capture the geo canvas for a given tab at fixed high resolution with light theme.
+// Capture the geo canvas for a given tab at fixed resolution with light theme.
 async function captureGeoForTab(tab){
     const prev={tab:activeTab,w:geoCanvas.width,h:geoCanvas.height,
                 s:scale,ox:offsetX,oy:offsetY};
@@ -42,16 +40,16 @@ async function captureGeoForTab(tab){
     return url;
 }
 
-// Capture a geo view and return an HTML img tag + register as elog attachment.
-async function captureGeoSection(tab,title,filename){
+// Capture a geo view, register as attachment, return markdown image reference.
+async function captureGeo(tab,caption,filename){
     try{
         const img=await captureGeoForTab(tab);
-        addReportAttachment(img,filename,title);
-        return `<h3>${title}</h3><img class="geo-img" src="${img}">`;
+        addAttachment(img,filename,caption);
+        return `![${caption}](${filename})\n\n`;
     }catch(e){ return ''; }
 }
 
-// Render a Plotly chart off-screen, capture as image.
+// Render a Plotly chart off-screen, capture as PNG data URL.
 async function plotToImage(plotFn,w,h){
     const div=document.createElement('div');
     div.style.cssText='position:fixed;left:-9999px;width:'+w+'px;height:'+h+'px';
@@ -63,19 +61,19 @@ async function plotToImage(plotFn,w,h){
     return img;
 }
 
-// Light-theme Plotly layout for printable reports.
+// Light-theme Plotly layout.
 const RPL={paper_bgcolor:'#fff',plot_bgcolor:'#fff',
     font:{family:'Helvetica,Arial,sans-serif',size:11,color:'#222'},
     margin:{l:50,r:15,t:28,b:36},
     xaxis:{gridcolor:'#ddd',zerolinecolor:'#bbb',linecolor:'#999',mirror:true},
     yaxis:{gridcolor:'#ddd',zerolinecolor:'#bbb',linecolor:'#999',mirror:true}};
 
-// Capture a bar histogram from raw bins into a PNG image.
-// Returns the data-URL string, or null on failure.
-async function histToImage(bins,binMin,binStep,title,xTitle,color,w,h){
-    if(!bins||!bins.some(b=>b>0)) return null;
+// Capture a bar histogram, register as attachment, return markdown reference.
+// Returns empty string if no data.
+async function captureHist(bins,binMin,binStep,title,xTitle,color,filename,w,h){
+    if(!bins||!bins.some(b=>b>0)) return '';
     try{
-        return await plotToImage(async div=>{
+        const img=await plotToImage(async div=>{
             const x=bins.map((_,i)=>binMin+(i+0.5)*binStep);
             const entries=bins.reduce((a,b)=>a+b,0);
             const titleText=entries?`${title} (${entries} entries)`:title;
@@ -85,134 +83,148 @@ async function histToImage(bins,binMin,binStep,title,xTitle,color,w,h){
                  xaxis:{...RPL.xaxis,title:xTitle},
                  yaxis:{...RPL.yaxis,title:'Counts'},bargap:0.05});
         },w,h);
-    }catch(e){ return null; }
+        addAttachment(img,filename,title);
+        return `![${title}](${filename})\n\n`;
+    }catch(e){ return ''; }
 }
 
-function addReportAttachment(dataUrl,filename,caption){
+function addAttachment(dataUrl,filename,caption){
     const b64=dataUrl.split(',')[1];
     if(b64) reportAttachments.push({data:b64,filename,caption,type:'image/png'});
 }
 
 // =========================================================================
-// HTML table helper
+// Markdown table helper
 // =========================================================================
-function htmlTable(headers,rows){
-    let h='<table><thead><tr>';
-    for(const col of headers)
-        h+=`<th${col.left?' style="text-align:left"':''}>${col.label}</th>`;
-    h+='</tr></thead><tbody>';
-    for(const row of rows){
-        h+='<tr>';
-        for(let i=0;i<headers.length;i++)
-            h+=`<td${headers[i].left?' style="text-align:left"':''}>${row[i]}</td>`;
-        h+='</tr>';
-    }
-    h+='</tbody></table>';
-    return h;
+function mdTable(headers,rows,alignments){
+    // headers: ['Col1','Col2',...]
+    // alignments: optional array of 'l','r','c' per column (default 'l')
+    const aligns=alignments||headers.map(()=>'l');
+    const sepMap={l:':---',r:'---:',c:':---:'};
+    let md='| '+headers.join(' | ')+' |\n';
+    md+='| '+aligns.map(a=>sepMap[a]||':---').join(' | ')+' |\n';
+    for(const row of rows)
+        md+='| '+row.join(' | ')+' |\n';
+    return md+'\n';
 }
 
 // =========================================================================
 // Report sections
 // =========================================================================
 
-// --- DQ ---
-registerReportSection({id:'dq',title:'Waveform Data (DQ)',order:10,
+// Helper: temporarily set LMS metric dropdown, capture geo, restore.
+async function captureLmsGeo(metric,caption,filename){
+    const sel=document.getElementById('lms-color-metric');
+    const prev=sel.value;
+    sel.value=metric;
+    const md=await captureGeo('lms',caption,filename);
+    sel.value=prev;
+    return md;
+}
+
+// Helper: find the ref index for a given ref channel name (e.g. 'LMS3').
+function findRefIndex(name){
+    const sel=document.getElementById('lms-ref-select');
+    for(const o of sel.options)
+        if(o.textContent===name) return parseInt(o.value);
+    return -1;
+}
+
+// --- Occupancy ---
+registerReportSection({id:'occupancy',title:'Occupancy',order:10,
     generate:async()=>{
-        let html='<div class="section"><h2>Waveform Data (DQ)</h2>';
-        const metric=document.getElementById('color-metric').value;
-        html+=await captureGeoSection('dq',`Detector Map (${metric})`,'dq_geo.png');
-        if(occTotal>0){
-            html+=`<h3>Occupancy Summary</h3><p>Total events: ${occTotal}</p>`;
-            const entries=modules.map(m=>{
-                const key=`${m.roc}_${m.sl}_${m.ch}`;
-                return{name:m.n,occ:occData[key]||0,occTcut:occTcutData[key]||0};
-            }).filter(e=>e.occ>0).sort((a,b)=>b.occ-a.occ);
-            const show=entries.slice(0,50);
-            html+=htmlTable(
-                [{label:'Module',left:true},{label:'Hits'},{label:'Occupancy %'},{label:'Hits (tcut)'}],
-                show.map(e=>[e.name,e.occ,(100*e.occ/occTotal).toFixed(2)+'%',e.occTcut])
-            );
-            if(entries.length>50)
-                html+=`<p class="no-data">Showing top 50 of ${entries.length} active modules</p>`;
-        }else{
-            html+='<p class="no-data">No occupancy data available</p>';
-        }
-        return html+'</div>';
+        // capture occupancy geo view
+        const prevMetric=document.getElementById('color-metric').value;
+        document.getElementById('color-metric').value='occupancy';
+        syncDqRange(); // recalculate range for occupancy metric
+        let md='## Occupancy\n\n';
+        if(occTotal>0) md+=`Total events: ${occTotal}\n\n`;
+        md+=await captureGeo('dq','Occupancy','occupancy.png');
+        // restore
+        document.getElementById('color-metric').value=prevMetric;
+        syncDqRange();
+        return md;
     }
 });
 
 // --- Clustering ---
 registerReportSection({id:'cluster',title:'Clustering',order:20,
     generate:async()=>{
-        const hasHist=clHistBins&&clHistBins.some(b=>b>0);
-        const hasClusters=clusterData&&clusterData.clusters&&clusterData.clusters.length;
-        if(!hasHist&&!hasClusters) return null;
-
-        let html='<div class="section"><h2>Clustering</h2>';
-        // energy histogram
-        const eImg=await histToImage(clHistBins,clHistMin,clHistStep,
-            `Cluster Energy (${clHistEvents} evts)`,'Energy (MeV)','#ff922b',800,300);
-        if(eImg){
-            html+=`<h3>Cluster Energy Distribution</h3><img class="chart-img" src="${eImg}">`;
-            addReportAttachment(eImg,'cluster_energy.png','Cluster Energy Histogram');
-        }
-        // stat histograms
-        const statImgs=[];
-        const ncImg=await histToImage(nclustBins,nclustMin,nclustStep,
-            'Clusters per Event','# Clusters','#00b4d8',400,260);
-        if(ncImg){statImgs.push(ncImg);addReportAttachment(ncImg,'clusters_per_event.png','Clusters per Event');}
-        const nbImg=await histToImage(nblocksBins,nblocksMin,nblocksStep,
-            'Blocks per Cluster','# Blocks','#51cf66',400,260);
-        if(nbImg){statImgs.push(nbImg);addReportAttachment(nbImg,'blocks_per_cluster.png','Blocks per Cluster');}
-        if(statImgs.length){
-            html+='<h3>Cluster Statistics</h3><div class="chart-row">';
-            for(const img of statImgs) html+=`<img class="chart-img" src="${img}">`;
-            html+='</div>';
-        }
-        // cluster table
-        if(hasClusters){
-            html+=`<h3>Clusters (Event #${currentEventNumber})</h3>`;
-            html+=htmlTable(
-                [{label:'#'},{label:'Center',left:true},{label:'Energy [MeV]'},
-                 {label:'X [mm]'},{label:'Y [mm]'},{label:'Blocks'}],
-                clusterData.clusters.map((cl,i)=>[
-                    i,cl.center,cl.energy.toFixed(1),cl.x.toFixed(1),cl.y.toFixed(1),cl.nblocks
-                ])
-            );
-        }
-        return html+'</div>';
+        if(!clHistBins||!clHistBins.some(b=>b>0)) return null;
+        let md='## Clustering\n\n';
+        md+=await captureHist(clHistBins,clHistMin,clHistStep,
+            `Cluster Energy (${clHistEvents} evts)`,'Energy (MeV)','#ff922b',
+            'cluster_energy.png',800,300);
+        md+=await captureHist(nclustBins,nclustMin,nclustStep,
+            'Clusters per Event','# Clusters','#00b4d8',
+            'clusters_per_event.png',500,300);
+        md+=await captureHist(nblocksBins,nblocksMin,nblocksStep,
+            'Blocks per Cluster','# Blocks','#51cf66',
+            'blocks_per_cluster.png',500,300);
+        return md;
     }
 });
 
-// --- LMS ---
-registerReportSection({id:'lms',title:'Gain Monitoring (LMS)',order:30,
+// --- LMS Monitoring ---
+registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
     generate:async()=>{
+        // fetch with LMS3 reference
+        const lms3Ref=findRefIndex('LMS3');
+        const refQ=lms3Ref>=0?`?ref=${lms3Ref}`:'';
+        try{
+            const d=await fetch(`/api/lms/summary${refQ}`).then(r=>r.json());
+            lmsSummaryData=d;
+        }catch(e){}
         if(!lmsSummaryData||!lmsSummaryData.modules) return null;
-        const entries=Object.entries(lmsSummaryData.modules)
+        const allEntries=Object.entries(lmsSummaryData.modules)
             .map(([idx,m])=>({idx:parseInt(idx),...m}));
-        if(!entries.length) return null;
+        if(!allEntries.length) return null;
 
-        let html='<div class="section"><h2>Gain Monitoring (LMS)</h2>';
-        html+=await captureGeoSection('lms','LMS Status Map','lms_geo.png');
-        entries.sort((a,b)=>{
+        // temporarily set ref so geo drawing uses the corrected data
+        const prevRef=g_lmsRefIndex;
+        g_lmsRefIndex=lms3Ref;
+
+        let md='## LMS Monitoring\n\n';
+        const refLabel=lms3Ref>=0?` (ref: LMS3)`:'';
+        md+=`LMS events: ${lmsSummaryData.events||0} | `;
+        md+=`Modules: ${allEntries.length}${refLabel}\n\n`;
+
+        // LMS Mean geo view
+        md+=await captureLmsGeo('mean','LMS Mean','lms_mean.png');
+        // RMS/Mean geo view
+        md+=await captureLmsGeo('rms_frac','RMS / Mean','lms_rms_frac.png');
+
+        // restore ref
+        g_lmsRefIndex=prevRef;
+
+        // build table: all WARN + top N OK by rms/mean
+        allEntries.sort((a,b)=>{
             if(a.warn!==b.warn) return a.warn?-1:1;
             const ra=a.mean>0?a.rms/a.mean:0, rb=b.mean>0?b.rms/b.mean:0;
             return rb-ra;
         });
-        const warnCount=entries.filter(e=>e.warn).length;
-        html+=`<h3>Module Summary</h3>`;
-        html+=`<p>LMS events: ${lmsSummaryData.events||0} | Modules: ${entries.length} | `;
-        html+=`Warnings: <span class="${warnCount?'warn':'ok'}">${warnCount}</span></p>`;
-        html+=htmlTable(
-            [{label:'Module',left:true},{label:'Mean'},{label:'RMS'},
-             {label:'RMS/Mean %'},{label:'Count'},{label:'Status'}],
-            entries.map(e=>[
-                e.name, e.mean.toFixed(1), e.rms.toFixed(2),
-                (e.mean>0?(e.rms/e.mean*100).toFixed(1):'--')+'%',
-                e.count, e.warn?'<span class="warn">WARN</span>':'<span class="ok">OK</span>'
-            ])
-        );
-        return html+'</div>';
+        const warnEntries=allEntries.filter(e=>e.warn);
+        const okEntries=allEntries.filter(e=>!e.warn);
+        const topOk=okEntries.slice(0,5);
+        const tableEntries=[...warnEntries,...topOk];
+
+        const warnCount=warnEntries.length;
+        md+=`### Status Summary\n\n`;
+        md+=`Warnings: **${warnCount}** / ${allEntries.length} modules\n\n`;
+
+        if(tableEntries.length){
+            md+=mdTable(
+                ['Module','Mean','RMS','RMS/Mean %','Count','Status'],
+                tableEntries.map(e=>[
+                    e.name, e.mean.toFixed(1), e.rms.toFixed(2),
+                    (e.mean>0?(e.rms/e.mean*100).toFixed(1):'--')+'%',
+                    e.count, e.warn?'**WARN**':'OK'
+                ]),['l','r','r','r','r','l']
+            );
+            if(okEntries.length>5)
+                md+=`*Showing ${warnCount} warnings + top 5 of ${okEntries.length} OK modules by RMS/Mean*\n\n`;
+        }
+        return md;
     }
 });
 
@@ -233,53 +245,11 @@ async function refreshDataForReport(){
             clHistBins=d.bins; clHistEvents=d.events||0;
         }
     }).catch(()=>{}));
-    const refQ=g_lmsRefIndex>=0?`?ref=${g_lmsRefIndex}`:'';
-    fetches.push(fetch(`/api/lms/summary${refQ}`).then(r=>r.json()).then(d=>{
-        lmsSummaryData=d;
-    }).catch(()=>{}));
+    // LMS section fetches its own data with LMS3 ref
     await Promise.all(fetches);
 }
 
-function buildReportHtml(sections){
-    const ts=new Date().toLocaleString();
-    const evInfo=mode==='online'?`${sampleCount} samples`:`${totalEvents} events`;
-    return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>PRad2 Monitor Report - ${ts}</title>
-<style>
-body{font-family:'Helvetica Neue',Arial,sans-serif;max-width:900px;margin:0 auto;padding:20px;color:#222;background:#fff}
-h1{font-size:20px;border-bottom:2px solid #0074d9;padding-bottom:6px;margin:0 0 6px}
-h2{font-size:16px;color:#0074d9;margin:24px 0 4px;border-bottom:1px solid #ddd;padding-bottom:4px;page-break-after:avoid}
-h3{font-size:13px;color:#333;margin:12px 0 6px}
-p{margin:4px 0}
-.meta{color:#666;font-size:12px;margin-bottom:16px}
-.meta span{margin-right:20px}
-img{max-width:100%;height:auto;display:block;margin:8px 0}
-table{border-collapse:collapse;width:100%;font-size:10px;margin:8px 0}
-th,td{border:1px solid #ccc;padding:2px 5px;text-align:right}
-th{background:#f0f0f0;font-weight:600}
-tr:nth-child(even){background:#fafafa}
-.warn{color:#c00;font-weight:600}
-.ok{color:#080}
-.geo-img{width:580px;border:1px solid #ddd}
-.chart-img{width:560px}
-.chart-row{display:flex;gap:8px}
-.chart-row img{width:280px}
-.no-data{color:#999;font-style:italic}
-@media print{body{padding:10px;max-width:none}h2{page-break-after:avoid}table{page-break-inside:auto}}
-</style></head><body>
-<h1>PRad2 HyCal Monitor Report</h1>
-<div class="meta">
-<span>Generated: ${ts}</span>
-<span>Mode: ${mode}</span>
-<span>${evInfo}</span>
-<span>Event #${currentEventNumber}</span>
-</div>
-${sections.join('\n')}
-<div class="meta" style="margin-top:30px;border-top:1px solid #ddd;padding-top:6px">
-PRad2 HyCal Online Monitor &mdash; Report generated ${ts}
-</div></body></html>`;
-}
-
+// Generate the report. Returns {md, attachments} or null.
 async function generateReport(){
     if(!modules.length){
         alert('No data loaded. Please load data before generating a report.');
@@ -291,18 +261,39 @@ async function generateReport(){
     try{
         await refreshDataForReport();
         reportAttachments=[];
-        const sections=[];
+        const ts=new Date().toLocaleString();
+        const samples=mode==='online'?sampleCount:totalEvents;
+        let header=`# PRad2 HyCal Monitor Report\n\n`;
+        header+=`- **Generated:** ${ts}\n`;
+        header+=`- **Samples:** ${samples}\n`;
+        let sectionsMd='';
         for(const entry of reportRegistry){
             try{
-                const html=await entry.generate();
-                if(html) sections.push(html);
+                const section=await entry.generate();
+                if(section) sectionsMd+=section;
             }catch(err){
-                sections.push(`<div class="section"><h2>${entry.title}</h2>
-                    <p class="no-data">Error: ${err.message}</p></div>`);
+                sectionsMd+=`## ${entry.title}\n\n*Error: ${err.message}*\n\n`;
             }
         }
+        // append LMS warn summary to header (data available after LMS section runs)
+        if(lmsSummaryData&&lmsSummaryData.modules){
+            const warns=Object.values(lmsSummaryData.modules)
+                .filter(m=>m.warn).map(m=>m.name)
+                .sort((a,b)=>{
+                    // W modules first, then G
+                    const ta=a.startsWith('W')?0:1, tb=b.startsWith('W')?0:1;
+                    if(ta!==tb) return ta-tb;
+                    return a.localeCompare(b,undefined,{numeric:true});
+                });
+            if(warns.length)
+                header+=`- **Gain Monitoring Warnings (${warns.length}):** ${warns.join(', ')}\n`;
+            else
+                header+=`- **Gain Monitoring Warnings:** None\n`;
+        }
+        let md=header+`\n---\n\n`+sectionsMd;
+        md+=`---\n*PRad2 HyCal Online Monitor — Report generated ${ts}*\n`;
         statusBar.textContent=prevStatus;
-        return buildReportHtml(sections);
+        return {md, attachments:reportAttachments};
     }catch(err){
         statusBar.textContent=`Report error: ${err.message}`;
         return null;
@@ -310,18 +301,42 @@ async function generateReport(){
 }
 
 // =========================================================================
-// PDF download
+// Download report (.md + images)
 // =========================================================================
 
-async function downloadReportPdf(){
-    const html=await generateReport();
-    if(!html) return;
-    // Open in a new window — clean CSS context, no monitor interference.
-    // Browser "Save as PDF" / Ctrl+P gives perfect results.
-    const w=window.open('','_blank');
-    if(!w){alert('Popup blocked — please allow popups for this site.');return;}
-    w.document.write(html);
-    w.document.close();
+function downloadBlob(blob,filename){
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=filename;
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+}
+
+function b64toBlob(b64,type){
+    const bin=atob(b64);
+    const arr=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type});
+}
+
+async function downloadReport(){
+    const report=await generateReport();
+    if(!report) return;
+    const statusBar=document.getElementById('status-bar');
+    const ts=new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+
+    // download .md file
+    downloadBlob(new Blob([report.md],{type:'text/markdown'}),
+        `prad2_report_${ts}.md`);
+
+    // download each image with small delay to avoid browser blocking
+    for(let i=0;i<report.attachments.length;i++){
+        const a=report.attachments[i];
+        await new Promise(r=>setTimeout(r,200));
+        downloadBlob(b64toBlob(a.data,a.type),a.filename);
+    }
+    statusBar.textContent=`Report saved (${1+report.attachments.length} files)`;
+    setTimeout(()=>{statusBar.textContent='Ready';},3000);
 }
 
 // =========================================================================
@@ -333,12 +348,12 @@ function escXml(s){
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function buildElogXml(title,logbook,author,tags,bodyHtml,attachments){
+function buildElogXml(title,logbook,author,tags,body,attachments){
     const parts=['<?xml version="1.0" encoding="UTF-8"?>','<Logentry>',
         `  <created>${new Date().toISOString()}</created>`,
         `  <Author><username>${escXml(author)}</username></Author>`,
         `  <title>${escXml(title)}</title>`,
-        `  <body type="html"><![CDATA[${bodyHtml}]]></body>`,
+        `  <body type="text"><![CDATA[${body}]]></body>`,
         '  <Logbooks>'];
     for(const lb of logbook.split(','))
         parts.push(`    <logbook>${escXml(lb.trim())}</logbook>`);
@@ -389,15 +404,14 @@ async function postToElog(){
     statusEl.textContent='Generating report...';
     statusEl.style.color='var(--dim)';
 
-    const html=await generateReport();
-    if(!html){statusEl.textContent='Failed to generate report.';statusEl.style.color='#c00';return;}
+    const report=await generateReport();
+    if(!report){statusEl.textContent='Failed to generate report.';statusEl.style.color='#c00';return;}
 
-    // strip base64 images from body (they go as attachments)
-    const bodyMatch=html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-    const body=(bodyMatch?bodyMatch[1]:'').replace(/<img[^>]*src="data:[^"]*"[^>]*>/gi,'');
+    // strip image markdown references from body (images go as attachments)
+    const body=report.md.replace(/!\[[^\]]*\]\([^)]+\)\n*/g,'');
 
     statusEl.textContent='Posting to elog...';
-    const xml=buildElogXml(title,logbook,author,tags,body,reportAttachments);
+    const xml=buildElogXml(title,logbook,author,tags,body,report.attachments);
 
     try{
         const resp=await fetch('/api/elog/post',{
@@ -421,24 +435,21 @@ async function postToElog(){
 // Init — called from viewer.js init() with config data
 // =========================================================================
 function initReport(data){
-    // report dropdown toggle
     const reportBtn=document.getElementById('btn-report');
     const reportMenu=document.getElementById('report-menu');
     reportBtn.onclick=(e)=>{e.stopPropagation();reportMenu.classList.toggle('open');};
     document.addEventListener('click',()=>reportMenu.classList.remove('open'));
     reportMenu.onclick=(e)=>e.stopPropagation();
     document.getElementById('btn-report-pdf').onclick=()=>{
-        reportMenu.classList.remove('open'); downloadReportPdf();};
+        reportMenu.classList.remove('open'); downloadReport();};
     document.getElementById('btn-report-elog').onclick=()=>{
         reportMenu.classList.remove('open'); showElogDialog();};
 
-    // elog dialog
     document.getElementById('elog-dialog-close').onclick=hideElogDialog;
     document.getElementById('elog-backdrop').onclick=hideElogDialog;
     document.getElementById('elog-cancel').onclick=hideElogDialog;
     document.getElementById('elog-submit').onclick=postToElog;
 
-    // elog config defaults from server
     if(data&&data.elog){
         elogConfig=data.elog;
         document.getElementById('elog-logbook').value=data.elog.logbook||'';

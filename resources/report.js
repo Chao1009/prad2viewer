@@ -173,10 +173,13 @@ registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
         const refQ=lms3Ref>=0?`?ref=${lms3Ref}`:'';
         const d=await fetch(`/api/lms/summary${refQ}`).then(r=>r.json());
         lmsSummaryData=d;
-        if(!lmsSummaryData||!lmsSummaryData.modules) return null;
+        const lmsEvents=lmsSummaryData?lmsSummaryData.events||0:0;
+        const trigBit=lmsSummaryData?lmsSummaryData.trigger_bit:'?';
+        if(!lmsSummaryData||!lmsSummaryData.modules||
+            !Object.keys(lmsSummaryData.modules).length)
+            return `## LMS Monitoring\n\nLMS events received: ${lmsEvents} (trigger bit = ${trigBit})\n\n`;
         const allEntries=Object.entries(lmsSummaryData.modules)
             .map(([idx,m])=>({idx:parseInt(idx),...m}));
-        if(!allEntries.length) return null;
 
         // temporarily set ref so geo drawing uses the corrected data
         const prevRef=g_lmsRefIndex;

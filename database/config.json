@@ -35,6 +35,16 @@
             "min": 0,
             "max": 3000,
             "step": 10
+        },
+        "nclusters_hist": {
+            "min": 0,
+            "max": 20,
+            "step": 1
+        },
+        "nblocks_hist": {
+            "min": 0,
+            "max": 40,
+            "step": 1
         }
     },
     "lms_monitor": {

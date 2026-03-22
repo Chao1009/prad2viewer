@@ -65,6 +65,12 @@ struct AppState {
     float    cl_hist_min       = 0.f;
     float    cl_hist_max       = 3000.f;
     float    cl_hist_step      = 10.f;
+    int      nclusters_hist_min  = 0;
+    int      nclusters_hist_max  = 20;
+    int      nclusters_hist_step = 1;
+    int      nblocks_hist_min    = 0;
+    int      nblocks_hist_max    = 40;
+    int      nblocks_hist_step   = 1;
 
     // ---- Accumulated data (guarded by data_mtx) ----------------------------
     mutable std::mutex data_mtx;

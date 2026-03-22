@@ -195,6 +195,18 @@ void AppState::init(const std::string &db_dir,
                 if (eh.contains("max"))  cl_hist_max  = eh["max"];
                 if (eh.contains("step")) cl_hist_step = eh["step"];
             }
+            if (cc.contains("nclusters_hist")) {
+                auto &nh = cc["nclusters_hist"];
+                if (nh.contains("min"))  nclusters_hist_min  = nh["min"];
+                if (nh.contains("max"))  nclusters_hist_max  = nh["max"];
+                if (nh.contains("step")) nclusters_hist_step = nh["step"];
+            }
+            if (cc.contains("nblocks_hist")) {
+                auto &bh = cc["nblocks_hist"];
+                if (bh.contains("min"))  nblocks_hist_min  = bh["min"];
+                if (bh.contains("max"))  nblocks_hist_max  = bh["max"];
+                if (bh.contains("step")) nblocks_hist_step = bh["step"];
+            }
             std::cerr << "Clustering: min_mod=" << cluster_cfg.min_module_energy
                       << " min_center=" << cluster_cfg.min_center_energy
                       << " min_cluster=" << cluster_cfg.min_cluster_energy

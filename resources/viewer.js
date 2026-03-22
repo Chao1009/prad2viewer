@@ -56,10 +56,10 @@ let clHistMin=0, clHistMax=3000, clHistStep=10;
 let currentClHist=null;  // {x:[], y:[]} for copy button
 let currentNclustHist=null, currentNblocksHist=null;
 
-// cluster count histograms
+// cluster count histograms (configurable via config.json clustering section)
 let nclustBins=null, nblocksBins=null;
-const NCLUST_MIN=0, NCLUST_MAX=20, NCLUST_STEP=1;
-const NBLOCKS_MIN=0, NBLOCKS_MAX=40, NBLOCKS_STEP=2;
+let nclustMin=0, nclustMax=20, nclustStep=1;
+let nblocksMin=0, nblocksMax=40, nblocksStep=1;
 
 // DQ tab working range (set by syncDqRange, used by drawGeo)
 let rangeMin=null, rangeMax=null;
@@ -746,6 +746,16 @@ function pollProgress() {
                     clHistMax=cfg.cluster_hist.max||3000;
                     clHistStep=cfg.cluster_hist.step||10;
                 }
+                if(cfg.nclusters_hist){
+                    nclustMin=cfg.nclusters_hist.min||0;
+                    nclustMax=cfg.nclusters_hist.max||20;
+                    nclustStep=cfg.nclusters_hist.step||1;
+                }
+                if(cfg.nblocks_hist){
+                    nblocksMin=cfg.nblocks_hist.min||0;
+                    nblocksMax=cfg.nblocks_hist.max||40;
+                    nblocksStep=cfg.nblocks_hist.step||1;
+                }
                 initClHist(); plotClHist(); plotClStatHists();
                 updateTimeCutLabel();
                 g_histCheckbox = histEnabled;
@@ -1039,8 +1049,8 @@ function initClHist(){
     clHistBins=new Array(nbins).fill(0);
     clHistEvents=0;
     currentClHist=null;
-    nclustBins=new Array(Math.ceil((NCLUST_MAX-NCLUST_MIN)/NCLUST_STEP)).fill(0);
-    nblocksBins=new Array(Math.ceil((NBLOCKS_MAX-NBLOCKS_MIN)/NBLOCKS_STEP)).fill(0);
+    nclustBins=new Array(Math.ceil((nclustMax-nclustMin)/nclustStep)).fill(0);
+    nblocksBins=new Array(Math.ceil((nblocksMax-nblocksMin)/nblocksStep)).fill(0);
     currentNclustHist=null;
     currentNblocksHist=null;
 }
@@ -1069,12 +1079,12 @@ function fillClHist(clusters){
     }
     // number of clusters per event
     const nc=clusters.length;
-    const nb1=Math.floor((nc-NCLUST_MIN)/NCLUST_STEP);
+    const nb1=Math.floor((nc-nclustMin)/nclustStep);
     if(nclustBins && nb1>=0 && nb1<nclustBins.length) nclustBins[nb1]++;
     // number of blocks per cluster
     for(const cl of clusters){
         const nbl=cl.nblocks||0;
-        const nb2=Math.floor((nbl-NBLOCKS_MIN)/NBLOCKS_STEP);
+        const nb2=Math.floor((nbl-nblocksMin)/nblocksStep);
         if(nblocksBins && nb2>=0 && nb2<nblocksBins.length) nblocksBins[nb2]++;
     }
     clHistEvents++;
@@ -1113,23 +1123,23 @@ function plotClStatHists(){
         if(!bins||!bins.length){
             return null;
         }
-        const x=bins.map((_,i)=>bmin+(i+0.5)*bstep);
+        const x=bins.map((_,i)=>bmin+i*bstep);  // left edge = actual value for integer bins
         const entries=bins.reduce((a,b)=>a+b,0);
         const cx=[],cy=[];
         for(let i=0;i<bins.length;i++){if(bins[i]>0){cx.push(x[i]);cy.push(bins[i]);}}
         Plotly.react(divId,[{
             x,y:bins,type:'bar',marker:{color,line:{width:0}},
-            hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
+            hovertemplate:'%{x}: %{y}<extra></extra>',
         }],{...PL,
             title:{text:`${title}<br><span style="font-size:9px;color:#888">${entries} entries</span>`,font:{size:10,color:'#ccc'}},
-            xaxis:{...PL.xaxis,title:xTitle,range:[bmin,bmin+bins.length*bstep]},
+            xaxis:{...PL.xaxis,title:xTitle,range:[bmin-0.5,bmin+bins.length*bstep-0.5]},
             yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
         },PC2);
         return {x:cx,y:cy};
     }
-    currentNclustHist=plotStat('cl-nclust-hist',nclustBins,NCLUST_MIN,NCLUST_STEP,
+    currentNclustHist=plotStat('cl-nclust-hist',nclustBins,nclustMin,nclustStep,
         'Clusters per Event','# Clusters','#00b4d8');
-    currentNblocksHist=plotStat('cl-nblocks-hist',nblocksBins,NBLOCKS_MIN,NBLOCKS_STEP,
+    currentNblocksHist=plotStat('cl-nblocks-hist',nblocksBins,nblocksMin,nblocksStep,
         'Blocks per Cluster','# Blocks','#51cf66');
 }
 
@@ -1629,11 +1639,21 @@ function init(){
         totalEvents=data.total_events||0;
         histEnabled=data.hist_enabled||false;
         histConfig=data.hist||{};
-        // cluster energy histogram config
+        // cluster histogram configs
         if(data.cluster_hist){
             clHistMin=data.cluster_hist.min||0;
             clHistMax=data.cluster_hist.max||3000;
             clHistStep=data.cluster_hist.step||10;
+        }
+        if(data.nclusters_hist){
+            nclustMin=data.nclusters_hist.min||0;
+            nclustMax=data.nclusters_hist.max||20;
+            nclustStep=data.nclusters_hist.step||1;
+        }
+        if(data.nblocks_hist){
+            nblocksMin=data.nblocks_hist.min||0;
+            nblocksMax=data.nblocks_hist.max||40;
+            nblocksStep=data.nblocks_hist.step||1;
         }
         initClHist();
         if(data.lms){

@@ -332,6 +332,12 @@ static json buildConfig() {
     cfg["cluster_hist"] = {
         {"min", g_app.cl_hist_min}, {"max", g_app.cl_hist_max}, {"step", g_app.cl_hist_step},
     };
+    cfg["nclusters_hist"] = {
+        {"min", g_app.nclusters_hist_min}, {"max", g_app.nclusters_hist_max}, {"step", g_app.nclusters_hist_step},
+    };
+    cfg["nblocks_hist"] = {
+        {"min", g_app.nblocks_hist_min}, {"max", g_app.nblocks_hist_max}, {"step", g_app.nblocks_hist_step},
+    };
     cfg["color_ranges"] = g_app.apiColorRanges();
     cfg["refresh_ms"] = {{"event", g_app.refresh_event_ms}, {"ring", g_app.refresh_ring_ms},
                          {"histogram", g_app.refresh_hist_ms}, {"lms", g_app.refresh_lms_ms}};

@@ -66,6 +66,12 @@ public:
     // number of snapshots stored
     int  GetSnapshotCount() const { return static_cast<int>(snapshots_.size()); }
 
+    // direct snapshot access by index (0 = oldest)
+    const Snapshot &GetSnapshot(int index) const { return snapshots_[index]; }
+
+    // trim oldest snapshots to keep at most max_count
+    void Trim(int max_count);
+
     // --- reset --------------------------------------------------------------
     void Clear();
 

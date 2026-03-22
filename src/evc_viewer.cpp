@@ -213,6 +213,12 @@ static void buildHistograms(const std::string &path, Progress &prog) {
             uint32_t ct = ch.GetControlTime();
             if (ct != 0) g_app.recordSyncTime(ct, last_ti_ts);
         }
+        // EPICS slow control event
+        if (ch.GetEventType() == evc::EventType::Epics) {
+            std::string text = ch.ExtractEpicsText();
+            if (!text.empty())
+                g_app.processEpics(text, g_app.events_processed.load(), last_ti_ts);
+        }
         for (int i = 0; i < ch.GetNEvents(); ++i) {
             if (!ch.DecodeEvent(i, event)) continue;
             prog.current = g_app.events_processed.load() + 1;
@@ -351,6 +357,13 @@ static json buildConfig() {
         {"url", g_app.elog_url}, {"logbook", g_app.elog_logbook},
         {"author", g_app.elog_author}, {"tags", g_app.elog_tags},
     };
+    cfg["epics"] = {
+        {"max_history", g_app.epics_max_history},
+        {"warn_threshold", g_app.epics_warn_thresh},
+        {"alert_threshold", g_app.epics_alert_thresh},
+        {"min_avg_points", g_app.epics_min_avg_pts},
+        {"default_channels", g_app.epics_default_channels},
+    };
     return cfg;
 }
 
@@ -417,6 +430,16 @@ static void onHttp(WsServer *srv, websocketpp::connection_hdl hdl) {
         }
         if (path_part == "summary") { reply(g_app.apiLmsSummary(ref).dump()); return; }
         reply(g_app.apiLmsModule(std::atoi(path_part.c_str()), ref).dump()); return;
+    }
+
+    // /api/epics/*
+    if (uri.rfind("/api/epics/", 0) == 0) {
+        std::string path_part = uri.substr(11);
+        if (path_part == "channels") { reply(g_app.apiEpicsChannels().dump()); return; }
+        if (path_part == "latest")   { reply(g_app.apiEpicsLatest().dump()); return; }
+        if (path_part.rfind("channel/", 0) == 0) {
+            reply(g_app.apiEpicsChannel(path_part.substr(8)).dump()); return;
+        }
     }
 
     // /api/files

@@ -153,6 +153,30 @@ registerReportSection({id:'occupancy',title:'Occupancy',order:10,
     }
 });
 
+// --- EPICS ---
+registerReportSection({id:'epics',title:'EPICS Slow Control',order:15,
+    generate:async()=>{
+        let data;
+        try{ data=await fetch('/api/epics/latest').then(r=>r.json()); }catch(e){ return null; }
+        if(!data||!data.channels||!data.channels.length) return null;
+        let md='## EPICS Slow Control\n\n';
+        md+=`EPICS events: ${data.events||0}\n\n`;
+        md+=mdTable(
+            ['Channel','Latest','Mean','Status'],
+            data.channels.map(ch=>{
+                let status='OK';
+                if(ch.count>=epicsMinAvgPts && ch.mean!==0){
+                    const dev=Math.abs(ch.value-ch.mean)/Math.abs(ch.mean);
+                    if(dev>=epicsAlertThresh) status='**ALERT**';
+                    else if(dev>=epicsWarnThresh) status='**WARN**';
+                }else if(ch.count<epicsMinAvgPts){ status='--'; }
+                return [ch.name,ch.value,ch.mean,status];
+            }),['l','r','r','l']
+        );
+        return md;
+    }
+});
+
 // --- Clustering ---
 registerReportSection({id:'cluster',title:'Clustering',order:20,
     generate:async()=>{

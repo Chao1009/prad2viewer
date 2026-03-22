@@ -114,6 +114,13 @@ bool EpicsStore::GetValue(int32_t event_number, const std::string &channel, floa
 // Clear
 //=============================================================================
 
+void EpicsStore::Trim(int max_count)
+{
+    if (max_count <= 0 || static_cast<int>(snapshots_.size()) <= max_count) return;
+    int to_remove = static_cast<int>(snapshots_.size()) - max_count;
+    snapshots_.erase(snapshots_.begin(), snapshots_.begin() + to_remove);
+}
+
 void EpicsStore::Clear()
 {
     channel_names_.clear();

@@ -268,6 +268,19 @@ void AppState::init(const std::string &db_dir,
                       << "\n";
         }
 
+        if (rcfg.contains("epics")) {
+            auto &ep = rcfg["epics"];
+            if (ep.contains("max_history"))     epics_max_history  = ep["max_history"];
+            if (ep.contains("warn_threshold"))  epics_warn_thresh  = ep["warn_threshold"];
+            if (ep.contains("alert_threshold")) epics_alert_thresh = ep["alert_threshold"];
+            if (ep.contains("min_avg_points"))  epics_min_avg_pts  = ep["min_avg_points"];
+            if (ep.contains("default_channels"))
+                for (auto &ch : ep["default_channels"])
+                    epics_default_channels.push_back(ch);
+            std::cerr << "EPICS     : max_history=" << epics_max_history
+                      << " defaults=" << epics_default_channels.size() << "\n";
+        }
+
         std::cerr << "Reco      : " << main_config
                   << " (adc_to_mev=" << adc_to_mev << ")\n";
     }
@@ -786,4 +799,90 @@ json AppState::apiLmsRefChannels() const
         });
     }
     return arr;
+}
+
+//=============================================================================
+// EPICS
+//=============================================================================
+
+void AppState::processEpics(const std::string &text, int32_t event_number, uint64_t timestamp)
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    epics.Feed(event_number, timestamp, text);
+    epics.Trim(epics_max_history);
+    epics_events++;
+}
+
+void AppState::clearEpics()
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    epics.Clear();
+    epics_events = 0;
+}
+
+json AppState::apiEpicsChannels() const
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    json names = json::array();
+    for (auto &n : epics.GetChannelNames()) names.push_back(n);
+    return {{"channels", names},
+            {"defaults", epics_default_channels},
+            {"events", epics_events.load()}};
+}
+
+json AppState::apiEpicsChannel(const std::string &name) const
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    int id = epics.GetChannelId(name);
+    if (id < 0)
+        return {{"name", name}, {"time", json::array()}, {"value", json::array()}, {"count", 0}};
+
+    int nsnap = epics.GetSnapshotCount();
+    json t_arr = json::array(), v_arr = json::array();
+
+    // time relative to first snapshot's timestamp
+    uint64_t t0 = (nsnap > 0) ? epics.GetSnapshot(0).timestamp : 0;
+    for (int i = 0; i < nsnap; ++i) {
+        auto &snap = epics.GetSnapshot(i);
+        double t_sec = static_cast<double>(snap.timestamp - t0) * TI_TICK_SEC;
+        float val = (id < (int)snap.values.size()) ? snap.values[id] : 0.f;
+        t_arr.push_back(std::round(t_sec * 100) / 100);
+        v_arr.push_back(val);
+    }
+    return {{"name", name}, {"time", t_arr}, {"value", v_arr}, {"count", nsnap}};
+}
+
+json AppState::apiEpicsLatest() const
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    json channels = json::array();
+    int nsnap = epics.GetSnapshotCount();
+    int nch = epics.GetChannelCount();
+    if (nsnap == 0 || nch == 0)
+        return {{"channels", channels}, {"events", epics_events.load()}};
+
+    auto &latest = epics.GetSnapshot(nsnap - 1);
+
+    // compute per-channel sum for mean
+    std::vector<double> sums(nch, 0.0);
+    std::vector<int> counts(nch, 0);
+    for (int i = 0; i < nsnap; ++i) {
+        auto &snap = epics.GetSnapshot(i);
+        for (int ch = 0; ch < std::min(nch, (int)snap.values.size()); ++ch) {
+            sums[ch] += snap.values[ch];
+            counts[ch]++;
+        }
+    }
+
+    for (int ch = 0; ch < nch; ++ch) {
+        float val = (ch < (int)latest.values.size()) ? latest.values[ch] : 0.f;
+        float mean = (counts[ch] > 0) ? static_cast<float>(sums[ch] / counts[ch]) : val;
+        channels.push_back({
+            {"name", epics.GetChannelName(ch)},
+            {"value", std::round(val * 1000) / 1000},
+            {"mean", std::round(mean * 1000) / 1000},
+            {"count", counts[ch]},
+        });
+    }
+    return {{"channels", channels}, {"events", epics_events.load()}};
 }

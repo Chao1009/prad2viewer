@@ -673,6 +673,24 @@ function connectWebSocket() {
             } else if (msg.type === 'lms_cleared') {
                 lmsSummaryData=null; lmsSelectedModule=-1; currentLmsData=null;
                 if(activeTab==='lms'){ drawLmsGeo(); updateLmsTable(); }
+            } else if (msg.type === 'epics_event') {
+                const now3 = Date.now();
+                if (now3 - lastEpicsFetch > refreshEpicsMs) {
+                    lastEpicsFetch = now3;
+                    if(activeTab==='epics'){
+                        fetchEpicsChannels();
+                        fetchEpicsLatest();
+                        fetchAllEpicsSlots();
+                    }
+                }
+            } else if (msg.type === 'epics_cleared') {
+                epicsLatestData=null;
+                epicsSlots=[null,null,null,null,null,null];
+                if(activeTab==='epics'){
+                    document.querySelectorAll('.epics-search').forEach(i=>i.value='');
+                    for(let i=0;i<6;i++) Plotly.react('epics-plot-'+i,[],{...PL},PC2);
+                    updateEpicsTable();
+                }
             }
         } catch (e) {}
     };
@@ -882,12 +900,16 @@ function switchTab(tab){
     document.querySelectorAll('.tab').forEach(t=>{
         t.classList.toggle('active', t.dataset.tab===tab);
     });
-    document.getElementById('geo-toolbar-dq').style.display  = tab==='dq' ? 'flex' : 'none';
+    const isEpics=tab==='epics';
+    document.getElementById('geo-panel').style.display        = isEpics ? 'none' : '';
+    document.getElementById('div-main').style.display         = isEpics ? 'none' : '';
+    document.getElementById('geo-toolbar-dq').style.display   = tab==='dq' ? 'flex' : 'none';
     document.getElementById('geo-toolbar-cl').style.display   = tab==='cluster' ? 'flex' : 'none';
     document.getElementById('geo-toolbar-lms').style.display  = tab==='lms' ? 'flex' : 'none';
     document.getElementById('detail-panel').style.display     = tab==='dq' ? 'flex' : 'none';
     document.getElementById('cluster-panel').style.display    = tab==='cluster' ? 'flex' : 'none';
     document.getElementById('lms-panel').style.display        = tab==='lms' ? 'flex' : 'none';
+    document.getElementById('epics-outer').style.display      = isEpics ? 'flex' : 'none';
 
     if(tab==='cluster') {
         loadClusterData(currentEvent);
@@ -901,6 +923,13 @@ function switchTab(tab){
         fetchLmsSummary();
         setTimeout(()=>{
             try{Plotly.Plots.resize('lms-plot');}catch(e){}
+        }, 50);
+    } else if(tab==='epics') {
+        fetchEpicsChannels();
+        fetchEpicsLatest();
+        fetchAllEpicsSlots();
+        setTimeout(()=>{
+            for(let i=0;i<6;i++) try{Plotly.Plots.resize('epics-plot-'+i);}catch(e){}
         }, 50);
     } else {
         drawGeo();
@@ -1362,6 +1391,127 @@ function drawLmsGeo(){
     }
 }
 
+// =========================================================================
+// EPICS monitoring
+// =========================================================================
+let epicsChannels=[];
+let epicsDefaultChannels=[];
+let epicsSlots=[null,null,null,null,null,null];
+let epicsWarnThresh=0.1, epicsAlertThresh=0.2, epicsMinAvgPts=10;
+let epicsLatestData=null;
+let lastEpicsFetch=0, refreshEpicsMs=2000;
+
+function fetchEpicsChannels(){
+    fetch('/api/epics/channels').then(r=>r.json()).then(data=>{
+        epicsChannels=data.channels||[];
+    }).catch(()=>{});
+}
+
+function fetchEpicsSlot(slot){
+    const name=epicsSlots[slot];
+    if(!name) return;
+    fetch(`/api/epics/channel/${encodeURIComponent(name)}`).then(r=>r.json()).then(data=>{
+        plotEpicsSlot(slot,data);
+    }).catch(()=>{});
+}
+
+function fetchAllEpicsSlots(){
+    for(let i=0;i<6;i++) if(epicsSlots[i]) fetchEpicsSlot(i);
+}
+
+function fetchEpicsLatest(){
+    fetch('/api/epics/latest').then(r=>r.json()).then(data=>{
+        epicsLatestData=data;
+        updateEpicsTable();
+    }).catch(()=>{});
+}
+
+function plotEpicsSlot(slot,data){
+    const divId='epics-plot-'+slot;
+    if(!data||!data.time||!data.time.length){
+        Plotly.react(divId,[],{...PL,title:{text:data?data.name:'',font:{size:10,color:'#888'}}},PC2);
+        return;
+    }
+    Plotly.react(divId,[{
+        x:data.time,y:data.value,type:'scatter',mode:'lines',
+        line:{color:'#00b4d8',width:1.5},
+        hovertemplate:'%{x:.1f}s: %{y:.3f}<extra></extra>',
+    }],{...PL,
+        title:{text:data.name,font:{size:10,color:'#ccc'}},
+        xaxis:{...PL.xaxis,title:'Time (s)'},
+        yaxis:{...PL.yaxis},
+    },PC2);
+}
+
+function updateEpicsTable(){
+    const tbody=document.getElementById('epics-tbody');
+    if(!epicsLatestData||!epicsLatestData.channels||!epicsLatestData.channels.length){
+        tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--dim)">Waiting for EPICS data...</td></tr>';
+        return;
+    }
+    let html='';
+    for(const ch of epicsLatestData.channels){
+        let cls='', statusText='OK';
+        if(ch.count>=epicsMinAvgPts && ch.mean!==0){
+            const dev=Math.abs(ch.value-ch.mean)/Math.abs(ch.mean);
+            if(dev>=epicsAlertThresh){ cls='epics-alert'; statusText='ALERT'; }
+            else if(dev>=epicsWarnThresh){ cls='epics-warn'; statusText='WARN'; }
+        }else if(ch.count<epicsMinAvgPts){
+            statusText='--';
+        }
+        html+=`<tr class="epics-table-row" data-channel="${ch.name}" style="cursor:pointer">`;
+        html+=`<td style="text-align:left">${ch.name}</td>`;
+        html+=`<td class="${cls}">${ch.value}</td>`;
+        html+=`<td>${ch.mean}</td>`;
+        html+=`<td class="${cls}">${statusText}</td></tr>`;
+    }
+    tbody.innerHTML=html;
+    tbody.querySelectorAll('.epics-table-row').forEach(row=>{
+        row.onclick=()=>{
+            const name=row.dataset.channel;
+            let slot=epicsSlots.indexOf(null);
+            if(slot<0) slot=5;
+            epicsSlots[slot]=name;
+            document.querySelectorAll('.epics-search')[slot].value=name;
+            fetchEpicsSlot(slot);
+        };
+    });
+}
+
+function initEpicsSearch(){
+    document.querySelectorAll('.epics-search').forEach(input=>{
+        const slot=parseInt(input.dataset.slot);
+        const dropdown=input.parentElement.querySelector('.epics-dropdown');
+        input.oninput=()=>{
+            const q=input.value.toLowerCase();
+            if(!q){dropdown.classList.remove('open');return;}
+            const matches=epicsChannels.filter(n=>n.toLowerCase().includes(q)).slice(0,20);
+            if(!matches.length){dropdown.classList.remove('open');return;}
+            dropdown.innerHTML=matches.map(n=>
+                `<div class="epics-dropdown-item" data-name="${n}">${n}</div>`
+            ).join('');
+            dropdown.classList.add('open');
+            dropdown.querySelectorAll('.epics-dropdown-item').forEach(item=>{
+                item.onclick=()=>{
+                    input.value=item.dataset.name;
+                    epicsSlots[slot]=item.dataset.name;
+                    dropdown.classList.remove('open');
+                    fetchEpicsSlot(slot);
+                };
+            });
+        };
+        input.onblur=()=>setTimeout(()=>dropdown.classList.remove('open'),200);
+        input.onkeydown=(e)=>{
+            if(e.key==='Escape'){
+                input.value='';
+                epicsSlots[slot]=null;
+                dropdown.classList.remove('open');
+                Plotly.react('epics-plot-'+slot,[],{...PL},PC2);
+            }
+        };
+    });
+}
+
 // Init
 // =========================================================================
 function init(){
@@ -1605,6 +1755,13 @@ function init(){
                 '<span class="cl-info-text">Click a module to view LMS history</span>';
             document.getElementById('lms-tbody').innerHTML='';
 
+            // EPICS: clear
+            epicsLatestData=null;
+            epicsSlots=[null,null,null,null,null,null];
+            document.querySelectorAll('.epics-search').forEach(inp=>inp.value='');
+            for(let i=0;i<6;i++) try{Plotly.react('epics-plot-'+i,[],{...PL},PC2);}catch(e){}
+            document.getElementById('epics-tbody').innerHTML='';
+
             // Reset counters
             sampleCount=0;
             updateHeaderStats();
@@ -1617,6 +1774,7 @@ function init(){
             Promise.all([
                 fetch('/api/hist/clear').then(r=>r.json()),
                 fetch('/api/lms/clear').then(r=>r.json()),
+                fetch('/api/epics/clear').then(r=>r.json()),
             ]).then(clearFrontend).catch(()=>{
                 document.getElementById('status-bar').textContent='Error clearing data';
             });
@@ -1771,6 +1929,19 @@ function init(){
             refreshLmsMs=data.refresh_ms.lms||2000;
         }
         initReport(data);  // report.js: wire buttons + load elog defaults
+        // EPICS config
+        if(data.epics){
+            if(data.epics.warn_threshold!==undefined) epicsWarnThresh=data.epics.warn_threshold;
+            if(data.epics.alert_threshold!==undefined) epicsAlertThresh=data.epics.alert_threshold;
+            if(data.epics.min_avg_points!==undefined) epicsMinAvgPts=data.epics.min_avg_points;
+            epicsDefaultChannels=data.epics.default_channels||[];
+            // set default channels into slots
+            for(let i=0;i<Math.min(6,epicsDefaultChannels.length);i++){
+                epicsSlots[i]=epicsDefaultChannels[i];
+                document.querySelectorAll('.epics-search')[i].value=epicsDefaultChannels[i];
+            }
+        }
+        initEpicsSearch();
         updateTimeCutLabel();
         mode=data.mode||'file';
         g_currentFile=data.current_file||'';

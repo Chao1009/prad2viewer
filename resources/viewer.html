@@ -84,6 +84,7 @@
     <button class="tab active" data-tab="dq">Waveform Data</button>
     <button class="tab" data-tab="cluster">Clustering</button>
     <button class="tab" data-tab="lms">Gain Monitoring</button>
+    <button class="tab" data-tab="epics">EPICS</button>
 </div>
 
 <div class="main">
@@ -267,6 +268,26 @@
         </div>
         <div id="lms-detail-header">
             <span class="cl-info-text" id="lms-info-text">Click a module to view LMS history</span>
+        </div>
+    </div>
+
+    <!-- EPICS panel (replaces both geo + detail when active) -->
+    <div class="epics-outer" id="epics-outer" style="display:none">
+        <div class="epics-grid" id="epics-grid">
+            <div class="epics-slot" data-slot="0"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="0" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-0"></div></div>
+            <div class="epics-slot" data-slot="1"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="1" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-1"></div></div>
+            <div class="epics-slot" data-slot="2"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="2" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-2"></div></div>
+            <div class="epics-slot" data-slot="3"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="3" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-3"></div></div>
+            <div class="epics-slot" data-slot="4"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="4" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-4"></div></div>
+            <div class="epics-slot" data-slot="5"><div class="epics-slot-header"><input type="text" class="epics-search" data-slot="5" placeholder="Search channel..."><div class="epics-dropdown"></div></div><div class="epics-plot" id="epics-plot-5"></div></div>
+        </div>
+        <div class="vdiv" id="div-epics"></div>
+        <div class="epics-table-wrap" id="epics-table-wrap">
+            <div style="padding:4px 8px;font-size:11px;color:var(--dim)">All EPICS Channels</div>
+            <table class="peaks-table" id="epics-table">
+                <thead><tr><th style="text-align:left">Channel</th><th>Latest</th><th>Mean</th><th>Status</th></tr></thead>
+                <tbody id="epics-tbody"></tbody>
+            </table>
         </div>
     </div>
 </div>

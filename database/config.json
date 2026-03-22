@@ -69,6 +69,20 @@
         "adc_to_mev": 0.078,
         "calibration_file": "prad1/prad_calibration.json"
     },
+    "epics": {
+        "max_history": 5000,
+        "warn_threshold": 0.1,
+        "alert_threshold": 0.2,
+        "min_avg_points": 10,
+        "default_channels": [
+            "hallb_IPM2C24A_CUR",
+            "MBSY2C_energy",
+            "TGT:PRad:Cell_P",
+            "TGT:PRad:Cell_Body_T",
+            "hallb_IPM2C24A_XPOS",
+            "hallb_IPM2C24A_YPOS"
+        ]
+    },
     "elog": {
         "url": "https://logbooks.jlab.org",
         "logbook": "PRADLOG",

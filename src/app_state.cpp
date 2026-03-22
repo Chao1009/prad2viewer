@@ -274,11 +274,16 @@ void AppState::init(const std::string &db_dir,
             if (ep.contains("warn_threshold"))  epics_warn_thresh  = ep["warn_threshold"];
             if (ep.contains("alert_threshold")) epics_alert_thresh = ep["alert_threshold"];
             if (ep.contains("min_avg_points"))  epics_min_avg_pts  = ep["min_avg_points"];
-            if (ep.contains("default_channels"))
-                for (auto &ch : ep["default_channels"])
-                    epics_default_channels.push_back(ch);
+            if (ep.contains("mean_window"))     epics_mean_window  = ep["mean_window"];
+            if (ep.contains("slots")) {
+                for (auto &slot : ep["slots"]) {
+                    std::vector<std::string> names;
+                    for (auto &ch : slot) names.push_back(ch);
+                    epics_default_slots.push_back(std::move(names));
+                }
+            }
             std::cerr << "EPICS     : max_history=" << epics_max_history
-                      << " defaults=" << epics_default_channels.size() << "\n";
+                      << " slots=" << epics_default_slots.size() << "\n";
         }
 
         std::cerr << "Reco      : " << main_config
@@ -825,8 +830,9 @@ json AppState::apiEpicsChannels() const
     std::lock_guard<std::mutex> lk(epics_mtx);
     json names = json::array();
     for (auto &n : epics.GetChannelNames()) names.push_back(n);
-    return {{"channels", names},
-            {"defaults", epics_default_channels},
+    json slots = json::array();
+    for (auto &s : epics_default_slots) slots.push_back(s);
+    return {{"channels", names}, {"slots", slots},
             {"events", epics_events.load()}};
 }
 
@@ -863,10 +869,11 @@ json AppState::apiEpicsLatest() const
 
     auto &latest = epics.GetSnapshot(nsnap - 1);
 
-    // compute per-channel sum for mean
+    // compute per-channel mean from most recent mean_window snapshots
+    int win_start = std::max(0, nsnap - epics_mean_window);
     std::vector<double> sums(nch, 0.0);
     std::vector<int> counts(nch, 0);
-    for (int i = 0; i < nsnap; ++i) {
+    for (int i = win_start; i < nsnap; ++i) {
         auto &snap = epics.GetSnapshot(i);
         for (int ch = 0; ch < std::min(nch, (int)snap.values.size()); ++ch) {
             sums[ch] += snap.values[ch];

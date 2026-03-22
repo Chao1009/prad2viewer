@@ -62,7 +62,8 @@ struct AppState {
     float epics_warn_thresh  = 0.1f;
     float epics_alert_thresh = 0.2f;
     int   epics_min_avg_pts  = 10;
-    std::vector<std::string> epics_default_channels;
+    int   epics_mean_window  = 20;   // compute mean from most recent N snapshots
+    std::vector<std::vector<std::string>> epics_default_slots;  // per-slot channel lists
 
     // Elog config
     std::string elog_url;

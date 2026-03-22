@@ -167,8 +167,8 @@ registerReportSection({id:'epics',title:'EPICS Slow Control',order:15,
                 let status='OK';
                 if(ch.count>=epicsMinAvgPts && ch.mean!==0){
                     const dev=Math.abs(ch.value-ch.mean)/Math.abs(ch.mean);
-                    if(dev>=epicsAlertThresh) status='**ALERT**';
-                    else if(dev>=epicsWarnThresh) status='**WARN**';
+                    if(dev>=epicsAlertThresh) status='**JUMPING**';
+                    else if(dev>=epicsWarnThresh) status='**CHANGING**';
                 }else if(ch.count<epicsMinAvgPts){ status='--'; }
                 return [ch.name,ch.value,ch.mean,status];
             }),['l','r','r','l']

@@ -74,13 +74,14 @@
         "warn_threshold": 0.1,
         "alert_threshold": 0.2,
         "min_avg_points": 10,
-        "default_channels": [
-            "hallb_IPM2C24A_CUR",
-            "MBSY2C_energy",
-            "TGT:PRad:Cell_P",
-            "TGT:PRad:Cell_Body_T",
-            "hallb_IPM2C24A_XPOS",
-            "hallb_IPM2C24A_YPOS"
+        "mean_window": 20,
+        "slots": [
+            ["hallb_IPM2C24A_CUR", "hallb_IPM2C21A_CUR"],
+            ["MBSY2C_energy"],
+            ["TGT:PRad:Cell_P", "TGT:PRad:Chamber_P"],
+            ["TGT:PRad:Cell_Body_T", "TGT:PRad:Cell_Gas_T"],
+            ["hallb_IPM2C24A_XPOS", "hallb_IPM2C24A_YPOS"],
+            ["hallb_IPM2C21A_XPOS", "hallb_IPM2C21A_YPOS"]
         ]
     },
     "elog": {

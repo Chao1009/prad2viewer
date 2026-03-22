@@ -685,9 +685,9 @@ function connectWebSocket() {
                 }
             } else if (msg.type === 'epics_cleared') {
                 epicsLatestData=null;
-                epicsSlots=[[],[],[]];
+                epicsSlots=[[],[],[],[],[],[]];
                 if(activeTab==='epics'){
-                    for(let s=0;s<3;s++){renderEpicsChips(s);Plotly.react('epics-plot-'+s,[],{...PL},PC2);}
+                    for(let s=0;s<EPICS_NUM_SLOTS;s++){renderEpicsChips(s);Plotly.react('epics-plot-'+s,[],{...PL},PC2);}
                     updateEpicsTable();
                 }
             }
@@ -928,7 +928,7 @@ function switchTab(tab){
         fetchEpicsLatest();
         fetchAllEpicsSlots();
         setTimeout(()=>{
-            for(let i=0;i<3;i++) try{Plotly.Plots.resize('epics-plot-'+i);}catch(e){}
+            for(let i=0;i<EPICS_NUM_SLOTS;i++) try{Plotly.Plots.resize('epics-plot-'+i);}catch(e){}
         }, 50);
     } else {
         drawGeo();
@@ -1397,7 +1397,8 @@ const EPICS_COLORS=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b']
 const EPICS_MAX_PER_SLOT=6;
 let epicsChannels=[];
 let epicsDefaultChannels=[];
-let epicsSlots=[[],[],[]];  // 3 slots, each an array of channel names (max 6)
+const EPICS_NUM_SLOTS=6;
+let epicsSlots=[[],[],[],[],[],[]];  // 6 slots, each an array of channel names (max 6 per slot)
 let epicsWarnThresh=0.1, epicsAlertThresh=0.2, epicsMinAvgPts=10;
 let epicsLatestData=null;
 let lastEpicsFetch=0, refreshEpicsMs=2000;
@@ -1438,7 +1439,7 @@ function fetchAndPlotEpicsSlot(slot){
 }
 
 function fetchAllEpicsSlots(){
-    for(let i=0;i<3;i++) fetchAndPlotEpicsSlot(i);
+    for(let i=0;i<EPICS_NUM_SLOTS;i++) fetchAndPlotEpicsSlot(i);
 }
 
 function fetchEpicsLatest(){
@@ -1476,7 +1477,7 @@ function renderEpicsChips(slot){
 function updateEpicsTable(){
     const tbody=document.getElementById('epics-tbody');
     if(!epicsLatestData||!epicsLatestData.channels||!epicsLatestData.channels.length){
-        tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--dim)">Waiting for EPICS data...</td></tr>';
+        tbody.innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--dim)">Waiting for EPICS data...</td></tr>';
         return;
     }
     let html='';
@@ -1484,15 +1485,18 @@ function updateEpicsTable(){
         let cls='', statusText='OK';
         if(ch.count>=epicsMinAvgPts && ch.mean!==0){
             const dev=Math.abs(ch.value-ch.mean)/Math.abs(ch.mean);
-            if(dev>=epicsAlertThresh){ cls='epics-alert'; statusText='ALERT'; }
-            else if(dev>=epicsWarnThresh){ cls='epics-warn'; statusText='WARN'; }
+            if(dev>=epicsAlertThresh){ cls='epics-alert'; statusText='JUMPING'; }
+            else if(dev>=epicsWarnThresh){ cls='epics-warn'; statusText='CHANGING'; }
         }else if(ch.count<epicsMinAvgPts){
             statusText='--';
         }
+        const fmtVal=typeof ch.value==='number'?ch.value.toFixed(3):ch.value;
+        const fmtMean=typeof ch.mean==='number'?ch.mean.toFixed(3):ch.mean;
         html+=`<tr class="epics-table-row" data-channel="${ch.name}" draggable="true">`;
         html+=`<td style="text-align:left">${ch.name}</td>`;
-        html+=`<td class="${cls}">${ch.value}</td>`;
-        html+=`<td>${ch.mean}</td>`;
+        html+=`<td class="${cls}">${fmtVal}</td>`;
+        html+=`<td>${fmtMean}</td>`;
+        html+=`<td>${ch.count}</td>`;
         html+=`<td class="${cls}">${statusText}</td></tr>`;
     }
     tbody.innerHTML=html;
@@ -1505,7 +1509,7 @@ function updateEpicsTable(){
         // click: add to first slot with room
         row.onclick=()=>{
             const name=row.dataset.channel;
-            for(let s=0;s<3;s++){
+            for(let s=0;s<EPICS_NUM_SLOTS;s++){
                 if(epicsSlots[s].length<EPICS_MAX_PER_SLOT && !epicsSlots[s].includes(name)){
                     addEpicsChannel(s,name); return;
                 }
@@ -1798,8 +1802,8 @@ function init(){
 
             // EPICS: clear
             epicsLatestData=null;
-            epicsSlots=[[],[],[]];
-            for(let s=0;s<3;s++){renderEpicsChips(s);try{Plotly.react('epics-plot-'+s,[],{...PL},PC2);}catch(e){}}
+            epicsSlots=[[],[],[],[],[],[]];
+            for(let s=0;s<EPICS_NUM_SLOTS;s++){renderEpicsChips(s);try{Plotly.react('epics-plot-'+s,[],{...PL},PC2);}catch(e){}}
             document.getElementById('epics-tbody').innerHTML='';
 
             // Reset counters
@@ -1974,14 +1978,16 @@ function init(){
             if(data.epics.warn_threshold!==undefined) epicsWarnThresh=data.epics.warn_threshold;
             if(data.epics.alert_threshold!==undefined) epicsAlertThresh=data.epics.alert_threshold;
             if(data.epics.min_avg_points!==undefined) epicsMinAvgPts=data.epics.min_avg_points;
-            epicsDefaultChannels=data.epics.default_channels||[];
-            // distribute defaults across 3 slots (2 per slot)
-            for(let i=0;i<Math.min(EPICS_MAX_PER_SLOT*3,epicsDefaultChannels.length);i++){
-                const slot=Math.floor(i/2)%3;
-                if(epicsSlots[slot].length<EPICS_MAX_PER_SLOT)
-                    epicsSlots[slot].push(epicsDefaultChannels[i]);
+            // load per-slot default channels
+            const cfgSlots=data.epics.slots||[];
+            for(let s=0;s<Math.min(EPICS_NUM_SLOTS,cfgSlots.length);s++){
+                const names=cfgSlots[s]||[];
+                for(const n of names){
+                    if(epicsSlots[s].length<EPICS_MAX_PER_SLOT)
+                        epicsSlots[s].push(n);
+                }
             }
-            for(let s=0;s<3;s++) renderEpicsChips(s);
+            for(let s=0;s<EPICS_NUM_SLOTS;s++) renderEpicsChips(s);
         }
         initEpicsSearch();
         initEpicsDragDrop();

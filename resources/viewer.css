@@ -215,7 +215,8 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 
 /* --- EPICS tab --- */
 .epics-outer { display:none; flex:1; min-height:0; }
-.epics-plots { display:flex; flex-direction:column; flex:7; gap:4px; padding:4px; min-width:0; }
+.epics-grid { display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr 1fr;
+    gap:4px; flex:7; padding:4px; min-width:0; }
 .epics-slot { display:flex; flex-direction:column; flex:1; min-height:0;
     border:1px solid var(--border); border-radius:3px; }
 .epics-slot.drag-over { border-color:var(--accent); background:rgba(0,180,216,0.05); }

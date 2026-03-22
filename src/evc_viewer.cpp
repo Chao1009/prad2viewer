@@ -362,7 +362,8 @@ static json buildConfig() {
         {"warn_threshold", g_app.epics_warn_thresh},
         {"alert_threshold", g_app.epics_alert_thresh},
         {"min_avg_points", g_app.epics_min_avg_pts},
-        {"default_channels", g_app.epics_default_channels},
+        {"mean_window", g_app.epics_mean_window},
+        {"slots", g_app.epics_default_slots},
     };
     return cfg;
 }

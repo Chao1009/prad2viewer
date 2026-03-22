@@ -227,6 +227,8 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .report-menu button:hover { background:rgba(0,180,216,0.15); }
 .report-menu button:first-child { border-radius:4px 4px 0 0; }
 .report-menu button:last-child { border-radius:0 0 4px 4px; }
+.report-menu button:disabled { color:var(--dim); cursor:default; }
+.report-menu button:disabled:hover { background:none; }
 
 /* --- elog dialog --- */
 .elog-form { padding:14px; }

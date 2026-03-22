@@ -468,14 +468,14 @@ function initReport(data){
     document.getElementById('elog-cancel').onclick=hideElogDialog;
     document.getElementById('elog-submit').onclick=postToElog;
 
-    if(data&&data.elog){
+    if(data&&data.elog&&data.elog.url){
         elogConfig=data.elog;
         document.getElementById('elog-logbook').value=data.elog.logbook||'';
         document.getElementById('elog-author').value=data.elog.author||'';
         document.getElementById('elog-tags').value=(data.elog.tags||[]).join(', ');
-        if(!data.elog.url){
-            const eb=document.getElementById('btn-report-elog');
-            if(eb) eb.style.display='none';
-        }
+    } else {
+        const eb=document.getElementById('btn-report-elog');
+        eb.disabled=true;
+        eb.title='Configure "elog" section in config.json to enable';
     }
 }

@@ -72,7 +72,7 @@
     "elog": {
         "url": "https://logbooks.jlab.org",
         "logbook": "PRADLOG",
-        "author": "",
+        "author": "clasrun",
         "tags": ["AutoReport", "PRad2"]
     }
 }

@@ -265,7 +265,8 @@ async function refreshDataForReport(){
 }
 
 // Generate the report. Returns {md, attachments} or null.
-async function generateReport(){
+// reportBy: optional name string to include in header.
+async function generateReport(reportBy){
     if(!modules.length){
         alert('No data loaded. Please load data before generating a report.');
         return null;
@@ -281,6 +282,7 @@ async function generateReport(){
         let header=`# PRad2 HyCal Monitor Report\n\n`;
         header+=`- **Generated:** ${ts}\n`;
         header+=`- **Samples:** ${samples}\n`;
+        if(reportBy) header+=`- **Report by:** ${reportBy}\n`;
         let sectionsMd='';
         for(const entry of reportRegistry){
             try{
@@ -338,7 +340,8 @@ function b64toBlob(b64,type){
 }
 
 async function downloadReport(){
-    const report=await generateReport();
+    const reportBy=prompt('Report by (your name, optional):','');
+    const report=await generateReport(reportBy||'');
     if(!report) return;
     const statusBar=document.getElementById('status-bar');
     const ts=new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
@@ -407,6 +410,7 @@ function hideElogDialog(){
 }
 
 async function postToElog(){
+    const reportBy=document.getElementById('elog-report-by').value.trim();
     const title=document.getElementById('elog-title').value.trim();
     const logbook=document.getElementById('elog-logbook').value.trim();
     const author=document.getElementById('elog-author').value.trim();
@@ -415,14 +419,14 @@ async function postToElog(){
     const statusEl=document.getElementById('elog-status');
 
     if(!title||!logbook||!author){
-        statusEl.textContent='Title, logbook, and author are required.';
+        statusEl.textContent='Title, logbook, and posting account are required.';
         statusEl.style.color='#c00';
         return;
     }
     statusEl.textContent='Generating report...';
     statusEl.style.color='var(--dim)';
 
-    const report=await generateReport();
+    const report=await generateReport(reportBy);
     if(!report){statusEl.textContent='Failed to generate report.';statusEl.style.color='#c00';return;}
 
     // strip image markdown references from body (images go as attachments)

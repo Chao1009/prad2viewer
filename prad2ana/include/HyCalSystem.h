@@ -167,6 +167,8 @@ public:
     // Format: [{"name":"W735","factor":0.37,"base_energy":2138.67,"non_linear":0.006}, ...]
     // Returns number of modules matched, or -1 on error.
     int LoadCalibration(const std::string &calib_path);
+    double GetCalibConstant(const int primex_id) const;
+    void SetCalibConstant(const int primex_id, const double factor);
 
     // --- module access (all O(1)) -------------------------------------------
     int             module_count()                     const { return n_modules_; }

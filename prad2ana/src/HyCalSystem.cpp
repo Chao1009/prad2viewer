@@ -472,4 +472,17 @@ int HyCalSystem::LoadCalibration(const std::string &calib_path)
     return matched;
 }
 
+double HyCalSystem::GetCalibConstant(const int primex_id) const {
+    const Module *m = module_by_id(primex_id);
+    if (m) return m->cal_factor;
+    else return 0;
+}
+void HyCalSystem::SetCalibConstant(const int primex_id, const double factor){
+    const Module *m = module_by_id(primex_id);
+    if (!m) return;
+    
+    Module &mod = modules_[m->index];
+    mod.cal_factor = factor;
+}
+
 } // namespace fdec

@@ -9,6 +9,14 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+find_package(ROOT 6.0 REQUIRED CONFIG)
+include(${ROOT_USE_FILE})
+if(ROOT_FOUND)
+    message(STATUS "ROOT: found at ${ROOT_DIR}")
+else()
+    message(STATUS "ROOT: not found")
+endif()
+
 # ---------------------------------------------------------------------------
 # Compile-time paths (auto-discovered, overridable)
 # ---------------------------------------------------------------------------
@@ -89,6 +97,25 @@ set_target_properties(evio_dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINA
 add_executable(ped_calc test/ped_calc.cpp)
 target_link_libraries(ped_calc PRIVATE prad2dec nlohmann_json::nlohmann_json)
 set_target_properties(ped_calc PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(replay_rawdata test/replay_rawdata.cpp)
+target_compile_definitions(replay_rawdata PRIVATE DATABASE_DIR="${DATABASE_DIR}")
+target_link_libraries(replay_rawdata PRIVATE prad2dec nlohmann_json::nlohmann_json
+    ROOT::Core ROOT::Tree ROOT::RIO
+)
+set_target_properties(replay_rawdata PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+#add_executable(replay_mutiThread test/replay_mutiThread.cpp)
+#target_compile_definitions(replay_mutiThread PRIVATE DATABASE_DIR="${DATABASE_DIR}")
+#target_link_libraries(replay_mutiThread PRIVATE prad2dec nlohmann_json::nlohmann_json
+#    ROOT::Core ROOT::Tree ROOT::RIO
+#)
+#set_target_properties(replay_mutiThread PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_executable(replay_hycalRecon test/replay_hycalRecon.cpp)
+target_compile_definitions(replay_hycalRecon PRIVATE DATABASE_DIR="${DATABASE_DIR}")
+target_link_libraries(replay_hycalRecon PRIVATE prad2dec ROOT::Core ROOT::Tree ROOT::RIO prad2ana)
+set_target_properties(replay_hycalRecon PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---------------------------------------------------------------------------
 # Event viewer

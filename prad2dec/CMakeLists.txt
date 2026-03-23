@@ -79,6 +79,7 @@ add_library(prad2dec STATIC
     src/Fadc250Decoder.cpp
     src/Adc1881mDecoder.cpp
     src/WaveAnalyzer.cpp
+    src/replay.cpp
 )
 
 target_include_directories(prad2dec

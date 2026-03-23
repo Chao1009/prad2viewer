@@ -35,6 +35,7 @@ add_library(prad2ana STATIC
     src/HyCalSystem.cpp
     src/HyCalCluster.cpp
     src/EpicsStore.cpp
+    src/Physics_anaTools.cpp
 )
 
 target_include_directories(prad2ana

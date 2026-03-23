@@ -9,6 +9,7 @@ let epicsChannels=[];
 let epicsSlots=[[],[],[],[],[],[]];
 let epicsWarnThresh=0.1, epicsAlertThresh=0.2, epicsMinAvgPts=10;
 let epicsLatestData=null;
+let epicsSlotData=new Array(EPICS_NUM_SLOTS).fill(null); // cached fetch results per slot
 let lastEpicsFetch=0, refreshEpicsMs=2000;
 
 // =========================================================================
@@ -24,12 +25,14 @@ function fetchEpicsChannels(){
 function fetchAndPlotEpicsSlot(slot){
     const names=epicsSlots[slot];
     if(!names.length){
+        epicsSlotData[slot]=null;
         Plotly.react('epics-plot-'+slot,[],{...PL},PC_EPICS);
         return;
     }
     Promise.all(names.map(n=>
         fetch(`/api/epics/channel/${encodeURIComponent(n)}`).then(r=>r.json()).catch(()=>null)
     )).then(results=>{
+        epicsSlotData[slot]=results;
         const traces=[];
         results.forEach((data,i)=>{
             if(!data||!data.time||!data.time.length) return;
@@ -179,6 +182,26 @@ function initEpics(data){
         }
         for(let s=0;s<EPICS_NUM_SLOTS;s++) renderEpicsChips(s);
     }
+
+    // copy buttons
+    document.querySelectorAll('.epics-copy').forEach(btn=>{
+        const slot=parseInt(btn.closest('.epics-slot').dataset.slot);
+        btn.onclick=()=>{
+            const results=epicsSlotData[slot];
+            if(!results) return;
+            let text='';
+            for(const data of results){
+                if(!data||!data.time||!data.time.length) continue;
+                text+=`# ${data.name}\n`;
+                text+=`time: [${data.time.join(', ')}]\n`;
+                text+=`value: [${data.value.join(', ')}]\n\n`;
+            }
+            if(!text) return;
+            navigator.clipboard.writeText(text).then(()=>{
+                btn.textContent='\u2713'; setTimeout(()=>{btn.textContent='copy';},1000);
+            });
+        };
+    });
 
     // search-as-you-type
     document.querySelectorAll('.epics-search').forEach(input=>{

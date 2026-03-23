@@ -191,6 +191,7 @@ static void buildIndex(const std::string &path, std::vector<EventIndex> &index, 
 static void buildHistograms(const std::string &path, Progress &prog) {
     g_app.clearHistograms();
     g_app.clearLms();
+    g_app.clearEpics();
 
     EvChannel ch;
     ch.SetConfig(g_app.daq_cfg);

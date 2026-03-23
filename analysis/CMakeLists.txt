@@ -1,10 +1,6 @@
 # analysis/ — replay and physics analysis tools (requires ROOT)
 
-find_package(ROOT 6.0 QUIET CONFIG)
-if(NOT ROOT_FOUND)
-    message(STATUS "ROOT not found — skipping analysis tools")
-    return()
-endif()
+find_package(ROOT 6.0 REQUIRED CONFIG)
 include(${ROOT_USE_FILE})
 message(STATUS "ROOT: ${ROOT_VERSION} at ${ROOT_DIR}")
 

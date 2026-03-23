@@ -1,13 +1,18 @@
 # Offline Analysis Tools
 
-Replay and physics analysis tools for PRad2. **Requires ROOT 6.0+** — automatically skipped if ROOT is not found.
+Replay and physics analysis tools for PRad2. **Requires ROOT 6.0+**.
 
-## Building
+Not built by default. Enable with:
+
+```bash
+cmake .. -DBUILD_ANALYSIS=ON
+make -j$(nproc)
+```
 
 ROOT must be discoverable by CMake. On JLab machines:
 ```bash
 source /apps/root/6.28.06/setroot_CUE.bash
-cmake .. && make -j$(nproc)
+cmake .. -DBUILD_ANALYSIS=ON && make -j$(nproc)
 ```
 
 ## Tools

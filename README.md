@@ -18,7 +18,7 @@ export FETCHCONTENT_BASE_DIR=$HOME/.cmake/fetchcontent
 
 For prebuilt CODA libraries: `cmake .. -DEVIO_SOURCE=prebuilt -DET_SOURCE=prebuilt`
 
-For analysis tools (requires ROOT): `cmake .. -DBUILD_ANALYSIS=ON`
+For offline analysis tools (requires ROOT 6.0+): `cmake .. -DBUILD_ANALYSIS=ON`
 
 For the Qt5 monitor client: `cmake .. -DBUILD_GUI=ON`
 

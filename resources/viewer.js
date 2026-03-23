@@ -651,6 +651,7 @@ function connectWebSocket() {
                     lastOccFetch = now;
                     fetchOccupancy();
                     fetchClHist();
+                    if(activeTab==='physics') fetchEnergyAngle();
                 }
             } else if (msg.type === 'status') {
                 setEtStatus(msg.connected, msg.waiting, msg.retries);
@@ -658,6 +659,7 @@ function connectWebSocket() {
                 occData={}; occTcutData={}; occTotal=0;
                 initClHist(); plotClHist(); plotClStatHists();
                 if (selectedModule) showHistograms(selectedModule);
+                clearPhysicsFrontend();
                 drawGeo();
             } else if (msg.type === 'lms_event') {
                 // throttle LMS refresh to ~0.5 Hz
@@ -820,6 +822,7 @@ function pollProgress() {
                 if (histEnabled) { fetchOccupancy(); fetchClHist(); }
                 fetchEpicsChannels(); fetchEpicsLatest();
                 if(activeTab==='epics') fetchAllEpicsSlots();
+                if(activeTab==='physics') fetchEnergyAngle();
                 syncDqRange();
                 drawGeo();
                 if (totalEvents > 0) loadEvent(1);
@@ -902,16 +905,17 @@ function switchTab(tab){
     document.querySelectorAll('.tab').forEach(t=>{
         t.classList.toggle('active', t.dataset.tab===tab);
     });
-    const isEpics=tab==='epics';
-    document.getElementById('geo-panel').style.display        = isEpics ? 'none' : '';
-    document.getElementById('div-main').style.display         = isEpics ? 'none' : '';
+    const fullTab=tab==='epics'||tab==='physics';
+    document.getElementById('geo-panel').style.display        = fullTab ? 'none' : '';
+    document.getElementById('div-main').style.display         = fullTab ? 'none' : '';
     document.getElementById('geo-toolbar-dq').style.display   = tab==='dq' ? 'flex' : 'none';
     document.getElementById('geo-toolbar-cl').style.display   = tab==='cluster' ? 'flex' : 'none';
     document.getElementById('geo-toolbar-lms').style.display  = tab==='lms' ? 'flex' : 'none';
     document.getElementById('detail-panel').style.display     = tab==='dq' ? 'flex' : 'none';
     document.getElementById('cluster-panel').style.display    = tab==='cluster' ? 'flex' : 'none';
     document.getElementById('lms-panel').style.display        = tab==='lms' ? 'flex' : 'none';
-    document.getElementById('epics-outer').style.display      = isEpics ? 'flex' : 'none';
+    document.getElementById('epics-outer').style.display      = tab==='epics' ? 'flex' : 'none';
+    document.getElementById('physics-outer').style.display    = tab==='physics' ? 'flex' : 'none';
 
     if(tab==='cluster') {
         loadClusterData(currentEvent);
@@ -933,6 +937,9 @@ function switchTab(tab){
         setTimeout(()=>{
             for(let i=0;i<EPICS_NUM_SLOTS;i++) try{Plotly.Plots.resize('epics-plot-'+i);}catch(e){}
         }, 50);
+    } else if(tab==='physics') {
+        fetchEnergyAngle();
+        setTimeout(()=>{try{Plotly.Plots.resize('physics-plot');}catch(e){}},50);
     } else {
         drawGeo();
     }
@@ -1644,8 +1651,9 @@ function init(){
                 '<span class="cl-info-text">Click a module to view LMS history</span>';
             document.getElementById('lms-tbody').innerHTML='';
 
-            // EPICS: clear
+            // EPICS + Physics: clear
             clearEpicsFrontend();
+            clearPhysicsFrontend();
 
             // Reset counters
             sampleCount=0;
@@ -1814,7 +1822,8 @@ function init(){
             refreshLmsMs=data.refresh_ms.lms||2000;
         }
         initReport(data);  // report.js: wire buttons + load elog defaults
-        initEpics(data);  // epics.js: config + search + drag-drop
+        initEpics(data);
+        initPhysics(data);
         updateTimeCutLabel();
         mode=data.mode||'file';
         const appTitle=mode==='online'?'PRad2 HyCal Monitor':'PRad2 HyCal Event Viewer';
@@ -1843,6 +1852,7 @@ function init(){
             if(histEnabled) { fetchOccupancy(); fetchClHist(); }
             fetchEpicsChannels(); fetchEpicsLatest();
             if(activeTab==='epics') fetchAllEpicsSlots();
+            if(activeTab==='physics') fetchEnergyAngle();
             syncDqRange();
             geoViewInit=false; resizeGeo();
             if(totalEvents>0)loadEvent(1);
@@ -1851,6 +1861,7 @@ function init(){
             syncDqRange();
             fetchOccupancy();
             fetchEpicsChannels(); fetchEpicsLatest();
+            if(activeTab==='physics') fetchEnergyAngle();
             resizeGeo();
             connectWebSocket();
             updateRingSelector();

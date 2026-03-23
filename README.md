@@ -41,13 +41,14 @@ evc_viewer prad.evio -D database/prad1/prad_daq_config.json -H             # PRa
 evc_viewer -d /data/stage6 -H                                              # file browser
 ```
 
-Open `http://localhost:5050`. Three tabs:
+Open `http://localhost:5050`. Four tabs:
 
 - **Waveform Data** — HyCal geometry colored by peak metrics, waveform display, per-channel histograms
 - **Clustering** — Island clustering with energy/ncluster/nblocks histograms, cluster table
 - **Gain Monitoring** — Per-module LMS signal vs time, reference channel correction, drift warnings
+- **EPICS** — Slow control values vs time (6 configurable plot slots, drag-and-drop), summary table with deviation alerts
 
-Geo view: scroll-wheel zoom, left-drag pan, double-click or Reset to restore.
+Geo view: scroll-wheel zoom, left-drag pan, double-click or Reset to restore. Click empty canvas to deselect.
 
 ## Online Monitor
 
@@ -59,9 +60,20 @@ Connects to a running ET system. Same GUI as the viewer, plus:
 
 - ET connection status indicator
 - Ring buffer of recent events with dropdown selector
-- Per-tab **Clear** buttons reset tab-specific data
+- **Clear All** resets all accumulated data (histograms, LMS, EPICS)
 - Auto-follows latest event; press **F** to resume after browsing
-- Gain monitoring and clustering accumulate continuously
+- All histograms and monitoring data accumulate server-side (no missed samples)
+
+### Reports
+
+Click **Report** in the header:
+
+- **Post to Elog** — generates markdown report with images and posts to JLab elog (requires SSL client cert on DAQ machine)
+- **Download Report** — saves `.md` file + PNG images locally
+
+Report contents: occupancy geo view, cluster histograms, LMS geo views + warning table, EPICS plots + status table. Extensible via registry pattern.
+
+Tab notification dots (yellow/red) alert to LMS warnings and EPICS value changes when not on that tab.
 
 ### Testing with et_feeder
 
@@ -106,8 +118,10 @@ Main configuration file for both viewer and monitor:
 | `waveform` | `time_cut`, `integral_hist`, `time_hist`, `thresholds` |
 | `clustering` | `min_module_energy`, `min_cluster_energy`, `skip_trigger_bits`, `energy_hist`, `nclusters_hist`, `nblocks_hist` |
 | `lms_monitor` | `trigger_bit`, `warn_threshold`, `warn_min_mean`, `max_history`, `reference_channels` |
+| `epics` | `max_history`, `warn_threshold`, `alert_threshold`, `min_avg_points`, `mean_window`, `slots` |
 | `color_ranges` | Per-tab:metric color range defaults (e.g. `"dq:integral": [0, 10000]`) |
 | `calibration` | `adc_to_mev`, `calibration_file` |
+| `elog` | `url`, `logbook`, `author`, `tags`, `cert`, `key` |
 
 ### PRad Support
 
@@ -115,6 +129,7 @@ PRad-specific files in `database/prad1/`:
 
 | File | Description |
 |------|-------------|
+| `prad_config.json` | Main config with PRad-specific ET, LMS trigger, and elog settings |
 | `prad_daq_config.json` | Event tags, ROC IDs, TI format, bank tags, pedestal/DAQ map refs |
 | `adc1881m_pedestals.json` | Per-channel pedestals (1733 channels) |
 | `prad_daq_map.json` | HyCal DAQ mapping for Fastbus ADC1881M |
@@ -135,10 +150,12 @@ prad2dec/                       libprad2dec.a (EVIO decoder library)
 prad2ana/                       libprad2ana.a (HyCal clustering + analysis)
 resources/
     viewer.html/css/js          Web GUI (shared by viewer and monitor)
+    report.js                   Report generation (markdown + images, elog posting)
+    epics.js                    EPICS slow control tab
 src/
     evc_viewer.cpp              File viewer (HTTP server)
     evc_monitor.cpp             Online monitor (ET + WebSocket)
-    app_state.h/cpp             Shared application state
+    app_state.h/cpp             Shared application state, config, API routing
     viewer_utils.h              Common types and helpers
 test/                           Diagnostic tools (see test/README.md)
 prad2qtmon/                     Qt5 WebEngine client (optional)

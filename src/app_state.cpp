@@ -268,6 +268,39 @@ void AppState::init(const std::string &db_dir,
                       << "\n";
         }
 
+        if (rcfg.contains("physics")) {
+            auto &ph = rcfg["physics"];
+            if (ph.contains("target") && ph["target"].is_array() && ph["target"].size()>=3) {
+                target_x=ph["target"][0]; target_y=ph["target"][1]; target_z=ph["target"][2];
+            }
+            if (ph.contains("hycal")) {
+                auto &hc = ph["hycal"];
+                if (hc.contains("position") && hc["position"].is_array() && hc["position"].size()>=3) {
+                    hycal_transform.x=hc["position"][0];
+                    hycal_transform.y=hc["position"][1];
+                    hycal_transform.z=hc["position"][2];
+                }
+                if (hc.contains("tilting") && hc["tilting"].is_array() && hc["tilting"].size()>=3) {
+                    hycal_transform.rx=hc["tilting"][0];
+                    hycal_transform.ry=hc["tilting"][1];
+                    hycal_transform.rz=hc["tilting"][2];
+                }
+            }
+            if (ph.contains("energy_angle_hist")) {
+                auto &ea = ph["energy_angle_hist"];
+                if (ea.contains("angle_min"))   ea_angle_min   = ea["angle_min"];
+                if (ea.contains("angle_max"))   ea_angle_max   = ea["angle_max"];
+                if (ea.contains("angle_step"))  ea_angle_step  = ea["angle_step"];
+                if (ea.contains("energy_min"))  ea_energy_min  = ea["energy_min"];
+                if (ea.contains("energy_max"))  ea_energy_max  = ea["energy_max"];
+                if (ea.contains("energy_step")) ea_energy_step = ea["energy_step"];
+            }
+            std::cerr << "Physics   : target=(" << target_x << "," << target_y << "," << target_z
+                      << ") HyCal=(" << hycal_transform.x << "," << hycal_transform.y << ","
+                      << hycal_transform.z << ") tilt=(" << hycal_transform.rx << ","
+                      << hycal_transform.ry << "," << hycal_transform.rz << ")\n";
+        }
+
         if (rcfg.contains("epics")) {
             auto &ep = rcfg["epics"];
             if (ep.contains("max_history"))     epics_max_history  = ep["max_history"];
@@ -295,6 +328,9 @@ void AppState::init(const std::string &db_dir,
     cluster_energy_hist.init(cl_nbins);
     nclusters_hist.init(std::max(1, (nclusters_hist_max - nclusters_hist_min) / nclusters_hist_step));
     nblocks_hist.init(std::max(1, (nblocks_hist_max - nblocks_hist_min) / nblocks_hist_step));
+    int ea_nx = std::max(1, (int)std::ceil((ea_angle_max - ea_angle_min) / ea_angle_step));
+    int ea_ny = std::max(1, (int)std::ceil((ea_energy_max - ea_energy_min) / ea_energy_step));
+    energy_angle_hist.init(ea_nx, ea_ny);
 }
 
 //=============================================================================
@@ -402,6 +438,15 @@ void AppState::clusterEvent(fdec::EventData &event,
     for (auto &rh : reco_hits) {
         cluster_energy_hist.fill(rh.energy, cl_hist_min, cl_hist_step);
         nblocks_hist.fill(rh.nblocks, nblocks_hist_min, nblocks_hist_step);
+        // transform hit from HyCal detector plane to lab frame
+        float lx, ly, lz;
+        hycal_transform.toLab(rh.x, rh.y, lx, ly, lz);
+        // compute scattering angle from target
+        float dx = lx - target_x, dy = ly - target_y, dz = lz - target_z;
+        float r = std::sqrt(dx*dx + dy*dy);
+        float theta_deg = std::atan2(r, dz) * (180.f / 3.14159265f);
+        energy_angle_hist.fill(theta_deg, rh.energy,
+            ea_angle_min, ea_angle_step, ea_energy_min, ea_energy_step);
     }
     nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
     cluster_events_processed++;
@@ -625,6 +670,7 @@ void AppState::clearHistograms()
     cluster_energy_hist.clear();
     nclusters_hist.clear();
     nblocks_hist.clear();
+    energy_angle_hist.clear();
     cluster_events_processed = 0;
 }
 
@@ -681,6 +727,18 @@ json AppState::apiClusterHist() const
     r["nblocks"] = histJson(nblocks_hist,
         (float)nblocks_hist_min, (float)nblocks_hist_max, (float)nblocks_hist_step);
     return r;
+}
+
+json AppState::apiEnergyAngle() const
+{
+    std::lock_guard<std::mutex> lk(data_mtx);
+    return {{"bins", energy_angle_hist.bins},
+            {"nx", energy_angle_hist.nx}, {"ny", energy_angle_hist.ny},
+            {"angle_min", ea_angle_min}, {"angle_max", ea_angle_max}, {"angle_step", ea_angle_step},
+            {"energy_min", ea_energy_min}, {"energy_max", ea_energy_max}, {"energy_step", ea_energy_step},
+            {"target", {target_x, target_y, target_z}},
+            {"hycal_z", hycal_transform.z},
+            {"events", cluster_events_processed}};
 }
 
 json AppState::apiOccupancy() const
@@ -917,6 +975,17 @@ void AppState::fillConfigJson(json &cfg) const
         {"trigger_bit", lms_trigger_bit}, {"warn_threshold", lms_warn_thresh},
         {"events", lms_events.load()}, {"ref_channels", apiLmsRefChannels()},
     };
+    cfg["physics"] = {
+        {"target", {target_x, target_y, target_z}},
+        {"hycal", {
+            {"position", {hycal_transform.x, hycal_transform.y, hycal_transform.z}},
+            {"tilting", {hycal_transform.rx, hycal_transform.ry, hycal_transform.rz}},
+        }},
+        {"energy_angle_hist", {
+            {"angle_min", ea_angle_min}, {"angle_max", ea_angle_max}, {"angle_step", ea_angle_step},
+            {"energy_min", ea_energy_min}, {"energy_max", ea_energy_max}, {"energy_step", ea_energy_step},
+        }},
+    };
     cfg["elog"] = {
         {"url", elog_url}, {"logbook", elog_logbook},
         {"author", elog_author}, {"tags", elog_tags},
@@ -933,6 +1002,8 @@ AppState::ApiResult AppState::handleReadApi(const std::string &uri) const
 {
     if (uri == "/api/occupancy")
         return {true, apiOccupancy().dump()};
+    if (uri == "/api/physics/energy_angle")
+        return {true, apiEnergyAngle().dump()};
     if (uri == "/api/cluster_hist")
         return {true, apiClusterHist().dump()};
     if (uri.rfind("/api/hist/", 0) == 0)

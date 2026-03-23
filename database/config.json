@@ -69,6 +69,21 @@
         "adc_to_mev": 0.078,
         "calibration_file": "prad1/prad_calibration.json"
     },
+    "physics": {
+        "target": [0.0, 0.0, 0.0],
+        "hycal": {
+            "position": [0.0, 0.0, 5800.0],
+            "tilting": [0.0, 0.0, 0.0]
+        },
+        "energy_angle_hist": {
+            "angle_min": 0.0,
+            "angle_max": 8.0,
+            "angle_step": 0.2,
+            "energy_min": 0.0,
+            "energy_max": 3000.0,
+            "energy_step": 100.0
+        }
+    },
     "epics": {
         "max_history": 5000,
         "warn_threshold": 0.1,

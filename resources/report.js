@@ -255,6 +255,36 @@ registerReportSection({id:'cluster',title:'Clustering',order:20,
     }
 });
 
+// --- Physics ---
+registerReportSection({id:'physics',title:'Physics',order:25,
+    generate:async()=>{
+        let data;
+        try{ data=await fetch('/api/physics/energy_angle').then(r=>r.json()); }catch(e){ return null; }
+        if(!data||!data.bins||!data.bins.length||!data.events) return null;
+
+        let md='## Physics\n\n';
+        md+=`Events: ${data.events} | HyCal z: ${(data.hycal_z||5800)/1000}m\n\n`;
+
+        // capture heatmap as image
+        try{
+            const img=await plotToImage(async div=>{
+                const z=[];
+                for(let iy=0;iy<data.ny;iy++)
+                    z.push(data.bins.slice(iy*data.nx,(iy+1)*data.nx).map(v=>v>0?Math.log10(v):null));
+                const x=[];for(let i=0;i<data.nx;i++) x.push(data.angle_min+(i+0.5)*data.angle_step);
+                const y=[];for(let i=0;i<data.ny;i++) y.push(data.energy_min+(i+0.5)*data.energy_step);
+                await Plotly.newPlot(div,[{z,x,y,type:'heatmap',colorscale:'Hot',
+                    colorbar:{title:'log₁₀(counts)',titleside:'right'}}],
+                    {...RPL,xaxis:{...RPL.xaxis,title:'Scattering Angle (deg)'},
+                     yaxis:{...RPL.yaxis,title:'Energy (MeV)'},margin:{l:55,r:80,t:10,b:40}});
+            },800,500);
+            addAttachment(img,'energy_vs_angle.png','Energy vs Angle');
+            md+=`![Energy vs Angle](energy_vs_angle.png)\n\n`;
+        }catch(e){}
+        return md;
+    }
+});
+
 // --- LMS Monitoring ---
 registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
     generate:async()=>{

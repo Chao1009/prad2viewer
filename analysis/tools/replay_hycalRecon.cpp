@@ -60,8 +60,8 @@ int main(int argc, char *argv[])
     // --- setup ---
     fdec::HyCalSystem hycal;
     evc::DaqConfig daq_cfg;
-    if (!daq_config_file.empty()) daq_cfg.load(daq_config_file);
-    hycal.LoadModules(db_dir + "/hycal_modules.json");
+    if (!daq_config_file.empty()) evc::load_daq_config(daq_config_file, daq_cfg);
+    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/daq_map.json");
 
     analysis::PhysicsTools physics(hycal);
 

@@ -10,6 +10,7 @@
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
 #include "DaqConfig.h"
+#include "load_daq_config.h"
 
 #include <TFile.h>
 #include <TTree.h>
@@ -25,7 +26,7 @@ public:
     Replay() = default;
 
     // Load DAQ configuration (event tags, ADC format, etc.).
-    void LoadDaqConfig(const std::string &json_path) { daq_cfg_.load(json_path); }
+    void LoadDaqConfig(const std::string &json_path) { evc::load_daq_config(json_path, daq_cfg_); }
 
     // Load DAQ map (module name lookup by crate/slot/channel).
     void LoadDaqMap(const std::string &json_path);

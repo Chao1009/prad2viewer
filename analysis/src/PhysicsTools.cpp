@@ -5,6 +5,12 @@
 #include "PhysicsTools.h"
 #include <TF1.h>
 #include <cmath>
+#include <fstream>
+#include <iostream>
+
+#ifndef DATABASE_DIR
+#define DATABASE_DIR "."
+#endif
 
 namespace analysis {
 
@@ -40,7 +46,7 @@ void PhysicsTools::FillModuleEnergy(int module_index, float energy)
         module_hists_[module_index]->Fill(energy);
 }
 
-TH1F *PhysicsTools::GetModuleHist(int module_index) const
+TH1F *PhysicsTools::GetModuleEnergyHist(int module_index) const
 {
     if (module_index >= 0 && module_index < (int)module_hists_.size())
         return module_hists_[module_index].get();
@@ -133,6 +139,27 @@ std::array<float, 2> PhysicsTools::FitPeakResolution(int module_index) const
     float sigma = gaus.GetParameter(2);
     float resolution = (mean > 0) ? sigma / mean : 0.f;
     return {mean, resolution};
+}
+
+void PhysicsTools::Resolution2Database(int run_id)
+{
+    std::string db_dir = DATABASE_DIR;
+    std::string filename = db_dir + Form("/recon/run_%d.dat", run_id);
+
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        std::cerr << "Failed to open file for writing: " << filename << std::endl;
+        return;
+    }
+
+    int module_count = hycal_.module_count();
+    for (int m = 0; m < module_count; m++) {
+        auto [peak, sigma] = FitPeakResolution(m);
+        if (peak > 0 && sigma > 0) {
+            std::string name = hycal_.module(m).name;
+            out << name << " " << peak << " " << sigma << "\n";
+        }
+    }
 }
 
 float PhysicsTools::ExpectedEnergy(float theta_deg, float Ebeam, const std::string &type)

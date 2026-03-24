@@ -25,7 +25,7 @@ public:
 
     // --- per-module cluster energy histograms --------------------------------
     void FillModuleEnergy(int module_index, float energy);
-    TH1F *GetModuleHist(int module_index) const;
+    TH1F *GetModuleEnergyHist(int module_index) const;
 
     // --- 2D energy vs module index -------------------------------------------
     void FillEnergyVsModule(int module_index, float energy);
@@ -42,6 +42,7 @@ public:
     // --- peak / resolution analysis ------------------------------------------
     // Returns {peak, resolution} from Gaussian fit. Resolution = sigma/mean.
     std::array<float, 2> FitPeakResolution(int module_index) const;
+    void Resolution2Database(int run_id);
 
     // --- kinematics ----------------------------------------------------------
     // Expected energy for elastic e-p or e-e scattering.

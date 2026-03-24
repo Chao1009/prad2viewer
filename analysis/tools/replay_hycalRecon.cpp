@@ -35,6 +35,8 @@ int main(int argc, char *argv[])
 
     //hardcoded beam energy for yield histograms, can be made configurable if needed
     float Ebeam = 3500.f; // MeV
+    //Todo: get run ID from filename or config
+    int run_id = 12345;
 
     int opt;
     while ((opt = getopt(argc, argv, "o:c:D:n:")) != -1) {
@@ -178,9 +180,10 @@ int main(int argc, char *argv[])
     outfile.mkdir("module_energy");
     outfile.cd("module_energy");
     for (int i = 0; i < hycal.module_count(); ++i) {
-        TH1F *h = physics.GetModuleHist(i);
+        TH1F *h = physics.GetModuleEnergyHist(i);
         if (h && h->GetEntries() > 0) h->Write();
     }
+    physics.Resolution2Database(run_id); // example run ID, 
     outfile.cd();
     if (physics.GetEnergyVsModuleHist())
         physics.GetEnergyVsModuleHist()->Write();

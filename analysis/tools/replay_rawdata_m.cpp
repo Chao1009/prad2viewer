@@ -24,7 +24,8 @@ std::vector<std::string> getFilesInDir(const std::string &dir_path)
     std::vector<std::string> files;
     for (auto &entry : std::filesystem::directory_iterator(dir_path)) {
         if (entry.is_regular_file()) {
-            files.push_back(entry.path().string());
+            if (entry.path().filename().string().find(".evio") != std::string::npos)
+                files.push_back(entry.path().string());
         }
     }
     std::sort(files.begin(), files.end());
@@ -72,6 +73,9 @@ int main(int argc, char *argv[])
     std::vector<pid_t> pids(num_threads);
     int files_per_process = (num_files + num_threads - 1) / num_threads; // round up
 
+    std::cout << "Processing " << num_files << " files with " << num_threads << " threads (" 
+              << files_per_process << " files/thread)\n";
+
     for (int i = 0; i < num_threads; ++i) {
         int start = i * files_per_process;
         int end   = std::min(start + files_per_process, num_files);
@@ -88,7 +92,7 @@ int main(int argc, char *argv[])
 
             for (int f = start; f < end; ++f) {
                 // each child process writes to its own output file to avoid conflicts
-                std::string out = evio_files[f].substr(0, evio_files[f].rfind('.')) + ".root";
+                std::string out = evio_files[f];
                 auto pos = out.find(".evio");
                 if (pos != std::string::npos) out = 
                     out.substr(0, pos) + out.substr(pos + 5);

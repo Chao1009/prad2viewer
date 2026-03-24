@@ -73,9 +73,9 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("integral",  ev.integral,   "integral[nch]/F");
     if (write_peaks) {
         tree->Branch("npeaks",       ev.npeaks,       "npeaks[nch]/I");
-        tree->Branch("peak_height",  ev.peak_height,  "peak_height[nch][8]/F");
-        tree->Branch("peak_time",    ev.peak_time,    "peak_time[nch][8]/F");
-        tree->Branch("peak_integral",ev.peak_integral, "peak_integral[nch][8]/F");
+        tree->Branch("peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
     }
 }
 
@@ -90,8 +90,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
         return false;
     }
 
-    TFile outfile(output_root.c_str(), "RECREATE");
-    if (!outfile.IsOpen()) {
+    TFile *outfile = TFile::Open(output_root.c_str(), "RECREATE");
+    if (!outfile || !outfile->IsOpen()) {
         std::cerr << "Replay: cannot create " << output_root << "\n";
         return false;
     }
@@ -162,7 +162,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
 
     std::cerr << "\rReplay: " << total << " events written to " << output_root << "\n";
     tree->Write();
-    outfile.Close();
+    delete outfile;
     return true;
 }
 

@@ -31,6 +31,14 @@ public:
     void FillEnergyVsModule(int module_index, float energy);
     TH2F *GetEnergyVsModuleHist() const { return h2_energy_module_.get(); }
 
+    // --- energy vs scattering angle -------------------------------------------
+    void FillEnergyVsTheta(float theta_deg, float energy);
+    TH2F *GetEnergyVsThetaHist() const { return h2_energy_theta_.get(); }
+
+    TH1F *GetEpYieldHist(TH2F *energy_theta, float Ebeam);
+    TH1F *GetEeYieldHist(TH2F *energy_theta, float Ebeam);
+    TH1F *GetYieldRatioHist(TH1F *ep_hist, TH1F *ee_hist);
+
     // --- peak / resolution analysis ------------------------------------------
     // Returns {peak, resolution} from Gaussian fit. Resolution = sigma/mean.
     std::array<float, 2> FitPeakResolution(int module_index) const;
@@ -47,10 +55,13 @@ public:
     //   E:     measured energy in MeV
     static float EnergyLoss(float theta_deg, float E);
 
+    static float GetShowerDepth(int primex_id, const float &E);
+
 private:
     fdec::HyCalSystem &hycal_;
     std::vector<std::unique_ptr<TH1F>> module_hists_;  // one per module
     std::unique_ptr<TH2F> h2_energy_module_;
+    std::unique_ptr<TH2F> h2_energy_theta_;
 };
 
 } // namespace analysis

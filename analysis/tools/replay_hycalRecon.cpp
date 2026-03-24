@@ -33,6 +33,9 @@ int main(int argc, char *argv[])
     std::string db_dir = DATABASE_DIR;
     int max_events = -1;
 
+    //hardcoded beam energy for yield histograms, can be made configurable if needed
+    float Ebeam = 3500.f; // MeV
+
     int opt;
     while ((opt = getopt(argc, argv, "o:c:D:n:")) != -1) {
         switch (opt) {
@@ -156,6 +159,8 @@ int main(int argc, char *argv[])
                 cl_center[i]  = hits[i].center_id;
                 physics.FillModuleEnergy(hits[i].center_id, hits[i].energy);
                 physics.FillEnergyVsModule(hits[i].center_id, hits[i].energy);
+                float theta = std::atan(std::sqrt(hits[i].x * hits[i].x + hits[i].y * hits[i].y) / 6225.f) * 180.f / 3.14159265f;
+                physics.FillEnergyVsTheta(theta, hits[i].energy);
             }
             tree->Fill();
             total++;
@@ -179,7 +184,14 @@ int main(int argc, char *argv[])
     outfile.cd();
     if (physics.GetEnergyVsModuleHist())
         physics.GetEnergyVsModuleHist()->Write();
-
+    if (physics.GetEnergyVsThetaHist())
+        physics.GetEnergyVsThetaHist()->Write();
+    TH1F *h_ep = physics.GetEpYieldHist(physics.GetEnergyVsThetaHist(), Ebeam);
+    TH1F *h_ee = physics.GetEeYieldHist(physics.GetEnergyVsThetaHist(), Ebeam);
+    if (h_ep) h_ep->Write();
+    if (h_ee) h_ee->Write();
+    if (h_ep && h_ee && physics.GetYieldRatioHist(h_ep, h_ee))
+        physics.GetYieldRatioHist(h_ep, h_ee)->Write();
     outfile.Close();
     return 0;
 }

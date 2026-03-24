@@ -97,8 +97,9 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     }
 
     TTree *tree = new TTree("events", "PRad2 replay data");
-    EventVars ev;
-    setupBranches(tree, ev, write_peaks);
+    //EventVars ev;
+    auto ev = std::make_unique<EventVars>();
+    setupBranches(tree, *ev, write_peaks);
 
     fdec::EventData event;
     fdec::WaveAnalyzer ana;
@@ -111,10 +112,10 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             if (!ch.DecodeEvent(ie, event)) continue;
             if (max_events > 0 && total >= max_events) break;
 
-            clearEvent(ev);
-            ev.event_num = event.info.event_number;
-            ev.trigger   = event.info.trigger_bits;
-            ev.timestamp = event.info.timestamp;
+            clearEvent(*ev);
+            ev->event_num = event.info.event_number;
+            ev->trigger   = event.info.trigger_bits;
+            ev->timestamp = event.info.timestamp;
 
             int nch = 0;
             for (int r = 0; r < event.nrocs; ++r) {
@@ -127,29 +128,29 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0 || nch >= kMaxCh) continue;
 
-                        ev.crate[nch]   = roc.tag;
-                        ev.slot[nch]    = s;
-                        ev.channel[nch] = c;
-                        ev.nsamples[nch] = cd.nsamples;
+                        ev->crate[nch]   = roc.tag;
+                        ev->slot[nch]    = s;
+                        ev->channel[nch] = c;
+                        ev->nsamples[nch] = cd.nsamples;
 
                         ana.Analyze(cd.samples, cd.nsamples, wres);
-                        ev.ped_mean[nch] = wres.ped.mean;
-                        ev.ped_rms[nch]  = wres.ped.rms;
-                        ev.integral[nch] = computeIntegral(cd, wres.ped.mean);
+                        ev->ped_mean[nch] = wres.ped.mean;
+                        ev->ped_rms[nch]  = wres.ped.rms;
+                        ev->integral[nch] = computeIntegral(cd, wres.ped.mean);
 
                         if (write_peaks) {
-                            ev.npeaks[nch] = wres.npeaks;
+                            ev->npeaks[nch] = wres.npeaks;
                             for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
-                                ev.peak_height[nch][p]   = wres.peaks[p].height;
-                                ev.peak_time[nch][p]     = wres.peaks[p].time;
-                                ev.peak_integral[nch][p] = wres.peaks[p].integral;
+                                ev->peak_height[nch][p]   = wres.peaks[p].height;
+                                ev->peak_time[nch][p]     = wres.peaks[p].time;
+                                ev->peak_integral[nch][p] = wres.peaks[p].integral;
                             }
                         }
                         nch++;
                     }
                 }
             }
-            ev.nch = nch;
+            ev->nch = nch;
             tree->Fill();
             total++;
 

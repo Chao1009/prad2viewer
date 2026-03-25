@@ -64,6 +64,7 @@ private:
     void clearEvent(EventVars &ev);
 
     std::string moduleName(int roc, int slot, int ch) const;
+    int moduleID(int roc, int slot, int ch) const;
     float computeIntegral(const fdec::ChannelData &cd, float pedestal) const;
 
     using DaqMap = std::unordered_map<std::string, std::string>;  // "roc_slot_ch" -> name

@@ -205,10 +205,10 @@ int main(int argc, char *argv[])
         physics.GetEnergyVsThetaHist()->Write();
     TH1F *h_ep = physics.GetEpYieldHist(physics.GetEnergyVsThetaHist(), Ebeam);
     TH1F *h_ee = physics.GetEeYieldHist(physics.GetEnergyVsThetaHist(), Ebeam);
+    TH1F *h_ratio = physics.GetYieldRatioHist(h_ep, h_ee);
     if (h_ep) h_ep->Write();
     if (h_ee) h_ee->Write();
-    if (h_ep && h_ee && physics.GetYieldRatioHist(h_ep, h_ee))
-        physics.GetYieldRatioHist(h_ep, h_ee)->Write();
+    if (h_ep && h_ee && h_ratio) h_ratio->Write();
     if (physics.GetMollerPhiDiffHist())
         physics.GetMollerPhiDiffHist()->Write();
     outfile.Close();

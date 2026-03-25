@@ -41,6 +41,15 @@ std::string Replay::moduleName(int roc, int slot, int ch) const
     return (it != daq_map_.end()) ? it->second : "";
 }
 
+int Replay::moduleID(int roc, int slot, int ch) const
+{
+    auto name = moduleName(roc, slot, ch);
+    if (name.empty()) return -1;
+    if(name[0] == 'G') return std::stoi(name.substr(1));
+    else if(name[0] == 'W') return std::stoi(name.substr(1))+1000;
+    else return -1; // Unknown module type
+}
+
 float Replay::computeIntegral(const fdec::ChannelData &cd, float pedestal) const
 {
     float sum = 0.f;
@@ -131,6 +140,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ev->crate[nch]   = roc.tag;
                         ev->slot[nch]    = s;
                         ev->channel[nch] = c;
+                        //ev->module_id[nch] = moduleID(roc.tag, s, c);
                         ev->nsamples[nch] = cd.nsamples;
 
                         ana.Analyze(cd.samples, cd.nsamples, wres);

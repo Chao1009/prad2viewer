@@ -172,7 +172,9 @@ float PhysicsTools::ExpectedEnergy(float theta_deg, float Ebeam, const std::stri
     if (type == "ep") {
         // elastic e-p: E' = E * M / (M + E*(1 - cos_t))
         // where M = proton mass
-        return Ebeam * M_PROTON / (M_PROTON + Ebeam * (1.f - cos_t));
+        float expectE = Ebeam * M_PROTON / (M_PROTON + Ebeam * (1.f - cos_t));
+        float eloss = EnergyLoss(theta_deg, expectE);
+        return expectE - eloss;
     }
     if (type == "ee") {
         // Moller scattering: E' = E * cos^2(theta) / (1 + (E/m)(sin^2(theta)))
@@ -181,7 +183,9 @@ float PhysicsTools::ExpectedEnergy(float theta_deg, float Ebeam, const std::stri
         float num = (gamma + 1.f) * cos_t * cos_t;
         float den = (gamma + 1.f) - (gamma - 1.f) * cos_t * cos_t;
         if (den <= 0) return 0.f;
-        return M_ELECTRON * num / den;
+        float expectE = M_ELECTRON * num / den;
+        float eloss = EnergyLoss(theta_deg, expectE);
+        return expectE - eloss;
     }
     return 0.f;
 }

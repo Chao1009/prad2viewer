@@ -29,9 +29,12 @@
 
 #include <nlohmann/json.hpp>
 #include <iostream>
+#include <fstream>
 #include <iomanip>
 #include <string>
 #include <map>
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <getopt.h>
 #include <memory>
@@ -243,6 +246,126 @@ static void accumulateStats(const ssp::SspEventData &ssp,
 }
 
 // -------------------------------------------------------------------------
+// Mode: ped — compute per-strip pedestals from raw SSP data
+// -------------------------------------------------------------------------
+struct StripAccum {
+    double sum  = 0.;
+    double sum2 = 0.;
+    int    count = 0;
+
+    void add(double v) { sum += v; sum2 += v * v; ++count; }
+    double mean() const { return count > 0 ? sum / count : 0.; }
+    double rms() const {
+        if (count < 2) return 0.;
+        double m = mean();
+        double var = sum2 / count - m * m;
+        return var > 0 ? std::sqrt(var) : 0.;
+    }
+};
+
+// key: pack (crate, mpd, apv, strip) into uint64
+static uint64_t packPedKey(int crate, int mpd, int apv, int strip)
+{
+    return (static_cast<uint64_t>(crate & 0xFFFF) << 48) |
+           (static_cast<uint64_t>(mpd   & 0xFFFF) << 32) |
+           (static_cast<uint64_t>(apv   & 0xFFFF) << 16) |
+           static_cast<uint64_t>(strip  & 0xFFFF);
+}
+
+// MPD pedestal algorithm:
+//   Per event, per APV:
+//     1) For each time sample: sort 128 strip ADCs, discard highest 28 and
+//        lowest 28, average the middle 72 → commonMode[ts].
+//        Subtract commonMode[ts] from each strip.
+//     2) For each strip: average the 6 CM-corrected time samples → value.
+//        Accumulate value into per-strip mean/RMS.
+//   After all events: offset = mean, noise = RMS.
+
+static constexpr int CM_DISCARD = 28;  // discard top/bottom 28 of 128
+
+static void accumulatePedestals(const ssp::SspEventData &ssp,
+                                std::map<uint64_t, StripAccum> &accum)
+{
+    float sorted[ssp::APV_STRIP_SIZE];
+    float cm_corrected[ssp::APV_STRIP_SIZE][ssp::SSP_TIME_SAMPLES];
+
+    for (int m = 0; m < ssp.nmpds; ++m) {
+        auto &mpd = ssp.mpds[m];
+        if (!mpd.present) continue;
+
+        for (int a = 0; a < ssp::MAX_APVS_PER_MPD; ++a) {
+            auto &apv = mpd.apvs[a];
+            if (!apv.present || apv.nstrips == 0) continue;
+
+            // Step 1.1: common mode subtraction per time sample
+            for (int t = 0; t < ssp::SSP_TIME_SAMPLES; ++t) {
+                // collect all strip values for this time sample
+                for (int s = 0; s < ssp::APV_STRIP_SIZE; ++s)
+                    sorted[s] = apv.hasStrip(s) ? (float)apv.strips[s][t] : 0.f;
+
+                // sort to find middle 72
+                std::sort(sorted, sorted + ssp::APV_STRIP_SIZE);
+
+                // average middle strips (skip lowest CM_DISCARD and highest CM_DISCARD)
+                double cm_sum = 0.;
+                int cm_count = ssp::APV_STRIP_SIZE - 2 * CM_DISCARD;
+                for (int s = CM_DISCARD; s < ssp::APV_STRIP_SIZE - CM_DISCARD; ++s)
+                    cm_sum += sorted[s];
+                double common_mode = cm_sum / cm_count;
+
+                // subtract common mode
+                for (int s = 0; s < ssp::APV_STRIP_SIZE; ++s)
+                    cm_corrected[s][t] = (apv.hasStrip(s) ? (float)apv.strips[s][t] : 0.f) - common_mode;
+            }
+
+            // Step 1.2: per-strip average across time samples, accumulate
+            for (int s = 0; s < ssp::APV_STRIP_SIZE; ++s) {
+                if (!apv.hasStrip(s)) continue;
+
+                double avg = 0.;
+                for (int t = 0; t < ssp::SSP_TIME_SAMPLES; ++t)
+                    avg += cm_corrected[s][t];
+                avg /= ssp::SSP_TIME_SAMPLES;
+
+                uint64_t key = packPedKey(mpd.crate_id, mpd.mpd_id, a, s);
+                accum[key].add(avg);
+            }
+        }
+    }
+}
+
+static int writePedestals(const std::map<uint64_t, StripAccum> &accum,
+                          const std::string &output_file)
+{
+    std::ofstream of(output_file);
+    if (!of.is_open()) {
+        std::cerr << "Error: cannot write " << output_file << "\n";
+        return 1;
+    }
+
+    of << "# GEM pedestals: crate  mpd  adc  strip  offset  noise\n";
+    of << "# computed by gem_dump -m ped\n";
+
+    int nstrips = 0;
+    for (auto &[key, acc] : accum) {
+        int crate = (key >> 48) & 0xFFFF;
+        int mpd   = (key >> 32) & 0xFFFF;
+        int apv   = (key >> 16) & 0xFFFF;
+        int strip = key & 0xFFFF;
+
+        of << crate << " " << mpd << " " << apv << " " << strip
+           << " " << std::fixed << std::setprecision(3) << acc.mean()
+           << " " << std::setprecision(4) << acc.rms()
+           << "\n";
+        nstrips++;
+    }
+    of.close();
+
+    std::cerr << "Written: " << output_file << " (" << nstrips << " strips)\n";
+    return 0;
+}
+
+// -------------------------------------------------------------------------
 // Main
 // -------------------------------------------------------------------------
 static void usage(const char *prog)
@@ -255,12 +378,14 @@ static void usage(const char *prog)
         << "  -m raw        Dump raw SSP-decoded APV data\n"
         << "  -m hits       Strip hits after pedestal/CM/zero-sup\n"
         << "  -m clusters   Full reconstruction: clusters + 2D hits\n"
-        << "  -m summary    Per-event statistics table\n\n"
+        << "  -m summary    Per-event statistics table\n"
+        << "  -m ped        Compute per-strip pedestals → output file\n\n"
         << "Options:\n"
         << "  -D <file>     DAQ configuration (auto-searches daq_config.json if omitted)\n"
         << "  -G <file>     GEM map file (default: gem_map.json)\n"
-        << "  -P <file>     GEM pedestal file\n"
-        << "  -n <N>        Max physics events (default: 10, 0=all)\n"
+        << "  -P <file>     GEM pedestal file (input, for hits/clusters)\n"
+        << "  -o <file>     Output file (ped mode, default: gem_ped.dat)\n"
+        << "  -n <N>        Max physics events (default: 10, 0=all for ped)\n"
         << "  -t <bit>      Trigger bit filter (-1=all, default)\n"
         << "  -e <N>        Dump only physics event N (1-based)\n";
 }
@@ -272,17 +397,19 @@ int main(int argc, char *argv[])
     std::string daq_config_file;
     std::string gem_map_file;
     std::string gem_ped_file;
+    std::string output_file = "gem_ped.dat";
     std::string mode = "summary";
     int max_events  = 10;
     int trigger_bit = -1;   // -1 = accept all
     int target_event = 0;   // 0 = disabled
 
     int opt;
-    while ((opt = getopt(argc, argv, "D:G:P:m:n:t:e:h")) != -1) {
+    while ((opt = getopt(argc, argv, "D:G:P:o:m:n:t:e:h")) != -1) {
         switch (opt) {
         case 'D': daq_config_file = optarg; break;
         case 'G': gem_map_file = optarg; break;
         case 'P': gem_ped_file = optarg; break;
+        case 'o': output_file = optarg; break;
         case 'm': mode = optarg; break;
         case 'n': max_events = std::atoi(optarg); break;
         case 't': trigger_bit = std::atoi(optarg); break;
@@ -292,6 +419,10 @@ int main(int argc, char *argv[])
     }
     if (optind >= argc) { usage(argv[0]); return 1; }
     std::string evio_file = argv[optind];
+
+    // ped mode defaults to all events
+    if (mode == "ped" && max_events == 10)
+        max_events = 0;
 
     // validate mode
     bool need_gem = (mode == "hits" || mode == "clusters" || mode == "summary");
@@ -389,6 +520,9 @@ int main(int argc, char *argv[])
     // totals for summary
     EventStats totals;
 
+    // pedestal accumulator
+    std::map<uint64_t, StripAccum> ped_accum;
+
     while (ch.Read() == status::success) {
         if (!ch.Scan()) continue;
         if (ch.GetEventType() != EventType::Physics) continue;
@@ -426,7 +560,12 @@ int main(int argc, char *argv[])
             }
 
             // output based on mode
-            if (mode == "raw") {
+            if (mode == "ped") {
+                accumulatePedestals(ssp_evt, ped_accum);
+                if (ssp_events % 1000 == 0)
+                    std::cerr << "  " << ssp_events << " events...\r" << std::flush;
+            }
+            else if (mode == "raw") {
                 std::cout << "[physics event " << phys_count
                           << " trigger#=" << event.info.trigger_number
                           << " bits=0x" << std::hex << event.info.trigger_bits
@@ -485,6 +624,13 @@ int main(int argc, char *argv[])
 
 done:
     ch.Close();
+
+    // pedestal output
+    if (mode == "ped" && !ped_accum.empty()) {
+        std::cerr << "Computed pedestals from " << ssp_events << " events, "
+                  << ped_accum.size() << " strips\n";
+        return writePedestals(ped_accum, output_file);
+    }
 
     // summary footer
     if (mode == "summary" && ssp_events > 0) {

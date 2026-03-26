@@ -17,75 +17,260 @@
     ],
 
     "apvs": [
-        {"// Layer 0 (det=0)": ""},
+        {"// ====== Layer 0 (GEM0) — crate 49, fibers 0-12 ======": ""},
 
-        {"// X-dimension MPD6 (special: pos=11, single APV)": ""},
+        {"// X-dimension MPD6 (fiber 0)": ""},
         {"crate": 49, "mpd": 0, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
 
-        {"// X-dimension MPD7": ""},
+        {"// X-dimension MPD7 (fiber 1)": ""},
         {"crate": 49, "mpd": 1, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
         {"crate": 49, "mpd": 1, "adc": 1, "det": 0, "plane": "X", "orient": 0, "pos": 4, "det_pos": 0},
         {"crate": 49, "mpd": 1, "adc": 2, "det": 0, "plane": "X", "orient": 0, "pos": 5, "det_pos": 0},
 
-        {"// X-dimension MPD8": ""},
+        {"// X-dimension MPD8 (fiber 2)": ""},
         {"crate": 49, "mpd": 2, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 0, "det_pos": 0},
         {"crate": 49, "mpd": 2, "adc": 1, "det": 0, "plane": "X", "orient": 0, "pos": 1, "det_pos": 0},
         {"crate": 49, "mpd": 2, "adc": 2, "det": 0, "plane": "X", "orient": 0, "pos": 2, "det_pos": 0},
 
-        {"// Y-dimension MPD9": ""},
+        {"// Y-dimension MPD9 (fiber 3)": ""},
         {"crate": 49, "mpd": 3, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 2, "det_pos": 0},
         {"crate": 49, "mpd": 3, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 1, "det_pos": 0},
         {"crate": 49, "mpd": 3, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 0, "det_pos": 0},
 
-        {"// Y-dimension MPD10": ""},
+        {"// Y-dimension MPD10 (fiber 4)": ""},
         {"crate": 49, "mpd": 4, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 5, "det_pos": 0},
         {"crate": 49, "mpd": 4, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 4, "det_pos": 0},
         {"crate": 49, "mpd": 4, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 3, "det_pos": 0},
 
-        {"// Y-dimension MPD13": ""},
+        {"// Y-dimension MPD13 (fiber 5)": ""},
         {"crate": 49, "mpd": 5, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 8, "det_pos": 0},
         {"crate": 49, "mpd": 5, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 7, "det_pos": 0},
         {"crate": 49, "mpd": 5, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 6, "det_pos": 0},
 
-        {"// Y-dimension MPD14": ""},
+        {"// Y-dimension MPD14 (fiber 6)": ""},
         {"crate": 49, "mpd": 6, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 11, "det_pos": 0},
         {"crate": 49, "mpd": 6, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 10, "det_pos": 0},
         {"crate": 49, "mpd": 6, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 9, "det_pos": 0},
 
-        {"// Y-dimension MPD15": ""},
+        {"// Y-dimension MPD15 (fiber 7)": ""},
         {"crate": 49, "mpd": 7, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 14, "det_pos": 0},
         {"crate": 49, "mpd": 7, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 13, "det_pos": 0},
         {"crate": 49, "mpd": 7, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 12, "det_pos": 0},
 
-        {"// Y-dimension MPD16": ""},
+        {"// Y-dimension MPD16 (fiber 8)": ""},
         {"crate": 49, "mpd": 8, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 17, "det_pos": 0},
         {"crate": 49, "mpd": 8, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 16, "det_pos": 0},
         {"crate": 49, "mpd": 8, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 15, "det_pos": 0},
 
-        {"// Y-dimension MPD17": ""},
+        {"// Y-dimension MPD17 (fiber 9)": ""},
         {"crate": 49, "mpd": 9, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 20, "det_pos": 0},
         {"crate": 49, "mpd": 9, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 19, "det_pos": 0},
         {"crate": 49, "mpd": 9, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 18, "det_pos": 0},
 
-        {"// Y-dimension MPD18": ""},
+        {"// Y-dimension MPD18 (fiber 10)": ""},
         {"crate": 49, "mpd": 10, "adc": 0, "det": 0, "plane": "Y", "orient": 1, "pos": 23, "det_pos": 0},
         {"crate": 49, "mpd": 10, "adc": 1, "det": 0, "plane": "Y", "orient": 1, "pos": 22, "det_pos": 0},
         {"crate": 49, "mpd": 10, "adc": 2, "det": 0, "plane": "Y", "orient": 1, "pos": 21, "det_pos": 0},
 
-        {"// X-dimension MPD19": ""},
+        {"// X-dimension MPD19 (fiber 11)": ""},
         {"crate": 49, "mpd": 11, "adc": 0, "det": 0, "plane": "X", "orient": 1, "pos": 7, "det_pos": 0},
         {"crate": 49, "mpd": 11, "adc": 1, "det": 0, "plane": "X", "orient": 1, "pos": 6, "det_pos": 0},
 
-        {"// X-dimension MPD20": ""},
+        {"// X-dimension MPD20 (fiber 12)": ""},
         {"crate": 49, "mpd": 12, "adc": 0, "det": 0, "plane": "X", "orient": 1, "pos": 10, "det_pos": 0},
         {"crate": 49, "mpd": 12, "adc": 1, "det": 0, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
         {"crate": 49, "mpd": 12, "adc": 2, "det": 0, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0},
 
-        {"// Layer 1 (det=1) — same structure as Layer 0, different fiber IDs": ""},
-        {"// See gem_map_prad2.txt for complete mapping (Layers 1-3)": ""},
-        {"// APV entries for layers 1-3 follow the same pattern with": ""},
-        {"//   layer 1: fiber 13-25, GEMID=2": ""},
-        {"//   layer 2: fiber 26-38, GEMID=3": ""},
-        {"//   layer 3: fiber 39-51, GEMID=4": ""}
+        {"// ====== Layer 1 (GEM1) — crate 49, fibers 13-25 ======": ""},
+
+        {"// X-dimension MPD6 (fiber 13)": ""},
+        {"crate": 49, "mpd": 13, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+
+        {"// X-dimension MPD7 (fiber 14)": ""},
+        {"crate": 49, "mpd": 14, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
+        {"crate": 49, "mpd": 14, "adc": 1, "det": 1, "plane": "X", "orient": 0, "pos": 4, "det_pos": 0},
+        {"crate": 49, "mpd": 14, "adc": 2, "det": 1, "plane": "X", "orient": 0, "pos": 5, "det_pos": 0},
+
+        {"// X-dimension MPD8 (fiber 15)": ""},
+        {"crate": 49, "mpd": 15, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 0, "det_pos": 0},
+        {"crate": 49, "mpd": 15, "adc": 1, "det": 1, "plane": "X", "orient": 0, "pos": 1, "det_pos": 0},
+        {"crate": 49, "mpd": 15, "adc": 2, "det": 1, "plane": "X", "orient": 0, "pos": 2, "det_pos": 0},
+
+        {"// Y-dimension MPD9 (fiber 16)": ""},
+        {"crate": 49, "mpd": 16, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 2, "det_pos": 0},
+        {"crate": 49, "mpd": 16, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 1, "det_pos": 0},
+        {"crate": 49, "mpd": 16, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 0, "det_pos": 0},
+
+        {"// Y-dimension MPD10 (fiber 17)": ""},
+        {"crate": 49, "mpd": 17, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 5, "det_pos": 0},
+        {"crate": 49, "mpd": 17, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 4, "det_pos": 0},
+        {"crate": 49, "mpd": 17, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 3, "det_pos": 0},
+
+        {"// Y-dimension MPD13 (fiber 18)": ""},
+        {"crate": 49, "mpd": 18, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 8, "det_pos": 0},
+        {"crate": 49, "mpd": 18, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 49, "mpd": 18, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// Y-dimension MPD14 (fiber 19)": ""},
+        {"crate": 49, "mpd": 19, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 11, "det_pos": 0},
+        {"crate": 49, "mpd": 19, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 49, "mpd": 19, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 9, "det_pos": 0},
+
+        {"// Y-dimension MPD15 (fiber 20)": ""},
+        {"crate": 49, "mpd": 20, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 14, "det_pos": 0},
+        {"crate": 49, "mpd": 20, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 13, "det_pos": 0},
+        {"crate": 49, "mpd": 20, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 12, "det_pos": 0},
+
+        {"// Y-dimension MPD16 (fiber 21)": ""},
+        {"crate": 49, "mpd": 21, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 17, "det_pos": 0},
+        {"crate": 49, "mpd": 21, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 16, "det_pos": 0},
+        {"crate": 49, "mpd": 21, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 15, "det_pos": 0},
+
+        {"// Y-dimension MPD17 (fiber 22)": ""},
+        {"crate": 49, "mpd": 22, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 20, "det_pos": 0},
+        {"crate": 49, "mpd": 22, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 19, "det_pos": 0},
+        {"crate": 49, "mpd": 22, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 18, "det_pos": 0},
+
+        {"// Y-dimension MPD18 (fiber 23)": ""},
+        {"crate": 49, "mpd": 23, "adc": 0, "det": 1, "plane": "Y", "orient": 1, "pos": 23, "det_pos": 0},
+        {"crate": 49, "mpd": 23, "adc": 1, "det": 1, "plane": "Y", "orient": 1, "pos": 22, "det_pos": 0},
+        {"crate": 49, "mpd": 23, "adc": 2, "det": 1, "plane": "Y", "orient": 1, "pos": 21, "det_pos": 0},
+
+        {"// X-dimension MPD19 (fiber 24)": ""},
+        {"crate": 49, "mpd": 24, "adc": 0, "det": 1, "plane": "X", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 49, "mpd": 24, "adc": 1, "det": 1, "plane": "X", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// X-dimension MPD20 (fiber 25)": ""},
+        {"crate": 49, "mpd": 25, "adc": 0, "det": 1, "plane": "X", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 49, "mpd": 25, "adc": 1, "det": 1, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
+        {"crate": 49, "mpd": 25, "adc": 2, "det": 1, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0},
+
+        {"// ====== Layer 2 (GEM2) — crate 52, fibers 0-12 ======": ""},
+
+        {"// X-dimension MPD6 (fiber 0)": ""},
+        {"crate": 52, "mpd": 0, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+
+        {"// X-dimension MPD7 (fiber 1)": ""},
+        {"crate": 52, "mpd": 1, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
+        {"crate": 52, "mpd": 1, "adc": 1, "det": 2, "plane": "X", "orient": 0, "pos": 4, "det_pos": 0},
+        {"crate": 52, "mpd": 1, "adc": 2, "det": 2, "plane": "X", "orient": 0, "pos": 5, "det_pos": 0},
+
+        {"// X-dimension MPD8 (fiber 2)": ""},
+        {"crate": 52, "mpd": 2, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 0, "det_pos": 0},
+        {"crate": 52, "mpd": 2, "adc": 1, "det": 2, "plane": "X", "orient": 0, "pos": 1, "det_pos": 0},
+        {"crate": 52, "mpd": 2, "adc": 2, "det": 2, "plane": "X", "orient": 0, "pos": 2, "det_pos": 0},
+
+        {"// Y-dimension MPD9 (fiber 3)": ""},
+        {"crate": 52, "mpd": 3, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 2, "det_pos": 0},
+        {"crate": 52, "mpd": 3, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 1, "det_pos": 0},
+        {"crate": 52, "mpd": 3, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 0, "det_pos": 0},
+
+        {"// Y-dimension MPD10 (fiber 4)": ""},
+        {"crate": 52, "mpd": 4, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 5, "det_pos": 0},
+        {"crate": 52, "mpd": 4, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 4, "det_pos": 0},
+        {"crate": 52, "mpd": 4, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 3, "det_pos": 0},
+
+        {"// Y-dimension MPD13 (fiber 5)": ""},
+        {"crate": 52, "mpd": 5, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 8, "det_pos": 0},
+        {"crate": 52, "mpd": 5, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 52, "mpd": 5, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// Y-dimension MPD14 (fiber 6)": ""},
+        {"crate": 52, "mpd": 6, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 11, "det_pos": 0},
+        {"crate": 52, "mpd": 6, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 52, "mpd": 6, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 9, "det_pos": 0},
+
+        {"// Y-dimension MPD15 (fiber 7)": ""},
+        {"crate": 52, "mpd": 7, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 14, "det_pos": 0},
+        {"crate": 52, "mpd": 7, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 13, "det_pos": 0},
+        {"crate": 52, "mpd": 7, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 12, "det_pos": 0},
+
+        {"// Y-dimension MPD16 (fiber 8)": ""},
+        {"crate": 52, "mpd": 8, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 17, "det_pos": 0},
+        {"crate": 52, "mpd": 8, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 16, "det_pos": 0},
+        {"crate": 52, "mpd": 8, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 15, "det_pos": 0},
+
+        {"// Y-dimension MPD17 (fiber 9)": ""},
+        {"crate": 52, "mpd": 9, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 20, "det_pos": 0},
+        {"crate": 52, "mpd": 9, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 19, "det_pos": 0},
+        {"crate": 52, "mpd": 9, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 18, "det_pos": 0},
+
+        {"// Y-dimension MPD18 (fiber 10)": ""},
+        {"crate": 52, "mpd": 10, "adc": 0, "det": 2, "plane": "Y", "orient": 1, "pos": 23, "det_pos": 0},
+        {"crate": 52, "mpd": 10, "adc": 1, "det": 2, "plane": "Y", "orient": 1, "pos": 22, "det_pos": 0},
+        {"crate": 52, "mpd": 10, "adc": 2, "det": 2, "plane": "Y", "orient": 1, "pos": 21, "det_pos": 0},
+
+        {"// X-dimension MPD19 (fiber 11)": ""},
+        {"crate": 52, "mpd": 11, "adc": 0, "det": 2, "plane": "X", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 52, "mpd": 11, "adc": 1, "det": 2, "plane": "X", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// X-dimension MPD20 (fiber 12)": ""},
+        {"crate": 52, "mpd": 12, "adc": 0, "det": 2, "plane": "X", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 52, "mpd": 12, "adc": 1, "det": 2, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
+        {"crate": 52, "mpd": 12, "adc": 2, "det": 2, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0},
+
+        {"// ====== Layer 3 (GEM3) — crate 52, fibers 13-25 ======": ""},
+
+        {"// X-dimension MPD6 (fiber 13)": ""},
+        {"crate": 52, "mpd": 13, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+
+        {"// X-dimension MPD7 (fiber 14)": ""},
+        {"crate": 52, "mpd": 14, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
+        {"crate": 52, "mpd": 14, "adc": 1, "det": 3, "plane": "X", "orient": 0, "pos": 4, "det_pos": 0},
+        {"crate": 52, "mpd": 14, "adc": 2, "det": 3, "plane": "X", "orient": 0, "pos": 5, "det_pos": 0},
+
+        {"// X-dimension MPD8 (fiber 15)": ""},
+        {"crate": 52, "mpd": 15, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 0, "det_pos": 0},
+        {"crate": 52, "mpd": 15, "adc": 1, "det": 3, "plane": "X", "orient": 0, "pos": 1, "det_pos": 0},
+        {"crate": 52, "mpd": 15, "adc": 2, "det": 3, "plane": "X", "orient": 0, "pos": 2, "det_pos": 0},
+
+        {"// Y-dimension MPD9 (fiber 16)": ""},
+        {"crate": 52, "mpd": 16, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 2, "det_pos": 0},
+        {"crate": 52, "mpd": 16, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 1, "det_pos": 0},
+        {"crate": 52, "mpd": 16, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 0, "det_pos": 0},
+
+        {"// Y-dimension MPD10 (fiber 17)": ""},
+        {"crate": 52, "mpd": 17, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 5, "det_pos": 0},
+        {"crate": 52, "mpd": 17, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 4, "det_pos": 0},
+        {"crate": 52, "mpd": 17, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 3, "det_pos": 0},
+
+        {"// Y-dimension MPD13 (fiber 18)": ""},
+        {"crate": 52, "mpd": 18, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 8, "det_pos": 0},
+        {"crate": 52, "mpd": 18, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 52, "mpd": 18, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// Y-dimension MPD14 (fiber 19)": ""},
+        {"crate": 52, "mpd": 19, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 11, "det_pos": 0},
+        {"crate": 52, "mpd": 19, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 52, "mpd": 19, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 9, "det_pos": 0},
+
+        {"// Y-dimension MPD15 (fiber 20)": ""},
+        {"crate": 52, "mpd": 20, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 14, "det_pos": 0},
+        {"crate": 52, "mpd": 20, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 13, "det_pos": 0},
+        {"crate": 52, "mpd": 20, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 12, "det_pos": 0},
+
+        {"// Y-dimension MPD16 (fiber 21)": ""},
+        {"crate": 52, "mpd": 21, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 17, "det_pos": 0},
+        {"crate": 52, "mpd": 21, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 16, "det_pos": 0},
+        {"crate": 52, "mpd": 21, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 15, "det_pos": 0},
+
+        {"// Y-dimension MPD17 (fiber 22)": ""},
+        {"crate": 52, "mpd": 22, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 20, "det_pos": 0},
+        {"crate": 52, "mpd": 22, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 19, "det_pos": 0},
+        {"crate": 52, "mpd": 22, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 18, "det_pos": 0},
+
+        {"// Y-dimension MPD18 (fiber 23)": ""},
+        {"crate": 52, "mpd": 23, "adc": 0, "det": 3, "plane": "Y", "orient": 1, "pos": 23, "det_pos": 0},
+        {"crate": 52, "mpd": 23, "adc": 1, "det": 3, "plane": "Y", "orient": 1, "pos": 22, "det_pos": 0},
+        {"crate": 52, "mpd": 23, "adc": 2, "det": 3, "plane": "Y", "orient": 1, "pos": 21, "det_pos": 0},
+
+        {"// X-dimension MPD19 (fiber 24)": ""},
+        {"crate": 52, "mpd": 24, "adc": 0, "det": 3, "plane": "X", "orient": 1, "pos": 7, "det_pos": 0},
+        {"crate": 52, "mpd": 24, "adc": 1, "det": 3, "plane": "X", "orient": 1, "pos": 6, "det_pos": 0},
+
+        {"// X-dimension MPD20 (fiber 25)": ""},
+        {"crate": 52, "mpd": 25, "adc": 0, "det": 3, "plane": "X", "orient": 1, "pos": 10, "det_pos": 0},
+        {"crate": 52, "mpd": 25, "adc": 1, "det": 3, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
+        {"crate": 52, "mpd": 25, "adc": 2, "det": 3, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0}
     ]
 }

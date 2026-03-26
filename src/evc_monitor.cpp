@@ -119,6 +119,8 @@ static void etReaderThread()
     ch.SetConfig(g_app.daq_cfg);
     auto event_ptr = std::make_unique<fdec::EventData>();
     auto &event = *event_ptr;
+    auto ssp_ptr = std::make_unique<ssp::SspEventData>();
+    auto &ssp_evt = *ssp_ptr;
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_app.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
@@ -204,8 +206,12 @@ static void etReaderThread()
             }
 
             for (int i = 0; i < ch.GetNEvents(); ++i) {
-                if (!ch.DecodeEvent(i, event)) continue;
+                ssp_evt.clear();
+                if (!ch.DecodeEvent(i, event, &ssp_evt)) continue;
                 last_ti_ts = event.info.timestamp;
+
+                // GEM reconstruction
+                g_app.processGemEvent(ssp_evt);
 
                 // process: histograms + clustering + LMS (every event)
                 g_app.processEvent(event, ana, wres);

@@ -86,6 +86,7 @@
     <button class="tab" data-tab="lms">Gain Monitoring<span class="tab-dot" id="lms-dot"></span></button>
     <button class="tab" data-tab="epics">EPICS<span class="tab-dot" id="epics-dot"></span></button>
     <button class="tab" data-tab="physics">Physics</button>
+    <button class="tab" data-tab="gem">GEM</button>
 </div>
 
 <div class="main">
@@ -295,6 +296,21 @@
         </div>
     </div>
 
+    <!-- GEM panel -->
+    <div class="gem-outer" id="gem-outer" style="display:none">
+        <div class="gem-toolbar">
+            <span id="gem-stats" style="color:var(--dim);font-size:11px"></span>
+        </div>
+        <div class="gem-grid">
+            <div class="gem-plane-cell">
+                <div id="gem-plane-0" style="width:100%;height:100%"></div>
+            </div>
+            <div class="gem-plane-cell">
+                <div id="gem-plane-1" style="width:100%;height:100%"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Physics panel -->
     <div class="physics-outer" id="physics-outer" style="display:none">
         <div class="physics-toolbar">
@@ -323,6 +339,7 @@
 <script src="report.js"></script>
 <script src="epics.js"></script>
 <script src="physics.js"></script>
+<script src="gem.js"></script>
 <script src="viewer.js"></script>
 </body>
 </html>

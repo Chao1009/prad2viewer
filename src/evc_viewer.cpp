@@ -199,6 +199,8 @@ static void buildHistograms(const std::string &path, Progress &prog) {
 
     auto event_ptr = std::make_unique<fdec::EventData>();
     auto &event = *event_ptr;
+    auto ssp_ptr = std::make_unique<ssp::SspEventData>();
+    auto &ssp_evt = *ssp_ptr;
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_app.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
@@ -221,7 +223,8 @@ static void buildHistograms(const std::string &path, Progress &prog) {
                 g_app.processEpics(text, g_app.events_processed.load(), last_ti_ts);
         }
         for (int i = 0; i < ch.GetNEvents(); ++i) {
-            if (!ch.DecodeEvent(i, event)) continue;
+            ssp_evt.clear();
+            if (!ch.DecodeEvent(i, event, &ssp_evt)) continue;
             prog.current = g_app.events_processed.load() + 1;
             last_ti_ts = event.info.timestamp;
 
@@ -229,6 +232,7 @@ static void buildHistograms(const std::string &path, Progress &prog) {
             g_app.fillHist(event, ana, wres);
             g_app.clusterEvent(event, ana, wres);
             g_app.processLms(event, ana, wres);
+            g_app.processGemEvent(ssp_evt);
             g_app.events_processed++;
         }
     }
@@ -269,7 +273,8 @@ static void loadFileAsync(const std::string &filepath) {
 // -------------------------------------------------------------------------
 // Decode raw event from file
 // -------------------------------------------------------------------------
-static std::string decodeRawEvent(int ev1, fdec::EventData &event) {
+static std::string decodeRawEvent(int ev1, fdec::EventData &event,
+                                  ssp::SspEventData *ssp_evt = nullptr) {
     std::shared_ptr<FileData> data;
     { std::lock_guard<std::mutex> lk(g_data_mtx); data = g_data; }
     if (!data) return "no file loaded";
@@ -281,7 +286,8 @@ static std::string decodeRawEvent(int ev1, fdec::EventData &event) {
     std::string err = g_reader.seekTo(data->filepath, ei.buffer_num);
     if (!err.empty()) return err;
     if (!g_reader.ch.Scan()) return "scan error";
-    if (!g_reader.ch.DecodeEvent(ei.sub_event, event)) return "decode error";
+    if (ssp_evt) ssp_evt->clear();
+    if (!g_reader.ch.DecodeEvent(ei.sub_event, event, ssp_evt)) return "decode error";
     return "";
 }
 
@@ -291,8 +297,11 @@ static std::string decodeRawEvent(int ev1, fdec::EventData &event) {
 static json decodeEvent(int ev1) {
     auto event_ptr = std::make_unique<fdec::EventData>();
     auto &event = *event_ptr;
-    std::string err = decodeRawEvent(ev1, event);
+    auto ssp_ptr = std::make_unique<ssp::SspEventData>();
+    std::string err = decodeRawEvent(ev1, event, ssp_ptr.get());
     if (!err.empty()) return {{"error", err}};
+
+    g_app.processGemEvent(*ssp_ptr);
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_app.hist_cfg.min_peak_ratio;
@@ -306,8 +315,11 @@ static json decodeEvent(int ev1) {
 static json computeClusters(int ev1) {
     auto event_ptr = std::make_unique<fdec::EventData>();
     auto &event = *event_ptr;
-    std::string err = decodeRawEvent(ev1, event);
+    auto ssp_ptr = std::make_unique<ssp::SspEventData>();
+    std::string err = decodeRawEvent(ev1, event, ssp_ptr.get());
     if (!err.empty()) return {{"error", err}};
+
+    g_app.processGemEvent(*ssp_ptr);
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = g_app.hist_cfg.min_peak_ratio;

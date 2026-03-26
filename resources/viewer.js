@@ -596,6 +596,8 @@ function loadEventData(reqId, data) {
         loadClusterData(currentEvent);
     } else if(activeTab==='lms'){
         // LMS geo doesn't change per event — no redraw needed
+    } else if(activeTab==='gem'){
+        fetchGemData();
     } else {
         drawGeo();
     }
@@ -947,7 +949,7 @@ function switchTab(tab){
     document.querySelectorAll('.tab').forEach(t=>{
         t.classList.toggle('active', t.dataset.tab===tab);
     });
-    const fullTab=tab==='epics'||tab==='physics';
+    const fullTab=tab==='epics'||tab==='physics'||tab==='gem';
     document.getElementById('geo-panel').style.display        = fullTab ? 'none' : '';
     document.getElementById('div-main').style.display         = fullTab ? 'none' : '';
     document.getElementById('geo-toolbar-dq').style.display   = tab==='dq' ? 'flex' : 'none';
@@ -958,6 +960,7 @@ function switchTab(tab){
     document.getElementById('lms-panel').style.display        = tab==='lms' ? 'flex' : 'none';
     document.getElementById('epics-outer').style.display      = tab==='epics' ? 'flex' : 'none';
     document.getElementById('physics-outer').style.display    = tab==='physics' ? 'flex' : 'none';
+    document.getElementById('gem-outer').style.display        = tab==='gem' ? 'flex' : 'none';
 
     if(tab==='cluster') {
         loadClusterData(currentEvent);
@@ -982,6 +985,9 @@ function switchTab(tab){
     } else if(tab==='physics') {
         fetchPhysics();
         setTimeout(()=>resizePhysics(),50);
+    } else if(tab==='gem') {
+        fetchGemData();
+        setTimeout(()=>resizeGem(),50);
     } else {
         drawGeo();
     }

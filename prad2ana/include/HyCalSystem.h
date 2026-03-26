@@ -176,6 +176,11 @@ public:
     const Module   *module_by_id(int primex_id)             const;
     const Module   *module_by_daq(int crate, int slot, int ch) const;
 
+    // --- calibration accessors ----------------------------------------------
+    double GetCalibConstant(int primex_id) const;
+    void   SetCalibConstant(int primex_id, double factor);
+    void   PrintCalibConstants(const std::string &output_file) const;
+
     // --- sector info --------------------------------------------------------
     const SectorInfo &sector_info(int s)               const { return sectors_[s]; }
     int  get_sector_id(double x, double y)             const;

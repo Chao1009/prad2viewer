@@ -13,6 +13,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
 
 using json = nlohmann::json;
 
@@ -437,6 +438,40 @@ const Module *HyCalSystem::module_by_daq(int crate, int slot, int ch) const
 {
     auto it = daq_map_.find(pack_daq(crate, slot, ch));
     return (it != daq_map_.end()) ? &modules_[it->second] : nullptr;
+}
+
+double HyCalSystem::GetCalibConstant(int primex_id) const
+{
+    const Module *m = module_by_id(primex_id);
+    return m ? m->cal_factor : 0.;
+}
+
+void HyCalSystem::SetCalibConstant(int primex_id, double factor)
+{
+    auto it = id_map_.find(primex_id);
+    if (it != id_map_.end())
+        modules_[it->second].cal_factor = factor;
+}
+
+void HyCalSystem::PrintCalibConstants(const std::string &output_file)
+const
+{
+    std::ofstream f(output_file);
+    if (!f.is_open()) {
+        std::cerr << "HyCalSystem::PrintCalibConstants: cannot open " << output_file << "\n";
+        return;
+    }
+    f << std::left << std::setw(8) << "name"
+      << std::setw(14) << "factor"
+      << std::setw(14) << "base_energy"
+      << std::setw(16) << "non_linear" << "\n";
+    for (const auto &m : modules_) {
+        if (m.id < 0) continue;
+        f << std::left << std::setw(8) << m.name
+        << std::setw(14) << m.cal_factor
+        << std::setw(14) << m.cal_base_energy
+        << std::setw(16) << m.cal_non_linear << "\n";
+    }
 }
 
 int HyCalSystem::LoadCalibration(const std::string &calib_path)

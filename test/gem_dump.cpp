@@ -387,7 +387,8 @@ static void usage(const char *prog)
         << "  -o <file>     Output file (ped mode, default: gem_ped.dat)\n"
         << "  -n <N>        Max physics events (default: 10, 0=all for ped)\n"
         << "  -t <bit>      Trigger bit filter (-1=all, default)\n"
-        << "  -e <N>        Dump only physics event N (1-based)\n";
+        << "  -e <N>        Dump only physics event N (1-based)\n"
+        << "  -z <sigma>    Override zero-suppression threshold (default: from gem_map)\n";
 }
 
 int main(int argc, char *argv[])
@@ -402,9 +403,10 @@ int main(int argc, char *argv[])
     int max_events  = 10;
     int trigger_bit = -1;   // -1 = accept all
     int target_event = 0;   // 0 = disabled
+    float zerosup_override = -1.f;  // <0 = use gem_map default
 
     int opt;
-    while ((opt = getopt(argc, argv, "D:G:P:o:m:n:t:e:h")) != -1) {
+    while ((opt = getopt(argc, argv, "D:G:P:o:m:n:t:e:z:h")) != -1) {
         switch (opt) {
         case 'D': daq_config_file = optarg; break;
         case 'G': gem_map_file = optarg; break;
@@ -414,6 +416,7 @@ int main(int argc, char *argv[])
         case 'n': max_events = std::atoi(optarg); break;
         case 't': trigger_bit = std::atoi(optarg); break;
         case 'e': target_event = std::atoi(optarg); max_events = 0; break;
+        case 'z': zerosup_override = std::atof(optarg); break;
         default:  usage(argv[0]); return 1;
         }
     }
@@ -469,6 +472,11 @@ int main(int argc, char *argv[])
         if (!gem_ped_file.empty()) {
             gem_sys->LoadPedestals(gem_ped_file);
             std::cerr << "GEM peds : " << gem_ped_file << "\n";
+        }
+
+        if (zerosup_override >= 0.f) {
+            gem_sys->SetZeroSupThreshold(zerosup_override);
+            std::cerr << "Zero-sup : " << zerosup_override << " sigma (override)\n";
         }
 
         if (need_cluster)

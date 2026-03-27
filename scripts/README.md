@@ -1,56 +1,27 @@
 # Scripts
 
-Utility scripts for PRad-II detector visualization and analysis. Requires Python 3 with matplotlib and numpy.
-
-```bash
-pip install -r scripts/requirements.txt
-```
+Python utilities for GEM visualization. Requires matplotlib and numpy.
 
 ## gem_layout.py
 
-Visualize GEM strip layout from `gem_map.json`. Shows X/Y strips and APV boundaries with beam hole.
+Visualize GEM strip layout from `gem_map.json`. Shows X/Y strips, APV boundaries, and beam hole.
 
 ```bash
-python scripts/gem_layout.py [path/to/gem_map.json]
+python scripts/gem_layout.py [gem_map.json]
 ```
-
-Defaults to `database/gem_map.json`. Saves `gem_layout.png`.
 
 ## gem_cluster_view.py
 
-Visualize GEM clustering results from a `gem_dump -m evdump` JSON file. Overlays fired strips, clusters, and 2D hits on the detector geometry.
+Visualize GEM clustering from `gem_dump -m evdump` JSON. Strip geometry is derived from APV addresses via `gem_strip_map.py`, so beam-hole half-strips are drawn correctly.
 
 ```bash
 python scripts/gem_cluster_view.py <event.json> [gem_map.json] [--det N] [-o file.png]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `event.json` | Event dump from `gem_dump -m evdump` (required) |
-| `gem_map.json` | GEM map file (default: auto-search `database/gem_map.json`) |
-| `--det N` | Show only detector N (default: all detectors) |
-| `-o file` | Output image (default: `gem_cluster_view.png`) |
+Shows: fired X strips (blue) and Y strips (red) color-coded by charge, cluster center markers, 2D hit positions, and beam hole. Prints a cluster summary table to the terminal.
 
-Visual elements:
-- **X strip hits** — vertical lines, blue colormap scaled by charge
-- **Y strip hits** — horizontal lines, red colormap scaled by charge
-- **Cross-talk hits** — dashed lines at lower opacity
-- **Cluster ranges** — semi-transparent bands over constituent strips
-- **Cluster centers** — triangle markers at detector edge with charge/size labels
-- **2D hits** — green star markers at reconstructed (x, y) positions
-- **Beam hole** — yellow rectangle
-
-Example workflow:
 ```bash
-# 1. Compute pedestals (if not already done)
 gem_dump data.evio -m ped -o gem_ped.json
-
-# 2. Dump a single event to JSON
-gem_dump data.evio -P gem_ped.json -m evdump -e 42 -o event_42.json
-
-# 3. Visualize clustering
-python scripts/gem_cluster_view.py event_42.json database/gem_map.json
-
-# Show only GEM0
-python scripts/gem_cluster_view.py event_42.json --det 0 -o gem0_event42.png
+gem_dump data.evio -P gem_ped.json -m evdump -e 42
+python scripts/gem_cluster_view.py gem_event.json database/gem_map.json
 ```

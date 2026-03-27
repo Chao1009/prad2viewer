@@ -120,58 +120,39 @@ ped_calc prad.evio -D prad_daq_config.json -t 3 -o pedestals.json
 
 ## gem_dump
 
-GEM data diagnostic tool. Decodes SSP/MPD banks from EVIO data, optionally runs GEM reconstruction, and prints diagnostic output at each stage of the pipeline.
+GEM data diagnostic tool. Decodes SSP/MPD banks, runs GEM reconstruction, prints diagnostics or dumps events to JSON for visualization.
 
 ```bash
-gem_dump <evio_file> -D <daq_config.json> [options]
+gem_dump <evio_file> [options]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `-D <file>` | DAQ configuration (required) |
-| `-G <file>` | GEM map file (default: gem_map.json from DAQ config dir) |
-| `-P <file>` | GEM pedestal file (optional) |
-| `-m <mode>` | Output mode (see below) |
-| `-n <N>` | Max physics events (default: 10, 0=all) |
-| `-t <bit>` | Trigger bit filter (-1=all, default) |
-| `-e <N>` | Dump only physics event N (1-based) |
-
-| `-o <file>` | Output file (ped/evdump modes) |
+| `-m <mode>` | `summary` (default), `raw`, `hits`, `clusters`, `ped`, `evdump` |
+| `-D <file>` | DAQ config (auto-searches `database/daq_config.json`) |
+| `-G <file>` | GEM map (default: `gem_map.json` next to DAQ config) |
+| `-P <file>` | Pedestal file (required for `hits`/`clusters`/`evdump`) |
+| `-n <N>` | Max events (default: 10, 0=all) |
+| `-e <N>` | Single event N (1-based) |
+| `-t <bit>` | Trigger bit filter (-1=all) |
+| `-o <file>` | Output file (`ped`/`evdump` modes) |
 | `-z <sigma>` | Override zero-suppression threshold |
+| `-f <filter>` | APV filter for `evdump` (see below) |
 
-Modes:
-- `raw` — Dump raw SSP-decoded APV data (strips × time samples)
-- `hits` — Strip hits after pedestal subtraction, CM correction, zero suppression
-- `clusters` — Full reconstruction: 1D clusters + 2D GEM hits
-- `summary` (default) — Per-event statistics table
-- `ped` — Compute per-strip pedestals from raw data (output: `gem_ped.json`)
-- `evdump` — Dump single event to JSON for visualization (output: `gem_event.json`)
+The `evdump` mode outputs JSON with three pipeline layers: `raw_apvs` (raw ADC), `zs_apvs` (zero-suppressed channels by APV address), and per-detector `clusters` + `hits_2d`. Use with `scripts/gem_cluster_view.py`.
 
-The `evdump` mode outputs a JSON file containing three layers of data:
-- **raw_apvs** — Raw SSP-decoded ADC samples per APV/channel (before any processing)
-- **x_hits / y_hits** — Strip hits after pedestal subtraction, common mode correction, and zero suppression
-- **x_clusters / y_clusters** — 1D clusters with charge-weighted position and constituent strips
-- **hits_2d** — 2D reconstructed hits from X/Y cluster matching
+By default evdump selects the first event with 2D hits. Use `-n K` for first K matching events, `-e N` for a specific event, or `-f` for custom APV-based filtering:
 
-Use with `scripts/gem_cluster_view.py` to visualize clustering results (see [scripts/README.md](../scripts/README.md)).
+```
+-f field=val[,val]:min_dets
+```
+Fields: `pos`, `plane` (X/Y), `match` (+Y/-Y), `orient`, `det`.
 
 Examples:
 ```bash
-# Quick summary of first 10 events with GEM data
-gem_dump data.evio -D database/daq_config.json
-
-# Dump raw APV data for event 42
-gem_dump data.evio -D database/daq_config.json -m raw -e 42
-
-# Full reconstruction with pedestals
-gem_dump data.evio -D database/daq_config.json -G database/gem_map.json -P gem_ped.json -m clusters -n 50
-
-# Summary with trigger filter (LMS events only)
-gem_dump data.evio -D database/daq_config.json -t 3 -n 0
-
-# Dump event 42 to JSON for cluster visualization
-gem_dump data.evio -P gem_ped.json -m evdump -e 42 -o event_42.json
-
-# Visualize the dump
-python scripts/gem_cluster_view.py event_42.json database/gem_map.json
+gem_dump data.evio -m ped -o gem_ped.json                       # pedestals
+gem_dump data.evio -P gem_ped.json -m summary -n 50             # overview
+gem_dump data.evio -P gem_ped.json -m evdump -e 42              # dump event 42
+gem_dump data.evio -P gem_ped.json -m evdump -f pos=10,11:3 -n 5  # beam-hole APVs in >=3 GEMs
+python scripts/gem_cluster_view.py gem_event.json database/gem_map.json
 ```

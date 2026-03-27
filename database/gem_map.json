@@ -9,6 +9,18 @@
     "online_zero_suppression": false,
     "position_resolution": 0.08,
 
+    "// Beam hole: rectangular cutout at the right edge (high-X), centered in Y.": "",
+    "// APV pos 0 and 11 on X-plane are split by the hole (16 channels each disconnected).": "",
+    "// All 4 GEMs are identical; rotation to lab frame handled by per-detector transform.": "",
+    "hole": {
+        "width": 44.0,
+        "height": 44.0,
+        "// x_center: right edge minus half-width = 12*128*0.4 - 22 = 592.4": "",
+        "x_center": 592.4,
+        "// y_center: detector center = 24*128*0.4/2 = 614.4": "",
+        "y_center": 614.4
+    },
+
     "layers": [
         {"id": 0, "name": "GEM0", "type": "PRADGEM", "x_apvs": 12, "y_apvs": 24, "x_pitch": 0.4, "y_pitch": 0.4},
         {"id": 1, "name": "GEM1", "type": "PRADGEM", "x_apvs": 12, "y_apvs": 24, "x_pitch": 0.4, "y_pitch": 0.4},
@@ -20,7 +32,7 @@
         {"// ====== Layer 0 (GEM0) — crate 49, fibers 0-12 ======": ""},
 
         {"// X-dimension MPD6 (fiber 0)": ""},
-        {"crate": 49, "mpd": 0, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+        {"crate": 49, "mpd": 0, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "readout_offset": 48, "strip_offset": -144, "match": "+Y"},
 
         {"// X-dimension MPD7 (fiber 1)": ""},
         {"crate": 49, "mpd": 1, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
@@ -84,7 +96,7 @@
         {"// ====== Layer 1 (GEM1) — crate 49, fibers 13-25 ======": ""},
 
         {"// X-dimension MPD6 (fiber 13)": ""},
-        {"crate": 49, "mpd": 13, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+        {"crate": 49, "mpd": 13, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "readout_offset": 48, "strip_offset": -144, "match": "+Y"},
 
         {"// X-dimension MPD7 (fiber 14)": ""},
         {"crate": 49, "mpd": 14, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
@@ -148,7 +160,7 @@
         {"// ====== Layer 2 (GEM2) — crate 52, fibers 0-12 ======": ""},
 
         {"// X-dimension MPD6 (fiber 0)": ""},
-        {"crate": 52, "mpd": 0, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+        {"crate": 52, "mpd": 0, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "readout_offset": 48, "strip_offset": -144, "match": "+Y"},
 
         {"// X-dimension MPD7 (fiber 1)": ""},
         {"crate": 52, "mpd": 1, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},
@@ -212,7 +224,7 @@
         {"// ====== Layer 3 (GEM3) — crate 52, fibers 13-25 ======": ""},
 
         {"// X-dimension MPD6 (fiber 13)": ""},
-        {"crate": 52, "mpd": 13, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0},
+        {"crate": 52, "mpd": 13, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "readout_offset": 48, "strip_offset": -144, "match": "+Y"},
 
         {"// X-dimension MPD7 (fiber 14)": ""},
         {"crate": 52, "mpd": 14, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 3, "det_pos": 0},

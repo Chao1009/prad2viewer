@@ -30,17 +30,6 @@ namespace ssp { struct SspEventData; struct ApvData; }
 namespace gem
 {
 
-// --- strip mapping tables ---------------------------------------------------
-// Pre-computed APV channel → detector strip lookup tables.
-// For PRADGEM: identity mapping (no conversion needed).
-// For UVa XY GEM: combines APV internal + hybrid board + connector mapping.
-
-// APV internal channel mapping only (PRADGEM default)
-extern const int kStripMapIdentity[128];
-
-// UVa XY GEM mapping (APV internal + hybrid board conversion)
-extern const int kStripMapUvaXY[128];
-
 // --- data structures --------------------------------------------------------
 
 struct StripHit {
@@ -92,6 +81,21 @@ struct ApvConfig {
     int orient      = 0;       // 0 or 1 (strip reversal)
     int plane_index = -1;      // APV position on plane
     int det_pos     = 0;       // detector position in layer
+
+    // Strip mapping parameters (APV channel → physical strip)
+    // readout_offset: center point for APV25-to-strip odd/even mapping.
+    //   32 = normal, 48 for special APVs. 0 = skip readout mapping.
+    int  readout_offset = 32;
+    // strip_offset: total offset added to plane-wide strip number (default 0).
+    //   Accounts for all wiring differences (e.g. -144 for pos-11:
+    //   -128 shares X column with pos-10, -16 for disconnected strips).
+    int  strip_offset   = 0;
+    bool hybrid_board   = true; // apply hybrid board pin conversion (MPD electronics)
+    // match: half-strip intersection constraint for beam hole region.
+    //   "" = full strip (intersects all cross-plane strips).
+    //   "+Y" = upper half only (above beam hole).
+    //   "-Y" = lower half only (below beam hole).
+    std::string match;
 
     // Pedestals (per-strip)
     ApvPedestal pedestal[128];
@@ -162,7 +166,6 @@ private:
 
     // --- strip mapping ------------------------------------------------------
     void buildStripMap(int apv_idx);
-    const int *getStripTable(const std::string &det_type) const;
 
     // --- detector hierarchy -------------------------------------------------
     std::vector<DetectorConfig> detectors_;

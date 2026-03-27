@@ -12,41 +12,6 @@
 using namespace gem;
 
 //=============================================================================
-// Strip mapping tables
-//=============================================================================
-
-// PRADGEM: identity mapping (APV internal channel = strip)
-const int gem::kStripMapIdentity[128] = {
-     0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
-    32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
-    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63,
-    64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79,
-    80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95,
-    96, 97, 98, 99,100,101,102,103,104,105,106,107,108,109,110,111,
-   112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127
-};
-
-// UVa XY GEM: APV internal + UVa hybrid board conversion
-// Combines: strip = 32*(ch%4) + 8*(ch/4) - 31*(ch/16)
-//           strip = strip + 1 + strip%4 - 5*((strip/4)%2)
-const int gem::kStripMapUvaXY[128] = {
-      1,  33, 65,  97,  9,  41, 73, 105, 17,  49,
-     81, 113, 25,  57, 89, 121,  3,  35, 67,  99,
-     11,  43, 75, 107, 19,  51, 83, 115, 27,  59,
-     91, 123,  5,  37, 69, 101, 13,  45, 77, 109,
-     21,  53, 85, 117, 29,  61, 93, 125,  7,  39,
-     71, 103, 15,  47, 79, 111, 23,  55, 87, 119,
-     31,  63, 95, 127,  0,  32, 64,  96,  8,  40,
-     72, 104, 16,  48, 80, 112, 24,  56, 88, 120,
-      2,  34, 66,  98, 10,  42, 74, 106, 18,  50,
-     82, 114, 26,  58, 90, 122,  4,  36, 68, 100,
-     12,  44, 76, 108, 20,  52, 84, 116, 28,  60,
-     92, 124,  6,  38, 70, 102, 14,  46, 78, 110,
-     22,  54, 86, 118, 30,  62, 94, 126
-};
-
-//=============================================================================
 // Construction / destruction
 //=============================================================================
 
@@ -112,6 +77,11 @@ void GemSystem::Init(const std::string &map_file)
             apv.orient      = entry.value("orient", 0);
             apv.plane_index = entry.value("pos", 0);
             apv.det_pos     = entry.value("det_pos", 0);
+
+            apv.readout_offset = entry.value("readout_offset", 32);
+            apv.strip_offset   = entry.value("strip_offset", 0);
+            apv.hybrid_board   = entry.value("hybrid_board", true);
+            apv.match          = entry.value("match", "");
 
             int idx = static_cast<int>(apvs_.size());
             apv_map_[packApvKey(apv.crate_id, apv.mpd_id, apv.adc_ch)] = idx;
@@ -482,6 +452,14 @@ void GemSystem::collectHits(int apv_idx)
 
 //=============================================================================
 // buildStripMap — compute APV channel → plane strip mapping
+//
+// Implements the full MapStrip pipeline (from PRadAnalyzer/mpd_gem_view_ssp):
+//   1. APV25 internal channel mapping (chip wiring, universal)
+//   2. Hybrid board pin conversion (MPD electronics only)
+//   3. Readout strip scaling (configurable offset: 32 normal, 48 for special APVs)
+//   4. 7-bit mask
+//   5. Orient flip
+//   6. Plane-wide strip number with configurable offset
 //=============================================================================
 
 void GemSystem::buildStripMap(int apv_idx)
@@ -489,42 +467,35 @@ void GemSystem::buildStripMap(int apv_idx)
     auto &cfg = apvs_[apv_idx];
     auto &work = apv_work_[apv_idx];
 
-    // Get strip lookup table based on detector type
-    const int *table = kStripMapIdentity;  // default PRADGEM
-    if (cfg.det_id >= 0 && cfg.det_id < static_cast<int>(detectors_.size()))
-        table = getStripTable(detectors_[cfg.det_id].type);
-
     for (int ch = 0; ch < APV_STRIP_SIZE; ++ch) {
-        int strip = table[ch];
+        // Step 1: APV25 internal channel mapping (chip wiring, universal)
+        int strip = 32 * (ch % 4) + 8 * (ch / 4) - 31 * (ch / 16);
 
-        // Orientation reversal
+        // Step 2: hybrid board pin conversion (MPD electronics)
+        if (cfg.hybrid_board)
+            strip = strip + 1 + strip % 4 - 5 * ((strip / 4) % 2);
+
+        // Step 3: APV25 channel to readout strip mapping
+        // readout_offset > 0: apply odd/even mapping around offset point
+        // readout_offset == 0: skip (steps 1+2 give final local strip)
+        if (cfg.readout_offset > 0) {
+            int off = cfg.readout_offset;
+            if (strip & 1)
+                strip = off - (strip + 1) / 2;
+            else
+                strip = off + strip / 2;
+        }
+
+        // Step 4: 7-bit mask
+        strip &= 0x7f;
+
+        // Step 5: orient flip
         if (cfg.orient == 1)
             strip = 127 - strip;
 
-        // Compute plane-wide strip number
-        // For X plane: strip = (det_pos * n_apvs + plane_index) * 128 + strip
-        // For Y plane: strip = plane_index * 128 + strip
-        if (cfg.plane_type == 0 && cfg.det_id >= 0) {
-            int n_apvs_x = detectors_[cfg.det_id].planes[0].n_apvs;
-            strip = (cfg.det_pos * n_apvs_x + cfg.plane_index) * APV_STRIP_SIZE + strip;
-        } else {
-            strip = cfg.plane_index * APV_STRIP_SIZE + strip;
-        }
+        // Step 6: plane-wide strip number
+        strip += cfg.strip_offset + cfg.plane_index * APV_STRIP_SIZE;
 
         work.strip_map[ch] = strip;
     }
-}
-
-//=============================================================================
-// getStripTable — select strip mapping LUT by detector type
-//=============================================================================
-
-const int *GemSystem::getStripTable(const std::string &det_type) const
-{
-    if (det_type == "PRADGEM" || det_type == "INTERNAL")
-        return kStripMapIdentity;
-    if (det_type == "UVAXYGEM")
-        return kStripMapUvaXY;
-    // Add more types as needed
-    return kStripMapIdentity;
 }

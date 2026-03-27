@@ -23,6 +23,8 @@
 #include <mutex>
 
 #include <TFileMerger.h>
+#include <TClass.h>
+#include <TROOT.h>
 
 #ifndef DATABASE_DIR
 #define DATABASE_DIR "."
@@ -53,6 +55,15 @@ static std::string makeOutputPath(const std::string &evio_path)
 
 int main(int argc, char *argv[])
 {
+    // Initialize ROOT for multi-threading
+    ROOT::EnableThreadSafety();
+    
+    // Force ROOT dictionary initialization in main thread
+    // This prevents concurrent TClass::Init calls
+    TClass::GetClass("TTree");
+    TClass::GetClass("TFile");
+    TClass::GetClass("TBranch");
+
     std::string input, daq_config, merged_output;
     int max_events = -1;
     int max_files = -1;

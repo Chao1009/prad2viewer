@@ -999,7 +999,7 @@ done:
                   << " physics events.\n";
     }
 
-    std::cerr << "Done: " << phys_count << " physics events, "
+    std::cerr << "Done: parsed " << phys_count << " physics events, "
               << ssp_events << " with SSP data.\n";
     return 0;
 }

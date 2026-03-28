@@ -12,6 +12,17 @@
     "online_zero_suppression": false,
     "position_resolution": 0.08,
 
+    "// Strip-level cuts (0 to disable)": "",
+    "reject_first_timebin": true,
+    "reject_last_timebin": true,
+    "min_peak_adc": 30.0,
+    "min_sum_adc": 60.0,
+
+    "// XY cluster matching cuts (negative to disable)": "",
+    "match_adc_asymmetry": 0.8,
+    "match_time_diff": 50.0,
+    "match_ts_period": 25.0,
+
     "// Beam hole: rectangular cutout at the right edge (high-X), centered in Y.": "",
     "// APV pos 0 and 11 on X-plane are split by the hole (16 channels each disconnected).": "",
     "// All 4 GEMs are identical; rotation to lab frame handled by per-detector transform.": "",

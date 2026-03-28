@@ -231,7 +231,34 @@ void GemCluster::filterClusters(std::vector<StripCluster> &clusters) const
 }
 
 //=============================================================================
+// seedMeanTime — ADC-weighted mean time of the seed (max-charge) strip
+//=============================================================================
+
+static float seedMeanTime(const StripCluster &cl, float ts_period)
+{
+    // find seed strip (highest charge)
+    const StripHit *seed = nullptr;
+    for (auto &h : cl.hits)
+        if (!seed || h.charge > seed->charge) seed = &h;
+    if (!seed || seed->ts_adc.empty()) return -1.f;
+
+    float sum_wt = 0.f, sum_w = 0.f;
+    for (size_t i = 0; i < seed->ts_adc.size(); ++i) {
+        float w = seed->ts_adc[i];
+        if (w > 0.f) {
+            sum_wt += w * static_cast<float>(i + 1) * ts_period;
+            sum_w  += w;
+        }
+    }
+    return (sum_w > 0.f) ? sum_wt / sum_w : -1.f;
+}
+
+//=============================================================================
 // CartesianReconstruct — match X and Y clusters to form 2D hits
+//
+// Full Cartesian product with optional cuts from mpd_gem_view_ssp:
+//   - ADC asymmetry: |Qx_peak - Qy_peak| / (Qx_peak + Qy_peak) <= threshold
+//   - Timing:        |mean_time_x_seed - mean_time_y_seed| <= threshold
 //=============================================================================
 
 void GemCluster::CartesianReconstruct(
@@ -242,36 +269,45 @@ void GemCluster::CartesianReconstruct(
 {
     container.clear();
 
-    // Match by peak charge ranking (cosmic/default mode):
-    // sort both X and Y by peak charge descending, pair by index
-    std::vector<StripCluster> xc = x_clusters;
-    std::vector<StripCluster> yc = y_clusters;
+    const float adc_asym_cut = cfg_.match_adc_asymmetry;
+    const float time_cut     = cfg_.match_time_diff;
+    const float ts_ns        = cfg_.ts_period;
 
-    std::sort(xc.begin(), xc.end(),
-              [](const StripCluster &a, const StripCluster &b) {
-                  return a.peak_charge > b.peak_charge;
-              });
-    std::sort(yc.begin(), yc.end(),
-              [](const StripCluster &a, const StripCluster &b) {
-                  return a.peak_charge > b.peak_charge;
-              });
+    for (auto &xc : x_clusters) {
+        float x_mean_t = (time_cut >= 0.f) ? seedMeanTime(xc, ts_ns) : 0.f;
 
-    size_t npairs = std::min(xc.size(), yc.size());
-    for (size_t i = 0; i < npairs; ++i) {
-        GEMHit hit;
-        hit.x = xc[i].position;
-        hit.y = yc[i].position;
-        hit.z = 0.f;
-        hit.det_id = det_id;
-        hit.x_charge = xc[i].total_charge;
-        hit.y_charge = yc[i].total_charge;
-        hit.x_peak   = xc[i].peak_charge;
-        hit.y_peak   = yc[i].peak_charge;
-        hit.x_max_timebin = xc[i].max_timebin;
-        hit.y_max_timebin = yc[i].max_timebin;
-        hit.x_size = static_cast<int>(xc[i].hits.size());
-        hit.y_size = static_cast<int>(yc[i].hits.size());
-        hit.sig_pos = resolution;
-        container.push_back(hit);
+        for (auto &yc : y_clusters) {
+            // ADC asymmetry cut
+            if (adc_asym_cut >= 0.f) {
+                float sum = xc.peak_charge + yc.peak_charge;
+                if (sum > 0.f) {
+                    float asym = std::abs(xc.peak_charge - yc.peak_charge) / sum;
+                    if (asym > adc_asym_cut) continue;
+                }
+            }
+
+            // timing asymmetry cut
+            if (time_cut >= 0.f && x_mean_t >= 0.f) {
+                float y_mean_t = seedMeanTime(yc, ts_ns);
+                if (y_mean_t >= 0.f && std::abs(x_mean_t - y_mean_t) > time_cut)
+                    continue;
+            }
+
+            GEMHit hit;
+            hit.x = xc.position;
+            hit.y = yc.position;
+            hit.z = 0.f;
+            hit.det_id = det_id;
+            hit.x_charge = xc.total_charge;
+            hit.y_charge = yc.total_charge;
+            hit.x_peak   = xc.peak_charge;
+            hit.y_peak   = yc.peak_charge;
+            hit.x_max_timebin = xc.max_timebin;
+            hit.y_max_timebin = yc.max_timebin;
+            hit.x_size = static_cast<int>(xc.hits.size());
+            hit.y_size = static_cast<int>(yc.hits.size());
+            hit.sig_pos = resolution;
+            container.push_back(hit);
+        }
     }
 }

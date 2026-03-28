@@ -24,6 +24,11 @@ struct ClusterConfig {
     float cross_talk_width  = 2.f;  // mm
     float position_res      = 0.08f;// mm
     std::vector<float> charac_dists;// cross-talk characteristic distances
+
+    // XY matching cuts (Cartesian reconstruction)
+    float match_adc_asymmetry = 0.8f;  // max |Qx-Qy|/(Qx+Qy), <0 to disable
+    float match_time_diff     = 50.f;  // max |mean_t_x - mean_t_y| in ns, <0 to disable
+    float ts_period           = 25.f;  // ns per time sample
 };
 
 class GemCluster

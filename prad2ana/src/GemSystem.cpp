@@ -69,6 +69,17 @@ void GemSystem::Init(const std::string &map_file)
     online_zero_sup_ = j.value("online_zero_suppression", false);
     position_res_    = j.value("position_resolution", 0.08f);
 
+    // strip-level cuts
+    reject_first_timebin_ = j.value("reject_first_timebin", true);
+    reject_last_timebin_  = j.value("reject_last_timebin", true);
+    min_peak_adc_         = j.value("min_peak_adc", 0.f);
+    min_sum_adc_          = j.value("min_sum_adc", 0.f);
+
+    // XY matching cuts (stored here, applied via GemCluster)
+    match_adc_asymmetry_  = j.value("match_adc_asymmetry", 0.8f);
+    match_time_diff_      = j.value("match_time_diff", 50.f);
+    match_ts_period_      = j.value("match_ts_period", 25.f);
+
     // --- parse APV entries ---
     apvs_.clear();
     apv_map_.clear();
@@ -228,6 +239,13 @@ void GemSystem::ProcessEvent(const ssp::SspEventData &evt)
 
 void GemSystem::Reconstruct(GemCluster &clusterer)
 {
+    // apply XY matching cuts from gem_map config
+    auto cfg = clusterer.GetConfig();
+    cfg.match_adc_asymmetry = match_adc_asymmetry_;
+    cfg.match_time_diff     = match_time_diff_;
+    cfg.ts_period           = match_ts_period_;
+    clusterer.SetConfig(cfg);
+
     for (int d = 0; d < static_cast<int>(detectors_.size()); ++d) {
         // cluster X and Y planes
         for (int p = 0; p < 2; ++p) {
@@ -422,16 +440,24 @@ void GemSystem::collectHits(int apv_idx)
 
         // Find max charge and max timebin
         float max_charge = -1e9f;
+        float sum_adc = 0.f;
         short max_tb = 0;
         std::vector<float> ts_adc(SSP_TIME_SAMPLES);
         for (int ts = 0; ts < SSP_TIME_SAMPLES; ++ts) {
             float val = work.raw[RAW_IDX(ch, ts)];
             ts_adc[ts] = val;
+            sum_adc += val;
             if (val > max_charge) {
                 max_charge = val;
                 max_tb = static_cast<short>(ts);
             }
         }
+
+        // Strip-level cuts
+        if (reject_first_timebin_ && max_tb == 0) continue;
+        if (reject_last_timebin_  && max_tb == SSP_TIME_SAMPLES - 1) continue;
+        if (min_peak_adc_ > 0.f   && max_charge < min_peak_adc_) continue;
+        if (min_sum_adc_  > 0.f   && sum_adc < min_sum_adc_) continue;
 
         // Calculate physical position
         float pos = static_cast<float>(plane_strip) * plane.pitch

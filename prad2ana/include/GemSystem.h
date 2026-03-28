@@ -222,6 +222,17 @@ private:
     float crosstalk_thres_  = 8.f;
     bool  online_zero_sup_  = false;
     float position_res_     = 0.08f;   // mm
+
+    // --- strip-level cuts (from mpd_gem_view_ssp) -------------------------
+    bool  reject_first_timebin_ = true;   // reject if peak at first time bin
+    bool  reject_last_timebin_  = true;   // reject if peak at last time bin
+    float min_peak_adc_         = 0.f;    // min peak ADC per strip (0=disabled)
+    float min_sum_adc_          = 0.f;    // min sum ADC per strip (0=disabled)
+
+    // --- XY matching cuts (passed to GemCluster at Reconstruct time) ------
+    float match_adc_asymmetry_  = 0.8f;
+    float match_time_diff_      = 50.f;
+    float match_ts_period_      = 25.f;
 };
 
 } // namespace gem

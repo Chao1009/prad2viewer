@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     daq_config = db_dir + "/daq_config.json"; // default DAQ config for PRad2
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:D:p:g:z:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:D:g:z:p")) != -1) {
         switch (opt) {
             case 'o': output = optarg; break;
             case 'D': daq_config = optarg; break;

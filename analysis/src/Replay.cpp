@@ -15,6 +15,10 @@
 
 using json = nlohmann::json;
 
+#ifndef DATABASE_DIR
+#define DATABASE_DIR "."
+#endif
+
 namespace analysis {
 
 void Replay::LoadDaqMap(const std::string &json_path)
@@ -92,6 +96,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
     tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/I");
     tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
+    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/I", fdec::MAX_SAMPLES));
     tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
     tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
     tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
@@ -176,8 +181,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     auto ev = std::make_unique<EventVars>();
     setupBranches(tree, *ev, write_peaks);
 
-    fdec::EventData event;
-    ssp::SspEventData ssp_evt;
+    auto event = std::make_unique<fdec::EventData>();
+    auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana;
     fdec::WaveResult wres;
     int total = 0;
@@ -187,20 +192,20 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
         if (ch.GetEventType() != evc::EventType::Physics) continue;
 
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
-            event.clear();
-            ssp_evt.clear();
-            if (!ch.DecodeEvent(ie, event, &ssp_evt)) continue;
+            event->clear();
+            ssp_evt->clear();
+            if (!ch.DecodeEvent(ie, *event, ssp_evt.get())) continue;
             if (max_events > 0 && total >= max_events) break;
 
             clearEvent(*ev);
-            ev->event_num = event.info.event_number;
-            ev->trigger   = event.info.trigger_bits;
-            ev->timestamp = event.info.timestamp;
+            ev->event_num = event->info.event_number;
+            ev->trigger   = event->info.trigger_bits;
+            ev->timestamp = event->info.timestamp;
 
             // decode HyCal FADC250 data
             int nch = 0;
-            for (int r = 0; r < event.nrocs; ++r) {
-                auto &roc = event.rocs[r];
+            for (int r = 0; r < event->nrocs; ++r) {
+                auto &roc = event->rocs[r];
                 if (!roc.present) continue;
                 auto cit = roc_to_crate.find(roc.tag);
                 int crate;
@@ -218,6 +223,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ev->channel[nch] = c;
                         //ev->module_id[nch] = moduleID(roc.tag, s, c);
                         ev->nsamples[nch] = cd.nsamples;
+                        for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
+                            ev->samples[nch][i] = cd.samples[i];
 
                         ana.Analyze(cd.samples, cd.nsamples, wres);
                         ev->ped_mean[nch] = wres.ped.mean;
@@ -240,8 +247,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
 
             // decode GEM SSP data
             int gem_ch = 0;
-            for (int m = 0; m < ssp_evt.nmpds; ++m) {
-                auto &mpd = ssp_evt.mpds[m];
+            for (int m = 0; m < ssp_evt->nmpds; ++m) {
+                auto &mpd = ssp_evt->mpds[m];
                 if (!mpd.present) continue;
                 for (int a = 0; a < ssp::MAX_APVS_PER_MPD; ++a) {
                     auto &apv = mpd.apvs[a];
@@ -289,7 +296,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     // - We also run the GemSystem reconstruction to get GEM hits.
     // - We fill a different TTree with reconstructed quantities instead of raw data.
 
-    std::string db_dir;
+    std::string db_dir = DATABASE_DIR;
     if (const char *env = std::getenv("PRAD2_DATABASE_DIR"))  db_dir = env;
 
     // build ROC tag → crate index mapping from DAQ config JSON
@@ -318,7 +325,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     if(prad1 == true)
         daq_map_file = db_dir + "/prad1/prad_daq_map.json";
     hycal.Init(db_dir + "/hycal_modules.json", daq_map_file);
-
+    if(prad1 == true) evc::load_pedestals(db_dir + "/prad1/adc1881m_pedestals.json", daq_cfg_);
     std::string calib_file = db_dir + "/prad1/prad_calibration.json";
     int nmatched = hycal.LoadCalibration(calib_file);
     if (nmatched >= 0)
@@ -371,8 +378,8 @@ if(!prad1){
     setupReconBranches(tree, *ev);
 
     //initialize tools for event decoder and cluster reconstruction
-    fdec::EventData event;
-    ssp::SspEventData ssp_evt;
+    auto event = std::make_unique<fdec::EventData>();
+    auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana;
     fdec::WaveResult wres;
     
@@ -383,19 +390,19 @@ if(!prad1){
         if (ch.GetEventType() != evc::EventType::Physics) continue;
 
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
-            event.clear();
-            ssp_evt.clear();
+            event->clear();
+            ssp_evt->clear();
             clusterer.Clear();
-            if (!ch.DecodeEvent(ie, event, &ssp_evt)) continue;
+            if (!ch.DecodeEvent(ie, *event, ssp_evt.get())) continue;
 
             clearReconEvent(*ev);
-            ev->event_num = event.info.event_number;
-            ev->trigger_bits = event.info.trigger_bits;
-            ev->timestamp = event.info.timestamp;
+            ev->event_num = event->info.event_number;
+            ev->trigger_bits = event->info.trigger_bits;
+            ev->timestamp = event->info.timestamp;
 
             // decode and reconstruct HyCal data
-            for (int r = 0; r < event.nrocs; ++r) {
-                auto &roc = event.rocs[r];
+            for (int r = 0; r < event->nrocs; ++r) {
+                auto &roc = event->rocs[r];
                 if (!roc.present) continue;
                 auto cit = roc_to_crate.find(roc.tag);
                 if (cit == roc_to_crate.end()) continue;
@@ -438,7 +445,7 @@ if(!prad1){
         if(!prad1){
             if (gem_sys) {
                 gem_sys->Clear();
-                gem_sys->ProcessEvent(ssp_evt);
+                gem_sys->ProcessEvent(*ssp_evt);
                 if (gem_clusterer)
                     gem_sys->Reconstruct(*gem_clusterer);
             }

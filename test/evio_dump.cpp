@@ -61,7 +61,7 @@ static std::string tag_label(uint32_t tag)
     if (tag == 0xC1) return "SYNC(legacy)";
 
     // JLab single-event physics
-    if ((tag & 0x00FF) <= 0x00BF && (tag & 0x00FF) >= 0x00A0) || (tag >= 0xFF50 && tag <= 0xFF8F) return "PHYSICS(built)"; 
+    if (((tag & 0x00FF) <= 0x00BF && (tag & 0x00FF) >= 0x00A0) || (tag >= 0xFF50 && tag <= 0xFF8F)) return "PHYSICS(built)"; 
 
     // JLab-specific banks
     if (tag == 0xC000) return "TRIGGER_BANK";

@@ -143,9 +143,10 @@ int main(int argc, char *argv[])
     
     for(int i = 0; i < Nentries; i++) {
         tree->GetEntry(i);
-        //loop over all the clusters on HyCal
         if (i % 1000 == 0)
             std::cerr << "Reading " << i << " events / " << Nentries << " total events\r" << std::flush;
+        
+        //loop over all the clusters on HyCal
         int nHits = ev.n_clusters;
         float sum_energy = 0.f;
         for (int j = 0; j < nHits; j++) {

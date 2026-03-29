@@ -5,19 +5,10 @@
 // adapted from PRadAnalyzer/PRadDetMatch.cpp
 //=============================================================================
 
-#include "HyCalCluster.h"
+#include "PhysicsTools.h"
 #include <vector>
 #include <cstdint>
 #include <cmath>
-
-// --- GEM hit (to be moved to a dedicated header later) ----------------------
-namespace fdec {
-struct GEMHit {
-    float x = 0.f;
-    float y = 0.f;
-    float z = 0.f;
-};
-} // namespace fdec
 
 namespace analysis {
 
@@ -41,18 +32,18 @@ struct ProjectHit
 class MatchHit
 {
     public:
-        fdec::ClusterHit cluster;
-        std::vector<fdec::GEMHit> gem1;
-        std::vector<fdec::GEMHit> gem2;
-        std::vector<fdec::GEMHit> gem3;
-        std::vector<fdec::GEMHit> gem4;
+        analysis::HCHit hycal_hit;
+        std::vector<analysis::GEMHit> gem1_hits;
+        std::vector<analysis::GEMHit> gem2_hits;
+        std::vector<analysis::GEMHit> gem3_hits;
+        std::vector<analysis::GEMHit> gem4_hits;
 
-        MatchHit(const fdec::ClusterHit &cl, std::vector<fdec::GEMHit> &g1, std::vector<fdec::GEMHit> &g2,
-                 const std::vector<fdec::GEMHit> &g3, const std::vector<fdec::GEMHit> &g4)
-            : cluster(cl), gem1(g1), gem2(g2), gem3(g3), gem4(g4) {}
+        MatchHit(const analysis::HCHit &hycal_hit, std::vector<analysis::GEMHit> &g1, std::vector<analysis::GEMHit> &g2,
+                 const std::vector<analysis::GEMHit> &g3, const std::vector<analysis::GEMHit> &g4)
+            : hycal_hit(hycal_hit), gem1_hits(g1), gem2_hits(g2), gem3_hits(g3), gem4_hits(g4) {}
 
         // --- added for matching logic ----------------------------------------
-        fdec::GEMHit gem{};         // best-matched GEM hit
+        analysis::GEMHit gem{};         // best-matched GEM hit
         uint32_t     mflag = 0;     // matching flags (see MatchFlag enum)
         size_t       hycal_idx = 0; // index into original hycal vector
 };
@@ -64,11 +55,11 @@ public:
 
     ProjectHit GetProjectionHits(float x, float y, float z, float projection_z) const;
 
-    std::vector<MatchHit> Match(std::vector<fdec::ClusterHit> &hycalHits,
-                            const std::vector<fdec::GEMHit> &gem1,
-                            const std::vector<fdec::GEMHit> &gem2,
-                            const std::vector<fdec::GEMHit> &gem3,
-                            const std::vector<fdec::GEMHit> &gem4) const;
+    std::vector<MatchHit> Match(std::vector<analysis::HCHit> &hycalHits,
+                            const std::vector<analysis::GEMHit> &gem1_hits,
+                            const std::vector<analysis::GEMHit> &gem2_hits,
+                            const std::vector<analysis::GEMHit> &gem3_hits,
+                            const std::vector<analysis::GEMHit> &gem4_hits) const;
 
     // configuration setters
     void SetMatchRange(float range)    { matchRange_ = range; }
@@ -80,9 +71,9 @@ private:
     float matchRange_ = 15.f;   // mm, spatial matching window
     bool  squareSel_  = true;   // true = square window, false = circular
 
-    float ProjectionDistance(const fdec::ClusterHit &h, const fdec::GEMHit &g) const;
-    float ProjectionDistance(const fdec::GEMHit &g1, const fdec::GEMHit &g2, float ref_z) const;
-    bool  PreMatch(const fdec::ClusterHit &hycal, const fdec::GEMHit &gem) const;
+    float ProjectionDistance(const analysis::HCHit &h, const analysis::GEMHit &g) const;
+    float ProjectionDistance(const analysis::GEMHit &g1, const analysis::GEMHit &g2, float ref_z) const;
+    bool  PreMatch(const analysis::HCHit &hycal, const analysis::GEMHit &gem) const;
     void  PostMatch(MatchHit &h) const;
 };
 

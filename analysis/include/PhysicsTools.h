@@ -17,6 +17,22 @@
 
 namespace analysis {
 
+// two simple data structures used in physics analysis
+struct GEMHit {
+    float x = 0.f;
+    float y = 0.f;
+    float z = 0.f;
+    int det_id = -1; // 1-4 for GEM1-GEM4
+};
+
+struct HCHit {
+    float x = 0.f;
+    float y = 0.f;
+    float z = 0.f;
+    float energy = 0.f;
+    int center_id = 0; // index of central block
+};
+
 class PhysicsTools
 {
 public:

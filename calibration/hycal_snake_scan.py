@@ -14,7 +14,8 @@ PbGlass layers to include is configurable in the GUI (0--6).
 Usage
 -----
     python hycal_snake_scan.py                          # simulation
-    python hycal_snake_scan.py --real                    # real EPICS
+    python hycal_snake_scan.py --expert                  # expert operator
+    python hycal_snake_scan.py --observer                # read-only monitor
     python hycal_snake_scan.py --database /path/to.json  # custom database
 
 Coordinate system
@@ -34,10 +35,15 @@ Position readback:
 
 All other PVs are read-only for monitoring.
 
+Observer mode (--observer)
+--------------------------
+    Read-only monitoring: shows motor position and PV values on the
+    canvas, but all scan controls are disabled and PV writes are blocked.
+
 Requirements
 ------------
     Python 3.8+
-    pyepics  (only for --real mode)
+    pyepics  (only for --expert / --observer mode)
 """
 
 from __future__ import annotations
@@ -380,6 +386,25 @@ class SimulatedEPICS:
             time.sleep(dt)
 
 
+class ObserverEPICS:
+    """Read-only wrapper around RealEPICS -- all puts are silently blocked."""
+
+    def __init__(self):
+        self._real = RealEPICS()
+
+    def connect(self) -> Tuple[int, int]:
+        return self._real.connect()
+
+    def disconnected_pvs(self) -> List[str]:
+        return self._real.disconnected_pvs()
+
+    def get(self, key: str, default=None):
+        return self._real.get(key, default)
+
+    def put(self, key: str, value) -> bool:
+        return False
+
+
 # -- helpers shared by both interfaces --------------------------------------
 
 def epics_move_to(ep, x: float, y: float) -> bool:
@@ -649,10 +674,12 @@ class SnakeScanGUI:
 
     def __init__(self, root: tk.Tk, epics, simulation: bool,
                  all_modules: List[Module],
-                 profiles: Optional[Dict[str, List[str]]] = None):
+                 profiles: Optional[Dict[str, List[str]]] = None,
+                 observer: bool = False):
         self.root = root
         self.ep = epics
         self.simulation = simulation
+        self.observer = observer
         self.all_modules = all_modules
         self._profiles = profiles or {}
         self._active_profile = self.AUTOGEN
@@ -705,6 +732,8 @@ class SnakeScanGUI:
         self._y_max = 0.0
 
         self._build_ui()
+        if self.observer:
+            self._disable_controls()
         self._poll()
 
     def _filter_scan_modules(self, lg_layers: int) -> List[Module]:
@@ -724,8 +753,13 @@ class SnakeScanGUI:
     # -----------------------------------------------------------------------
 
     def _build_ui(self):
-        self.root.title("HyCal Snake Scan" +
-                        ("  [SIMULATION]" if self.simulation else "  [REAL EPICS]"))
+        if self.observer:
+            mode_suffix = "  [OBSERVER]"
+        elif self.simulation:
+            mode_suffix = "  [SIMULATION]"
+        else:
+            mode_suffix = "  [EXPERT OPERATOR]"
+        self.root.title("HyCal Snake Scan" + mode_suffix)
         self.root.configure(bg=C.BG)
         self.root.resizable(True, True)
 
@@ -773,8 +807,15 @@ class SnakeScanGUI:
         tk.Label(top, text="  HYCAL SNAKE SCAN  ",
                  bg="#0d1520", fg=C.GREEN,
                  font=("Consolas", 13, "bold")).pack(side="left", padx=8)
-        mode_text = "SIMULATION" if self.simulation else "REAL EPICS"
-        mode_fg = C.YELLOW if self.simulation else C.GREEN
+        if self.observer:
+            mode_text = "OBSERVER (read-only)"
+            mode_fg = C.ORANGE
+        elif self.simulation:
+            mode_text = "SIMULATION"
+            mode_fg = C.YELLOW
+        else:
+            mode_text = "EXPERT OPERATOR"
+            mode_fg = C.GREEN
         tk.Label(top, text=mode_text, bg="#0d1520", fg=mode_fg,
                  font=("Consolas", 9, "bold")).pack(side="left", padx=4)
 
@@ -813,6 +854,30 @@ class SnakeScanGUI:
         self._log_text.tag_configure("info", foreground=C.TEXT)
         self._log_text.tag_configure("warn", foreground=C.YELLOW)
         self._log_text.tag_configure("error", foreground=C.RED)
+
+    # -- observer: disable all controls ---------------------------------------
+
+    def _disable_controls(self):
+        """Disable all scan and direct-control widgets for observer mode."""
+        for w in (self._btn_start, self._btn_pause, self._btn_stop,
+                  self._btn_skip, self._btn_ack):
+            w.configure(state="disabled")
+        # Direct control buttons live inside the Direct Control frame;
+        # walk the widget tree and disable all buttons there.
+        for child in self.root.winfo_children():
+            self._disable_buttons_recursive(child)
+        # Disable input widgets
+        for w in (self._start_combo, self._profile_combo):
+            w.configure(state="disabled")
+        for w in (self._lg_layers_spin, self._count_entry):
+            w.configure(state="disabled")
+
+    def _disable_buttons_recursive(self, widget):
+        """Recursively disable all ttk.Button widgets."""
+        if isinstance(widget, ttk.Button):
+            widget.configure(state="disabled")
+        for child in widget.winfo_children():
+            self._disable_buttons_recursive(child)
 
     # -- canvas (module map) -------------------------------------------------
 
@@ -1014,6 +1079,10 @@ class SnakeScanGUI:
         self._update_canvas_label()
 
     def _update_canvas(self):
+        if self.observer:
+            self._update_canvas_observer()
+            return
+
         eng = self.engine
         running = eng.state in (ScanState.MOVING, ScanState.DWELLING,
                                 ScanState.PAUSED, ScanState.ERROR)
@@ -1078,7 +1147,14 @@ class SnakeScanGUI:
                     *coords, fill=C.PATH_LINE, width=1,
                     dash=(3, 3), tags=("path_preview",))
 
-        # Motor position marker (crosshair)
+        self._draw_motor_marker()
+
+    def _update_canvas_observer(self):
+        """Observer mode: only draw the motor position marker, no module colouring."""
+        self._draw_motor_marker()
+
+    def _draw_motor_marker(self):
+        """Draw the red crosshair at the current motor position."""
         self._canvas.delete("motor_pos")
         rx = self.ep.get("x_pos", None)
         ry = self.ep.get("y_pos", None)
@@ -1655,8 +1731,10 @@ def _load_path_profiles(path: str) -> Dict[str, List[str]]:
 def main():
     parser = argparse.ArgumentParser(
         description="HyCal Snake Scan -- module scanner")
-    parser.add_argument("--real", action="store_true",
-                        help="Use real EPICS (requires pyepics)")
+    parser.add_argument("--expert", action="store_true",
+                        help="Expert operator mode: full control via real EPICS")
+    parser.add_argument("--observer", action="store_true",
+                        help="Observer mode: read-only, no PV writes")
     parser.add_argument("--database", default=DEFAULT_DB_PATH,
                         help="Path to hycal_modules.json")
     parser.add_argument("--paths", default=PATHS_FILE,
@@ -1677,9 +1755,12 @@ def main():
     if profiles:
         print(f"Loaded {len(profiles)} path profiles from {args.paths}")
 
-    simulation = not args.real
+    observer = args.observer
+    simulation = not args.expert and not observer
 
-    if simulation:
+    if observer:
+        ep = ObserverEPICS()
+    elif simulation:
         ep = SimulatedEPICS()
     else:
         ep = RealEPICS()
@@ -1695,7 +1776,8 @@ def main():
             print("WARNING: many PVs not connected -- check IOC / network")
 
     root = tk.Tk()
-    SnakeScanGUI(root, ep, simulation, all_modules, profiles)
+    SnakeScanGUI(root, ep, simulation, all_modules, profiles,
+                 observer=observer)
     root.mainloop()
 
 

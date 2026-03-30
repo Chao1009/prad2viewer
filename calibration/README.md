@@ -10,7 +10,7 @@ On **clasrun@clonpc19**, or any other machine in the counting room:
 
 ```bash
 cd ~/prad2_daq/prad2evviewer
-./calibration/hycal_snake_scan.py --real
+./calibration/hycal_snake_scan.py --expert
 ```
 
 ### Running a Scan
@@ -64,7 +64,7 @@ run coordinator.
 
 | Script | Purpose |
 |--------|---------|
-| `hycal_snake_scan.py` | Snake scan GUI (simulation or real EPICS) |
+| `hycal_snake_scan.py` | Snake scan GUI (simulation, expert, or observer mode) |
 | `scan_path_editor.py` | Manual path builder GUI |
 | `scan_utils.py` | Shared types, constants, coordinate transforms |
 | `paths.json` | Predefined scan path profiles |
@@ -73,7 +73,8 @@ run coordinator.
 
 ```bash
 python calibration/hycal_snake_scan.py              # simulation
-python calibration/hycal_snake_scan.py --real        # real EPICS
+python calibration/hycal_snake_scan.py --expert      # expert operator (full control)
+python calibration/hycal_snake_scan.py --observer    # observer (read-only monitor)
 python calibration/hycal_snake_scan.py --paths calibration/paths.json
 ```
 
@@ -103,5 +104,6 @@ ptrans_y =   10.11 - module_y       (y inverted)
 Travel limits: ptrans_x **-582.65** to **329.15** mm,
 ptrans_y **-672.50** to **692.72** mm.
 
-**Safety:** Only four EPICS PVs are written: `ptrans_{x,y}.VAL` and
-`ptrans_{x,y}.SPMG`. All others are read-only.
+**Safety:** Only four EPICS PVs are written (in expert mode only):
+`ptrans_{x,y}.VAL` and `ptrans_{x,y}.SPMG`. All others are read-only.
+Observer mode (`--observer`) blocks all PV writes and disables scan controls.

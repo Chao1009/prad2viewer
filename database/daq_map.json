@@ -6680,8 +6680,8 @@
   {
     "name": "W706",
     "crate": 4,
-    "slot": 20,
-    "channel": 3
+    "slot": 17,
+    "channel": 14
   },
   {
     "name": "W805",
@@ -6704,8 +6704,8 @@
   {
     "name": "W839",
     "crate": 4,
-    "slot": 20,
-    "channel": 7
+    "slot": 17,
+    "channel": 13
   },
   {
     "name": "W735",

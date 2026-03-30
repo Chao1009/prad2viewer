@@ -23,6 +23,7 @@
         <select id="ring-select" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:2px 6px;border-radius:3px;font-family:inherit;font-size:12px;min-width:120px"></select>
         <button id="follow-status" style="font-size:11px;color:#ffd43b;background:none;border:1px solid #ffd43b;padding:2px 8px;border-radius:3px;display:none;cursor:pointer"></button>
     </div>
+    <button id="btn-mode-toggle" class="clear-all-btn" style="display:none" title="Switch between file viewer and online monitor"></button>
     <span class="header-stats" id="header-stats"></span>
     <div class="report-dropdown" id="report-dropdown">
         <button id="btn-report" class="report-btn" title="Generate report">Report &#x25BE;</button>
@@ -32,6 +33,26 @@
         </div>
     </div>
     <button id="btn-clear-all" class="clear-all-btn" title="Clear all data (new run)">Clear All</button>
+</div>
+
+<!-- ET connect dialog -->
+<div class="backdrop" id="et-backdrop"></div>
+<div class="file-dialog" id="et-dialog">
+    <div class="file-dialog-header">
+        <span>Connect to ET System</span>
+        <button id="et-dialog-close">&times;</button>
+    </div>
+    <div class="elog-form">
+        <label>ET Host<input type="text" id="et-input-host" placeholder="e.g. clonpc19"></label>
+        <label>ET Port<input type="number" id="et-input-port" placeholder="e.g. 11111"></label>
+        <label>ET File<input type="text" id="et-input-file" placeholder="e.g. /tmp/et_sys_prad2"></label>
+        <label>Station<input type="text" id="et-input-station" placeholder="e.g. prad2_monitor"></label>
+        <div class="elog-form-actions">
+            <button id="et-cancel">Cancel</button>
+            <button id="et-connect" class="report-btn">Connect</button>
+        </div>
+        <div class="elog-status" id="et-status-msg"></div>
+    </div>
 </div>
 
 <!-- elog dialog -->
@@ -82,11 +103,11 @@
 
 <div class="tab-bar" id="tab-bar">
     <button class="tab active" data-tab="dq">Waveform Data</button>
-    <button class="tab" data-tab="cluster">Clustering</button>
     <button class="tab" data-tab="lms">Gain Monitoring<span class="tab-dot" id="lms-dot"></span></button>
+    <button class="tab" data-tab="cluster">Clustering</button>
+    <button class="tab" data-tab="gem">GEM</button>
     <button class="tab" data-tab="epics">EPICS<span class="tab-dot" id="epics-dot"></span></button>
     <button class="tab" data-tab="physics">Physics</button>
-    <button class="tab" data-tab="gem">GEM</button>
 </div>
 
 <div class="main">
@@ -154,6 +175,7 @@
         </div>
         <div class="geo-canvas-wrap" id="geo-wrap">
             <canvas id="geo-canvas"></canvas>
+            <canvas id="geo-outline-canvas" style="position:absolute;top:0;left:0;pointer-events:none"></canvas>
             <button id="btn-reset-view" class="geo-view-reset" title="Reset view (double-click also works)">Reset</button>
             <div class="geo-tooltip" id="geo-tooltip"></div>
         </div>

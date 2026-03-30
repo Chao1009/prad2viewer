@@ -97,41 +97,33 @@ target_link_libraries(gem_dump PRIVATE prad2dec prad2det nlohmann_json::nlohmann
 set_target_properties(gem_dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---------------------------------------------------------------------------
-# Event viewer
+# Server library (shared between prad2_server and prad2evviewer)
 # ---------------------------------------------------------------------------
-add_executable(prad2_viewer src/prad2_viewer.cpp src/app_state.cpp)
-target_compile_definitions(prad2_viewer PRIVATE
-    DATABASE_DIR="${DATABASE_DIR}"
-    RESOURCE_DIR="${RESOURCE_DIR}"
-)
 find_package(Threads REQUIRED)
-target_link_libraries(prad2_viewer PRIVATE
+
+add_library(prad2srv STATIC src/viewer_server.cpp src/app_state.cpp)
+target_include_directories(prad2srv PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(prad2srv PUBLIC
     prad2dec
     prad2det
     nlohmann_json::nlohmann_json
     websocketpp_lib
     Threads::Threads
 )
-set_target_properties(prad2_viewer PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+if(WITH_ET)
+    target_compile_definitions(prad2srv PUBLIC WITH_ET)
+endif()
 
 # ---------------------------------------------------------------------------
-# Online monitor (requires ET for live data streaming)
+# Unified server (replaces prad2_viewer + prad2_monitor)
 # ---------------------------------------------------------------------------
-if(WITH_ET)
-    add_executable(prad2_monitor src/prad2_monitor.cpp src/app_state.cpp)
-    target_compile_definitions(prad2_monitor PRIVATE
-        DATABASE_DIR="${DATABASE_DIR}"
-        RESOURCE_DIR="${RESOURCE_DIR}"
-    )
-    target_link_libraries(prad2_monitor PRIVATE
-        prad2dec
-        prad2det
-        nlohmann_json::nlohmann_json
-        websocketpp_lib
-        Threads::Threads
-    )
-    set_target_properties(prad2_monitor PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-endif()
+add_executable(prad2_server src/prad2_server.cpp)
+target_compile_definitions(prad2_server PRIVATE
+    DATABASE_DIR="${DATABASE_DIR}"
+    RESOURCE_DIR="${RESOURCE_DIR}"
+)
+target_link_libraries(prad2_server PRIVATE prad2srv)
+set_target_properties(prad2_server PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # ---------------------------------------------------------------------------
 # Analysis tools (optional, requires ROOT)
@@ -142,16 +134,39 @@ if(BUILD_ANALYSIS)
 endif()
 
 # ---------------------------------------------------------------------------
-# Qt WebEngine monitor client (optional)
+# Qt standalone viewer + thin client (optional)
 # ---------------------------------------------------------------------------
-option(BUILD_GUI "Build the Qt5 WebEngine monitor client" OFF)
+option(BUILD_GUI "Build Qt GUI applications" OFF)
 if(BUILD_GUI)
-    find_package(Qt5 REQUIRED COMPONENTS Widgets WebEngineWidgets)
-    add_executable(prad2_qtgui src/prad2_qtgui.cpp)
-    target_link_libraries(prad2_qtgui PRIVATE Qt5::Widgets Qt5::WebEngineWidgets)
-    set_target_properties(prad2_qtgui PROPERTIES
+    find_package(Qt6 QUIET COMPONENTS Widgets WebEngineWidgets)
+    if(Qt6_FOUND)
+        set(QT_VERSION_MAJOR 6)
+        message(STATUS "Qt: using Qt6")
+    else()
+        find_package(Qt5 REQUIRED COMPONENTS Widgets WebEngineWidgets)
+        set(QT_VERSION_MAJOR 5)
+        message(STATUS "Qt: Qt6 not found, falling back to Qt5")
+    endif()
+
+    # Standalone viewer (embedded server + WebEngine)
+    add_executable(prad2evviewer src/prad2evviewer.cpp)
+    target_compile_definitions(prad2evviewer PRIVATE
+        DATABASE_DIR="${DATABASE_DIR}"
+        RESOURCE_DIR="${RESOURCE_DIR}"
+    )
+    target_link_libraries(prad2evviewer PRIVATE
+        prad2srv Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::WebEngineWidgets)
+    set_target_properties(prad2evviewer PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
         AUTOMOC ON
+    )
+
+    # Thin remote client
+    add_executable(prad2_client src/prad2_client.cpp)
+    target_link_libraries(prad2_client PRIVATE
+        Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::WebEngineWidgets)
+    set_target_properties(prad2_client PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
     )
 endif()
 
@@ -160,16 +175,17 @@ endif()
 # ---------------------------------------------------------------------------
 include(GNUInstallDirs)
 
-install(TARGETS prad2_viewer evio_dump ped_calc gem_dump
+install(TARGETS prad2_server evio_dump ped_calc gem_dump
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 if(WITH_ET)
-    install(TARGETS prad2_monitor evc_test et_feeder evchan_test
+    install(TARGETS evc_test et_feeder evchan_test
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if(BUILD_GUI)
-    install(TARGETS prad2_qtgui RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(TARGETS prad2evviewer prad2_client
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 install(DIRECTORY database/   DESTINATION ${CMAKE_INSTALL_DATADIR}/prad2evviewer/database)
@@ -187,5 +203,5 @@ message(STATUS "  Database     : ${DATABASE_DIR}")
 message(STATUS "  Resources    : ${RESOURCE_DIR}")
 message(STATUS "  ET support   : ${WITH_ET}")
 message(STATUS "  Analysis     : ${BUILD_ANALYSIS}")
-message(STATUS "  Qt client    : ${BUILD_GUI}")
+message(STATUS "  Qt GUI       : ${BUILD_GUI}")
 message(STATUS "----------------------------------------------------")

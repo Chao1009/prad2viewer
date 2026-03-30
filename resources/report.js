@@ -136,7 +136,7 @@ function findRefIndex(name){
 }
 
 // --- Occupancy ---
-registerReportSection({id:'occupancy',title:'Occupancy',order:10,
+registerReportSection({id:'occupancy',title:'Occupancy',order:1,
     generate:async()=>{
         const prevMetric=document.getElementById('color-metric').value;
         document.getElementById('color-metric').value='occupancy';
@@ -203,7 +203,7 @@ async function captureEpicsPlots(){
     return canvas.toDataURL('image/png');
 }
 
-registerReportSection({id:'epics',title:'EPICS Slow Control',order:15,
+registerReportSection({id:'epics',title:'EPICS Slow Control',order:5,
     generate:async()=>{
         let data;
         try{ data=await fetch('/api/epics/latest').then(r=>r.json()); }catch(e){ return null; }
@@ -238,7 +238,7 @@ registerReportSection({id:'epics',title:'EPICS Slow Control',order:15,
 });
 
 // --- Clustering ---
-registerReportSection({id:'cluster',title:'Clustering',order:20,
+registerReportSection({id:'cluster',title:'Clustering',order:3,
     generate:async()=>{
         if(!clHistBins||!clHistBins.some(b=>b>0)) return null;
         let md='## Clustering\n\n';
@@ -256,7 +256,7 @@ registerReportSection({id:'cluster',title:'Clustering',order:20,
 });
 
 // --- Physics ---
-registerReportSection({id:'physics',title:'Physics',order:25,
+registerReportSection({id:'physics',title:'Physics',order:6,
     generate:async()=>{
         let data,ml;
         try{ data=await fetch('/api/physics/energy_angle').then(r=>r.json()); }catch(e){}
@@ -343,8 +343,77 @@ registerReportSection({id:'physics',title:'Physics',order:25,
     }
 });
 
+// --- GEM ---
+registerReportSection({id:'gem',title:'GEM Detectors',order:4,
+    generate:async()=>{
+        let data;
+        try{ data=await fetch('/api/gem/hist').then(r=>r.json()); }catch(e){}
+        let occ;
+        try{ occ=await fetch('/api/gem/occupancy').then(r=>r.json()); }catch(e){}
+
+        const hasHist=data&&((data.nclusters&&data.nclusters.bins&&data.nclusters.bins.some(b=>b>0))||
+                             (data.theta&&data.theta.bins&&data.theta.bins.some(b=>b>0)));
+        const hasOcc=occ&&occ.detectors&&occ.detectors.length>0&&
+                     occ.detectors.some(d=>d.bins&&d.bins.some(b=>b>0));
+        if(!hasHist&&!hasOcc) return null;
+
+        let md='## GEM Detectors\n\n';
+
+        // GEM occupancy heatmaps (combined into one image)
+        if(hasOcc){
+            try{
+                const plotW=400, plotH=300;
+                const nDet=occ.detectors.length;
+                const cols=Math.min(nDet,2), rows=Math.ceil(nDet/cols);
+                const canvas=document.createElement('canvas');
+                canvas.width=cols*plotW; canvas.height=rows*plotH;
+                const ctx=canvas.getContext('2d');
+                ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+                for(let di=0;di<nDet;di++){
+                    const det=occ.detectors[di];
+                    if(!det.bins||!det.bins.some(b=>b>0)) continue;
+                    const col=di%cols, row=Math.floor(di/cols);
+                    const z=[];
+                    for(let iy=0;iy<det.ny;iy++)
+                        z.push(det.bins.slice(iy*det.nx,(iy+1)*det.nx));
+                    const x=[];for(let i=0;i<det.nx;i++) x.push(det.x_min+(i+0.5)*det.x_step);
+                    const y=[];for(let i=0;i<det.ny;i++) y.push(det.y_min+(i+0.5)*det.y_step);
+                    const imgUrl=await plotToImage(async div=>{
+                        await Plotly.newPlot(div,[{z,x,y,type:'heatmap',colorscale:'Hot',
+                            colorbar:{title:'Hits',titleside:'right'}}],
+                            {...RPL,title:{text:det.name||('GEM '+di),font:{size:12,color:'#222'}},
+                             xaxis:{...RPL.xaxis,title:'X (mm)'},
+                             yaxis:{...RPL.yaxis,title:'Y (mm)'},
+                             margin:{l:50,r:70,t:30,b:40}});
+                    },plotW,plotH);
+                    const img=new Image();
+                    await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=reject;img.src=imgUrl;});
+                    ctx.drawImage(img,col*plotW,row*plotH,plotW,plotH);
+                }
+                const combined=canvas.toDataURL('image/png');
+                addAttachment(combined,'gem_occupancy.png','GEM Occupancy');
+                md+=`![GEM Occupancy](gem_occupancy.png)\n\n`;
+            }catch(e){}
+        }
+
+        // GEM histograms
+        if(data&&data.nclusters&&data.nclusters.bins){
+            md+=await captureHist(data.nclusters.bins,data.nclusters.min,data.nclusters.step,
+                'GEM Clusters per Event','N clusters','#51cf66',
+                'gem_clusters.png',500,300);
+        }
+        if(data&&data.theta&&data.theta.bins){
+            md+=await captureHist(data.theta.bins,data.theta.min,data.theta.step,
+                'GEM Hit Angle','Angle (deg)','#00b4d8',
+                'gem_theta.png',500,300);
+        }
+        return md;
+    }
+});
+
 // --- LMS Monitoring ---
-registerReportSection({id:'lms',title:'LMS Monitoring',order:30,
+registerReportSection({id:'lms',title:'LMS Monitoring',order:2,
     generate:async()=>{
         // fetch with LMS3 reference
         const lms3Ref=findRefIndex('LMS3');

@@ -1,6 +1,6 @@
 #pragma once
 //=============================================================================
-// viewer_utils.h — shared utilities for prad2_viewer and prad2_monitor
+// viewer_utils.h — shared utilities for the event viewer/monitor
 //=============================================================================
 
 #include "DetectorTransform.h"

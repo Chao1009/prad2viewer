@@ -6,13 +6,15 @@ let currentEventNumber=0, currentTriggerBits=0;  // DAQ event number + trigger f
 let eventChannels={};
 let selectedModule=null, hoveredModule=null;
 let geoCanvas, geoCtx, geoWrap, scale=1, offsetX=0, offsetY=0, canvasW, canvasH;
+let geoOutlineCanvas, geoOutlineCtx;  // static outline layer
 const PC=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997','#f06595'];
 const CRATE_NAME={0x80:'adchycal1',0x82:'adchycal2',0x84:'adchycal3',0x86:'adchycal4',0x88:'adchycal5',0x8a:'adchycal6',0x8c:'adchycal7',
     0x01:'PRadTS',0x04:'PRadROC_1',0x05:'PRadROC_2',0x06:'PRadROC_3',0x07:'PRadSRS_1',0x08:'PRadSRS_2'};
 function crateName(r){return CRATE_NAME[r]||`ROC 0x${r.toString(16)}`;}
 let histEnabled=false, histConfig={};
-let mode='file';    // 'file' or 'online'
-let ws=null;        // WebSocket connection (online mode)
+let mode='idle';    // 'idle', 'file', or 'online'
+let etAvailable=false, fileAvailable=false;
+let ws=null;        // WebSocket connection (always connected)
 let autoFollow=true; // auto-load latest event
 let lastEventFetch=0, lastHistFetch=0, lastRingFetch=0, lastOccFetch=0, lastLmsFetch=0;
 let refreshEventMs=200, refreshRingMs=500, refreshHistMs=2000, refreshLmsMs=2000;
@@ -64,7 +66,7 @@ let nclustBins=null, nblocksBins=null;
 let nclustMin=0, nclustMax=20, nclustStep=1;
 let nblocksMin=0, nblocksMax=40, nblocksStep=1;
 
-// DQ tab working range (set by syncDqRange, used by drawGeo)
+// DQ tab working range (set by syncDqRange, used by geoDq)
 let rangeMin=null, rangeMax=null;
 let updateGeoTooltip=()=>{};  // set in init(), called on data refresh
 
@@ -162,6 +164,8 @@ function initGeo(){
     geoWrap=document.getElementById('geo-wrap');
     geoCanvas=document.getElementById('geo-canvas');
     geoCtx=geoCanvas.getContext('2d');
+    geoOutlineCanvas=document.getElementById('geo-outline-canvas');
+    geoOutlineCtx=geoOutlineCanvas.getContext('2d');
     resizeGeo();
     new ResizeObserver(resizeGeo).observe(geoWrap);
 
@@ -229,6 +233,7 @@ function resizeGeo(){
     canvasW=geoWrap.clientWidth; canvasH=geoWrap.clientHeight;
     if(canvasW<10||canvasH<10)return;
     geoCanvas.width=canvasW; geoCanvas.height=canvasH;
+    geoOutlineCanvas.width=canvasW; geoOutlineCanvas.height=canvasH;
     if(modules.length && !geoViewInit){ fitView(); geoViewInit=true; }
     redrawGeo();
 }
@@ -239,9 +244,122 @@ function fitView(){
     offsetX=canvasW/2-(x0+x1)/2*scale; offsetY=canvasH/2+(y0+y1)/2*scale;
 }
 function redrawGeo(){
-    if(activeTab==='cluster') drawClusterGeo();
-    else if(activeTab==='lms') drawLmsGeo();
-    else drawGeo();
+    if(activeTab==='cluster') geoCluster();
+    else if(activeTab==='lms') geoLms();
+    else geoDq();
+}
+
+// ── Tab-specific geo providers ───────────────────────────────────────
+// Helper: map a value into a color scale with optional log scaling
+function geoValueColor(val, vmin, vmax, useLog, emptyColor){
+    if(val===null||val===undefined) return emptyColor;
+    const span=vmax-vmin||1;
+    const clamped=Math.max(vmin,Math.min(vmax,val));
+    const t=useLog?Math.log1p(clamped-vmin)/Math.log1p(span):(clamped-vmin)/span;
+    return colorScale(Math.max(0,Math.min(1,t)));
+}
+
+function geoDq(){
+    const useLog=document.getElementById('log-scale').checked;
+    const vals=modules.map(modVal);
+    const vmin=rangeMin!==null?rangeMin:0;
+    const vmax=rangeMax!==null?rangeMax:100;
+
+    renderGeo(
+        i => vals[i]!==null ? geoValueColor(vals[i],vmin,vmax,useLog) : geoEmptyColor(modules[i].t),
+        i => (selectedModule&&selectedModule.n===modules[i].n) ? {color:'#fff',width:2.5} : null,
+        null
+    );
+}
+
+function geoCluster(){
+    if(!clusterData){ renderGeo(i=>geoEmptyColor(modules[i].t),null,null); return; }
+    const hits=clusterData.hits||{};
+    const clusters=clusterData.clusters||[];
+    const useLog=document.getElementById('cl-log-scale').checked;
+
+    let autoMax=0;
+    for(const k in hits) if(hits[k]>autoMax) autoMax=hits[k];
+    if(autoMax<=0) autoMax=1;
+    const clr=getGeoRange('cluster','energy');
+    const emin=clr[0]!==null?clr[0]:0;
+    const emax=clr[1]!==null?clr[1]:autoMax;
+    document.getElementById('cl-range-min-show').textContent=emin.toFixed(0);
+    document.getElementById('cl-range-max-show').textContent=emax.toFixed(0);
+
+    const modCluster={};
+    clusters.forEach((cl,ci)=>{ (cl.modules||[]).forEach(mi=>{ modCluster[mi]=ci; }); });
+    const selSet=selectedCluster>=0?clusterModuleSet(selectedCluster):null;
+
+    renderGeo(
+        i => {
+            const energy=hits[String(i)]||0;
+            const dimmed=selSet&&!selSet.has(i);
+            if(energy>0&&!dimmed) return geoValueColor(energy,emin,emax,useLog);
+            return dimmed?geoDimColor():geoEmptyColor(modules[i].t);
+        },
+        i => {
+            if(selectedModule&&selectedModule.n===modules[i].n) return {color:'#fff',width:2.5};
+            const ci=modCluster[i];
+            const dimmed=selSet&&!selSet.has(i);
+            if(ci!==undefined&&!dimmed){
+                const w=(selectedCluster>=0&&ci===selectedCluster)?2.5:1.5;
+                return {color:PC[ci%PC.length],width:w};
+            }
+            return null;
+        },
+        ctx => {
+            clusters.forEach((cl,ci)=>{
+                if(selSet&&ci!==selectedCluster) return;
+                const [cx,cy]=d2c(cl.x,cl.y);
+                ctx.strokeStyle=PC[ci%PC.length]; ctx.lineWidth=2;
+                const sz=6;
+                ctx.beginPath();ctx.moveTo(cx-sz,cy);ctx.lineTo(cx+sz,cy);ctx.stroke();
+                ctx.beginPath();ctx.moveTo(cx,cy-sz);ctx.lineTo(cx,cy+sz);ctx.stroke();
+            });
+        }
+    );
+}
+
+function geoLms(){
+    const metric=document.getElementById('lms-color-metric').value;
+    const useLog=document.getElementById('lms-log-scale').checked;
+    const mods=lmsSummaryData?lmsSummaryData.modules:{};
+
+    const lmsVal=md=>{
+        if(!md) return null;
+        if(metric==='mean') return md.mean;
+        if(metric==='rms_frac') return md.mean>0?md.rms/md.mean:0;
+        return md.warn?1:0;
+    };
+
+    let autoMax=0;
+    for(const k in mods){ const v=lmsVal(mods[k]); if(v>autoMax) autoMax=v; }
+    if(autoMax<=0) autoMax=1;
+    const lmsr=getGeoRange('lms',metric);
+    const vmin=lmsr[0]!==null?lmsr[0]:0;
+    const vmax=lmsr[1]!==null?lmsr[1]:autoMax;
+    document.getElementById('lms-range-min-show').textContent=vmin.toFixed(metric==='rms_frac'?3:0);
+    document.getElementById('lms-range-max-show').textContent=vmax.toFixed(metric==='rms_frac'?3:0);
+
+    renderGeo(
+        i => {
+            const md=mods[String(i)];
+            const val=lmsVal(md);
+            if(val!==null&&val>0){
+                if(metric==='warn') return md.warn?'#f66':'#51cf66';
+                return geoValueColor(val,vmin,vmax,useLog);
+            }
+            return geoEmptyColor(modules[i].t);
+        },
+        i => {
+            if(lmsSelectedModule===i) return {color:'#fff',width:2.5};
+            const md=mods[String(i)];
+            if(md&&md.warn) return {color:'#f66',width:1.5};
+            return null;
+        },
+        null
+    );
 }
 function geoHandleClick(cx,cy){
     const m=hitTest(cx,cy);
@@ -250,14 +368,14 @@ function geoHandleClick(cx,cy){
         if(activeTab==='cluster'){
             selectedCluster=-1;
             document.getElementById('cl-select').value='all';
-            drawClusterGeo(); updateClusterTable(); showClusterDetail();
+            geoCluster(); updateClusterTable(); showClusterDetail();
         } else if(activeTab==='lms'){
             lmsSelectedModule=-1;
             currentLmsData=null;
             Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
             document.getElementById('lms-detail-header').innerHTML=
                 '<span class="cl-info-text">Click a module to view LMS history</span>';
-            updateLmsTable(); drawLmsGeo();
+            updateLmsTable(); geoLms();
         } else {
             selectedModule=null;
             currentWaveform=null;
@@ -268,7 +386,7 @@ function geoHandleClick(cx,cy){
             Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
             Plotly.react('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:'#555'}}},PC2);
             document.getElementById('peaks-tbody').innerHTML='';
-            drawGeo();
+            geoDq();
         }
         return;
     }
@@ -287,13 +405,13 @@ function geoHandleClick(cx,cy){
             selectedCluster=-1;
         }
         document.getElementById('cl-select').value=selectedCluster>=0?selectedCluster:'all';
-        drawClusterGeo(); updateClusterTable(); showClusterDetail();
+        geoCluster(); updateClusterTable(); showClusterDetail();
     } else if(activeTab==='lms'){
         const idx=modules.indexOf(m);
         lmsSelectedModule=idx;
         fetchLmsHistory(idx, m.n);
         updateLmsTable();
-        drawLmsGeo();
+        geoLms();
     } else {
         showWaveform(m);
     }
@@ -341,30 +459,70 @@ function modVal(m){
     if(mt==='time')return bp.t;
     return bp.i;
 }
-function drawGeo(){
-    if(!geoCtx)return;const ctx=geoCtx;
+// ── Unified geo renderer ─────────────────────────────────────────────
+// colorFn(i)    → fill color string for module i
+// outlineFn(i)  → null (default stroke) or {color, width} for special highlight
+// decorateFn(ctx) → draw tab-specific extras (e.g. cluster crosshairs) on overlay
+//
+// Fills go on geoCtx, outlines go on geoOutlineCtx.
+// Hover highlight is handled automatically for all tabs.
+
+let _geoOutlineFn=null, _geoDecorateFn=null;  // stored for hover-only redraws
+
+function renderGeoFills(colorFn){
+    if(!geoCtx)return;
+    const ctx=geoCtx;
     if(geoLightTheme){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvasW,canvasH);}
     else ctx.clearRect(0,0,canvasW,canvasH);
-    const useLog=document.getElementById('log-scale').checked;
-    const vals=modules.map(modVal);
-    const vmin=rangeMin!==null?rangeMin:0;
-    const vmax=rangeMax!==null?rangeMax:100;
-    const span=vmax-vmin||1;
-
     for(let i=0;i<modules.length;i++){
-        const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale,v=vals[i];
-        let t=0;
-        if(v!==null){
-            const clamped=Math.max(vmin,Math.min(vmax,v));
-            if(useLog) t=Math.log1p(clamped-vmin)/Math.log1p(span);
-            else t=(clamped-vmin)/span;
-        }
-        ctx.fillStyle=(v!==null)?colorScale(t):geoEmptyColor(m.t);
+        const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
+        ctx.fillStyle=colorFn(i);
         ctx.fillRect(cx-w/2,cy-h/2,w,h);
-        const sel=selectedModule&&selectedModule.n===m.n,hov=hoveredModule&&hoveredModule.n===m.n;
-        ctx.strokeStyle=sel?'#fff':hov?'#00b4d8':geoStrokeColor();ctx.lineWidth=sel?2.5:hov?1.5:0.5;
+    }
+}
+
+function renderGeoOutlines(outlineFn, decorateFn){
+    if(!geoOutlineCtx)return;
+    const ctx=geoOutlineCtx;
+    ctx.clearRect(0,0,canvasW,canvasH);
+
+    // 1. batch default outlines in one path
+    ctx.beginPath(); ctx.strokeStyle=geoStrokeColor(); ctx.lineWidth=0.5;
+    for(let i=0;i<modules.length;i++){
+        const style=outlineFn?outlineFn(i):null;
+        const hov=hoveredModule&&hoveredModule.n===modules[i].n;
+        if(!style&&!hov){
+            const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
+            ctx.rect(cx-w/2,cy-h/2,w,h);
+        }
+    }
+    ctx.stroke();
+
+    // 2. special outlines (cluster members, warn, selection)
+    for(let i=0;i<modules.length;i++){
+        const style=outlineFn?outlineFn(i):null;
+        if(style){
+            const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
+            ctx.strokeStyle=style.color; ctx.lineWidth=style.width;
+            ctx.strokeRect(cx-w/2,cy-h/2,w,h);
+        }
+    }
+
+    // 3. hover highlight (same for all tabs)
+    if(hoveredModule){
+        const m=hoveredModule,[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
+        ctx.strokeStyle='#00b4d8'; ctx.lineWidth=1.5;
         ctx.strokeRect(cx-w/2,cy-h/2,w,h);
     }
+
+    // 4. tab-specific decorations
+    if(decorateFn) decorateFn(ctx);
+}
+
+function renderGeo(colorFn, outlineFn, decorateFn){
+    _geoOutlineFn=outlineFn; _geoDecorateFn=decorateFn;
+    renderGeoFills(colorFn);
+    renderGeoOutlines(outlineFn, decorateFn);
 }
 function hitTest(cx,cy){
     const[dx,dy]=c2d(cx,cy);
@@ -383,9 +541,30 @@ const PC_EPICS={responsive:true,displayModeBar:true,
     modeBarButtonsToRemove:['sendDataToCloud','lasso2d','select2d'],
     displaylogo:false};
 
+// ── Plotly plot registry ──────────────────────────────────────────────
+// All Plotly divs register here with their tab and default layout.
+// Provides unified init, resize-by-tab, and resize-all.
+const plotRegistry=[];  // [{id, tab, layout, config}]
+
+function registerPlot(id, tab, title, config){
+    const layout={...PL};
+    if(title) layout.title={text:title, font:{size:10,color:'#555'}};
+    plotRegistry.push({id, tab, layout, config: config||PC2});
+}
+
+function initRegisteredPlots(){
+    for(const p of plotRegistry)
+        Plotly.newPlot(p.id, [], p.layout, p.config);
+}
+
+function resizePlotsForTab(tab){
+    for(const p of plotRegistry)
+        if(p.tab===tab) try{Plotly.Plots.resize(p.id);}catch(e){}
+}
+
 function resizeAllPlots(){
-    for(const id of['waveform-div','inthist-div','poshist-div','cl-energy-hist','cl-nclust-hist','cl-nblocks-hist','lms-plot'])
-        try{Plotly.Plots.resize(id);}catch(e){}
+    for(const p of plotRegistry)
+        try{Plotly.Plots.resize(p.id);}catch(e){}
 }
 
 // =========================================================================
@@ -399,14 +578,41 @@ function showWaveform(mod){
     document.getElementById('detail-header').innerHTML=
         `<span class="mod-name">${mod.n}</span> <span class="mod-daq">${crateName(mod.roc)} &middot; slot ${mod.sl} &middot; ch ${mod.ch}${pedInfo}</span>`;
 
-    if(!d||!d.s){
+    if(!d){
         currentWaveform=null;
         Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — No data`,font:{size:11,color:'#555'}}},PC2);
         document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No data</td></tr>';
-        showHistograms(mod); drawGeo(); return;
+        showHistograms(mod); geoDq(); return;
     }
 
-    const samples=d.s, peaks=d.pk||[], x=samples.map((_,i)=>i);
+    // if samples are already present (e.g. from ring buffer), use them directly;
+    // otherwise fetch on demand from /api/waveform/<event>/<key>
+    if(d.s){
+        renderWaveform(mod, key, d, d.s);
+    } else {
+        fetch(`/api/waveform/${currentEvent}/${key}`).then(r=>r.json()).then(wf=>{
+            if(wf.error){ renderWaveform(mod, key, d, null); return; }
+            // cache samples in eventChannels so re-clicking doesn't re-fetch
+            d.s=wf.s;
+            if(wf.pk) d.pk=wf.pk;
+            if(wf.pm!==undefined) d.pm=wf.pm;
+            if(wf.pr!==undefined) d.pr=wf.pr;
+            renderWaveform(mod, key, d, d.s);
+        }).catch(()=>renderWaveform(mod, key, d, null));
+    }
+
+    showHistograms(mod); geoDq();
+}
+
+function renderWaveform(mod, key, d, samples){
+    if(!samples){
+        currentWaveform=null;
+        Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — No samples`,font:{size:11,color:'#555'}}},PC2);
+        document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No waveform data</td></tr>';
+        return;
+    }
+
+    const peaks=d.pk||[], x=samples.map((_,i)=>i);
     currentWaveform={x, y:Array.from(samples)};
 
     // --- stacking mode ---
@@ -443,7 +649,7 @@ function showWaveform(mod){
         // skip peaks table in stack mode
         document.getElementById('peaks-tbody').innerHTML=
             '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">Stack mode — peaks hidden</td></tr>';
-        showHistograms(mod); drawGeo(); return;
+        return;
     }
 
     // --- normal (single event) mode ---
@@ -482,9 +688,6 @@ function showWaveform(mod){
     });
     if(!peaks.length) rows='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No peaks</td></tr>';
     document.getElementById('peaks-tbody').innerHTML=rows;
-
-    showHistograms(mod);
-    drawGeo();
 }
 
 // =========================================================================
@@ -602,7 +805,7 @@ function loadEventData(reqId, data) {
     } else if(activeTab==='gem'){
         fetchGemData();
     } else {
-        drawGeo();
+        geoDq();
     }
     if (activeTab==='dq' && selectedModule) showWaveform(selectedModule);
     updateGeoTooltip();
@@ -696,8 +899,7 @@ function connectWebSocket() {
                 // throttle occupancy + cluster hist refresh to ~0.5 Hz
                 if (now - lastOccFetch > refreshHistMs) {
                     lastOccFetch = now;
-                    fetchOccupancy();
-                    fetchClHist();
+                    if(histEnabled) { fetchOccupancy(); fetchClHist(); }
                     if(activeTab==='physics') fetchPhysics();
                     if(activeTab==='gem') fetchGemAccum();
                 }
@@ -726,7 +928,7 @@ function connectWebSocket() {
                 }
             } else if (msg.type === 'lms_cleared') {
                 lmsSummaryData=null; lmsSelectedModule=-1; currentLmsData=null;
-                if(activeTab==='lms'){ drawLmsGeo(); updateLmsTable(); }
+                if(activeTab==='lms'){ geoLms(); updateLmsTable(); }
             } else if (msg.type === 'epics_event') {
                 const now3 = Date.now();
                 if (now3 - lastEpicsFetch > refreshEpicsMs) {
@@ -739,6 +941,11 @@ function connectWebSocket() {
                 }
             } else if (msg.type === 'epics_cleared') {
                 clearEpicsFrontend();
+            } else if (msg.type === 'mode_changed') {
+                if (msg.mode && msg.mode !== mode) {
+                    clearFrontend();
+                    fetchConfigAndApply();
+                }
             }
         } catch (e) {}
     };
@@ -866,7 +1073,7 @@ function pollProgress() {
                 const hcb = document.getElementById('hist-checkbox');
                 if (hcb) hcb.checked = histEnabled;
                 document.getElementById('ev-total').textContent = `/ ${totalEvents}`;
-                updateHeaderInfo(cfg);
+    
                 updateHeaderStats();
                 if (histEnabled) { fetchOccupancy(); fetchClHist(); }
                 fetchEpicsChannels(); fetchEpicsLatest();
@@ -895,13 +1102,12 @@ function fetchOccupancy() {
         // redraw if currently showing occupancy on DQ tab
         if (activeTab === 'dq' && document.getElementById('color-metric').value === 'occupancy') {
             syncDqRange();
-            drawGeo();
+            geoDq();
         }
         updateGeoTooltip();
     }).catch(() => {});
 }
 
-function updateHeaderInfo(cfg) {}
 
 let sampleCount=0;
 function updateHeaderStats(){
@@ -966,36 +1172,29 @@ function switchTab(tab){
     document.getElementById('physics-outer').style.display    = tab==='physics' ? 'flex' : 'none';
     document.getElementById('gem-outer').style.display        = tab==='gem' ? 'flex' : 'none';
 
-    if(tab==='cluster') {
-        loadClusterData(currentEvent);
-        setTimeout(()=>{
-            try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}
-            try{Plotly.Plots.resize('cl-nclust-hist');}catch(e){}
-            try{Plotly.Plots.resize('cl-nblocks-hist');}catch(e){}
-            plotClHist(); plotClStatHists();
-        }, 50);
-    } else if(tab==='lms') {
-        fetchLmsSummary();
-        setTimeout(()=>{
-            try{Plotly.Plots.resize('lms-plot');}catch(e){}
-        }, 50);
-    } else if(tab==='epics') {
-        fetchEpicsChannels();
-        fetchEpicsLatest();
-        fetchAllEpicsSlots();
-        setTimeout(()=>{
-            for(let i=0;i<EPICS_NUM_SLOTS;i++) try{Plotly.Plots.resize('epics-plot-'+i);}catch(e){}
-        }, 50);
-    } else if(tab==='physics') {
-        fetchPhysics();
-        setTimeout(()=>resizePhysics(),50);
-    } else if(tab==='gem') {
-        fetchGemData();
-        fetchGemAccum();
-        setTimeout(()=>resizeGem(),50);
-    } else {
-        drawGeo();
-    }
+    // --- per-tab actions: fetch data + resize after layout settles ---
+    const tabActions = {
+        dq:      { hasGeo: true },
+        cluster: { hasGeo: true,
+                   fetch(){ loadClusterData(currentEvent); },
+                   after(){ plotClHist(); plotClStatHists(); } },
+        lms:     { hasGeo: true,
+                   fetch(){ fetchLmsSummary(); } },
+        epics:   { fetch(){ fetchEpicsChannels(); fetchEpicsLatest(); fetchAllEpicsSlots(); } },
+        physics: { fetch(){ fetchPhysics(); } },
+        gem:     { fetch(){ fetchGemData(); fetchGemAccum(); },
+                   after(){ resizeGem(); } },
+    };
+    const action = tabActions[tab] || tabActions.dq;
+
+    if (action.fetch) action.fetch();
+
+    // after layout settles: resize geo (for geo tabs) + registered Plotly plots + custom after()
+    setTimeout(()=>{
+        if (action.hasGeo) resizeGeo();
+        resizePlotsForTab(tab);
+        if (action.after) action.after();
+    }, 50);
     updateStatusBar();
 }
 
@@ -1003,7 +1202,7 @@ function switchTab(tab){
 // Clustering
 // =========================================================================
 function loadClusterData(evnum){
-    if(clusterEvent===evnum && clusterData) { drawClusterGeo(); updateClusterTable(); return; }
+    if(clusterEvent===evnum && clusterData) { geoCluster(); updateClusterTable(); return; }
     document.getElementById('status-bar').textContent=`Loading clusters for sample ${evnum}...`;
     fetch(`/api/clusters/${evnum}`).then(r=>{
         if(!r.ok) throw new Error('not available');
@@ -1013,7 +1212,7 @@ function loadClusterData(evnum){
         clusterData=data;
         clusterEvent=evnum;
         selectedCluster=-1;
-        drawClusterGeo();
+        geoCluster();
         updateClusterUI();
         updateGeoTooltip();
         // accumulate energy histogram from per-event cluster data
@@ -1069,7 +1268,7 @@ function updateClusterTable(){
             const idx=parseInt(tr.dataset.idx);
             selectedCluster=(selectedCluster===idx)?-1:idx;
             document.getElementById('cl-select').value=selectedCluster>=0?selectedCluster:'all';
-            drawClusterGeo();
+            geoCluster();
             updateClusterTable();
             showClusterDetail();
         };
@@ -1098,85 +1297,6 @@ function clusterModuleSet(clIdx){
     return new Set(cl.modules);
 }
 
-function drawClusterGeo(){
-    if(!geoCtx) return;
-    const ctx=geoCtx;
-    if(geoLightTheme){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvasW,canvasH);}
-    else ctx.clearRect(0,0,canvasW,canvasH);
-    if(!clusterData) return;
-
-    const hits=clusterData.hits||{};
-    const clusters=clusterData.clusters||[];
-    const useLog=document.getElementById('cl-log-scale').checked;
-
-    // find energy range from hits (auto range)
-    let autoMax=0;
-    for(const k in hits) if(hits[k]>autoMax) autoMax=hits[k];
-    if(autoMax<=0) autoMax=1;
-    const clr=getGeoRange('cluster','energy');
-    const emin=clr[0]!==null?clr[0]:0;
-    const emax=clr[1]!==null?clr[1]:autoMax;
-    document.getElementById('cl-range-min-show').textContent=emin.toFixed(0);
-    document.getElementById('cl-range-max-show').textContent=emax.toFixed(0);
-
-    // build module-index → cluster-index map
-    const modCluster={};
-    clusters.forEach((cl,ci)=>{
-        (cl.modules||[]).forEach(mi=>{ modCluster[mi]=ci; });
-    });
-
-    // selected cluster module set
-    const selSet=selectedCluster>=0?clusterModuleSet(selectedCluster):null;
-
-    for(let i=0;i<modules.length;i++){
-        const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
-        const energy=hits[String(i)]||0;
-        const ci=modCluster[i];
-
-        // dim modules not in selected cluster
-        let dimmed=false;
-        if(selSet && !selSet.has(i)) dimmed=true;
-
-        let fillColor;
-        const span=emax-emin||1;
-        if(energy>0 && !dimmed){
-            const clamped=Math.max(emin,Math.min(emax,energy));
-            let t=useLog?Math.log1p(clamped-emin)/Math.log1p(span):(clamped-emin)/span;
-            t=Math.max(0,Math.min(1,t));
-            fillColor=colorScale(t);
-        } else {
-            fillColor=dimmed?geoDimColor():geoEmptyColor(m.t);
-        }
-        ctx.fillStyle=fillColor;
-        ctx.fillRect(cx-w/2,cy-h/2,w,h);
-
-        // border: highlight cluster members
-        let strokeColor=geoStrokeColor(), lw=0.5;
-        if(ci!==undefined && !dimmed){
-            strokeColor=PC[ci%PC.length];
-            lw=1.5;
-        }
-        if(selectedCluster>=0 && ci===selectedCluster){
-            strokeColor=PC[ci%PC.length];
-            lw=2.5;
-        }
-        if(hoveredModule&&hoveredModule.n===m.n){ strokeColor='#00b4d8'; lw=1.5; }
-        if(selectedModule&&selectedModule.n===m.n){ strokeColor='#fff'; lw=2.5; }
-        ctx.strokeStyle=strokeColor; ctx.lineWidth=lw;
-        ctx.strokeRect(cx-w/2,cy-h/2,w,h);
-    }
-
-    // draw cluster center markers (crosshairs)
-    clusters.forEach((cl,ci)=>{
-        if(selSet && ci!==selectedCluster) return;
-        const [cx,cy]=d2c(cl.x,cl.y);
-        const col=PC[ci%PC.length];
-        ctx.strokeStyle=col; ctx.lineWidth=2;
-        const sz=6;
-        ctx.beginPath(); ctx.moveTo(cx-sz,cy); ctx.lineTo(cx+sz,cy); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(cx,cy-sz); ctx.lineTo(cx,cy+sz); ctx.stroke();
-    });
-}
 
 // =========================================================================
 // =========================================================================
@@ -1302,7 +1422,7 @@ function fetchLmsSummary(){
     const refQ=g_lmsRefIndex>=0?`?ref=${g_lmsRefIndex}`:'';
     fetch(`/api/lms/summary${refQ}`).then(r=>r.json()).then(data=>{
         lmsSummaryData=data;
-        drawLmsGeo();
+        geoLms();
         updateLmsTable();
         if(hoveredModule) updateGeoTooltip();
         // update tab dot if not currently on LMS tab
@@ -1394,72 +1514,11 @@ function updateLmsTable(){
             const name=lmsSummaryData.modules[idx]?lmsSummaryData.modules[idx].name:'';
             fetchLmsHistory(idx, name);
             updateLmsTable();
-            drawLmsGeo();
+            geoLms();
         };
     });
 }
 
-function drawLmsGeo(){
-    if(!geoCtx) return;
-    const ctx=geoCtx;
-    if(geoLightTheme){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvasW,canvasH);}
-    else ctx.clearRect(0,0,canvasW,canvasH);
-
-    const metric=document.getElementById('lms-color-metric').value;
-    const useLog=document.getElementById('lms-log-scale').checked;
-    const mods=lmsSummaryData?lmsSummaryData.modules:{};
-
-    // compute auto range
-    let autoMax=0;
-    for(const k in mods){
-        let v=0;
-        if(metric==='mean') v=mods[k].mean;
-        else if(metric==='rms_frac') v=mods[k].mean>0?mods[k].rms/mods[k].mean:0;
-        else v=mods[k].warn?1:0;
-        if(v>autoMax) autoMax=v;
-    }
-    if(autoMax<=0) autoMax=1;
-    const lmsr=getGeoRange('lms', metric);
-    const vmin=lmsr[0]!==null?lmsr[0]:0;
-    const vmax=lmsr[1]!==null?lmsr[1]:autoMax;
-    const vspan=vmax-vmin||1;
-    document.getElementById('lms-range-min-show').textContent=vmin.toFixed(metric==='rms_frac'?3:0);
-    document.getElementById('lms-range-max-show').textContent=vmax.toFixed(metric==='rms_frac'?3:0);
-
-    for(let i=0;i<modules.length;i++){
-        const m=modules[i],[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
-        const md=mods[String(i)];
-        let val=null;
-        if(md){
-            if(metric==='mean') val=md.mean;
-            else if(metric==='rms_frac') val=md.mean>0?md.rms/md.mean:0;
-            else val=md.warn?1:0;
-        }
-
-        let fillColor;
-        if(val!==null && val>0){
-            if(metric==='warn'){
-                fillColor=md.warn?'#f66':'#51cf66';
-            } else {
-                const clamped=Math.max(vmin,Math.min(vmax,val));
-                let t=useLog?Math.log1p(clamped-vmin)/Math.log1p(vspan):(clamped-vmin)/vspan;
-                t=Math.max(0,Math.min(1,t));
-                fillColor=colorScale(t);
-            }
-        } else {
-            fillColor=geoEmptyColor(m.t);
-        }
-        ctx.fillStyle=fillColor;
-        ctx.fillRect(cx-w/2,cy-h/2,w,h);
-
-        let strokeColor=geoStrokeColor(), lw=0.5;
-        if(md&&md.warn){ strokeColor='#f66'; lw=1.5; }
-        if(lmsSelectedModule===i){ strokeColor='#fff'; lw=2.5; }
-        if(hoveredModule&&hoveredModule.n===m.n){ strokeColor='#00b4d8'; lw=1.5; }
-        ctx.strokeStyle=strokeColor; ctx.lineWidth=lw;
-        ctx.strokeRect(cx-w/2,cy-h/2,w,h);
-    }
-}
 
 // Init
 // =========================================================================
@@ -1469,9 +1528,9 @@ function init(){
         paletteIdx=(paletteIdx+1)%PALETTE_NAMES.length;
         drawColorBar(); redrawGeo();
     };
-    Plotly.newPlot('waveform-div',[],{...PL,xaxis:{...PL.xaxis,title:'Sample'},yaxis:{...PL.yaxis,title:'ADC'}},PC2);
-    Plotly.newPlot('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
-    Plotly.newPlot('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:'#555'}}},PC2);
+    registerPlot('waveform-div', 'dq', null);
+    registerPlot('inthist-div',  'dq', 'Integral Histogram');
+    registerPlot('poshist-div',  'dq', 'Position Histogram');
 
     // --- copy data buttons ---
     function setupCopyBtn(btnId, getData) {
@@ -1520,9 +1579,9 @@ function init(){
     // --- cluster controls ---
     document.getElementById('cl-select').onchange=e=>{
         selectedCluster=e.target.value==='all'?-1:parseInt(e.target.value);
-        drawClusterGeo(); updateClusterTable(); showClusterDetail();
+        geoCluster(); updateClusterTable(); showClusterDetail();
     };
-    document.getElementById('cl-log-scale').onchange=()=>{ if(activeTab==='cluster') drawClusterGeo(); };
+    document.getElementById('cl-log-scale').onchange=()=>{ if(activeTab==='cluster') geoCluster(); };
     document.getElementById('cl-colorbar-canvas').onclick=()=>{
         paletteIdx=(paletteIdx+1)%PALETTE_NAMES.length;
         drawColorBar(); redrawGeo();
@@ -1532,19 +1591,14 @@ function init(){
         drawColorBar(); redrawGeo();
     };
 
-    // cluster energy histogram
-    Plotly.newPlot('cl-energy-hist',[],{...PL,title:{text:'Cluster Energy',font:{size:10,color:'#555'}}},PC2);
+    registerPlot('cl-energy-hist',  'cluster', 'Cluster Energy');
+    registerPlot('cl-nclust-hist', 'cluster', 'Clusters per Event');
+    registerPlot('cl-nblocks-hist','cluster', 'Blocks per Cluster');
+    registerPlot('gem-ncl-hist',   'gem',     'GEM Clusters / Event');
+    registerPlot('gem-theta-hist', 'gem',     'GEM Hit Angle');
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
     setupCopyBtn('btn-copy-nclust', ()=>currentNclustHist);
     setupCopyBtn('btn-copy-nblocks', ()=>currentNblocksHist);
-
-    // cluster stat histograms init
-    Plotly.newPlot('cl-nclust-hist',[],{...PL,title:{text:'Clusters per Event',font:{size:10,color:'#555'}}},PC2);
-    Plotly.newPlot('cl-nblocks-hist',[],{...PL,title:{text:'Blocks per Cluster',font:{size:10,color:'#555'}}},PC2);
-
-    // GEM histograms init + copy
-    Plotly.newPlot('gem-ncl-hist',[],{...PL,title:{text:'GEM Clusters / Event',font:{size:10,color:'#555'}}},PC2);
-    Plotly.newPlot('gem-theta-hist',[],{...PL,title:{text:'GEM Hit Angle',font:{size:10,color:'#555'}}},PC2);
     setupCopyBtn('btn-copy-gem-ncl', ()=>currentGemNclHist);
     setupCopyBtn('btn-copy-gem-theta', ()=>currentGemThetaHist);
 
@@ -1584,15 +1638,22 @@ function init(){
         ()=>0,
         80, 80, ()=>{try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}});
 
-    // LMS plot init + divider
-    Plotly.newPlot('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
+    registerPlot('lms-plot', 'lms', 'LMS History');
+    registerPlot('physics-plot',       'physics', null, PC_EPICS);
+    registerPlot('moller-xy-plot',     'physics', null, PC_EPICS);
+    registerPlot('moller-energy-plot', 'physics', null, PC_EPICS);
+    for(let i=0;i<EPICS_NUM_SLOTS;i++)
+        registerPlot('epics-plot-'+i, 'epics', null, PC_EPICS);
+
+    initRegisteredPlots();
+
     setupDivider('div-lms-ht','y',
         ()=>document.getElementById('lms-plot-panel'),
         ()=>document.getElementById('lms-panel'),
         ()=>0,
         80, 80, ()=>{try{Plotly.Plots.resize('lms-plot');}catch(e){}});
-    document.getElementById('lms-color-metric').onchange=drawLmsGeo;
-    document.getElementById('lms-log-scale').onchange=drawLmsGeo;
+    document.getElementById('lms-color-metric').onchange=geoLms;
+    document.getElementById('lms-log-scale').onchange=geoLms;
 
     // LMS range editors
     function lmsRangeGet(isMax){
@@ -1606,9 +1667,9 @@ function init(){
         else setGeoRange('lms',mt,v,r[1]);
     }
     setupRangeEdit('lms-range-min-btn','lms-range-min-edit','lms-range-min-show',
-        ()=>lmsRangeGet(false), v=>lmsRangeSet(false,v), drawLmsGeo);
+        ()=>lmsRangeGet(false), v=>lmsRangeSet(false,v), geoLms);
     setupRangeEdit('lms-range-max-btn','lms-range-max-edit','lms-range-max-show',
-        ()=>lmsRangeGet(true), v=>lmsRangeSet(true,v), drawLmsGeo);
+        ()=>lmsRangeGet(true), v=>lmsRangeSet(true,v), geoLms);
     document.getElementById('lms-ref-select').onchange=e=>{
         g_lmsRefIndex=parseInt(e.target.value);
         fetchLmsSummary();
@@ -1623,9 +1684,9 @@ function init(){
     document.getElementById('btn-prev').onclick=()=>{if(currentEvent>1)loadEvent(currentEvent-1);};
     document.getElementById('btn-next').onclick=()=>{if(currentEvent<totalEvents)loadEvent(currentEvent+1);};
     document.getElementById('ev-input').onchange=e=>{const v=parseInt(e.target.value);if(v>=1&&v<=totalEvents)loadEvent(v);};
-    document.getElementById('color-metric').onchange=()=>{syncDqRange();drawGeo();};
-    document.getElementById('log-scale').onchange=drawGeo;
-    document.getElementById('time-cut').onchange=drawGeo;
+    document.getElementById('color-metric').onchange=()=>{syncDqRange();geoDq();};
+    document.getElementById('log-scale').onchange=geoDq;
+    document.getElementById('time-cut').onchange=geoDq;
 
     // --- file browser ---
     document.getElementById('btn-open').onclick = openFileDialog;
@@ -1633,8 +1694,12 @@ function init(){
     document.getElementById('file-backdrop').onclick = closeFileDialog;
     document.getElementById('file-filter').oninput = e => renderFileList(e.target.value);
     document.addEventListener('keydown', e => {
-        if (e.key === 'Escape' && document.getElementById('file-dialog').classList.contains('open'))
-            closeFileDialog();
+        if (e.key === 'Escape') {
+            if (document.getElementById('file-dialog').classList.contains('open'))
+                closeFileDialog();
+            if (document.getElementById('et-dialog').classList.contains('open'))
+                closeEtDialog();
+        }
     });
 
     // --- range editing ---
@@ -1671,14 +1736,14 @@ function init(){
     function dqRangeApply(){
         const mt=document.getElementById('color-metric').value;
         setGeoRange('dq', mt, rangeMin, rangeMax);
-        updateRangeDisplay(); drawGeo();
+        updateRangeDisplay(); geoDq();
     }
     setupRangeEdit('range-min-btn','range-min-edit','range-min-show',
         ()=>rangeMin, v=>{rangeMin=v;}, dqRangeApply);
     setupRangeEdit('range-max-btn','range-max-edit','range-max-show',
         ()=>rangeMax, v=>{rangeMax=v;}, dqRangeApply);
     // Cluster range editors
-    function clRangeApply(){ drawClusterGeo(); }
+    function clRangeApply(){ geoCluster(); }
     setupRangeEdit('cl-range-min-btn','cl-range-min-edit','cl-range-min-show',
         ()=>getGeoRange('cluster','energy')[0],
         v=>{const r=getGeoRange('cluster','energy');setGeoRange('cluster','energy',v,r[1]);},
@@ -1699,57 +1764,52 @@ function init(){
 
     // Clear All — resets all tabs' data for new run
     document.getElementById('btn-clear-all').onclick=()=>{
-        function clearFrontend(){
-            // DQ: clear occupancy + copy data + event channels
-            occData={}; occTcutData={}; occTotal=0;
-            eventChannels={};
-            currentWaveform=null;
-            currentHist={};
-            if(selectedModule) showHistograms(selectedModule);
+        // always clear server-side, then frontend
+        Promise.all([
+            fetch('/api/hist/clear').then(r=>r.json()),
+            fetch('/api/lms/clear').then(r=>r.json()),
+            fetch('/api/epics/clear').then(r=>r.json()),
+        ]).then(clearFrontend).catch(()=>{
+            document.getElementById('status-bar').textContent='Error clearing data';
+        });
+    };
 
-            // Clustering: clear all bins + caches + copy data + UI
-            initClHist(); plotClHist(); plotClStatHists();
-            clusterData=null; clusterEvent=-1; selectedCluster=-1;
-            currentNclustHist=null; currentNblocksHist=null;
-            document.getElementById('cl-select').innerHTML='<option value="all">All</option>';
-            document.getElementById('cl-detail-header').innerHTML=
-                '<span class="cl-info-text">Click a module or select a cluster</span>';
-            document.getElementById('cl-tbody').innerHTML='';
-
-            // LMS: clear all state + plots + table
-            lmsSummaryData=null; lmsSelectedModule=-1; currentLmsData=null;
-            Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
-            document.getElementById('lms-detail-header').innerHTML=
-                '<span class="cl-info-text">Click a module to view LMS history</span>';
-            document.getElementById('lms-tbody').innerHTML='';
-
-            // GEM: clear histogram copy data
-            currentGemNclHist=null; currentGemThetaHist=null;
-
-            // EPICS + Physics: clear
-            clearEpicsFrontend();
-            clearPhysicsFrontend();
-
-            // Reset counters
-            sampleCount=0;
-            updateHeaderStats();
-            redrawGeo();
-            document.getElementById('status-bar').textContent='All data cleared — ready for new run';
-        }
-
+    // mode toggle button — opens ET dialog when going online
+    document.getElementById('btn-mode-toggle').onclick=()=>{
         if(mode==='online'){
-            // clear server-side, then frontend
-            Promise.all([
-                fetch('/api/hist/clear').then(r=>r.json()),
-                fetch('/api/lms/clear').then(r=>r.json()),
-                fetch('/api/epics/clear').then(r=>r.json()),
-            ]).then(clearFrontend).catch(()=>{
-                document.getElementById('status-bar').textContent='Error clearing data';
-            });
+            fetch('/api/mode/file',{method:'POST'});
         } else {
-            // file mode: frontend-only clear
-            clearFrontend();
+            openEtDialog();
         }
+    };
+
+    // ET connect dialog
+    const etBackdrop=document.getElementById('et-backdrop');
+    const etDialog=document.getElementById('et-dialog');
+    document.getElementById('et-dialog-close').onclick=()=>closeEtDialog();
+    document.getElementById('et-cancel').onclick=()=>closeEtDialog();
+    etBackdrop.onclick=()=>closeEtDialog();
+    document.getElementById('et-connect').onclick=()=>{
+        const cfg={
+            host:    document.getElementById('et-input-host').value,
+            port:    parseInt(document.getElementById('et-input-port').value)||11111,
+            et_file: document.getElementById('et-input-file').value,
+            station: document.getElementById('et-input-station').value,
+        };
+        document.getElementById('et-status-msg').textContent='Connecting...';
+        fetch('/api/mode/online',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(cfg),
+        }).then(r=>r.json()).then(d=>{
+            if(d.error){
+                document.getElementById('et-status-msg').textContent='Error: '+d.error;
+            } else {
+                closeEtDialog();
+            }
+        }).catch(()=>{
+            document.getElementById('et-status-msg').textContent='Connection failed';
+        });
     };
 
     // geo mouse
@@ -1806,7 +1866,7 @@ function init(){
         const r=geoCanvas.getBoundingClientRect(),m=hitTest(e.clientX-r.left,e.clientY-r.top);
         if(m!==hoveredModule){
             hoveredModule=m;
-            redrawGeo();
+            renderGeoOutlines(_geoOutlineFn, _geoDecorateFn);  // outlines only — fills unchanged
         }
         if(m){
             tip.textContent=tooltipText(m);tip.style.display='block';
@@ -1816,7 +1876,7 @@ function init(){
     // click is now handled via geoHandleClick (called from mouseup when drag threshold not exceeded)
     geoCanvas.addEventListener('mouseleave',()=>{
         hoveredModule=null;tip.style.display='none';
-        redrawGeo();
+        renderGeoOutlines(_geoOutlineFn, _geoDecorateFn);
     });
     document.addEventListener('keydown',e=>{
         if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
@@ -1837,111 +1897,179 @@ function init(){
         }
     });
 
+    // always connect WebSocket (for mode_changed and clear notifications)
+    connectWebSocket();
+
     // load config and init mode
-    fetch('/api/config').then(r=>r.json()).then(data=>{
-        const crateRoc=data.crate_roc||{};
-        const rawMods=data.modules||[],rawDaq=data.daq||[];
-        if(rawMods.length&&rawMods[0].roc!==undefined){
-            modules=rawMods.map(m=>({...m,t:m.t==='PbGlass'?'G':(m.t==='G'?'G':'W')}));
-        }else{
-            const dm={};for(const d of rawDaq)dm[d.name]=d;modules=[];
-            for(const m of rawMods){const d=dm[m.n];if(!d)continue;
-                modules.push({n:m.n,t:m.t==='PbGlass'?'G':'W',x:m.x,y:m.y,sx:m.sx,sy:m.sy,
-                    roc:crateRoc[String(d.crate)]||0,sl:d.slot,ch:d.channel});}
-        }
-        totalEvents=data.total_events||0;
-        histEnabled=data.hist_enabled||false;
-        histConfig=data.hist||{};
-        // cluster histogram configs
-        if(data.cluster_hist){
-            clHistMin=data.cluster_hist.min||0;
-            clHistMax=data.cluster_hist.max||3000;
-            clHistStep=data.cluster_hist.step||10;
-        }
-        if(data.nclusters_hist){
-            nclustMin=data.nclusters_hist.min||0;
-            nclustMax=data.nclusters_hist.max||20;
-            nclustStep=data.nclusters_hist.step||1;
-        }
-        if(data.nblocks_hist){
-            nblocksMin=data.nblocks_hist.min||0;
-            nblocksMax=data.nblocks_hist.max||40;
-            nblocksStep=data.nblocks_hist.step||1;
-        }
-        initClHist();
-        if(data.lms){
-            g_lmsWarnThresh=data.lms.warn_threshold||0.1;
-            // populate ref channel dropdown
-            const sel=document.getElementById('lms-ref-select');
-            sel.innerHTML='<option value="-1">None</option>';
-            if(data.lms.ref_channels){
-                for(const rc of data.lms.ref_channels){
-                    const o=document.createElement('option');
-                    o.value=rc.index;
-                    o.textContent=rc.name;
-                    sel.appendChild(o);
-                }
-            }
-        }
-        // load color range defaults from server config
-        if(data.color_ranges){
-            for(const [k,v] of Object.entries(data.color_ranges)){
-                if(Array.isArray(v) && v.length===2 && !geoRangeOverrides[k])
-                    geoRangeOverrides[k]=v;
-            }
-        }
-        if(data.refresh_ms){
-            refreshEventMs=data.refresh_ms.event||200;
-            refreshRingMs=data.refresh_ms.ring||500;
-            refreshHistMs=data.refresh_ms.histogram||2000;
-            refreshLmsMs=data.refresh_ms.lms||2000;
-        }
-        initReport(data);  // report.js: wire buttons + load elog defaults
-        initEpics(data);
-        initPhysics(data);
-        updateTimeCutLabel();
-        mode=data.mode||'file';
-        const appTitle=mode==='online'?'PRad-II HyCal Monitor':'PRad-II HyCal Event Viewer';
-        document.title=appTitle;
-        document.getElementById('app-title').textContent=appTitle;
-        g_currentFile=data.current_file||'';
-        g_dataDirEnabled=data.data_dir_enabled||false;
-        g_dataDir=data.data_dir||'';
-        g_histCheckbox=histEnabled;
-
-        // init histogram checkbox
-        const hcb=document.getElementById('hist-checkbox');
-        if(hcb) hcb.checked=histEnabled;
-
-        // show/hide mode-specific UI
-        document.getElementById('nav-file').style.display   = mode==='file'?'flex':'none';
-        document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
-
-        // always show file browser button
-        document.getElementById('btn-open').style.display='';
-
-        if(mode==='file'){
-            document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
-            updateHeaderInfo(data);
-            updateHeaderStats();
-            if(histEnabled) { fetchOccupancy(); fetchClHist(); }
-            fetchEpicsChannels(); fetchEpicsLatest();
-            if(activeTab==='epics') fetchAllEpicsSlots();
-            if(activeTab==='physics') fetchPhysics();
-            syncDqRange();
-            geoViewInit=false; resizeGeo();
-            if(totalEvents>0)loadEvent(1);
-        } else {
-            setEtStatus(data.et_connected||false);
-            syncDqRange();
-            fetchOccupancy();
-            fetchEpicsChannels(); fetchEpicsLatest();
-            if(activeTab==='physics') fetchPhysics();
-            resizeGeo();
-            connectWebSocket();
-            updateRingSelector();
-            loadLatestEvent();
-        }
-    });
+    fetchConfigAndApply();
 }
 window.addEventListener('DOMContentLoaded',init);
+
+// Reset all frontend state (used by Clear All and mode switching)
+function clearFrontend(){
+    occData={}; occTcutData={}; occTotal=0;
+    eventChannels={}; currentWaveform=null; currentHist={};
+    if(selectedModule) showHistograms(selectedModule);
+
+    initClHist(); plotClHist(); plotClStatHists();
+    clusterData=null; clusterEvent=-1; selectedCluster=-1;
+    currentNclustHist=null; currentNblocksHist=null;
+    document.getElementById('cl-select').innerHTML='<option value="all">All</option>';
+    document.getElementById('cl-detail-header').innerHTML=
+        '<span class="cl-info-text">Click a module or select a cluster</span>';
+    document.getElementById('cl-tbody').innerHTML='';
+
+    lmsSummaryData=null; lmsSelectedModule=-1; currentLmsData=null;
+    Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
+    document.getElementById('lms-detail-header').innerHTML=
+        '<span class="cl-info-text">Click a module to view LMS history</span>';
+    document.getElementById('lms-tbody').innerHTML='';
+
+    currentGemNclHist=null; currentGemThetaHist=null;
+    clearEpicsFrontend();
+    clearPhysicsFrontend();
+
+    sampleCount=0;
+    updateHeaderStats();
+    redrawGeo();
+    document.getElementById('status-bar').textContent='';
+}
+
+// fetch /api/config and reconfigure the UI
+function fetchConfigAndApply(){
+    fetch('/api/config').then(r=>r.json()).then(applyConfig);
+}
+
+// ET connection dialog
+function openEtDialog(){
+    // populate fields with current ET config from last /api/config
+    const etc=window._etConfig||{};
+    document.getElementById('et-input-host').value=etc.host||'localhost';
+    document.getElementById('et-input-port').value=etc.port||11111;
+    document.getElementById('et-input-file').value=etc.et_file||'/tmp/et_sys_prad2';
+    document.getElementById('et-input-station').value=etc.station||'prad2_monitor';
+    document.getElementById('et-status-msg').textContent='';
+    document.getElementById('et-backdrop').classList.add('open');
+    document.getElementById('et-dialog').classList.add('open');
+}
+function closeEtDialog(){
+    document.getElementById('et-backdrop').classList.remove('open');
+    document.getElementById('et-dialog').classList.remove('open');
+}
+
+function applyConfig(data){
+    const crateRoc=data.crate_roc||{};
+    const rawMods=data.modules||[],rawDaq=data.daq||[];
+    if(rawMods.length&&rawMods[0].roc!==undefined){
+        modules=rawMods.map(m=>({...m,t:m.t==='PbGlass'?'G':(m.t==='G'?'G':'W')}));
+    }else{
+        const dm={};for(const d of rawDaq)dm[d.name]=d;modules=[];
+        for(const m of rawMods){const d=dm[m.n];if(!d)continue;
+            modules.push({n:m.n,t:m.t==='PbGlass'?'G':'W',x:m.x,y:m.y,sx:m.sx,sy:m.sy,
+                roc:crateRoc[String(d.crate)]||0,sl:d.slot,ch:d.channel});}
+    }
+    totalEvents=data.total_events||0;
+    histEnabled=data.hist_enabled||false;
+    histConfig=data.hist||{};
+    // cluster histogram configs
+    if(data.cluster_hist){
+        clHistMin=data.cluster_hist.min||0;
+        clHistMax=data.cluster_hist.max||3000;
+        clHistStep=data.cluster_hist.step||10;
+    }
+    if(data.nclusters_hist){
+        nclustMin=data.nclusters_hist.min||0;
+        nclustMax=data.nclusters_hist.max||20;
+        nclustStep=data.nclusters_hist.step||1;
+    }
+    if(data.nblocks_hist){
+        nblocksMin=data.nblocks_hist.min||0;
+        nblocksMax=data.nblocks_hist.max||40;
+        nblocksStep=data.nblocks_hist.step||1;
+    }
+    initClHist();
+    if(data.lms){
+        g_lmsWarnThresh=data.lms.warn_threshold||0.1;
+        const sel=document.getElementById('lms-ref-select');
+        sel.innerHTML='<option value="-1">None</option>';
+        if(data.lms.ref_channels){
+            for(const rc of data.lms.ref_channels){
+                const o=document.createElement('option');
+                o.value=rc.index;
+                o.textContent=rc.name;
+                sel.appendChild(o);
+            }
+        }
+    }
+    if(data.color_ranges){
+        for(const [k,v] of Object.entries(data.color_ranges)){
+            if(Array.isArray(v) && v.length===2 && !geoRangeOverrides[k])
+                geoRangeOverrides[k]=v;
+        }
+    }
+    if(data.refresh_ms){
+        refreshEventMs=data.refresh_ms.event||200;
+        refreshRingMs=data.refresh_ms.ring||500;
+        refreshHistMs=data.refresh_ms.histogram||2000;
+        refreshLmsMs=data.refresh_ms.lms||2000;
+    }
+    initReport(data);
+    initEpics(data);
+    initPhysics(data);
+    updateTimeCutLabel();
+    mode=data.mode||'file';
+    etAvailable=data.et_available||false;
+    if(data.et_config) window._etConfig=data.et_config;
+    fileAvailable=data.file_available||false;
+    const appTitle=mode==='online'?'PRad-II HyCal Monitor':'PRad-II HyCal Event Viewer';
+    document.title=appTitle;
+    document.getElementById('app-title').textContent=appTitle;
+    g_currentFile=data.current_file||'';
+    g_dataDirEnabled=data.data_dir_enabled||false;
+    g_dataDir=data.data_dir||'';
+    g_histCheckbox=histEnabled;
+
+    const hcb=document.getElementById('hist-checkbox');
+    if(hcb) hcb.checked=histEnabled;
+
+    // show/hide mode-specific UI
+    document.getElementById('nav-file').style.display   = mode!=='online'?'flex':'none';
+    document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
+    document.getElementById('btn-open').style.display='';
+
+    // mode toggle button — visible whenever ET is available
+    const toggleBtn=document.getElementById('btn-mode-toggle');
+    if(etAvailable){
+        toggleBtn.style.display='';
+        toggleBtn.textContent=mode==='online'?'View Files':'Go Online';
+    } else {
+        toggleBtn.style.display='none';
+    }
+
+    if(mode==='file'){
+        document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
+
+        updateHeaderStats();
+        if(histEnabled) { fetchOccupancy(); fetchClHist(); }
+        fetchEpicsChannels(); fetchEpicsLatest();
+        if(activeTab==='epics') fetchAllEpicsSlots();
+        if(activeTab==='physics') fetchPhysics();
+        syncDqRange();
+        geoViewInit=false; resizeGeo();
+        if(totalEvents>0)loadEvent(1);
+    } else if(mode==='online'){
+        setEtStatus(data.et_connected||false);
+        syncDqRange();
+        fetchOccupancy();
+        fetchEpicsChannels(); fetchEpicsLatest();
+        if(activeTab==='physics') fetchPhysics();
+        resizeGeo();
+        updateRingSelector();
+        loadLatestEvent();
+    } else {
+        // idle mode
+        syncDqRange();
+        resizeGeo();
+        updateHeaderStats();
+    }
+}

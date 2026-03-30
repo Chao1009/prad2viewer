@@ -479,205 +479,21 @@ void AppState::init(const std::string &db_dir,
 // Per-event processing
 //=============================================================================
 
-void AppState::fillHist(fdec::EventData &event,
-                        fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
+// Encode peak array for one channel.
+static json encodePeaks(const fdec::WaveResult &wres)
 {
-    if (waveform_trigger_mask != 0 &&
-        !(event.info.trigger_bits & waveform_trigger_mask)) return;
-    for (int r = 0; r < event.nrocs; ++r) {
-        auto &roc = event.rocs[r];
-        if (!roc.present) continue;
-        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
-            if (!roc.slots[s].present) continue;
-            auto &slot = roc.slots[s];
-            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
-                if (!(slot.channel_mask & (1ull << c))) continue;
-                auto &cd = slot.channels[c];
-                if (cd.nsamples <= 0) continue;
-
-                ana.Analyze(cd.samples, cd.nsamples, wres);
-
-                std::string key = std::to_string(roc.tag) + "_"
-                                + std::to_string(s) + "_" + std::to_string(c);
-
-                bool has_peak = false, has_peak_tcut = false;
-                float best = -1;
-                for (int p = 0; p < wres.npeaks; ++p) {
-                    auto &pk = wres.peaks[p];
-                    if (pk.height < hist_cfg.threshold) continue;
-                    has_peak = true;
-                    if (pk.time >= hist_cfg.time_min && pk.time <= hist_cfg.time_max) {
-                        has_peak_tcut = true;
-                        if (pk.integral > best) best = pk.integral;
-                    }
-                }
-                if (best >= 0) {
-                    auto &h = histograms[key];
-                    if (h.bins.empty()) h.init(hist_nbins);
-                    h.fill(best, hist_cfg.bin_min, hist_cfg.bin_step);
-                }
-                for (int p = 0; p < wres.npeaks; ++p) {
-                    auto &pk = wres.peaks[p];
-                    if (pk.height < hist_cfg.threshold) continue;
-                    auto &ph = pos_histograms[key];
-                    if (ph.bins.empty()) ph.init(pos_nbins);
-                    ph.fill(pk.time, hist_cfg.pos_min, hist_cfg.pos_step);
-                }
-                if (has_peak)      occupancy[key]++;
-                if (has_peak_tcut) occupancy_tcut[key]++;
-            }
-        }
+    json parr = json::array();
+    for (int p = 0; p < wres.npeaks; ++p) {
+        auto &pk = wres.peaks[p];
+        parr.push_back({
+            {"p", pk.pos}, {"t", std::round(pk.time * 10) / 10},
+            {"h", std::round(pk.height * 10) / 10},
+            {"i", std::round(pk.integral * 10) / 10},
+            {"l", pk.left}, {"r", pk.right},
+            {"o", pk.overflow ? 1 : 0},
+        });
     }
-}
-
-void AppState::clusterEvent(fdec::EventData &event,
-                            fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
-{
-    if (cluster_trigger_mask != 0 &&
-        !(event.info.trigger_bits & cluster_trigger_mask)) return;
-
-    bool is_adc1881m = (daq_cfg.adc_format == "adc1881m");
-    fdec::HyCalCluster clusterer(hycal);
-    clusterer.SetConfig(cluster_cfg);
-
-    for (int r = 0; r < event.nrocs; ++r) {
-        auto &roc = event.rocs[r];
-        if (!roc.present) continue;
-        auto cit = roc_to_crate.find(roc.tag);
-        if (cit == roc_to_crate.end()) continue;
-        int crate = cit->second;
-
-        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
-            if (!roc.slots[s].present) continue;
-            auto &slot = roc.slots[s];
-            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
-                if (!(slot.channel_mask & (1ull << c))) continue;
-                auto &cd = slot.channels[c];
-                if (cd.nsamples <= 0) continue;
-
-                const auto *mod = hycal.module_by_daq(crate, s, c);
-                if (!mod || !mod->is_hycal()) continue;
-
-                float adc_val = 0;
-                if (is_adc1881m) {
-                    adc_val = cd.samples[0];
-                } else {
-                    ana.Analyze(cd.samples, cd.nsamples, wres);
-                    adc_val = bestPeakInWindow(wres, hist_cfg.threshold,
-                                               hist_cfg.time_min, hist_cfg.time_max);
-                }
-                if (adc_val <= 0) continue;
-
-                float energy = (mod->cal_factor > 0.)
-                    ? static_cast<float>(mod->energize(adc_val))
-                    : adc_val * adc_to_mev;
-                clusterer.AddHit(mod->index, energy);
-            }
-        }
-    }
-
-    clusterer.FormClusters();
-    std::vector<fdec::ClusterHit> reco_hits;
-    clusterer.ReconstructHits(reco_hits);
-
-    // compute lab-frame coordinates and scattering angles for all clusters
-    struct ClusterInfo { float lx, ly, lz, theta; };
-    std::vector<ClusterInfo> cinfo(reco_hits.size());
-    for (size_t i = 0; i < reco_hits.size(); ++i) {
-        auto &rh = reco_hits[i];
-        auto &ci = cinfo[i];
-        hycal_transform.toLab(rh.x, rh.y, ci.lx, ci.ly, ci.lz);
-        float dx = ci.lx - target_x, dy = ci.ly - target_y, dz = ci.lz - target_z;
-        float r = std::sqrt(dx*dx + dy*dy);
-        ci.theta = std::atan2(r, dz) * (180.f / 3.14159265f);
-    }
-
-    // fill clustering histograms (always)
-    for (size_t i = 0; i < reco_hits.size(); ++i) {
-        cluster_energy_hist.fill(reco_hits[i].energy, cl_hist_min, cl_hist_step);
-        nblocks_hist.fill(reco_hits[i].nblocks, nblocks_hist_min, nblocks_hist_step);
-    }
-    nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
-    cluster_events_processed++;
-
-    // physics trigger gate
-    bool physics_accept = (physics_trigger_mask == 0) ||
-        (event.info.trigger_bits & physics_trigger_mask);
-    if (!physics_accept) return;
-
-    // fill physics histograms
-    for (size_t i = 0; i < reco_hits.size(); ++i) {
-        energy_angle_hist.fill(cinfo[i].theta, reco_hits[i].energy,
-            ea_angle_min, ea_angle_step, ea_energy_min, ea_energy_step);
-    }
-
-    // Møller selection: exactly 2 clusters, energy sum ~ beam, one cluster in angle window
-    if (reco_hits.size() == 2 && beam_energy > 0) {
-        float esum = reco_hits[0].energy + reco_hits[1].energy;
-        bool energy_ok = std::abs(esum - beam_energy) < moller_energy_tol * beam_energy;
-        bool angle_ok = false;
-        for (int j = 0; j < 2; ++j) {
-            if (cinfo[j].theta >= moller_angle_min && cinfo[j].theta <= moller_angle_max)
-                angle_ok = true;
-        }
-        if (energy_ok && angle_ok) {
-            moller_events++;
-            for (int j = 0; j < 2; ++j) {
-                moller_xy_hist.fill(cinfo[j].lx, cinfo[j].ly,
-                    moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
-                moller_energy_hist.fill(reco_hits[j].energy, moller_e_min, moller_e_step);
-            }
-        }
-    }
-}
-
-void AppState::processLms(fdec::EventData &event,
-                          fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
-{
-    if (lms_trigger_mask != 0 &&
-        !(event.info.trigger_bits & lms_trigger_mask)) return;
-
-    if (lms_first_ts == 0)
-        lms_first_ts = event.info.timestamp;
-    double time_sec = static_cast<double>(event.info.timestamp - lms_first_ts) * TI_TICK_SEC;
-
-    bool is_adc1881m = (daq_cfg.adc_format == "adc1881m");
-
-    for (int r = 0; r < event.nrocs; ++r) {
-        auto &roc = event.rocs[r];
-        if (!roc.present) continue;
-        auto cit = roc_to_crate.find(roc.tag);
-        if (cit == roc_to_crate.end()) continue;
-        int crate = cit->second;
-
-        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
-            if (!roc.slots[s].present) continue;
-            auto &slot = roc.slots[s];
-            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
-                if (!(slot.channel_mask & (1ull << c))) continue;
-                auto &cd = slot.channels[c];
-                if (cd.nsamples <= 0) continue;
-
-                const auto *mod = hycal.module_by_daq(crate, s, c);
-                if (!mod) continue;  // include LMS modules
-
-                float val = 0;
-                if (is_adc1881m) {
-                    val = cd.samples[0];
-                } else {
-                    ana.Analyze(cd.samples, cd.nsamples, wres);
-                    val = bestPeakInWindow(wres, hist_cfg.threshold,
-                                           hist_cfg.time_min, hist_cfg.time_max);
-                }
-                if (val <= 0) continue;
-
-                auto &hist = lms_history[mod->index];
-                if (static_cast<int>(hist.size()) < lms_max_history)
-                    hist.push_back({time_sec, val});
-            }
-        }
-    }
-    lms_events++;
+    return parr;
 }
 
 json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
@@ -699,25 +515,11 @@ json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
                 std::string key = std::to_string(roc.tag) + "_"
                                 + std::to_string(s) + "_" + std::to_string(c);
 
-                json sarr = json::array();
-                for (int j = 0; j < cd.nsamples; ++j) sarr.push_back(cd.samples[j]);
-
-                json parr = json::array();
-                for (int p = 0; p < wres.npeaks; ++p) {
-                    auto &pk = wres.peaks[p];
-                    parr.push_back({
-                        {"p", pk.pos}, {"t", std::round(pk.time * 10) / 10},
-                        {"h", std::round(pk.height * 10) / 10},
-                        {"i", std::round(pk.integral * 10) / 10},
-                        {"l", pk.left}, {"r", pk.right},
-                        {"o", pk.overflow ? 1 : 0},
-                    });
-                }
+                // summary only — no raw samples (use /api/waveform for full waveform)
                 channels[key] = {
-                    {"s", sarr},
                     {"pm", std::round(wres.ped.mean * 10) / 10},
                     {"pr", std::round(wres.ped.rms * 10) / 10},
-                    {"pk", parr},
+                    {"pk", encodePeaks(wres)},
                 };
             }
         }
@@ -725,6 +527,36 @@ json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
     return {{"event", ev_id}, {"channels", channels},
             {"event_number", event.info.event_number},
             {"trigger_bits", event.info.trigger_bits}};
+}
+
+json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &chan_key,
+                                  fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
+{
+    // parse "roc_slot_ch" key
+    int roc_tag = 0, sl = 0, ch = 0;
+    if (std::sscanf(chan_key.c_str(), "%d_%d_%d", &roc_tag, &sl, &ch) != 3)
+        return {{"error", "invalid channel key"}};
+
+    // find the channel in the event
+    for (int r = 0; r < event.nrocs; ++r) {
+        auto &roc = event.rocs[r];
+        if (!roc.present || roc.tag != roc_tag) continue;
+        if (!roc.slots[sl].present) break;
+        if (!(roc.slots[sl].channel_mask & (1ull << ch))) break;
+        auto &cd = roc.slots[sl].channels[ch];
+        if (cd.nsamples <= 0) break;
+
+        ana.Analyze(cd.samples, cd.nsamples, wres);
+
+        json sarr = json::array();
+        for (int j = 0; j < cd.nsamples; ++j) sarr.push_back(cd.samples[j]);
+
+        return {{"key", chan_key}, {"s", sarr},
+                {"pm", std::round(wres.ped.mean * 10) / 10},
+                {"pr", std::round(wres.ped.rms * 10) / 10},
+                {"pk", encodePeaks(wres)}};
+    }
+    return {{"error", "channel not found"}};
 }
 
 json AppState::computeClustersJson(fdec::EventData &event, int ev_id,
@@ -822,16 +654,183 @@ void AppState::recordSyncTime(uint32_t unix_time, uint64_t last_ti_ts)
 void AppState::processEvent(fdec::EventData &event,
                             fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
-    {
+    // --- check which consumers need this event ---
+    bool do_hist = (waveform_trigger_mask == 0) ||
+                   (event.info.trigger_bits & waveform_trigger_mask);
+    bool do_cluster = (cluster_trigger_mask == 0) ||
+                      (event.info.trigger_bits & cluster_trigger_mask);
+    bool do_lms = (lms_trigger_mask != 0) &&
+                  (event.info.trigger_bits & lms_trigger_mask);
+
+    if (!do_hist && !do_cluster && !do_lms) {
         std::lock_guard<std::mutex> lk(data_mtx);
-        fillHist(event, ana, wres);
-        clusterEvent(event, ana, wres);
         events_processed++;
+        return;
     }
-    {
-        std::lock_guard<std::mutex> lk(lms_mtx);
-        processLms(event, ana, wres);
+
+    bool is_adc1881m = (daq_cfg.adc_format == "adc1881m");
+
+    // clustering setup (stack-allocated, per-event)
+    fdec::HyCalCluster clusterer(hycal);
+    if (do_cluster) clusterer.SetConfig(cluster_cfg);
+
+    // LMS timing
+    double lms_time = 0;
+
+    // acquire both locks for the merged pass
+    std::unique_lock<std::mutex> lk1(data_mtx, std::defer_lock);
+    std::unique_lock<std::mutex> lk2(lms_mtx, std::defer_lock);
+    std::lock(lk1, lk2);
+
+    if (do_lms) {
+        if (lms_first_ts == 0) lms_first_ts = event.info.timestamp;
+        lms_time = static_cast<double>(event.info.timestamp - lms_first_ts) * TI_TICK_SEC;
     }
+
+    // --- single pass: analyze once per channel, feed all consumers ---
+    for (int r = 0; r < event.nrocs; ++r) {
+        auto &roc = event.rocs[r];
+        if (!roc.present) continue;
+
+        // crate lookup (needed by cluster + LMS consumers)
+        int crate = -1;
+        if (do_cluster || do_lms) {
+            auto cit = roc_to_crate.find(roc.tag);
+            if (cit != roc_to_crate.end()) crate = cit->second;
+        }
+
+        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+            if (!roc.slots[s].present) continue;
+            auto &slot = roc.slots[s];
+            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                if (!(slot.channel_mask & (1ull << c))) continue;
+                auto &cd = slot.channels[c];
+                if (cd.nsamples <= 0) continue;
+
+                // ── analyze ONCE ──
+                float peak_in_window = -1;
+                if (!is_adc1881m) {
+                    ana.Analyze(cd.samples, cd.nsamples, wres);
+                    peak_in_window = bestPeakInWindow(wres, hist_cfg.threshold,
+                                                       hist_cfg.time_min, hist_cfg.time_max);
+                } else {
+                    wres.npeaks = 0;
+                    peak_in_window = cd.samples[0];
+                }
+
+                // ── histogram consumer ──
+                if (do_hist && !is_adc1881m) {
+                    std::string key = std::to_string(roc.tag) + "_"
+                                   + std::to_string(s) + "_" + std::to_string(c);
+                    bool has_peak = false, has_peak_tcut = false;
+                    float best = -1;
+                    for (int p = 0; p < wres.npeaks; ++p) {
+                        auto &pk = wres.peaks[p];
+                        if (pk.height < hist_cfg.threshold) continue;
+                        has_peak = true;
+                        if (pk.time >= hist_cfg.time_min && pk.time <= hist_cfg.time_max) {
+                            has_peak_tcut = true;
+                            if (pk.integral > best) best = pk.integral;
+                        }
+                    }
+                    if (best >= 0) {
+                        auto &h = histograms[key];
+                        if (h.bins.empty()) h.init(hist_nbins);
+                        h.fill(best, hist_cfg.bin_min, hist_cfg.bin_step);
+                    }
+                    for (int p = 0; p < wres.npeaks; ++p) {
+                        auto &pk = wres.peaks[p];
+                        if (pk.height < hist_cfg.threshold) continue;
+                        auto &ph = pos_histograms[key];
+                        if (ph.bins.empty()) ph.init(pos_nbins);
+                        ph.fill(pk.time, hist_cfg.pos_min, hist_cfg.pos_step);
+                    }
+                    if (has_peak)      occupancy[key]++;
+                    if (has_peak_tcut) occupancy_tcut[key]++;
+                }
+
+                // ── cluster consumer ──
+                if (do_cluster && crate >= 0) {
+                    const auto *mod = hycal.module_by_daq(crate, s, c);
+                    if (mod && mod->is_hycal()) {
+                        float adc_val = is_adc1881m ? (float)cd.samples[0] : peak_in_window;
+                        if (adc_val > 0) {
+                            float energy = (mod->cal_factor > 0.)
+                                ? static_cast<float>(mod->energize(adc_val))
+                                : adc_val * adc_to_mev;
+                            clusterer.AddHit(mod->index, energy);
+                        }
+                    }
+                }
+
+                // ── LMS consumer ──
+                if (do_lms && crate >= 0) {
+                    const auto *mod = hycal.module_by_daq(crate, s, c);
+                    if (mod) {
+                        float val = is_adc1881m ? (float)cd.samples[0] : peak_in_window;
+                        if (val > 0) {
+                            auto &hist = lms_history[mod->index];
+                            if (static_cast<int>(hist.size()) < lms_max_history)
+                                hist.push_back({lms_time, val});
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // --- post-loop: clustering + physics histograms ---
+    if (do_cluster) {
+        clusterer.FormClusters();
+        std::vector<fdec::ClusterHit> reco_hits;
+        clusterer.ReconstructHits(reco_hits);
+
+        struct ClusterInfo { float lx, ly, lz, theta; };
+        std::vector<ClusterInfo> cinfo(reco_hits.size());
+        for (size_t i = 0; i < reco_hits.size(); ++i) {
+            auto &rh = reco_hits[i];
+            auto &ci = cinfo[i];
+            hycal_transform.toLab(rh.x, rh.y, ci.lx, ci.ly, ci.lz);
+            float dx = ci.lx - target_x, dy = ci.ly - target_y, dz = ci.lz - target_z;
+            float rv = std::sqrt(dx*dx + dy*dy);
+            ci.theta = std::atan2(rv, dz) * (180.f / 3.14159265f);
+        }
+
+        for (size_t i = 0; i < reco_hits.size(); ++i) {
+            cluster_energy_hist.fill(reco_hits[i].energy, cl_hist_min, cl_hist_step);
+            nblocks_hist.fill(reco_hits[i].nblocks, nblocks_hist_min, nblocks_hist_step);
+        }
+        nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
+        cluster_events_processed++;
+
+        bool physics_accept = (physics_trigger_mask == 0) ||
+            (event.info.trigger_bits & physics_trigger_mask);
+        if (physics_accept) {
+            for (size_t i = 0; i < reco_hits.size(); ++i) {
+                energy_angle_hist.fill(cinfo[i].theta, reco_hits[i].energy,
+                    ea_angle_min, ea_angle_step, ea_energy_min, ea_energy_step);
+            }
+            if (reco_hits.size() == 2 && beam_energy > 0) {
+                float esum = reco_hits[0].energy + reco_hits[1].energy;
+                bool energy_ok = std::abs(esum - beam_energy) < moller_energy_tol * beam_energy;
+                bool angle_ok = false;
+                for (int j = 0; j < 2; ++j)
+                    if (cinfo[j].theta >= moller_angle_min && cinfo[j].theta <= moller_angle_max)
+                        angle_ok = true;
+                if (energy_ok && angle_ok) {
+                    moller_events++;
+                    for (int j = 0; j < 2; ++j) {
+                        moller_xy_hist.fill(cinfo[j].lx, cinfo[j].ly,
+                            moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
+                        moller_energy_hist.fill(reco_hits[j].energy, moller_e_min, moller_e_step);
+                    }
+                }
+            }
+        }
+    }
+
+    events_processed++;
+    if (do_lms) lms_events++;
 }
 
 void AppState::processGemEvent(const ssp::SspEventData &ssp_evt)
@@ -1271,6 +1270,36 @@ json AppState::apiEpicsChannel(const std::string &name) const
     return {{"name", name}, {"time", t_arr}, {"value", v_arr}, {"count", nsnap}};
 }
 
+json AppState::apiEpicsBatch(const std::vector<std::string> &names) const
+{
+    std::lock_guard<std::mutex> lk(epics_mtx);
+    int nsnap = epics.GetSnapshotCount();
+    uint64_t t0 = (nsnap > 0) ? epics.GetSnapshot(0).timestamp : 0;
+
+    // build shared time array once
+    json t_arr = json::array();
+    for (int i = 0; i < nsnap; ++i) {
+        double t_sec = static_cast<double>(epics.GetSnapshot(i).timestamp - t0) * TI_TICK_SEC;
+        t_arr.push_back(std::round(t_sec * 100) / 100);
+    }
+
+    json channels = json::array();
+    for (auto &name : names) {
+        int id = epics.GetChannelId(name);
+        if (id < 0) {
+            channels.push_back({{"name", name}, {"value", json::array()}, {"count", 0}});
+            continue;
+        }
+        json v_arr = json::array();
+        for (int i = 0; i < nsnap; ++i) {
+            auto &snap = epics.GetSnapshot(i);
+            v_arr.push_back((id < (int)snap.values.size()) ? snap.values[id] : 0.f);
+        }
+        channels.push_back({{"name", name}, {"value", v_arr}, {"count", nsnap}});
+    }
+    return {{"time", t_arr}, {"channels", channels}};
+}
+
 json AppState::apiEpicsLatest() const
 {
     std::lock_guard<std::mutex> lk(epics_mtx);
@@ -1396,6 +1425,34 @@ AppState::ApiResult AppState::handleReadApi(const std::string &uri) const
         if (path == "channels") return {true, apiEpicsChannels().dump()};
         if (path == "latest")   return {true, apiEpicsLatest().dump()};
         if (path == "clear")    return {false, ""};  // clear handled by caller
+        if (path.rfind("batch?", 0) == 0) {
+            // /api/epics/batch?ch=name1&ch=name2&...
+            std::string query = path.substr(6);
+            std::vector<std::string> names;
+            for (size_t pos = 0; pos < query.size();) {
+                size_t amp = query.find('&', pos);
+                if (amp == std::string::npos) amp = query.size();
+                std::string kv = query.substr(pos, amp - pos);
+                if (kv.rfind("ch=", 0) == 0) {
+                    // URL-decode
+                    std::string raw = kv.substr(3), name;
+                    for (size_t i = 0; i < raw.size(); ++i) {
+                        if (raw[i] == '%' && i + 2 < raw.size()) {
+                            int hi = 0, lo = 0;
+                            if (std::sscanf(raw.c_str() + i + 1, "%1x%1x", &hi, &lo) == 2) {
+                                name += static_cast<char>((hi << 4) | lo);
+                                i += 2; continue;
+                            }
+                        }
+                        if (raw[i] == '+') name += ' ';
+                        else name += raw[i];
+                    }
+                    names.push_back(name);
+                }
+                pos = amp + 1;
+            }
+            return {true, apiEpicsBatch(names).dump()};
+        }
         if (path.rfind("channel/", 0) == 0) {
             // URL-decode the channel name (e.g. %3A → :)
             std::string raw = path.substr(8), name;

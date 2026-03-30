@@ -1,10 +1,12 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// prad2_qtgui – Lightweight Qt WebEngine client for PRad2 event viewer/monitor
+// prad2_client – Lightweight Qt WebEngine client for a remote PRad2 server
+//
+// Connects to a running prad2_server instance (file viewer or online monitor).
 //
 // Usage:
-//   prad2_qtgui                        # http://localhost:5051
-//   prad2_qtgui -H clonpc19            # http://clonpc19:5051
-//   prad2_qtgui -H clonpc19 -p 8080   # http://clonpc19:8080
+//   prad2_client                        # http://localhost:5051
+//   prad2_client -H clonpc19            # http://clonpc19:5051
+//   prad2_client -H clonpc19 -p 8080   # http://clonpc19:8080
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include <QApplication>
@@ -14,7 +16,7 @@
 
 #include <iostream>
 #include <string>
-#include <unistd.h>
+#include <getopt.h>
 
 static void printUsage(const char *prog)
 {
@@ -30,7 +32,7 @@ static void printUsage(const char *prog)
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
-    app.setApplicationName("PRad2 Monitor");
+    app.setApplicationName("PRad2 Client");
     app.setApplicationVersion("1.0.0");
 
     std::string host = "localhost";
@@ -50,12 +52,11 @@ int main(int argc, char *argv[])
     QUrl url(QString("http://%1:%2")
         .arg(QString::fromStdString(host), QString::fromStdString(port)));
 
-    std::cout << "Loading: " << url.toString().toStdString() << "\n";
+    std::cout << "Connecting to: " << url.toString().toStdString() << "\n";
 
     QWebEngineView view;
-    view.setWindowTitle("PRad2 Monitor — " + url.toString());
+    view.setWindowTitle("PRad2 Client \u2014 " + url.toString());
     view.resize(1280, 800);
-    // log load errors to console
     QObject::connect(view.page(), &QWebEnginePage::loadFinished,
                      [&url](bool ok) {
         if (!ok)

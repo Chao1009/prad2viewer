@@ -29,9 +29,13 @@ function fetchAndPlotEpicsSlot(slot){
         Plotly.react('epics-plot-'+slot,[],{...PL},PC_EPICS);
         return;
     }
-    Promise.all(names.map(n=>
-        fetch(`/api/epics/channel/${encodeURIComponent(n)}`).then(r=>r.json()).catch(()=>null)
-    )).then(results=>{
+    // batch fetch: single request for all channels in this slot
+    const query=names.map(n=>'ch='+encodeURIComponent(n)).join('&');
+    fetch(`/api/epics/batch?${query}`).then(r=>r.json()).then(batch=>{
+        // reshape batch response to match the per-channel format
+        const results=(batch.channels||[]).map(ch=>({
+            name:ch.name, time:batch.time||[], value:ch.value||[], count:ch.count||0
+        }));
         epicsSlotData[slot]=results;
         const traces=[];
         results.forEach((data,i)=>{

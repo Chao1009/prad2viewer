@@ -29,9 +29,11 @@ Writable PVs (the ONLY PVs this tool writes to):
     ptrans_x.SPMG / ptrans_y.SPMG  -- motor mode  Stop(0) Pause(1) Move(2) Go(3)
 
 Position readback:
-    ptrans_x / ptrans_y             -- true motor position
-    ptrans_x.RBV / ptrans_y.RBV    -- echo of VAL (same as set-point, not true readback)
+    ptrans_x.RBV / ptrans_y.RBV    -- true motor position (read-back value)
     hallb_ptrans_x_encoder / hallb_ptrans_y1_encoder -- raw encoder values
+
+Note: bare ptrans_x / ptrans_y are aliases for ptrans_x.VAL / ptrans_y.VAL
+(the set-point), NOT the actual position.
 
 All other PVs are read-only for monitoring.
 
@@ -95,7 +97,6 @@ class PV:
     X_SPMG = "ptrans_x.SPMG";  Y_SPMG = "ptrans_y.SPMG"
     X_ENCODER = "hallb_ptrans_x_encoder"
     Y_ENCODER = "hallb_ptrans_y1_encoder"
-    X_POS  = "ptrans_x";        Y_POS  = "ptrans_y"
     X_RBV  = "ptrans_x.RBV";   Y_RBV  = "ptrans_y.RBV"
     X_MOVN = "ptrans_x.MOVN";  Y_MOVN = "ptrans_y.MOVN"
     X_VELO = "ptrans_x.VELO";  Y_VELO = "ptrans_y.VELO"
@@ -218,7 +219,6 @@ _PV_MAP: List[Tuple[str, str]] = [
     ("x_spmg",    PV.X_SPMG),   ("y_spmg",    PV.Y_SPMG),
     # read-only
     ("x_encoder", PV.X_ENCODER), ("y_encoder", PV.Y_ENCODER),
-    ("x_pos",     PV.X_POS),    ("y_pos",     PV.Y_POS),
     ("x_rbv",     PV.X_RBV),    ("y_rbv",     PV.Y_RBV),
     ("x_movn",    PV.X_MOVN),   ("y_movn",    PV.Y_MOVN),
     ("x_velo",    PV.X_VELO),   ("y_velo",    PV.Y_VELO),
@@ -301,8 +301,6 @@ class SimulatedEPICS:
             return {
                 "x_encoder": round(self._x + random.gauss(0, 0.002), 4),
                 "y_encoder": round(self._y + random.gauss(0, 0.002), 4),
-                "x_pos": round(self._x, 3),
-                "y_pos": round(self._y, 3),
                 "x_rbv": round(self._x, 3),
                 "y_rbv": round(self._y, 3),
                 "x_val": round(self._tx, 3),
@@ -435,9 +433,9 @@ def epics_resume(ep):
 def epics_is_moving(ep) -> bool:
     return bool(ep.get("x_movn", 0)) or bool(ep.get("y_movn", 0))
 
-def epics_read_position(ep) -> Tuple[float, float]:
-    """Read true motor position from ptrans_x / ptrans_y PVs."""
-    return (ep.get("x_pos", 0.0), ep.get("y_pos", 0.0))
+def epics_read_rbv(ep) -> Tuple[float, float]:
+    """Read true motor position from RBV (read-back value) PVs."""
+    return (ep.get("x_rbv", 0.0), ep.get("y_rbv", 0.0))
 
 
 # ============================================================================
@@ -578,7 +576,7 @@ class ScanEngine:
                     break
 
                 # -- check position error --
-                rbv_x, rbv_y = epics_read_position(self.ep)
+                rbv_x, rbv_y = epics_read_rbv(self.ep)
                 err = math.sqrt((rbv_x - px)**2 + (rbv_y - py)**2)
                 if err > self.pos_threshold:
                     self.error_modules.add(i)
@@ -1156,8 +1154,8 @@ class SnakeScanGUI:
     def _draw_motor_marker(self):
         """Draw the red crosshair at the current motor position."""
         self._canvas.delete("motor_pos")
-        rx = self.ep.get("x_pos", None)
-        ry = self.ep.get("y_pos", None)
+        rx = self.ep.get("x_rbv", None)
+        ry = self.ep.get("y_rbv", None)
         if rx is not None and ry is not None:
             hx, hy = ptrans_to_module(rx, ry)
             cx = self._ox + (hx - self._x_min) * self._scale
@@ -1343,7 +1341,7 @@ class SnakeScanGUI:
 
         self._status_labels: Dict[str, tk.Label] = {}
         self._build_motor_block(inner, "X Motor", [
-            ("Encoder",  "x_encoder"), ("Position", "x_pos"),
+            ("Encoder",  "x_encoder"), ("RBV",  "x_rbv"),
             ("VAL",      "x_val"),     ("MOVN", "x_movn"),
             ("SPMG",     "x_spmg"),    ("VELO", "x_velo"),
             ("ACCL",     "x_accl"),    ("TDIR", "x_tdir"),
@@ -1351,7 +1349,7 @@ class SnakeScanGUI:
         ], row=0)
 
         self._build_motor_block(inner, "Y Motor", [
-            ("Encoder",  "y_encoder"), ("Position", "y_pos"),
+            ("Encoder",  "y_encoder"), ("RBV",  "y_rbv"),
             ("VAL",      "y_val"),     ("MOVN", "y_movn"),
             ("SPMG",     "y_spmg"),    ("VELO", "y_velo"),
             ("ACCL",     "y_accl"),    ("TDIR", "y_tdir"),
@@ -1616,8 +1614,8 @@ class SnakeScanGUI:
 
         # position check
         eng = self.engine
-        rx = self.ep.get("x_pos", 0.0)
-        ry = self.ep.get("y_pos", 0.0)
+        rx = self.ep.get("x_rbv", 0.0)
+        ry = self.ep.get("y_rbv", 0.0)
         self._lbl_actual.configure(
             text=f"Actual:   ({rx:.3f}, {ry:.3f})")
 

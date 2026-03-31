@@ -497,7 +497,8 @@ static json encodePeaks(const fdec::WaveResult &wres)
 }
 
 json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
-                               fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
+                               fdec::WaveAnalyzer &ana, fdec::WaveResult &wres,
+                               bool include_samples)
 {
     json channels = json::object();
     for (int r = 0; r < event.nrocs; ++r) {
@@ -515,12 +516,17 @@ json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
                 std::string key = std::to_string(roc.tag) + "_"
                                 + std::to_string(s) + "_" + std::to_string(c);
 
-                // summary only — no raw samples (use /api/waveform for full waveform)
-                channels[key] = {
+                json ch_j = {
                     {"pm", std::round(wres.ped.mean * 10) / 10},
                     {"pr", std::round(wres.ped.rms * 10) / 10},
                     {"pk", encodePeaks(wres)},
                 };
+                if (include_samples) {
+                    json sarr = json::array();
+                    for (int j = 0; j < cd.nsamples; ++j) sarr.push_back(cd.samples[j]);
+                    ch_j["s"] = std::move(sarr);
+                }
+                channels[key] = std::move(ch_j);
             }
         }
     }

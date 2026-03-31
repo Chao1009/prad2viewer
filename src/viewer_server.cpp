@@ -637,7 +637,7 @@ void ViewerServer::etReaderThread()
                         last_ring_push = now;
 
                         std::string evjson = app_online_.encodeEventJson(
-                            event, seq, ana, wres).dump();
+                            event, seq, ana, wres, true).dump();
                         std::string cljson = app_online_.computeClustersJson(
                             event, seq, ana, wres).dump();
 

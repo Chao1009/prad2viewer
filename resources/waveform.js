@@ -22,7 +22,7 @@ function showWaveform(mod){
         currentWaveform=null;
         Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — No data`,font:{size:11,color:'#555'}}},PC2);
         document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No data</td></tr>';
-        showHistograms(mod); geoDq(); return;
+        showHistograms(mod); redrawGeo(); return;
     }
 
     // if samples are already present (e.g. from ring buffer), use them directly;
@@ -41,7 +41,7 @@ function showWaveform(mod){
         }).catch(()=>renderWaveform(mod, key, d, null));
     }
 
-    showHistograms(mod); geoDq();
+    showHistograms(mod); redrawGeo();
 }
 
 function renderWaveform(mod, key, d, samples){

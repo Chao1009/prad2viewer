@@ -182,9 +182,12 @@ struct AppState {
     void processEvent(fdec::EventData &event,
                       fdec::WaveAnalyzer &ana, fdec::WaveResult &wres);
 
-    // Encode one decoded event as JSON (channel summaries: peaks + pedestal, no raw samples).
+    // Encode one decoded event as JSON.
+    // include_samples=false: summaries only (peaks + pedestal, ~20KB).
+    // include_samples=true:  full waveforms included (~800KB, used for ring buffer).
     nlohmann::json encodeEventJson(fdec::EventData &event, int ev_id,
-                                   fdec::WaveAnalyzer &ana, fdec::WaveResult &wres);
+                                   fdec::WaveAnalyzer &ana, fdec::WaveResult &wres,
+                                   bool include_samples = false);
 
     // Encode raw waveform for a single channel (key = "roc_slot_ch").
     nlohmann::json encodeWaveformJson(fdec::EventData &event, const std::string &chan_key,

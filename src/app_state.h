@@ -157,6 +157,8 @@ struct AppState {
     // sync_unix = absolute time, sync_rel_sec = relative time on LMS axis
     uint32_t sync_unix    = 0;
     double   sync_rel_sec = 0.;
+    uint32_t pending_sync_unix = 0;  // stashed until first LMS event arrives
+    uint64_t pending_sync_ti   = 0;
 
     // ---- EPICS data (guarded by epics_mtx) ----------------------------------
     mutable std::mutex epics_mtx;

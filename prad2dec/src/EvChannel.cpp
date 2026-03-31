@@ -518,7 +518,10 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
 
 uint32_t EvChannel::GetControlTime() const
 {
-    if (evtype != EventType::Sync) return 0;
+    // All CODA control events (Prestart, Go, Sync, End) share the same layout
+    if (evtype != EventType::Sync && evtype != EventType::Prestart &&
+        evtype != EventType::Go && evtype != EventType::End)
+        return 0;
 
     // Control event layout (after 2-word bank header):
     //   word[0]: [Event Type | 0x01 | 0]  (data word header)

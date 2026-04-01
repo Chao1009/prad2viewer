@@ -20,8 +20,6 @@
 namespace fdec
 {
 
-static constexpr int MAX_PEAKS = 8;
-
 struct WaveResult {
     Pedestal ped;
     int      npeaks;

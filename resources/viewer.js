@@ -678,6 +678,18 @@ function init(){
         wfStackTraces=[]; wfStackModKey='';
         if(selectedModule) showWaveform(selectedModule);
     };
+    document.getElementById('btn-wf-ymin').onclick=()=>{
+        wfYminIdx=(wfYminIdx+1)%wfYminSteps.length;
+        wfYmin=wfYminSteps[wfYminIdx];
+        document.getElementById('btn-wf-ymin').textContent='Y0:'+wfYmin;
+        if(selectedModule) showWaveform(selectedModule);
+    };
+    document.getElementById('btn-wf-ymax').onclick=()=>{
+        wfYmaxIdx=(wfYmaxIdx+1)%wfYmaxSteps.length;
+        wfYmax=wfYmaxSteps[wfYmaxIdx];
+        document.getElementById('btn-wf-ymax').textContent='Y1:'+wfYmax;
+        if(selectedModule) showWaveform(selectedModule);
+    };
 
     // histogram log-scale toggles
     document.getElementById('inthist-logx').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };

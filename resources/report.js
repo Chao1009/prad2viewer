@@ -421,7 +421,8 @@ registerReportSection({id:'lms',title:'LMS Monitoring',order:2,
         const d=await fetch(`/api/lms/summary${refQ}`).then(r=>r.json());
         lmsSummaryData=d;
         const lmsEvents=lmsSummaryData?lmsSummaryData.events||0:0;
-        const trigMask=lmsSummaryData?'0x'+(lmsSummaryData.trigger_mask||0).toString(16):'?';
+        const tf=lmsSummaryData&&lmsSummaryData.trigger||{};
+        const trigMask=`accept=0x${(tf.trigger_accept||0).toString(16)} reject=0x${(tf.trigger_reject||0).toString(16)}`;
         if(!lmsSummaryData||!lmsSummaryData.modules||
             !Object.keys(lmsSummaryData.modules).length)
             return `## LMS Monitoring\n\nLMS events received: ${lmsEvents} (trigger mask = ${trigMask})\n\n`;

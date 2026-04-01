@@ -30,10 +30,48 @@ struct ReconEventData;
 #include <mutex>
 #include <atomic>
 
+// Trigger filter: reject overrides accept. accept==0 means accept all.
+struct TriggerFilter {
+    uint32_t accept = 0;  // 0 = accept all
+    uint32_t reject = 0;  // 0 = reject none
+
+    bool operator()(uint32_t bits) const {
+        if (reject && (bits & reject)) return false;
+        return accept == 0 || (bits & accept);
+    }
+
+    // parse from JSON section containing accept_trigger_bits / reject_trigger_bits
+    void parse(const nlohmann::json &section) {
+        accept = maskFrom(section, "accept_trigger_bits");
+        reject = maskFrom(section, "reject_trigger_bits");
+    }
+
+    // emit to JSON
+    nlohmann::json toJson() const {
+        return {{"trigger_accept", accept}, {"trigger_reject", reject}};
+    }
+
+    // log line fragment: "trigger accept=0x3 reject=0x0"
+    friend std::ostream &operator<<(std::ostream &os, const TriggerFilter &f) {
+        return os << "trigger accept=0x" << std::hex << f.accept
+                  << " reject=0x" << f.reject << std::dec;
+    }
+
+private:
+    static uint32_t maskFrom(const nlohmann::json &section, const char *key) {
+        if (!section.contains(key)) return 0;
+        auto &arr = section[key];
+        if (!arr.is_array() || arr.empty()) return 0;
+        uint32_t m = 0;
+        for (auto &b : arr) m |= (1u << b.get<int>());
+        return m;
+    }
+};
+
 struct AppState {
     // ---- Configuration (set once at startup, then read-only) ---------------
     HistConfig hist_cfg;
-    uint32_t waveform_trigger_mask = 0;  // 0 = accept all
+    TriggerFilter waveform_trigger;
     int hist_nbins = 0;
     int pos_nbins  = 0;
 
@@ -65,7 +103,7 @@ struct AppState {
     nlohmann::json base_config;                 // modules, daq, crate_roc for /api/config
 
     // LMS config
-    uint32_t lms_trigger_mask = 0;       // 0 = accept all
+    TriggerFilter lms_trigger;
     float    lms_warn_thresh  = 0.1f;
     float    lms_warn_min_mean = 100.f;  // warn if mean below this
     int      lms_max_history  = 5000;
@@ -89,7 +127,7 @@ struct AppState {
     float ea_angle_min=0.f, ea_angle_max=8.f, ea_angle_step=0.2f;   // degrees
     float ea_energy_min=0.f, ea_energy_max=3000.f, ea_energy_step=100.f; // MeV
     float beam_energy = 2200.f;  // MeV (for elastic line overlay)
-    uint32_t physics_trigger_mask = 0;  // 0 = accept all
+    TriggerFilter physics_trigger;
 
     // Møller selection config
     float moller_energy_tol = 0.1f;     // energy sum within this fraction of beam_energy
@@ -121,7 +159,7 @@ struct AppState {
     std::map<std::string, std::pair<float, float>> color_range_defaults;
 
     // cluster config
-    uint32_t cluster_trigger_mask = 0;   // 0 = accept all
+    TriggerFilter cluster_trigger;
     float    adc_to_mev        = 1.0f;
     float    cl_hist_min       = 0.f;
     float    cl_hist_max       = 3000.f;

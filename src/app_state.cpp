@@ -71,25 +71,12 @@ void AppState::init(const std::string &db_dir,
         }
     }
 
-    // helper: parse "accept_trigger_bits" array → bitmask
-    // missing or empty array → mask stays 0 (accept all)
-    // non-empty array → accept only events with any listed bit set
-    auto parseTriggerBits = [](const json &section, uint32_t &mask) {
-        if (section.contains("accept_trigger_bits")) {
-            auto &arr = section["accept_trigger_bits"];
-            if (arr.is_array() && !arr.empty()) {
-                mask = 0;
-                for (auto &b : arr)
-                    mask |= (1u << b.get<int>());
-            }
-        }
-    };
 
     // --- Waveform / histogram config ---
     // Try "waveform" section from config.json (loaded later in reco_file),
     // then fall back to separate hist_config.json, then -H override.
     auto loadWaveformConfig = [&](const json &w) {
-        parseTriggerBits(w, waveform_trigger_mask);
+        waveform_trigger.parse(w);
         if (w.contains("time_cut")) {
             auto &tc = w["time_cut"];
             if (tc.contains("min")) hist_cfg.time_min = tc["min"];
@@ -155,7 +142,7 @@ void AppState::init(const std::string &db_dir,
         (hist_cfg.pos_max - hist_cfg.pos_min) / hist_cfg.pos_step));
     std::cerr << "Waveform  : time_cut=[" << hist_cfg.time_min << "," << hist_cfg.time_max
               << "] threshold=" << hist_cfg.threshold
-              << " trigger=0x" << std::hex << waveform_trigger_mask << std::dec << "\n";
+              << " " << waveform_trigger << "\n";
 
     // --- HyCal system ---
     std::string modules_filename = "hycal_modules.json";
@@ -266,7 +253,7 @@ void AppState::init(const std::string &db_dir,
                 if (j.contains("log_weight_thres"))   cfg.log_weight_thres   = j["log_weight_thres"];
             };
             loadCfg(cc, cluster_cfg);
-            parseTriggerBits(cc, cluster_trigger_mask);
+            cluster_trigger.parse(cc);
             if (cc.contains("energy_hist")) {
                 auto &eh = cc["energy_hist"];
                 if (eh.contains("min"))  cl_hist_min  = eh["min"];
@@ -288,14 +275,14 @@ void AppState::init(const std::string &db_dir,
             std::cerr << "Clustering: min_mod=" << cluster_cfg.min_module_energy
                       << " min_center=" << cluster_cfg.min_center_energy
                       << " min_cluster=" << cluster_cfg.min_cluster_energy
-                      << " trigger=0x" << std::hex << cluster_trigger_mask << std::dec
+                      << " " << cluster_trigger
                       << " hist=[" << cl_hist_min << "," << cl_hist_max
                       << "]/" << cl_hist_step << "\n";
         }
 
         if (rcfg.contains("lms_monitor")) {
             auto &lm = rcfg["lms_monitor"];
-            parseTriggerBits(lm, lms_trigger_mask);
+            lms_trigger.parse(lm);
             if (lm.contains("warn_threshold")) lms_warn_thresh     = lm["warn_threshold"];
             if (lm.contains("warn_min_mean"))  lms_warn_min_mean  = lm["warn_min_mean"];
             if (lm.contains("max_history"))    lms_max_history    = lm["max_history"];
@@ -306,7 +293,7 @@ void AppState::init(const std::string &db_dir,
                     lms_ref_channels.push_back({n, mod ? mod->index : -1});
                 }
             }
-            std::cerr << "LMS       : trigger=0x" << std::hex << lms_trigger_mask << std::dec
+            std::cerr << "LMS       : " << lms_trigger
                       << " warn=" << lms_warn_thresh
                       << " refs=" << lms_ref_channels.size() << "\n";
         }
@@ -382,7 +369,7 @@ void AppState::init(const std::string &db_dir,
 
         if (rcfg.contains("physics")) {
             auto &ph = rcfg["physics"];
-            parseTriggerBits(ph, physics_trigger_mask);
+            physics_trigger.parse(ph);
             if (ph.contains("energy_angle_hist")) {
                 auto &ea = ph["energy_angle_hist"];
                 if (ea.contains("angle_min"))   ea_angle_min   = ea["angle_min"];
@@ -413,7 +400,7 @@ void AppState::init(const std::string &db_dir,
                     if (eh.contains("step")) moller_e_step = eh["step"];
                 }
             }
-            std::cerr << "Physics   : trigger=0x" << std::hex << physics_trigger_mask << std::dec
+            std::cerr << "Physics   : " << physics_trigger
                       << " Moller: tol=" << moller_energy_tol
                       << " angle=[" << moller_angle_min << "," << moller_angle_max << "]\n";
         }
@@ -569,8 +556,7 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
 json AppState::computeClustersJson(fdec::EventData &event, int ev_id,
                                    fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
-    if (cluster_trigger_mask != 0 &&
-        !(event.info.trigger_bits & cluster_trigger_mask))
+    if (!cluster_trigger(event.info.trigger_bits))
         return {{"event", ev_id}, {"hits", json::object()}, {"clusters", json::array()},
                 {"info", "trigger filtered"}};
 
@@ -671,12 +657,10 @@ void AppState::processEvent(fdec::EventData &event,
                             fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
     // --- check which consumers need this event ---
-    bool do_hist = (waveform_trigger_mask == 0) ||
-                   (event.info.trigger_bits & waveform_trigger_mask);
-    bool do_cluster = (cluster_trigger_mask == 0) ||
-                      (event.info.trigger_bits & cluster_trigger_mask);
-    bool do_lms = (lms_trigger_mask != 0) &&
-                  (event.info.trigger_bits & lms_trigger_mask);
+    uint32_t tb = event.info.trigger_bits;
+    bool do_hist    = waveform_trigger(tb);
+    bool do_cluster = cluster_trigger(tb);
+    bool do_lms     = lms_trigger.accept != 0 && lms_trigger(tb);
 
     if (!do_hist && !do_cluster && !do_lms) {
         std::lock_guard<std::mutex> lk(data_mtx);
@@ -830,8 +814,7 @@ void AppState::processEvent(fdec::EventData &event,
         nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
         cluster_events_processed++;
 
-        bool physics_accept = (physics_trigger_mask == 0) ||
-            (event.info.trigger_bits & physics_trigger_mask);
+        bool physics_accept = physics_trigger(tb);
         if (physics_accept) {
             for (size_t i = 0; i < reco_hits.size(); ++i) {
                 energy_angle_hist.fill(cinfo[i].theta, reco_hits[i].energy,
@@ -862,10 +845,9 @@ void AppState::processEvent(fdec::EventData &event,
 
 void AppState::processReconEvent(const ReconEventData &recon)
 {
-    bool do_cluster = (cluster_trigger_mask == 0) ||
-                      (recon.trigger_bits & cluster_trigger_mask);
-    bool do_physics = (physics_trigger_mask == 0) ||
-                      (recon.trigger_bits & physics_trigger_mask);
+    uint32_t tb = recon.trigger_bits;
+    bool do_cluster = cluster_trigger(tb);
+    bool do_physics = physics_trigger(tb);
 
     std::lock_guard<std::mutex> lk(data_mtx);
     events_processed++;
@@ -1281,7 +1263,7 @@ json AppState::apiLmsSummary(int ref_index) const
         }
     }
     return {{"modules", mods}, {"events", lms_events.load()},
-            {"trigger_mask", lms_trigger_mask},
+            {"trigger", lms_trigger.toJson()},
             {"ref_index", ref_index},
             {"ref_mean", rc.ref_mean},
             {"sync_unix", sync_unix}, {"sync_rel_sec", sync_rel_sec}};
@@ -1463,7 +1445,8 @@ void AppState::fillConfigJson(json &cfg) const
     cfg["refresh_ms"] = {{"event", refresh_event_ms}, {"ring", refresh_ring_ms},
                          {"histogram", refresh_hist_ms}, {"lms", refresh_lms_ms}};
     cfg["lms"] = {
-        {"trigger_mask", lms_trigger_mask}, {"warn_threshold", lms_warn_thresh},
+        {"trigger", lms_trigger.toJson()},
+        {"warn_threshold", lms_warn_thresh},
         {"events", lms_events.load()}, {"ref_channels", apiLmsRefChannels()},
     };
     cfg["runinfo"] = {
@@ -1476,7 +1459,7 @@ void AppState::fillConfigJson(json &cfg) const
         }},
     };
     cfg["physics"] = {
-        {"trigger_mask", physics_trigger_mask},
+        {"trigger", physics_trigger.toJson()},
         {"energy_angle_hist", {
             {"angle_min", ea_angle_min}, {"angle_max", ea_angle_max}, {"angle_step", ea_angle_step},
             {"energy_min", ea_energy_min}, {"energy_max", ea_energy_max}, {"energy_step", ea_energy_step},

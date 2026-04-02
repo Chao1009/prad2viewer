@@ -65,6 +65,7 @@ public:
         int    port         = 5051;
         bool   hist_enabled = false;
         bool   start_online = false;    // connect ET on startup
+        bool   interactive  = false;    // enable stdin command loop
     };
 
     ViewerServer();
@@ -162,7 +163,8 @@ private:
     void sleepMs(int ms);
 #endif
 
-    void joinAll();  // join all background threads (safe to call multiple times)
+    void joinAll();      // join all background threads (safe to call multiple times)
+    void commandLoop();  // interactive stdin command loop
 
     // ── HTTP / resource handling ─────────────────────────────────────────
     void setupServer(int port);

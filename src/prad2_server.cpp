@@ -43,13 +43,14 @@ int main(int argc, char *argv[])
         {"config",     required_argument, nullptr, 'c'},
         {"data-dir",   required_argument, nullptr, 'd'},
         {"daq-config", required_argument, nullptr, 'D'},
-        {"et",         no_argument,       nullptr, 'E'},
-        {"help",       no_argument,       nullptr, '?'},
+        {"et",          no_argument,       nullptr, 'E'},
+        {"interactive", no_argument,       nullptr, 'i'},
+        {"help",        no_argument,       nullptr, '?'},
         {nullptr, 0, nullptr, 0},
     };
 
     int opt;
-    while ((opt = getopt_long(argc, argv, "p:Hc:d:D:", long_opts, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "p:Hc:d:D:i", long_opts, nullptr)) != -1) {
         switch (opt) {
         case 'p': cfg.port = std::atoi(optarg); break;
         case 'H': cfg.hist_enabled = true; break;
@@ -57,9 +58,10 @@ int main(int argc, char *argv[])
         case 'd': cfg.data_dir = optarg; break;
         case 'D': cfg.daq_config_file = optarg; break;
         case 'E': cfg.start_online = true; break;
+        case 'i': cfg.interactive = true; break;
         default:
             std::cerr << "Usage: " << argv[0]
-                      << " [evio_file] [-p port] [-H] [-c config.json]"
+                      << " [evio_file] [-p port] [-H] [-i] [-c config.json]"
                       << " [-d data_dir] [-D daq_config.json] [--et]\n";
             return 1;
         }

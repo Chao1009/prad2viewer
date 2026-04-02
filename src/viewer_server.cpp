@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
@@ -224,7 +225,12 @@ void ViewerServer::run()
               << "  " << (data ? data->event_count : 0) << " events"
               << (hist_enabled_ ? ", histograms enabled" : "")
               << (!cfg_.data_dir.empty() ? ", file browser enabled" : "")
-              << "\n  Ctrl+C to stop\n";
+              << (cfg_.interactive ? "\n  Type 'help' for commands, " : "\n  ")
+              << "Ctrl+C to stop\n";
+
+    // interactive stdin command loop (detached — will be killed on exit)
+    if (cfg_.interactive)
+        std::thread([this]() { commandLoop(); }).detach();
 
     server_->run();
 
@@ -495,6 +501,110 @@ json ViewerServer::computeClusters(int ev1)
     ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
     return app_file_.computeClustersJson(event, ev1, ana, wres);
+}
+
+// =========================================================================
+// Interactive command loop (stdin)
+// =========================================================================
+
+void ViewerServer::commandLoop()
+{
+    std::string line;
+    while (running_ && std::getline(std::cin, line)) {
+        // trim whitespace
+        auto s = line.find_first_not_of(" \t");
+        if (s == std::string::npos) continue;
+        line = line.substr(s, line.find_last_not_of(" \t") - s + 1);
+        if (line.empty()) continue;
+
+        std::istringstream iss(line);
+        std::string cmd;
+        iss >> cmd;
+
+        if (cmd == "help" || cmd == "?") {
+            std::cout << "Commands:\n"
+                      << "  status            — show server status\n"
+                      << "  load <file> [H]   — load an evio file (H=1 for histograms)\n"
+#ifdef WITH_ET
+                      << "  online            — switch to ET/online mode\n"
+#endif
+                      << "  offline           — switch to file mode\n"
+                      << "  clear <what>      — clear hist, lms, or epics\n"
+                      << "  quit / exit       — stop the server\n";
+        }
+        else if (cmd == "status") {
+            std::shared_ptr<FileData> data;
+            { std::lock_guard<std::mutex> lk(file_data_mtx_); data = file_data_; }
+            std::cout << "Mode: " << mode() << "\n";
+            if (data)
+                std::cout << "File: " << data->filepath << " (" << data->event_count << " events)\n";
+#ifdef WITH_ET
+            std::cout << "ET: " << (et_connected_.load() ? "connected" : "not connected")
+                      << " (" << et_cfg_.host << ":" << et_cfg_.port << ")\n";
+            std::cout << "Events processed: " << app_online_.events_processed.load() << "\n";
+#endif
+        }
+        else if (cmd == "load") {
+            std::string path;
+            int hist = 0;
+            iss >> path >> hist;
+            if (path.empty()) {
+                std::cout << "Usage: load <filepath> [hist=0|1]\n";
+            } else {
+                loadFile(path, hist != 0);
+                std::cout << "Loading " << path << (hist ? " (with histograms)" : "") << "\n";
+            }
+        }
+#ifdef WITH_ET
+        else if (cmd == "online") {
+            std::lock_guard<std::mutex> lk(mode_mtx_);
+            if (mode_.load() == Mode::Online)
+                et_generation_++;
+            et_active_ = true;
+            setMode(Mode::Online);
+            std::cout << "Switched to online mode\n";
+        }
+#endif
+        else if (cmd == "offline") {
+            std::lock_guard<std::mutex> lk(mode_mtx_);
+            if (mode_.load() == Mode::Online) {
+#ifdef WITH_ET
+                et_active_ = false;
+#endif
+                std::shared_ptr<FileData> data;
+                { std::lock_guard<std::mutex> lk2(file_data_mtx_); data = file_data_; }
+                setMode(data ? Mode::File : Mode::Idle);
+            }
+            std::cout << "Switched to " << mode() << " mode\n";
+        }
+        else if (cmd == "clear") {
+            std::string what;
+            iss >> what;
+            if (what == "hist") {
+                activeApp().clearHistograms();
+                wsBroadcast("{\"type\":\"hist_cleared\"}");
+                std::cout << "Histograms cleared\n";
+            } else if (what == "lms") {
+                activeApp().clearLms();
+                wsBroadcast("{\"type\":\"lms_cleared\"}");
+                std::cout << "LMS cleared\n";
+            } else if (what == "epics") {
+                activeApp().clearEpics();
+                wsBroadcast("{\"type\":\"epics_cleared\"}");
+                std::cout << "EPICS cleared\n";
+            } else {
+                std::cout << "Usage: clear hist|lms|epics\n";
+            }
+        }
+        else if (cmd == "quit" || cmd == "exit") {
+            std::cout << "Stopping server...\n";
+            stop();
+            break;
+        }
+        else {
+            std::cout << "Unknown command: " << cmd << " (type 'help')\n";
+        }
+    }
 }
 
 // =========================================================================

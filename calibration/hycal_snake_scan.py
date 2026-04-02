@@ -1683,17 +1683,24 @@ class SnakeScanGUI:
         if mod is None and eng.path and 0 <= self._selected_start_idx < len(eng.path):
             mod = eng.path[self._selected_start_idx]
 
+        scanning = eng.state in (ScanState.MOVING, ScanState.DWELLING,
+                                  ScanState.PAUSED, ScanState.ERROR)
         if mod:
             px, py = module_to_ptrans(mod.x, mod.y)
             err = math.sqrt((rx - px)**2 + (ry - py)**2)
             self._lbl_expected.configure(
-                text=f"Expected: ({px:.3f}, {py:.3f})")
-            err_fg = C.RED if err > eng.pos_threshold else C.GREEN
-            self._lbl_error.configure(
-                text=f"Diff:     {err:.3f} mm", fg=err_fg)
+                text=f"Expected: {mod.name} ({px:.3f}, {py:.3f})")
+            if scanning:
+                err_fg = C.RED if err > eng.pos_threshold else C.GREEN
+                self._lbl_error.configure(
+                    text=f"Diff:     {err:.3f} mm", fg=err_fg)
+            else:
+                self._lbl_error.configure(
+                    text=f"Diff:     {err:.3f} mm (not scanning)", fg=C.DIM)
         else:
             self._lbl_expected.configure(text="Expected: --")
-            self._lbl_error.configure(text="Diff:     --", fg=C.DIM)
+            self._lbl_error.configure(text="Diff:     -- (not scanning)",
+                                      fg=C.DIM)
 
     def _update_scan_info(self):
         eng = self.engine

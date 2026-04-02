@@ -138,9 +138,16 @@ private:
     std::thread load_thread_;
     std::mutex load_mtx_;
 
-    // On-demand histogram accumulation (when hist not pre-processed)
+    // On-demand accumulation: mirrors the online-mode logic for file browsing.
+    // - Preprocessed (hist_enabled_): all events already processed by
+    //   buildHistograms(); further calls are no-ops.
+    // - Not preprocessed: processEvent/processGemEvent are called once per
+    //   event as the user browses (deduped by ondemand_processed_).
+    // Any new accumulation added to processEvent() automatically follows
+    // this pattern — no per-endpoint code is needed.
     std::unordered_set<int> ondemand_processed_;
     std::mutex ondemand_mtx_;
+    void accumulate(int ev1, fdec::EventData &event, ssp::SspEventData *ssp);
 
     void buildHistograms();
     void loadFileInternal(const std::string &filepath);

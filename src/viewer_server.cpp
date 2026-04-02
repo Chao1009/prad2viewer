@@ -463,6 +463,26 @@ std::string ViewerServer::decodeRawEvent(int ev1, fdec::EventData &event,
     return data_source_->decodeEvent(idx, event, ssp_evt);
 }
 
+// Central accumulation gate for file mode.
+// Mirrors online-mode logic: processEvent + processGemEvent are called once
+// per event.  Preprocessed files skip this (buildHistograms already did it).
+// Any new accumulation added to processEvent() works automatically.
+void ViewerServer::accumulate(int ev1, fdec::EventData &event,
+                              ssp::SspEventData *ssp)
+{
+    if (hist_enabled_) return;  // preprocessed — already done
+
+    std::lock_guard<std::mutex> lk(ondemand_mtx_);
+    if (!ondemand_processed_.insert(ev1).second) return;  // already seen
+
+    if (ssp) app_file_.processGemEvent(*ssp);
+
+    fdec::WaveAnalyzer ana;
+    ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
+    fdec::WaveResult wres;
+    app_file_.processEvent(event, ana, wres);
+}
+
 json ViewerServer::decodeEvent(int ev1)
 {
     // check if this is a recon source (no per-channel data)
@@ -485,19 +505,11 @@ json ViewerServer::decodeEvent(int ev1)
     std::string err = decodeRawEvent(ev1, event, ssp_ptr.get());
     if (!err.empty()) return {{"error", err}};
 
-    app_file_.processGemEvent(*ssp_ptr);
+    accumulate(ev1, event, ssp_ptr.get());
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
-
-    // on-demand histogram accumulation (only when not pre-processed)
-    if (!hist_enabled_) {
-        std::lock_guard<std::mutex> lk(ondemand_mtx_);
-        if (ondemand_processed_.insert(ev1).second)
-            app_file_.processEvent(event, ana, wres);
-    }
-
     return app_file_.encodeEventJson(event, ev1, ana, wres);
 }
 
@@ -520,7 +532,7 @@ json ViewerServer::computeClusters(int ev1)
     std::string err = decodeRawEvent(ev1, event, ssp_ptr.get());
     if (!err.empty()) return {{"error", err}};
 
-    app_file_.processGemEvent(*ssp_ptr);
+    accumulate(ev1, event, ssp_ptr.get());
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
@@ -1083,6 +1095,8 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         auto ssp_ptr = std::make_unique<ssp::SspEventData>();
         std::string err = decodeRawEvent(evnum, *event_ptr, ssp_ptr.get());
         if (!err.empty()) { reply(json({{"error", err}}).dump()); return; }
+
+        accumulate(evnum, *event_ptr, ssp_ptr.get());
 
         fdec::WaveAnalyzer ana;
         ana.cfg.min_peak_ratio = activeApp().hist_cfg.min_peak_ratio;

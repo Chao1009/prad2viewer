@@ -419,42 +419,7 @@ function pollProgress() {
         if (!data.loading) {
             // done — hide overlay, reload config + first event
             document.getElementById('progress-overlay').classList.remove('active');
-            fetch('/api/config').then(r => r.json()).then(cfg => {
-                totalEvents = cfg.total_events || 0;
-                g_currentFile = cfg.current_file || '';
-                histEnabled = cfg.hist_enabled || false;
-                histConfig = cfg.hist || {};
-                if(cfg.cluster_hist){
-                    clHistMin=cfg.cluster_hist.min||0;
-                    clHistMax=cfg.cluster_hist.max||3000;
-                    clHistStep=cfg.cluster_hist.step||10;
-                }
-                if(cfg.nclusters_hist){
-                    nclustMin=cfg.nclusters_hist.min||0;
-                    nclustMax=cfg.nclusters_hist.max||20;
-                    nclustStep=cfg.nclusters_hist.step||1;
-                }
-                if(cfg.nblocks_hist){
-                    nblocksMin=cfg.nblocks_hist.min||0;
-                    nblocksMax=cfg.nblocks_hist.max||40;
-                    nblocksStep=cfg.nblocks_hist.step||1;
-                }
-                initClHist(); plotClHist(); plotClStatHists();
-                updateTimeCutLabel();
-                g_histCheckbox = histEnabled;
-                const hcb = document.getElementById('hist-checkbox');
-                if (hcb) hcb.checked = histEnabled;
-                document.getElementById('ev-total').textContent = `/ ${totalEvents}`;
-
-                updateHeaderStats();
-                if (histEnabled) { fetchOccupancy(); fetchClHist(); }
-                fetchEpicsChannels(); fetchEpicsLatest();
-                if(activeTab==='epics') fetchAllEpicsSlots();
-                if(activeTab==='physics') fetchPhysics();
-                syncDqRange();
-                redrawGeo();
-                if (totalEvents > 0) loadEvent(1);
-            });
+            fetchConfigAndApply();
             return;
         }
         const pct = data.total > 0 ? Math.round(100 * data.current / data.total) : 0;

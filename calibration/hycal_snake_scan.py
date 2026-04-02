@@ -1589,10 +1589,8 @@ class SnakeScanGUI:
             self.engine.stop_scan()
             self._btn_pause.configure(text="Pause")
         else:
-            # No scan running — still send stop to halt any manual move,
-            # then restore Go so future moves aren't blocked
+            # No scan running — still send stop to halt any manual move
             epics_stop(self.ep)
-            epics_resume(self.ep)
             self._log("Motors stopped")
 
     def _cmd_skip(self):

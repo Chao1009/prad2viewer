@@ -30,7 +30,7 @@ from typing import Dict, List, Optional, Tuple
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QTextEdit, QMessageBox, QSplitter, QSizePolicy,
-    QFileDialog,
+    QFileDialog, QLineEdit,
 )
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread
 from PyQt6.QtGui import (
@@ -53,6 +53,12 @@ NUM_CRATES = 7
 CRATE_NAMES = [f"adchycal{i}" for i in range(1, NUM_CRATES + 1)]
 CHANNELS_PER_SLOT = 16
 
+# Display ranges for the two maps  (adjust as needed)
+DISPLAY_PED_MIN = 50.0
+DISPLAY_PED_MAX = 300.0
+DISPLAY_DELTA_MIN = -3.0
+DISPLAY_DELTA_MAX = 3.0
+
 # Thresholds for flagging irregular channels  (adjust as needed)
 THRESH_PED_MIN = 50.0       # acceptable pedestal mean lower bound
 THRESH_PED_MAX = 300.0      # acceptable pedestal mean upper bound
@@ -60,6 +66,42 @@ THRESH_DEAD_AVG = 1.0       # avg below this AND rms below THRESH_DEAD_RMS -> DE
 THRESH_DEAD_RMS = 0.1       # rms below this AND avg below THRESH_DEAD_AVG -> DEAD
 THRESH_HIGH_RMS = 1.5       # rms above this -> HIGH RMS
 THRESH_DRIFT = 3.0          # |current - original| above this -> DRIFT
+
+# LMS / V module positions below HyCal  (name -> centre-x)
+_BOTTOM_Y = -640.0
+_BOTTOM_SZ = 50.0
+_LMS_V_XPOS = {
+    "LMS1": -170.0, "LMS2": -115.0, "LMS3": -60.0,
+    "V1": 5.0, "V2": 60.0, "V3": 115.0, "V4": 170.0,
+}
+
+
+# ===========================================================================
+#  Colour palettes  (click colour bar to cycle)
+# ===========================================================================
+
+PALETTES = {
+    "viridis": [
+        (0.00, (68,   1,  84)), (0.25, (59,  82, 139)),
+        (0.50, (33, 145, 140)), (0.75, (94, 201,  98)),
+        (1.00, (253, 231,  37)),
+    ],
+    "inferno": [
+        (0.00, (0,   0,   4)), (0.25, (120,  28, 109)),
+        (0.50, (229, 89,  52)), (0.75, (253, 198,  39)),
+        (1.00, (252, 255, 164)),
+    ],
+    "coolwarm": [
+        (0.00, (59,  76, 192)), (0.25, (141, 176, 254)),
+        (0.50, (221, 221, 221)), (0.75, (245, 148, 114)),
+        (1.00, (180,   4,  38)),
+    ],
+    "hot": [
+        (0.00, (11,   0,   0)), (0.33, (230,   0,   0)),
+        (0.66, (255, 210,   0)), (1.00, (255, 255, 255)),
+    ],
+}
+PALETTE_NAMES = list(PALETTES.keys())
 
 
 # ===========================================================================
@@ -69,7 +111,7 @@ THRESH_DRIFT = 3.0          # |current - original| above this -> DRIFT
 @dataclass
 class Module:
     name: str
-    mod_type: str   # "PbWO4", "PbGlass", "LMS"
+    mod_type: str   # "PbWO4", "PbGlass", "LMS", "Scintillator"
     x: float
     y: float
     sx: float
@@ -85,6 +127,23 @@ def load_modules(path: Path) -> List[Module]:
         data = json.load(f)
     return [Module(e["n"], e["t"], e["x"], e["y"], e["sx"], e["sy"])
             for e in data]
+
+
+def prepare_modules(modules: List[Module]) -> List[Module]:
+    """Reposition LMS1-3 below HyCal and add V1-V4."""
+    result: List[Module] = []
+    for m in modules:
+        if m.name in _LMS_V_XPOS:
+            result.append(Module(m.name, m.mod_type,
+                                 _LMS_V_XPOS[m.name], _BOTTOM_Y,
+                                 _BOTTOM_SZ, _BOTTOM_SZ))
+        else:
+            result.append(m)
+    for name in ("V1", "V2", "V3", "V4"):
+        result.append(Module(name, "Scintillator",
+                             _LMS_V_XPOS[name], _BOTTOM_Y,
+                             _BOTTOM_SZ, _BOTTOM_SZ))
+    return result
 
 
 def load_daq_map(path: Path) -> Dict[Tuple[int, int, int], str]:
@@ -195,14 +254,13 @@ def find_irregular_channels(
     daq_map: Dict[Tuple[int, int, int], str],
 ) -> List[str]:
     """Return formatted lines describing flagged channels."""
-    # Reverse map:  module_name -> (crate_name, slot, ch)
     rev: Dict[str, Tuple[str, int, int]] = {}
     for (ci, slot, ch), name in daq_map.items():
         rev[name] = (CRATE_NAMES[ci], slot, ch)
 
     issues: List[str] = []
-
-    for mod, d in sorted(measured.items(), key=lambda kv: rev.get(kv[0], ("", 0, 0))):
+    for mod, d in sorted(measured.items(),
+                         key=lambda kv: rev.get(kv[0], ("", 0, 0))):
         cname, slot, ch = rev.get(mod, ("???", 0, 0))
         loc = f"{cname} slot {slot:2d} ch {ch:2d}"
         avg, rms = d["avg"], d["rms"]
@@ -218,40 +276,21 @@ def find_irregular_channels(
             issues.append(f"  HIGH RMS      {mod:<6s}  {loc}  "
                           f"avg={avg:.2f}  rms={rms:.3f}")
 
-        # Drift check (skip dead channels)
         if mod in original and not (avg < THRESH_DEAD_AVG and rms < THRESH_DEAD_RMS):
             delta = avg - original[mod]
             if abs(delta) > THRESH_DRIFT:
                 issues.append(f"  DRIFT         {mod:<6s}  {loc}  "
                               f"cur={avg:.2f}  orig={original[mod]:.2f}  "
                               f"delta={delta:+.2f}")
-
     return issues
 
 
 # ===========================================================================
-#  Colour helpers  (no numpy / matplotlib)
+#  Colour helpers
 # ===========================================================================
 
 def _lerp(a: int, b: int, t: float) -> int:
     return int(a + (b - a) * t)
-
-
-_VIRIDIS = [
-    (0.00, (68,   1,  84)),
-    (0.25, (59,  82, 139)),
-    (0.50, (33, 145, 140)),
-    (0.75, (94, 201,  98)),
-    (1.00, (253, 231, 37)),
-]
-
-_RDBU = [
-    (0.00, ( 33, 102, 172)),
-    (0.25, (103, 169, 207)),
-    (0.50, (247, 247, 247)),
-    (0.75, (239, 138,  98)),
-    (1.00, (178,  24,  43)),
-]
 
 
 def _cmap_qcolor(t: float, stops) -> QColor:
@@ -268,24 +307,18 @@ def _cmap_qcolor(t: float, stops) -> QColor:
     return QColor(*c)
 
 
-def _percentile(data: List[float], p: float) -> float:
-    if not data:
-        return 0.0
-    s = sorted(data)
-    k = (len(s) - 1) * p / 100.0
-    lo = int(k)
-    hi = min(lo + 1, len(s) - 1)
-    return s[lo] + (k - lo) * (s[hi] - s[lo])
-
-
 # ===========================================================================
 #  HyCal map widget
 # ===========================================================================
+
+_LABEL_NAMES = {"LMS1", "LMS2", "LMS3", "V1", "V2", "V3", "V4"}
+
 
 class HyCalMapWidget(QWidget):
     """Draws a colour-coded HyCal module map using QPainter."""
 
     module_hovered = pyqtSignal(str)
+    palette_clicked = pyqtSignal()
 
     _SHRINK = 0.92
 
@@ -299,42 +332,40 @@ class HyCalMapWidget(QWidget):
         self._modules: List[Module] = []
         self._values: Dict[str, float] = {}
         self._title = ""
-        self._cmap = "viridis"
-        self._center_zero = False
         self._vmin = 0.0
         self._vmax = 1.0
+        self._palette_idx = 0
         self._hovered: Optional[str] = None
         self._rects: Dict[str, QRectF] = {}
+        self._cb_rect: Optional[QRectF] = None
         self._layout_dirty = True
 
     # -- public API --
 
     def set_data(self, modules: List[Module], values: Dict[str, float],
-                 title: str, cmap: str = "viridis",
-                 center_zero: bool = False):
+                 title: str, vmin: float, vmax: float):
         self._modules = modules
         self._values = values
         self._title = title
-        self._cmap = cmap
-        self._center_zero = center_zero
+        self._vmin = vmin
+        self._vmax = vmax
         self._layout_dirty = True
+        self.update()
 
-        live = [v for v in values.values() if v != 0.0] or list(values.values())
-        if live:
-            self._vmin = _percentile(live, 2)
-            self._vmax = _percentile(live, 98)
-        else:
-            self._vmin, self._vmax = 0.0, 1.0
-        if center_zero:
-            mx = max(abs(self._vmin), abs(self._vmax), 1e-9)
-            self._vmin, self._vmax = -mx, mx
+    def set_range(self, vmin: float, vmax: float):
+        self._vmin = vmin
+        self._vmax = vmax
+        self.update()
+
+    def set_palette(self, idx: int):
+        self._palette_idx = idx % len(PALETTES)
         self.update()
 
     # -- layout --
 
     def _recompute_layout(self):
         self._rects.clear()
-        det = [m for m in self._modules if m.mod_type != "LMS"]
+        det = list(self._modules)   # all modules including LMS/V
         if not det:
             return
         w, h = self.width(), self.height()
@@ -380,12 +411,12 @@ class HyCalMapWidget(QWidget):
             if not self._values:
                 p.setPen(QColor("#555555"))
                 p.setFont(QFont("Monospace", 12))
-                p.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignCenter,
-                           "No data")
+                p.drawText(QRectF(0, 0, w, h),
+                           Qt.AlignmentFlag.AlignCenter, "No data")
             p.end()
             return
 
-        stops = _VIRIDIS if self._cmap == "viridis" else _RDBU
+        stops = list(PALETTES.values())[self._palette_idx]
         vmin, vmax = self._vmin, self._vmax
 
         # Modules
@@ -397,6 +428,14 @@ class HyCalMapWidget(QWidget):
             else:
                 p.fillRect(rect, QColor("#1a1a2e"))
 
+        # Labels on LMS / V blocks
+        p.setPen(QColor("#c9d1d9"))
+        p.setFont(QFont("Monospace", 7, QFont.Weight.Bold))
+        for name in _LABEL_NAMES:
+            if name in self._rects:
+                p.drawText(self._rects[name],
+                           Qt.AlignmentFlag.AlignCenter, name)
+
         # Hover highlight
         if self._hovered and self._hovered in self._rects:
             p.setPen(QPen(QColor("#58a6ff"), 2.0))
@@ -405,28 +444,40 @@ class HyCalMapWidget(QWidget):
 
         # Colour bar
         cb_w = min(300, w - 80)
-        cb_h, cb_x, cb_y = 14, (w - min(300, w - 80)) / 2, h - 40
+        cb_h = 14
+        cb_x = (w - cb_w) / 2
+        cb_y = h - 40
+        self._cb_rect = QRectF(cb_x, cb_y, cb_w, cb_h)
+
         grad = QLinearGradient(cb_x, 0, cb_x + cb_w, 0)
         for t, (r, g, b) in stops:
             grad.setColorAt(t, QColor(r, g, b))
-        p.fillRect(QRectF(cb_x, cb_y, cb_w, cb_h), QBrush(grad))
-        p.setPen(QPen(QColor("#555"), 0.5))
-        p.drawRect(QRectF(cb_x, cb_y, cb_w, cb_h))
+        p.fillRect(self._cb_rect, QBrush(grad))
+        p.setPen(QPen(QColor("#58a6ff"), 1.0))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawRect(self._cb_rect)
+
+        # Range labels + palette name
         p.setPen(QColor("#8b949e"))
         p.setFont(QFont("Monospace", 9))
         p.drawText(QRectF(cb_x, cb_y + cb_h + 2, 60, 14),
                    Qt.AlignmentFlag.AlignLeft, f"{vmin:.1f}")
         p.drawText(QRectF(cb_x + cb_w - 60, cb_y + cb_h + 2, 60, 14),
                    Qt.AlignmentFlag.AlignRight, f"{vmax:.1f}")
-        mid = (vmin + vmax) / 2
-        p.drawText(QRectF(cb_x + cb_w / 2 - 30, cb_y + cb_h + 2, 60, 14),
-                   Qt.AlignmentFlag.AlignCenter, f"{mid:.1f}")
+        pname = PALETTE_NAMES[self._palette_idx]
+        p.drawText(QRectF(cb_x, cb_y + cb_h + 2, cb_w, 14),
+                   Qt.AlignmentFlag.AlignCenter, pname)
         p.end()
 
-    # -- mouse tracking --
+    # -- mouse --
 
     def mouseMoveEvent(self, event):
         pos = event.position()
+        # Hand cursor over colour bar
+        if self._cb_rect and self._cb_rect.contains(pos):
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        else:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
         found = None
         for name, rect in self._rects.items():
             if rect.contains(pos):
@@ -438,16 +489,20 @@ class HyCalMapWidget(QWidget):
             if found:
                 self.module_hovered.emit(found)
 
+    def mousePressEvent(self, event):
+        if self._cb_rect and self._cb_rect.contains(event.position()):
+            self.palette_clicked.emit()
+        super().mousePressEvent(event)
+
 
 # ===========================================================================
 #  Measurement thread
 # ===========================================================================
 
 class MeasureThread(QThread):
-    """Runs faV3peds on each crate via SSH, emitting stdout per crate."""
-    progress = pyqtSignal(int, str)        # crate_idx, status_msg
-    crate_done = pyqtSignal(int, str)      # crate_idx, combined stdout+stderr
-    crate_error = pyqtSignal(int, str)     # crate_idx, error_msg
+    progress = pyqtSignal(int, str)
+    crate_done = pyqtSignal(int, str)
+    crate_error = pyqtSignal(int, str)
 
     def run(self):
         for i, cname in enumerate(CRATE_NAMES):
@@ -479,19 +534,20 @@ class PedestalMonitorWindow(QMainWindow):
         self._modules = modules
         self._daq_map = daq_map
         self._sim = sim
+        self._palette_idx = 0
 
         self._original: Dict[str, float] = {}
         self._latest: Dict[str, float] = {}
-        self._measured: Dict[str, dict] = {}   # from stdout: name->{avg,rms,...}
+        self._measured: Dict[str, dict] = {}
 
         self._build_ui()
         self._load_data()
 
-    # ---- UI construction ----
+    # ---- UI ----
 
     def _build_ui(self):
         self.setWindowTitle("HyCal Pedestal Monitor")
-        self.resize(1400, 820)
+        self.resize(1400, 900)
         self._apply_dark_palette()
 
         central = QWidget()
@@ -507,7 +563,6 @@ class PedestalMonitorWindow(QMainWindow):
         lbl.setStyleSheet("color:#58a6ff;")
         top.addWidget(lbl)
         top.addStretch()
-
         self._measure_btn = self._make_btn(
             "Measure Pedestals", "#3fb950", self._on_measure)
         top.addWidget(self._measure_btn)
@@ -519,32 +574,40 @@ class PedestalMonitorWindow(QMainWindow):
         top.addWidget(self._save_btn)
         root.addLayout(top)
 
-        # -- maps + report splitter --
-        splitter = QSplitter(Qt.Orientation.Vertical)
-
+        # -- maps --
         maps = QWidget()
         ml = QHBoxLayout(maps)
         ml.setContentsMargins(0, 0, 0, 0)
         ml.setSpacing(8)
         self._map_left = HyCalMapWidget()
         self._map_right = HyCalMapWidget()
-        self._map_left.module_hovered.connect(self._on_hover)
-        self._map_right.module_hovered.connect(self._on_hover)
+        for m in (self._map_left, self._map_right):
+            m.module_hovered.connect(self._on_hover)
+            m.palette_clicked.connect(self._cycle_palette)
         ml.addWidget(self._map_left)
         ml.addWidget(self._map_right)
-        splitter.addWidget(maps)
+        root.addWidget(maps, stretch=1)
 
-        self._report = QTextEdit()
-        self._report.setReadOnly(True)
-        self._report.setFont(QFont("Monospace", 10))
-        self._report.setStyleSheet(
-            "QTextEdit{background:#161b22;color:#8b949e;"
-            "border:1px solid #30363d;border-radius:4px;}")
-        self._report.setMaximumHeight(220)
-        splitter.addWidget(self._report)
-        splitter.setStretchFactor(0, 4)
-        splitter.setStretchFactor(1, 1)
-        root.addWidget(splitter)
+        # -- range controls --
+        rng = QHBoxLayout()
+        rng.addWidget(self._slabel("Mean range:"))
+        self._left_min = self._sedit(f"{DISPLAY_PED_MIN:.0f}")
+        self._left_max = self._sedit(f"{DISPLAY_PED_MAX:.0f}")
+        rng.addWidget(self._left_min)
+        rng.addWidget(self._slabel("-"))
+        rng.addWidget(self._left_max)
+        rng.addSpacing(30)
+        rng.addWidget(self._slabel("Delta range:"))
+        self._right_min = self._sedit(f"{DISPLAY_DELTA_MIN:.1f}")
+        self._right_max = self._sedit(f"{DISPLAY_DELTA_MAX:.1f}")
+        rng.addWidget(self._right_min)
+        rng.addWidget(self._slabel("-"))
+        rng.addWidget(self._right_max)
+        rng.addSpacing(10)
+        rng.addWidget(self._make_btn("Apply", "#c9d1d9",
+                                     self._apply_ranges))
+        rng.addStretch()
+        root.addLayout(rng)
 
         # -- info bar --
         self._info = QLabel("Hover over a module for details")
@@ -555,10 +618,45 @@ class PedestalMonitorWindow(QMainWindow):
         self._info.setFixedHeight(28)
         root.addWidget(self._info)
 
-        self.statusBar().setStyleSheet(
-            "QStatusBar{color:#8b949e;font:10px Monospace;}")
+        # -- status bar (prominent, for measurement progress) --
+        self._status_lbl = QLabel("Ready")
+        self._status_lbl.setFont(QFont("Monospace", 12, QFont.Weight.Bold))
+        self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._set_status_style("idle")
+        self._status_lbl.setFixedHeight(34)
+        root.addWidget(self._status_lbl)
 
-    def _make_btn(self, text: str, fg: str, slot) -> QPushButton:
+        # -- report area --
+        self._report = QTextEdit()
+        self._report.setReadOnly(True)
+        self._report.setFont(QFont("Monospace", 10))
+        self._report.setStyleSheet(
+            "QTextEdit{background:#161b22;color:#8b949e;"
+            "border:1px solid #30363d;border-radius:4px;}")
+        self._report.setMaximumHeight(180)
+        root.addWidget(self._report)
+
+    def _set_status_style(self, mode: str):
+        if mode == "measuring":
+            self._status_lbl.setStyleSheet(
+                "QLabel{background:#2d1f00;color:#d29922;padding:4px;"
+                "border:2px solid #d29922;border-radius:4px;}")
+        elif mode == "done":
+            self._status_lbl.setStyleSheet(
+                "QLabel{background:#1a2a1a;color:#3fb950;padding:4px;"
+                "border:2px solid #3fb950;border-radius:4px;}")
+        elif mode == "error":
+            self._status_lbl.setStyleSheet(
+                "QLabel{background:#2a1a1a;color:#f85149;padding:4px;"
+                "border:2px solid #f85149;border-radius:4px;}")
+        else:
+            self._status_lbl.setStyleSheet(
+                "QLabel{background:#161b22;color:#8b949e;padding:4px;"
+                "border:1px solid #30363d;border-radius:4px;}")
+
+    # -- helpers --
+
+    def _make_btn(self, text, fg, slot):
         btn = QPushButton(text)
         btn.setStyleSheet(
             f"QPushButton{{background:#21262d;color:{fg};"
@@ -569,19 +667,60 @@ class PedestalMonitorWindow(QMainWindow):
         btn.clicked.connect(slot)
         return btn
 
+    def _slabel(self, text):
+        lbl = QLabel(text)
+        lbl.setFont(QFont("Monospace", 10))
+        lbl.setStyleSheet("color:#c9d1d9;")
+        return lbl
+
+    def _sedit(self, text):
+        e = QLineEdit(text)
+        e.setFixedWidth(55)
+        e.setFont(QFont("Monospace", 10))
+        e.setStyleSheet(
+            "QLineEdit{background:#161b22;color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:3px;padding:2px 4px;}")
+        e.returnPressed.connect(self._apply_ranges)
+        return e
+
     def _apply_dark_palette(self):
         pal = self.palette()
         for role, colour in [
-            (QPalette.ColorRole.Window,       "#0d1117"),
-            (QPalette.ColorRole.WindowText,   "#c9d1d9"),
-            (QPalette.ColorRole.Base,         "#161b22"),
-            (QPalette.ColorRole.Text,         "#c9d1d9"),
-            (QPalette.ColorRole.Button,       "#21262d"),
-            (QPalette.ColorRole.ButtonText,   "#c9d1d9"),
-            (QPalette.ColorRole.Highlight,    "#58a6ff"),
+            (QPalette.ColorRole.Window,     "#0d1117"),
+            (QPalette.ColorRole.WindowText, "#c9d1d9"),
+            (QPalette.ColorRole.Base,       "#161b22"),
+            (QPalette.ColorRole.Text,       "#c9d1d9"),
+            (QPalette.ColorRole.Button,     "#21262d"),
+            (QPalette.ColorRole.ButtonText, "#c9d1d9"),
+            (QPalette.ColorRole.Highlight,  "#58a6ff"),
         ]:
             pal.setColor(role, QColor(colour))
         self.setPalette(pal)
+
+    # ---- palette cycling ----
+
+    def _cycle_palette(self):
+        self._palette_idx = (self._palette_idx + 1) % len(PALETTES)
+        self._map_left.set_palette(self._palette_idx)
+        self._map_right.set_palette(self._palette_idx)
+
+    # ---- range editing ----
+
+    def _apply_ranges(self):
+        try:
+            lmin = float(self._left_min.text())
+            lmax = float(self._left_max.text())
+            if lmin < lmax:
+                self._map_left.set_range(lmin, lmax)
+        except ValueError:
+            pass
+        try:
+            rmin = float(self._right_min.text())
+            rmax = float(self._right_max.text())
+            if rmin < rmax:
+                self._map_right.set_range(rmin, rmax)
+        except ValueError:
+            pass
 
     # ---- data loading ----
 
@@ -589,62 +728,54 @@ class PedestalMonitorWindow(QMainWindow):
         if self._sim:
             self._load_sim_data()
             return
-
-        # Original pedestals
         if ORIGINAL_PED_DIR.exists():
             self._original = read_all_pedestals(
                 ORIGINAL_PED_DIR, "_ped.cnf", self._daq_map)
         else:
             self._original = {}
-
-        # Latest measured pedestals
         if PEDESTALS_DIR.exists():
             self._latest = read_all_pedestals(
                 PEDESTALS_DIR, "_latest.cnf", self._daq_map)
         else:
             self._latest = {}
-
-        n_orig = len(self._original)
-        n_lat = len(self._latest)
-        self.statusBar().showMessage(
-            f"Loaded {n_orig} original, {n_lat} latest channels", 5000)
+        n_o, n_l = len(self._original), len(self._latest)
+        self._status_lbl.setText(
+            f"Loaded {n_o} original, {n_l} latest channels")
+        self._set_status_style("idle")
         self._update_maps()
         self._update_report()
 
     def _load_sim_data(self):
         rng = random.Random(42)
-        names = [m.name for m in self._modules if m.mod_type != "LMS"]
         self._original.clear()
         self._latest.clear()
         self._measured.clear()
+        all_names: List[str] = []
         for m in self._modules:
-            if m.mod_type == "LMS":
-                continue
+            n = m.name
+            all_names.append(n)
             o = rng.gauss(160, 25)
             l = o + rng.gauss(0, 1.0)
-            self._original[m.name] = o
-            self._latest[m.name] = l
-            self._measured[m.name] = {
+            self._original[n] = o
+            self._latest[n] = l
+            self._measured[n] = {
                 "avg": l, "rms": abs(rng.gauss(0.7, 0.15)),
                 "min": int(l) - 3, "max": int(l) + 3,
             }
-        # Dead channels (avg ~ 0, rms ~ 0)
-        for n in rng.sample(names, 15):
+        for n in rng.sample(all_names, min(15, len(all_names))):
             self._original[n] = 0.0
             self._latest[n] = 0.0
             self._measured[n].update(avg=0.0, rms=0.0)
-        # Out-of-range channels
-        for n in rng.sample(names, 3):
+        for n in rng.sample(all_names, 3):
             val = rng.choice([rng.uniform(10, 40), rng.uniform(320, 500)])
             self._original[n] = val
             self._latest[n] = val + rng.gauss(0, 0.5)
-            self._measured[n].update(avg=self._latest[n], rms=abs(rng.gauss(0.7, 0.2)))
-        # High-RMS channels
-        for n in rng.sample(names, 5):
+            self._measured[n].update(avg=self._latest[n],
+                                     rms=abs(rng.gauss(0.7, 0.2)))
+        for n in rng.sample(all_names, 5):
             if self._measured[n]["avg"] >= THRESH_DEAD_AVG:
                 self._measured[n]["rms"] = rng.uniform(1.8, 5.0)
-        # Drift channels
-        for n in rng.sample(names, 4):
+        for n in rng.sample(all_names, 4):
             if self._measured[n]["avg"] >= THRESH_PED_MIN:
                 drift = rng.choice([-1, 1]) * rng.uniform(4.0, 12.0)
                 self._latest[n] = self._original[n] + drift
@@ -660,7 +791,8 @@ class PedestalMonitorWindow(QMainWindow):
         label = "Current" if has_latest else "Original"
 
         self._map_left.set_data(
-            self._modules, cur, f"{label} Pedestal Mean")
+            self._modules, cur, f"{label} Pedestal Mean",
+            DISPLAY_PED_MIN, DISPLAY_PED_MAX)
 
         if has_latest and self._original:
             delta = {n: cur[n] - self._original[n]
@@ -668,15 +800,21 @@ class PedestalMonitorWindow(QMainWindow):
             self._map_right.set_data(
                 self._modules, delta,
                 "Mean Difference (Current \u2212 Original)",
-                cmap="rdbu", center_zero=True)
+                DISPLAY_DELTA_MIN, DISPLAY_DELTA_MAX)
         else:
             self._map_right.set_data(
-                self._modules, {}, "Mean Difference (no comparison data)")
+                self._modules, {},
+                "Mean Difference (no comparison data)",
+                DISPLAY_DELTA_MIN, DISPLAY_DELTA_MAX)
+
+        # Apply current palette
+        self._map_left.set_palette(self._palette_idx)
+        self._map_right.set_palette(self._palette_idx)
 
     def _update_report(self):
         lines: List[str] = []
 
-        def _stats(label: str, peds: Dict[str, float]):
+        def _stats(label, peds):
             vals = list(peds.values())
             live = [v for v in vals if v >= THRESH_DEAD_AVG]
             dead = sum(1 for v in vals if v < THRESH_DEAD_AVG)
@@ -705,10 +843,9 @@ class PedestalMonitorWindow(QMainWindow):
                 lines.extend(issues)
             else:
                 lines.append("All channels within normal parameters.")
-
         self._report.setPlainText("\n".join(lines))
 
-    # ---- hover info ----
+    # ---- hover ----
 
     def _on_hover(self, name: str):
         parts = [name]
@@ -728,7 +865,7 @@ class PedestalMonitorWindow(QMainWindow):
             parts.append(f"rms: {self._measured[name]['rms']:.3f}")
         self._info.setText("    ".join(parts))
 
-    # ---- save report ----
+    # ---- save ----
 
     def _on_save_report(self):
         text = self._report.toPlainText().strip()
@@ -743,7 +880,8 @@ class PedestalMonitorWindow(QMainWindow):
             return
         with open(path, "w") as f:
             f.write(text + "\n")
-        self.statusBar().showMessage(f"Report saved to {path}", 5000)
+        self._status_lbl.setText(f"Report saved to {path}")
+        self._set_status_style("done")
 
     # ---- measurement ----
 
@@ -757,19 +895,24 @@ class PedestalMonitorWindow(QMainWindow):
             QMessageBox.StandardButton.No)
         if reply != QMessageBox.StandardButton.Yes:
             return
-
         self._measure_btn.setEnabled(False)
         self._reload_btn.setEnabled(False)
         self._measure_btn.setText("Measuring...")
         self._measured.clear()
+        self._report.clear()
+
+        self._set_status_style("measuring")
+        self._status_lbl.setText("MEASURING: starting...")
 
         self._thread = MeasureThread()
-        self._thread.progress.connect(
-            lambda _i, s: self.statusBar().showMessage(s))
+        self._thread.progress.connect(self._on_progress)
         self._thread.crate_done.connect(self._on_crate_done)
         self._thread.crate_error.connect(self._on_crate_error)
         self._thread.finished.connect(self._on_measure_finished)
         self._thread.start()
+
+    def _on_progress(self, idx: int, msg: str):
+        self._status_lbl.setText(f"MEASURING: {msg}")
 
     def _on_crate_done(self, idx: int, stdout: str):
         parsed = parse_measurement_stdout(stdout, idx, self._daq_map)
@@ -779,17 +922,23 @@ class PedestalMonitorWindow(QMainWindow):
 
     def _on_crate_error(self, idx: int, msg: str):
         self._report.append(f"  ERROR: {msg}")
+        self._set_status_style("error")
+        self._status_lbl.setText(f"ERROR: {msg}")
 
     def _on_measure_finished(self):
         self._measure_btn.setEnabled(True)
         self._reload_btn.setEnabled(True)
         self._measure_btn.setText("Measure Pedestals")
-        self.statusBar().showMessage("Measurement complete", 5000)
 
-        # Re-read latest files (now on shared mount)
         if PEDESTALS_DIR.exists():
             self._latest = read_all_pedestals(
                 PEDESTALS_DIR, "_latest.cnf", self._daq_map)
+
+        n = len(self._measured)
+        self._status_lbl.setText(
+            f"MEASUREMENT COMPLETE: {n} channels measured")
+        self._set_status_style("done")
+
         self._update_maps()
         self._update_report()
 
@@ -806,7 +955,7 @@ def main():
     ap.add_argument("--daq-map", type=Path, default=DAQ_MAP_JSON)
     args = ap.parse_args()
 
-    modules = load_modules(args.modules_db)
+    modules = prepare_modules(load_modules(args.modules_db))
     daq_map = load_daq_map(args.daq_map)
 
     app = QApplication(sys.argv)

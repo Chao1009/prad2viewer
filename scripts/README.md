@@ -4,7 +4,7 @@ Python utilities for detector visualization and monitoring.
 
 ## hycal_scaler_map.py
 
-Live colour-coded HyCal FADC scaler map. Polls `B_DET_HYCAL_FADC_<name>` EPICS channels every 10 s.
+PyQt6 live colour-coded HyCal FADC scaler map. Polls `B_DET_HYCAL_FADC_<name>` EPICS channels every 10 s. Requires `pyepics` for real EPICS; `--sim` works without it.
 
 ```bash
 python scripts/hycal_scaler_map.py          # real EPICS (default)

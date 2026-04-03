@@ -17,6 +17,7 @@
         <input type="number" id="ev-input" value="1" min="1">
         <span style="color:var(--dim);font-size:12px" id="ev-total">/ 0</span>
         <button id="btn-next" title="→ key">▶</button>
+        <button id="btn-filter" title="Event filter" style="margin-left:8px">Filter</button>
     </div>
     <div class="nav" id="nav-online" style="display:none">
         <span id="et-status" style="font-size:12px;color:#f66">● Disconnected</span>
@@ -73,6 +74,65 @@
             <button id="elog-submit" class="report-btn">Post</button>
         </div>
         <div class="elog-status" id="elog-status"></div>
+    </div>
+</div>
+
+<!-- filter dialog -->
+<div class="backdrop" id="filter-backdrop"></div>
+<div class="file-dialog" id="filter-dialog" style="max-width:440px">
+    <div class="file-dialog-header">
+        <span>Event Filter</span>
+        <button id="filter-dialog-close">&times;</button>
+    </div>
+    <div class="elog-form" style="gap:6px">
+        <fieldset style="border:1px solid var(--border);padding:8px;margin:0">
+            <legend style="font-size:12px;padding:0 4px"><label><input type="checkbox" id="flt-wf-enable"> Waveform Filter</label></legend>
+            <div class="flt-fields" id="flt-wf-fields">
+                <label>Modules <input type="text" id="flt-wf-modules" placeholder="W100, W101, G25" style="width:100%"></label>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Peak count min<input type="number" id="flt-wf-nmin" value="1" min="0"></label>
+                    <label style="flex:1">max<input type="number" id="flt-wf-nmax" value="999999" min="0"></label>
+                </div>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Time min<input type="number" id="flt-wf-tmin" step="any" placeholder=""></label>
+                    <label style="flex:1">max<input type="number" id="flt-wf-tmax" step="any" placeholder=""></label>
+                </div>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Integral min<input type="number" id="flt-wf-imin" step="any" placeholder=""></label>
+                    <label style="flex:1">max<input type="number" id="flt-wf-imax" step="any" placeholder=""></label>
+                </div>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Height min<input type="number" id="flt-wf-hmin" step="any" placeholder=""></label>
+                    <label style="flex:1">max<input type="number" id="flt-wf-hmax" step="any" placeholder=""></label>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset style="border:1px solid var(--border);padding:8px;margin:0">
+            <legend style="font-size:12px;padding:0 4px"><label><input type="checkbox" id="flt-cl-enable"> Cluster Filter</label></legend>
+            <div class="flt-fields" id="flt-cl-fields">
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Cluster count min<input type="number" id="flt-cl-nmin" value="0" min="0"></label>
+                    <label style="flex:1">max<input type="number" id="flt-cl-nmax" value="999999" min="0"></label>
+                </div>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Energy min<input type="number" id="flt-cl-emin" step="any" placeholder="0"></label>
+                    <label style="flex:1">max<input type="number" id="flt-cl-emax" step="any" placeholder=""></label>
+                </div>
+                <div style="display:flex;gap:6px">
+                    <label style="flex:1">Size min<input type="number" id="flt-cl-smin" value="1" min="1"></label>
+                    <label style="flex:1">max<input type="number" id="flt-cl-smax" value="999999" min="1"></label>
+                </div>
+                <label>Includes modules <input type="text" id="flt-cl-includes" placeholder="W100, G25" style="width:100%"></label>
+                <label>Min includes <input type="number" id="flt-cl-incmin" value="1" min="1" style="width:60px"></label>
+                <label>Center modules <input type="text" id="flt-cl-centers" placeholder="W100, W101" style="width:100%"></label>
+            </div>
+        </fieldset>
+        <div class="elog-form-actions">
+            <button id="flt-cancel">Cancel</button>
+            <button id="flt-clear">Clear Filter</button>
+            <button id="flt-apply" class="report-btn">Apply</button>
+        </div>
+        <div class="elog-status" id="flt-status-msg"></div>
     </div>
 </div>
 

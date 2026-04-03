@@ -42,7 +42,7 @@ cmake --build build
 `prad2_server` is a unified HTTP server that supports both file-based viewing and online ET monitoring. It replaces the former `prad2_viewer` and `prad2_monitor` executables.
 
 ```bash
-prad2_server [evio_file] [-p port] [-H] [-i] [-c config.json] [-d data_dir] [-D daq_config.json] [--et]
+prad2_server [evio_file] [-p port] [-H] [-i] [-f filter.json] [-c config.json] [-d data_dir] [-D daq_config.json] [--et]
 ```
 
 Opens a web GUI at `http://localhost:5051` with tabs: Waveform Data, Clustering, Gain Monitoring (LMS), EPICS, Physics, GEM. See [docs/API.md](docs/API.md) for the full HTTP/WebSocket API reference and interactive CLI commands (`-i`).

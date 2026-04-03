@@ -126,5 +126,49 @@ prad2_server data.evio -H -i
 | `online` | Switch to ET/online mode |
 | `offline` | Switch to file/offline mode |
 | `clear hist\|lms\|epics` | Clear accumulators |
+| `filter` | Show current filter state |
+| `filter load <f>` | Load event filter from JSON file |
+| `filter unload` | Remove all filters |
 | `quit` / `exit` | Stop the server |
 | `help` | Show command list |
+
+---
+
+## Event Filters
+
+Filters control which events are navigable and accumulated in file mode.
+Load from a file (`-f filter.json`) or at runtime via the API / UI panel.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/filter` | Current filter state |
+| POST | `/api/filter/load` | Load filter (JSON body). Rebuilds indices and histograms |
+| POST | `/api/filter/unload` | Remove all filters. Rebuilds |
+| GET | `/api/filter/indices` | List of 1-based event indices passing the filter |
+
+### Filter JSON format
+
+```json
+{
+  "waveform": {
+    "enable": true,
+    "modules": ["W100", "W101"],
+    "n_peaks_min": 1, "n_peaks_max": 999999,
+    "time_min": 160, "time_max": 220,
+    "integral_min": 100, "integral_max": 15000,
+    "height_min": 20, "height_max": 4000
+  },
+  "clustering": {
+    "enable": true,
+    "n_min": 1, "n_max": 999999,
+    "energy_min": 50, "energy_max": 2500,
+    "size_min": 1, "size_max": 999999,
+    "includes_modules": ["W100", "G25"], "includes_min": 1,
+    "center_modules": ["W100", "W101"]
+  }
+}
+```
+
+Each section has `enable: false` by default. All other fields optional.
+Events pass if ALL enabled filters return true. Loading/unloading clears
+accumulated data and rebuilds histograms if the file was preprocessed.

@@ -25,6 +25,7 @@ struct ReconEventData;
 
 #include <map>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <string>
 #include <mutex>
@@ -199,6 +200,14 @@ struct AppState {
     int      nblocks_hist_max    = 40;
     int      nblocks_hist_step   = 1;
 
+    // ---- Event filters (loaded from external JSON via loadFilter) -----------
+    WaveformFilter waveform_filter;
+    ClusterFilter  cluster_filter;
+    // resolved indices for fast filter evaluation
+    std::unordered_set<std::string> filter_wf_keys;   // DAQ keys ("roc_slot_ch")
+    std::unordered_set<int> filter_cl_includes;        // module indices for includes check
+    std::unordered_set<int> filter_cl_centers;          // module IDs (PrimEx) for center check
+
     // ---- Accumulated data (guarded by data_mtx) ----------------------------
     mutable std::mutex data_mtx;
     std::map<std::string, Histogram> histograms;
@@ -308,6 +317,13 @@ struct AppState {
     nlohmann::json apiGemOccupancy() const;
     nlohmann::json apiGemHist() const;
 
+    // ---- Filters ---------------------------------------------------------------
+    std::string loadFilter(const nlohmann::json &j);
+    void unloadFilter();
+    nlohmann::json filterToJson() const;
+    bool filterActive() const { return waveform_filter.enable || cluster_filter.enable; }
+    bool evaluateFilter(fdec::EventData &event, ssp::SspEventData *ssp) const;
+
     // Fill common config fields into a JSON object (used by both viewer and monitor).
     void fillConfigJson(nlohmann::json &cfg) const;
 
@@ -315,4 +331,7 @@ struct AppState {
     // Does NOT handle /api/config, clear endpoints, or mode-specific routes.
     struct ApiResult { bool handled; std::string body; };
     ApiResult handleReadApi(const std::string &uri) const;
+
+private:
+    void resolveFilterKeys();
 };

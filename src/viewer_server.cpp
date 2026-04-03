@@ -113,6 +113,22 @@ void ViewerServer::init(const Config &cfg)
     app_file_.init(db_dir, daq_cfg_file, cfg.config_file);
     app_online_.init(db_dir, daq_cfg_file, cfg.config_file);
 
+    // --- load external filter file if specified ---
+    if (!cfg.filter_file.empty()) {
+        std::string s = readFile(cfg.filter_file);
+        if (!s.empty()) {
+            auto fj = json::parse(s, nullptr, false);
+            if (!fj.is_discarded()) {
+                app_file_.loadFilter(fj);
+                app_online_.loadFilter(fj);
+            } else {
+                std::cerr << "Warning: failed to parse filter file: " << cfg.filter_file << "\n";
+            }
+        } else {
+            std::cerr << "Warning: cannot read filter file: " << cfg.filter_file << "\n";
+        }
+    }
+
     // --- build base_config JSON for /api/config ---
     json modules_j = json::array(), daq_j = json::array();
     { std::string s = readFile(findFile("hycal_modules.json", db_dir));
@@ -382,6 +398,10 @@ void ViewerServer::loadFileInternal(const std::string &filepath)
     app_file_.clearLms();
     app_file_.clearEpics();
 
+    // build filtered index if filter is active
+    if (app_file_.filterActive())
+        buildFilteredIndex();
+
     if (hist_enabled_) {
         progress_.total = data->event_count;
         buildHistograms();
@@ -412,6 +432,9 @@ void ViewerServer::buildHistograms()
         // physics events (EVIO / ROOT raw)
         [&](int idx, fdec::EventData &event, ssp::SspEventData *ssp) {
             progress_.current = app_file_.events_processed.load() + 1;
+            // skip events that don't pass the filter
+            if (app_file_.filterActive() && !app_file_.evaluateFilter(event, ssp))
+                return;
             app_file_.processEvent(event, ana, wres);
             if (ssp) app_file_.processGemEvent(*ssp);
         },
@@ -466,12 +489,102 @@ void ViewerServer::accumulate(int ev1, fdec::EventData &event,
     std::lock_guard<std::mutex> lk(ondemand_mtx_);
     if (!ondemand_processed_.insert(ev1).second) return;  // already seen
 
+    // skip events that don't pass the filter
+    if (app_file_.filterActive() && !app_file_.evaluateFilter(event, ssp))
+        return;
+
     if (ssp) app_file_.processGemEvent(*ssp);
 
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
     app_file_.processEvent(event, ana, wres);
+}
+
+// =========================================================================
+// Filters
+// =========================================================================
+
+std::string ViewerServer::applyFilter(const json &fj)
+{
+    std::string err = app_file_.loadFilter(fj);
+    if (!err.empty()) return err;
+    app_online_.loadFilter(fj);
+
+    // clear + rebuild
+    app_file_.clearHistograms();
+    app_file_.clearLms();
+    app_online_.clearHistograms();
+    app_online_.clearLms();
+    { std::lock_guard<std::mutex> lk(ondemand_mtx_); ondemand_processed_.clear(); }
+
+    buildFilteredIndex();
+
+    if (hist_enabled_) {
+        std::shared_ptr<FileData> data;
+        { std::lock_guard<std::mutex> lk(file_data_mtx_); data = file_data_; }
+        if (data) buildHistograms();
+    }
+
+    wsBroadcast("{\"type\":\"hist_cleared\"}");
+    return "";
+}
+
+void ViewerServer::clearFilter()
+{
+    app_file_.unloadFilter();
+    app_online_.unloadFilter();
+
+    app_file_.clearHistograms();
+    app_file_.clearLms();
+    app_online_.clearHistograms();
+    app_online_.clearLms();
+    { std::lock_guard<std::mutex> lk(ondemand_mtx_); ondemand_processed_.clear(); }
+
+    filtered_indices_.clear();
+
+    if (hist_enabled_) {
+        std::shared_ptr<FileData> data;
+        { std::lock_guard<std::mutex> lk(file_data_mtx_); data = file_data_; }
+        if (data) buildHistograms();
+    }
+
+    wsBroadcast("{\"type\":\"hist_cleared\"}");
+}
+
+void ViewerServer::buildFilteredIndex()
+{
+    filtered_indices_.clear();
+    if (!app_file_.filterActive()) return;
+
+    std::lock_guard<std::mutex> lk(data_source_mtx_);
+    if (!data_source_) return;
+
+    auto event_ptr = std::make_unique<fdec::EventData>();
+    auto &event = *event_ptr;
+    auto ssp_ptr = std::make_unique<ssp::SspEventData>();
+    auto &ssp_evt = *ssp_ptr;
+    int idx = 0;
+
+    progress_.loading = true;
+    progress_.setFile("Filtering events");
+    progress_.phase = 1;
+    progress_.current = 0;
+    progress_.total = 0;
+
+    data_source_->iterateAll(
+        [&](int /*i*/, fdec::EventData &ev, ssp::SspEventData *ssp) {
+            idx++;
+            progress_.current = idx;
+            if (app_file_.evaluateFilter(ev, ssp))
+                filtered_indices_.push_back(idx);  // 1-based
+        },
+        nullptr, nullptr, nullptr
+    );
+
+    progress_.loading = false;
+    progress_.phase = 0;
+    std::cerr << "Filter: " << filtered_indices_.size() << " / " << idx << " events pass\n";
 }
 
 json ViewerServer::decodeEvent(int ev1)
@@ -558,6 +671,9 @@ void ViewerServer::commandLoop()
 #endif
                       << "  offline           — switch to file mode\n"
                       << "  clear <what>      — clear hist, lms, or epics\n"
+                      << "  filter            — show current filter\n"
+                      << "  filter load <f>   — load filter from JSON file\n"
+                      << "  filter unload     — remove all filters\n"
                       << "  quit / exit       — stop the server\n";
         }
         else if (cmd == "status") {
@@ -622,6 +738,36 @@ void ViewerServer::commandLoop()
                 std::cout << "EPICS cleared\n";
             } else {
                 std::cout << "Usage: clear hist|lms|epics\n";
+            }
+        }
+        else if (cmd == "filter") {
+            std::string sub;
+            iss >> sub;
+            if (sub == "load") {
+                std::string path;
+                iss >> path;
+                if (path.empty()) {
+                    std::cout << "Usage: filter load <path.json>\n";
+                } else {
+                    std::string s = readFile(path);
+                    if (s.empty()) { std::cout << "Cannot read: " << path << "\n"; }
+                    else {
+                        auto fj = json::parse(s, nullptr, false);
+                        if (fj.is_discarded()) { std::cout << "Invalid JSON\n"; }
+                        else {
+                            std::string err = applyFilter(fj);
+                            if (err.empty())
+                                std::cout << "Filter loaded: " << filtered_indices_.size()
+                                          << " events pass\n";
+                            else std::cout << "Error: " << err << "\n";
+                        }
+                    }
+                }
+            } else if (sub == "unload") {
+                clearFilter();
+                std::cout << "Filters unloaded\n";
+            } else {
+                std::cout << activeApp().filterToJson().dump(2) << "\n";
             }
         }
         else if (cmd == "quit" || cmd == "exit") {
@@ -920,6 +1066,9 @@ json ViewerServer::buildConfig()
     cfg["data_dir_enabled"] = !cfg_.data_dir.empty();
     cfg["data_dir"] = cfg_.data_dir;
     cfg["hist_enabled"] = (mode_.load() == Mode::Online) ? true : hist_enabled_.load();
+    cfg["filter_active"] = app_file_.filterActive();
+    cfg["filtered_count"] = filtered_indices_.empty() ? (data ? data->event_count : 0)
+                                                       : (int)filtered_indices_.size();
 
     // data source capabilities
     // In online mode without a file, report EVIO-native capabilities
@@ -1141,6 +1290,30 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
 
     // --- progress ---
     if (uri == "/api/progress") { reply(progress_.toJson().dump()); return; }
+
+    // --- clear endpoints (always available, clears active mode's data) ---
+    // --- filter endpoints ---
+    if (uri == "/api/filter") {
+        reply(activeApp().filterToJson().dump()); return;
+    }
+    if (uri == "/api/filter/load") {
+        std::string body = con->get_request_body();
+        auto fj = json::parse(body, nullptr, false);
+        if (fj.is_discarded()) { reply("{\"error\":\"invalid JSON\"}"); return; }
+        std::string err = applyFilter(fj);
+        if (!err.empty()) { reply(json({{"error", err}}).dump()); return; }
+        reply(json({{"status", "ok"}, {"filter", activeApp().filterToJson()},
+                     {"filtered_count", (int)filtered_indices_.size()}}).dump());
+        return;
+    }
+    if (uri == "/api/filter/unload") {
+        clearFilter();
+        reply(json({{"status", "ok"}, {"filter_active", false}}).dump());
+        return;
+    }
+    if (uri == "/api/filter/indices") {
+        reply(json(filtered_indices_).dump()); return;
+    }
 
     // --- clear endpoints (always available, clears active mode's data) ---
     if (uri == "/api/hist/clear") {

@@ -9,6 +9,7 @@ let triggerTypeDef=[];  // [{type, tag, name, label, primary_bit}, ...]
 // per-tab trigger filter masks: { tabName: {accept: mask, reject: mask} }
 const tabTrigFilter={};
 function trigFilter(){ return tabTrigFilter[activeTab]||(tabTrigFilter[activeTab]={accept:0,reject:0}); }
+let filterActive=false, filteredIndices=null, filteredCount=0;
 let eventChannels={};
 let selectedModule=null, hoveredModule=null;
 const PC=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997','#f06595'];
@@ -321,7 +322,14 @@ function loadEventData(reqId, data) {
 function loadEvent(evnum) {
     currentEvent = evnum;
     const reqId = ++eventRequestId;
-    if (mode === 'file') document.getElementById('ev-input').value = evnum;
+    if (mode === 'file') {
+        if(filteredIndices){
+            const pos=filteredIndices.indexOf(evnum);
+            document.getElementById('ev-input').value = pos>=0 ? pos+1 : evnum;
+        } else {
+            document.getElementById('ev-input').value = evnum;
+        }
+    }
     document.getElementById('status-bar').textContent = `Loading sample ${evnum}...`;
     fetch(`/api/event/${evnum}`).then(r => r.json()).then(d => loadEventData(reqId, d))
         .catch(err => { document.getElementById('status-bar').textContent = `Error: ${err}`; });
@@ -881,9 +889,28 @@ function init(){
     };
 
     // --- file mode nav ---
-    document.getElementById('btn-prev').onclick=()=>{if(currentEvent>1){navDirection=-1;loadEvent(currentEvent-1);}};
-    document.getElementById('btn-next').onclick=()=>{if(currentEvent<totalEvents){navDirection=1;loadEvent(currentEvent+1);}};
-    document.getElementById('ev-input').onchange=e=>{const v=parseInt(e.target.value);if(v>=1&&v<=totalEvents)loadEvent(v);};
+    document.getElementById('btn-prev').onclick=()=>{
+        navDirection=-1;
+        if(filteredIndices){
+            const pos=filteredIndices.indexOf(currentEvent);
+            if(pos>0) loadEvent(filteredIndices[pos-1]);
+        } else { if(currentEvent>1) loadEvent(currentEvent-1); }
+    };
+    document.getElementById('btn-next').onclick=()=>{
+        navDirection=1;
+        if(filteredIndices){
+            const pos=filteredIndices.indexOf(currentEvent);
+            if(pos>=0&&pos<filteredIndices.length-1) loadEvent(filteredIndices[pos+1]);
+        } else { if(currentEvent<totalEvents) loadEvent(currentEvent+1); }
+    };
+    document.getElementById('ev-input').onchange=e=>{
+        const v=parseInt(e.target.value);
+        if(filteredIndices){
+            if(v>=1&&v<=filteredIndices.length) loadEvent(filteredIndices[v-1]);
+        } else {
+            if(v>=1&&v<=totalEvents) loadEvent(v);
+        }
+    };
     document.getElementById('color-metric').onchange=()=>{syncDqRange();geoDq();};
     document.getElementById('log-scale').onchange=geoDq;
     document.getElementById('time-cut').onchange=()=>{
@@ -1008,6 +1035,102 @@ function init(){
         }
     };
 
+    // Filter dialog
+    const fltBackdrop=document.getElementById('filter-backdrop');
+    const fltDialog=document.getElementById('filter-dialog');
+    function openFilterDialog(){
+        fltBackdrop.classList.add('active'); fltDialog.classList.add('active');
+        document.getElementById('flt-status-msg').textContent='';
+        // populate from current filter state
+        fetch('/api/filter').then(r=>r.json()).then(f=>{
+            const w=f.waveform||{}, c=f.clustering||{};
+            document.getElementById('flt-wf-enable').checked=w.enable||false;
+            document.getElementById('flt-wf-modules').value=(w.modules||[]).join(', ');
+            document.getElementById('flt-wf-nmin').value=w.n_peaks_min||1;
+            document.getElementById('flt-wf-nmax').value=w.n_peaks_max||999999;
+            document.getElementById('flt-wf-tmin').value=w.time_min!=null?w.time_min:'';
+            document.getElementById('flt-wf-tmax').value=w.time_max!=null?w.time_max:'';
+            document.getElementById('flt-wf-imin').value=w.integral_min!=null?w.integral_min:'';
+            document.getElementById('flt-wf-imax').value=w.integral_max!=null?w.integral_max:'';
+            document.getElementById('flt-wf-hmin').value=w.height_min!=null?w.height_min:'';
+            document.getElementById('flt-wf-hmax').value=w.height_max!=null?w.height_max:'';
+            document.getElementById('flt-cl-enable').checked=c.enable||false;
+            document.getElementById('flt-cl-nmin').value=c.n_min||0;
+            document.getElementById('flt-cl-nmax').value=c.n_max||999999;
+            document.getElementById('flt-cl-emin').value=c.energy_min!=null?c.energy_min:'';
+            document.getElementById('flt-cl-emax').value=c.energy_max!=null?c.energy_max:'';
+            document.getElementById('flt-cl-smin').value=c.size_min||1;
+            document.getElementById('flt-cl-smax').value=c.size_max||999999;
+            document.getElementById('flt-cl-includes').value=(c.includes_modules||[]).join(', ');
+            document.getElementById('flt-cl-incmin').value=c.includes_min||1;
+            document.getElementById('flt-cl-centers').value=(c.center_modules||[]).join(', ');
+            toggleFilterFields();
+        }).catch(()=>{});
+    }
+    function closeFilterDialog(){ fltBackdrop.classList.remove('active'); fltDialog.classList.remove('active'); }
+    function toggleFilterFields(){
+        const wfOn=document.getElementById('flt-wf-enable').checked;
+        document.getElementById('flt-wf-fields').style.opacity=wfOn?'1':'0.4';
+        document.querySelectorAll('#flt-wf-fields input').forEach(i=>{if(i.type!=='checkbox')i.disabled=!wfOn;});
+        const clOn=document.getElementById('flt-cl-enable').checked;
+        document.getElementById('flt-cl-fields').style.opacity=clOn?'1':'0.4';
+        document.querySelectorAll('#flt-cl-fields input').forEach(i=>{if(i.type!=='checkbox')i.disabled=!clOn;});
+    }
+    function parseModuleList(s){ return s.split(/[,\s]+/).map(x=>x.trim()).filter(x=>x); }
+    function optFloat(id){ const v=document.getElementById(id).value; return v===''?undefined:parseFloat(v); }
+
+    document.getElementById('btn-filter').onclick=()=>openFilterDialog();
+    document.getElementById('filter-dialog-close').onclick=()=>closeFilterDialog();
+    document.getElementById('flt-cancel').onclick=()=>closeFilterDialog();
+    fltBackdrop.onclick=()=>closeFilterDialog();
+    document.getElementById('flt-wf-enable').onchange=toggleFilterFields;
+    document.getElementById('flt-cl-enable').onchange=toggleFilterFields;
+    document.getElementById('flt-apply').onclick=()=>{
+        const fj={};
+        // waveform
+        const wf={enable:document.getElementById('flt-wf-enable').checked};
+        const wfMods=parseModuleList(document.getElementById('flt-wf-modules').value);
+        if(wfMods.length) wf.modules=wfMods;
+        wf.n_peaks_min=parseInt(document.getElementById('flt-wf-nmin').value)||1;
+        wf.n_peaks_max=parseInt(document.getElementById('flt-wf-nmax').value)||999999;
+        const tmin=optFloat('flt-wf-tmin'); if(tmin!=null) wf.time_min=tmin;
+        const tmax=optFloat('flt-wf-tmax'); if(tmax!=null) wf.time_max=tmax;
+        const imin=optFloat('flt-wf-imin'); if(imin!=null) wf.integral_min=imin;
+        const imax=optFloat('flt-wf-imax'); if(imax!=null) wf.integral_max=imax;
+        const hmin=optFloat('flt-wf-hmin'); if(hmin!=null) wf.height_min=hmin;
+        const hmax=optFloat('flt-wf-hmax'); if(hmax!=null) wf.height_max=hmax;
+        fj.waveform=wf;
+        // clustering
+        const cl={enable:document.getElementById('flt-cl-enable').checked};
+        cl.n_min=parseInt(document.getElementById('flt-cl-nmin').value)||0;
+        cl.n_max=parseInt(document.getElementById('flt-cl-nmax').value)||999999;
+        const emin=optFloat('flt-cl-emin'); if(emin!=null) cl.energy_min=emin;
+        const emax=optFloat('flt-cl-emax'); if(emax!=null) cl.energy_max=emax;
+        cl.size_min=parseInt(document.getElementById('flt-cl-smin').value)||1;
+        cl.size_max=parseInt(document.getElementById('flt-cl-smax').value)||999999;
+        const incMods=parseModuleList(document.getElementById('flt-cl-includes').value);
+        if(incMods.length){ cl.includes_modules=incMods; cl.includes_min=parseInt(document.getElementById('flt-cl-incmin').value)||1; }
+        const ctrMods=parseModuleList(document.getElementById('flt-cl-centers').value);
+        if(ctrMods.length) cl.center_modules=ctrMods;
+        fj.clustering=cl;
+
+        document.getElementById('flt-status-msg').textContent='Applying filter...';
+        fetch('/api/filter/load',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fj)})
+            .then(r=>r.json()).then(d=>{
+                if(d.error){ document.getElementById('flt-status-msg').textContent='Error: '+d.error; return; }
+                closeFilterDialog();
+                fetchConfigAndApply();
+            }).catch(()=>{ document.getElementById('flt-status-msg').textContent='Request failed'; });
+    };
+    document.getElementById('flt-clear').onclick=()=>{
+        document.getElementById('flt-status-msg').textContent='Clearing filter...';
+        fetch('/api/filter/unload',{method:'POST'}).then(()=>{
+            closeFilterDialog();
+            fetchConfigAndApply();
+        }).catch(()=>{ document.getElementById('flt-status-msg').textContent='Request failed'; });
+    };
+    toggleFilterFields();
+
     // ET connect dialog
     const etBackdrop=document.getElementById('et-backdrop');
     const etDialog=document.getElementById('et-dialog');
@@ -1107,8 +1230,14 @@ function init(){
     document.addEventListener('keydown',e=>{
         if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
         if(mode==='file'){
-            if(e.key==='ArrowLeft'&&currentEvent>1){navDirection=-1;loadEvent(currentEvent-1);}
-            if(e.key==='ArrowRight'&&currentEvent<totalEvents){navDirection=1;loadEvent(currentEvent+1);}
+            if(filteredIndices){
+                const pos=filteredIndices.indexOf(currentEvent);
+                if(e.key==='ArrowLeft'&&pos>0){navDirection=-1;loadEvent(filteredIndices[pos-1]);}
+                if(e.key==='ArrowRight'&&pos<filteredIndices.length-1){navDirection=1;loadEvent(filteredIndices[pos+1]);}
+            } else {
+                if(e.key==='ArrowLeft'&&currentEvent>1){navDirection=-1;loadEvent(currentEvent-1);}
+                if(e.key==='ArrowRight'&&currentEvent<totalEvents){navDirection=1;loadEvent(currentEvent+1);}
+            }
         } else {
             if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
                 // navigate ring buffer
@@ -1215,6 +1344,8 @@ function applyConfig(data){
                 roc:crateRoc[String(d.crate)]||0,sl:d.slot,ch:d.channel});}
     }
     totalEvents=data.total_events||0;
+    filterActive=data.filter_active||false;
+    filteredCount=data.filtered_count||totalEvents;
     histEnabled=data.hist_enabled||false;
     histConfig=data.hist||{};
     // populate time cut display
@@ -1323,7 +1454,16 @@ function applyConfig(data){
     }
 
     if(mode==='file'){
-        document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
+        if(filterActive){
+            document.getElementById('ev-total').textContent=`/ ${filteredCount} (${totalEvents} total)`;
+            fetch('/api/filter/indices').then(r=>r.json()).then(idx=>{
+                filteredIndices=idx;
+                if(idx.length>0) loadEvent(idx[0]);
+            }).catch(()=>{filteredIndices=null;});
+        } else {
+            document.getElementById('ev-total').textContent=`/ ${totalEvents}`;
+            filteredIndices=null;
+        }
 
         updateHeaderStats();
         if(histEnabled) { fetchOccupancy(); fetchClHist(); }
@@ -1332,7 +1472,7 @@ function applyConfig(data){
         if(activeTab==='physics') fetchPhysics();
         syncDqRange();
         geoViewInit=false; resizeGeo();
-        if(totalEvents>0)loadEvent(1);
+        if(totalEvents>0 && !filterActive) loadEvent(1);
     } else if(mode==='online'){
         setEtStatus(data.et_connected||false, !data.et_connected);
         syncDqRange();

@@ -67,6 +67,7 @@ public:
         bool   hist_enabled = false;
         bool   start_online = false;    // connect ET on startup
         bool   interactive  = false;    // enable stdin command loop
+        std::string filter_file;        // external filter JSON (-f)
     };
 
     ViewerServer();
@@ -144,6 +145,12 @@ private:
     std::unordered_set<int> ondemand_processed_;
     std::mutex ondemand_mtx_;
     void accumulate(int ev1, fdec::EventData &event, ssp::SspEventData *ssp);
+
+    // ── Filters ──────────────────────────────────────────────────────────
+    std::vector<int> filtered_indices_;   // 1-based event indices passing filter
+    void buildFilteredIndex();
+    std::string applyFilter(const nlohmann::json &fj);
+    void clearFilter();
 
     void buildHistograms();
     void loadFileInternal(const std::string &filepath);

@@ -81,6 +81,35 @@ struct HistConfig {
     float min_peak_ratio = 0.3f;
 };
 
+// --- Event-level filters (loaded from external JSON, applied per-event) ------
+// Each filter has enable=false by default; disabled filters are skipped.
+
+struct WaveformFilter {
+    bool  enable       = false;
+    std::vector<std::string> modules;   // HyCal module names; empty = no module restriction
+    int   n_peaks_min  = 1;             // qualifying-peak count range
+    int   n_peaks_max  = 999999;
+    float time_min     = -1e30f;        // peak time range (omit = no cut)
+    float time_max     =  1e30f;
+    float integral_min = -1e30f;        // peak integral range
+    float integral_max =  1e30f;
+    float height_min   = -1e30f;        // peak height range
+    float height_max   =  1e30f;
+};
+
+struct ClusterFilter {
+    bool  enable       = false;
+    int   n_min        = 0;             // qualifying-cluster count range
+    int   n_max        = 999999;
+    float energy_min   = 0;             // per-cluster energy range
+    float energy_max   = 1e30f;
+    int   size_min     = 1;             // per-cluster nblocks range
+    int   size_max     = 999999;
+    std::vector<std::string> includes_modules;  // cluster must contain >= includes_min of these
+    int   includes_min = 1;
+    std::vector<std::string> center_modules;    // cluster center must be in this list
+};
+
 // --- LMS entry (shared between viewer FileData and monitor globals) ---------
 struct LmsEntry {
     double time_sec;    // seconds since first LMS event (from TI timestamp)

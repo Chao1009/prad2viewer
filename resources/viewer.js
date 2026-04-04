@@ -993,8 +993,26 @@ window.addEventListener('DOMContentLoaded',init);
 function clearFrontend(){
     occData={}; occTcutData={}; occTotal=0;
     eventChannels={}; currentWaveform=null; currentHist={};
-    if(selectedModule) showHistograms(selectedModule);
 
+    // reset waveform stacking state
+    wfStackTraces=[]; wfStackModKey=''; wfStackEnabled=false;
+    wfRequestId++;  // invalidate any in-flight waveform fetches
+    lastHistModule='';
+    document.getElementById('wf-stack').checked=false;
+    document.getElementById('wf-stack-count').style.display='none';
+    document.getElementById('btn-wf-stack-reset').style.display='none';
+
+    // deselect module and blank all DQ plots
+    selectedModule=null;
+    document.getElementById('detail-header').innerHTML=
+        '<div class="empty-msg">Click a module to view details</div>';
+    Plotly.react('waveform-div',[],{...PL,xaxis:{...PL.xaxis,title:'Sample'},yaxis:{...PL.yaxis,title:'ADC'}},PC2);
+    Plotly.react('heighthist-div',[],{...PL,title:{text:'Height Histogram',font:{size:10,color:'#555'}}},PC2);
+    Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
+    Plotly.react('poshist-div',[],{...PL,title:{text:'Peak Position',font:{size:10,color:'#555'}}},PC2);
+    document.getElementById('peaks-tbody').innerHTML='';
+
+    // cluster tab
     initClHist(); plotClHist(); plotClStatHists();
     clusterData=null; clusterEvent=-1; selectedCluster=-1;
     currentNclustHist=null; currentNblocksHist=null;
@@ -1003,6 +1021,7 @@ function clearFrontend(){
         '<span class="cl-info-text">Click a module or select a cluster</span>';
     document.getElementById('cl-tbody').innerHTML='';
 
+    // LMS tab
     lmsSummaryData=null; lmsSelectedModule=-1; currentLmsData=null;
     Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
     document.getElementById('lms-detail-header').innerHTML=
@@ -1012,6 +1031,7 @@ function clearFrontend(){
 
     document.getElementById('ring-select').innerHTML='';
 
+    // GEM, EPICS, Physics tabs
     currentGemNclHist=null; currentGemThetaHist=null;
     clearEpicsFrontend();
     clearPhysicsFrontend();
@@ -1019,7 +1039,7 @@ function clearFrontend(){
     sampleCount=0;
     updateHeaderStats();
     redrawGeo();
-    document.getElementById('status-bar').textContent='';
+    document.getElementById('status-bar').textContent='All data cleared';
 }
 
 // fetch /api/config and reconfigure the UI

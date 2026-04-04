@@ -1,11 +1,23 @@
-[
-  {"bit": 8,  "name": "SSP0",     "label": "Raw Sum"},
-  {"bit": 9,  "name": "SSP1",     "label": "1 Cluster"},
-  {"bit": 10, "name": "SSP2",     "label": "2 Clusters"},
-  {"bit": 11, "name": "SSP3",     "label": "3 Clusters"},
-  {"bit": 15, "name": "Pulser",   "label": "100Hz Pulser"},
-  {"bit": 24, "name": "LMS",      "label": "LMS"},
-  {"bit": 25, "name": "Alpha",    "label": "Alpha"},
-  {"bit": 26, "name": "Faraday",  "label": "Faraday"},
-  {"bit": 27, "name": "MasterOR", "label": "Master OR"}
-]
+{
+    "_comment": "PRad-II trigger definitions (from prad_v0.trg and trig-debug analysis)",
+
+    "trigger_bits": [
+        {"bit": 8,  "name": "SSP0",     "label": "Raw Sum"},
+        {"bit": 9,  "name": "SSP1",     "label": "1 Cluster"},
+        {"bit": 10, "name": "SSP2",     "label": "2 Clusters"},
+        {"bit": 11, "name": "SSP3",     "label": "3 Clusters"},
+        {"bit": 15, "name": "Pulser",   "label": "100Hz Pulser"},
+        {"bit": 24, "name": "LMS",      "label": "LMS"},
+        {"bit": 25, "name": "Alpha",    "label": "Alpha"},
+        {"bit": 26, "name": "Faraday",  "label": "Faraday"},
+        {"bit": 27, "name": "MasterOR", "label": "Master OR"}
+    ],
+
+    "trigger_type": [
+        {"type": "0x29", "tag": "0x00A9", "name": "SSP_RawSum",  "label": "SSP Raw Sum",   "primary_bit": 8},
+        {"type": "0x30", "tag": "0x00B0", "name": "Pulser",      "label": "100Hz Pulser",   "primary_bit": 15},
+        {"type": "0x39", "tag": "0x00B9", "name": "LMS",         "label": "LMS",            "primary_bit": 24},
+        {"type": "0x3A", "tag": "0x00BA", "name": "Alpha",       "label": "Alpha",          "primary_bit": 25},
+        {"type": "0x3C", "tag": "0x00BC", "name": "MasterOR",    "label": "Master OR",      "primary_bit": 27}
+    ]
+}

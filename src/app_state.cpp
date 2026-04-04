@@ -141,13 +141,22 @@ void AppState::init(const std::string &db_dir,
         }
     }
 
-    // load trigger bit definitions
+    // load trigger definitions
     {
         std::string tbpath = findFile("trigger_bits.json", db_dir);
         std::string tbs = readFile(tbpath);
         if (!tbs.empty()) {
             auto tb = json::parse(tbs, nullptr, false);
-            if (tb.is_array()) trigger_bits_def = tb;
+            if (tb.is_array()) {
+                // legacy flat array format: just trigger bits
+                trigger_bits_def = tb;
+            } else if (tb.is_object()) {
+                // new format: {trigger_bits: [...], trigger_type: [...]}
+                if (tb.contains("trigger_bits"))
+                    trigger_bits_def = tb["trigger_bits"];
+                if (tb.contains("trigger_type"))
+                    trigger_type_def = tb["trigger_type"];
+            }
         }
     }
     if (!waveform_loaded) {
@@ -1474,6 +1483,7 @@ void AppState::fillConfigJson(json &cfg) const
     };
     cfg["ref_lines"] = ref_lines;
     cfg["trigger_bits"] = trigger_bits_def;
+    cfg["trigger_type"] = trigger_type_def;
     cfg["cluster_hist"] = {{"min", cl_hist_min}, {"max", cl_hist_max}, {"step", cl_hist_step}};
     cfg["nclusters_hist"] = {{"min", nclusters_hist_min}, {"max", nclusters_hist_max}, {"step", nclusters_hist_step}};
     cfg["nblocks_hist"] = {{"min", nblocks_hist_min}, {"max", nblocks_hist_max}, {"step", nblocks_hist_step}};

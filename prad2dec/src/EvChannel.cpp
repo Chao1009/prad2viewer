@@ -214,12 +214,6 @@ void EvChannel::decodeTIBank(const EvNode &node, fdec::EventInfo &info,
     size_t nw = node.data_words;
     if (nw == 0) return;
 
-    // d[0] event header: trigger_type = TI event_type (TS trigger table output).
-    // Single value per event — identifies which trigger CAUSED this event.
-    // Maps to event_tag via: tag = 0x80 + trigger_type.
-    // See database/trigger_bit.json "trigger_type" section.
-    info.trigger_type = static_cast<uint8_t>((d[0] >> 24) & 0xFF);
-
     // d[1] event/trigger number
     if (config.ti_trigger_word >= 0 &&
         static_cast<size_t>(config.ti_trigger_word) < nw)
@@ -341,14 +335,21 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     evt.info.event_tag = evh.tag;
     evt.info.type = static_cast<uint8_t>(evtype);
 
+    // Main trigger type: derived from event tag (see docs/rols/banktags.md).
+    // Physics event tags follow: tag = 0x80 + trigger_type.
+    // trigger_type identifies WHICH trigger caused this event (single per event).
+    // Maps to trigger name via database/trigger_bits.json "trigger_type" section.
+    if (evh.tag >= 0x00A0 && evh.tag <= 0x00BF)
+        evt.info.trigger_type = static_cast<uint8_t>(evh.tag - 0x80);
+
     // --- extract event info: scan all nodes for trigger/TI banks ------------
-    // Works for both built (3-level) and flat (2-level) event structures.
+    // Works for both built (3-level), flat (2-level), and mixed structures.
 
     // 0xC000: trigger bank → event number
     if (auto *tb = FindFirstByTag(config.trigger_bank_tag))
         decodeTriggerInfo(*tb, evt.info);
 
-    // 0xE10A: first TI bank → trigger_type, trigger_number, timestamp
+    // 0xE10A: first TI bank → trigger_number, timestamp
     bool have_info = false;
     if (auto *ti = FindFirstByTag(config.ti_bank_tag)) {
         decodeTIBank(*ti, evt.info, false);

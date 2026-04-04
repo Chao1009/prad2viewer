@@ -49,6 +49,7 @@ struct ReconGemHit {
 
 struct ReconEventData {
     int      event_num    = 0;
+    uint8_t  trigger_type = 0;
     uint32_t trigger_bits = 0;
     uint64_t timestamp    = 0;
     std::vector<ReconCluster> clusters;

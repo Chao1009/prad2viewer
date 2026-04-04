@@ -50,9 +50,11 @@ std::string RootRawDataSource::open(const std::string &path)
     n_entries_ = static_cast<int>(tree_->GetEntries());
 
     // set branch addresses into the shared RawEventData struct
-    tree_->SetBranchAddress("event_num", &ev_.event_num);
-    tree_->SetBranchAddress("trigger",   &ev_.trigger);
-    tree_->SetBranchAddress("timestamp", &ev_.timestamp);
+    tree_->SetBranchAddress("event_num",    &ev_.event_num);
+    if (tree_->GetBranch("trigger_type"))
+        tree_->SetBranchAddress("trigger_type", &ev_.trigger_type);
+    tree_->SetBranchAddress("trigger",       &ev_.trigger);
+    tree_->SetBranchAddress("timestamp",     &ev_.timestamp);
     tree_->SetBranchAddress("hycal.nch",       &ev_.nch);
     tree_->SetBranchAddress("hycal.crate",     ev_.crate);
     tree_->SetBranchAddress("hycal.slot",      ev_.slot);
@@ -112,6 +114,7 @@ void RootRawDataSource::fillEventData(fdec::EventData &evt) const
 {
     evt.clear();
     evt.info.event_number = ev_.event_num;
+    evt.info.trigger_type = ev_.trigger_type;
     evt.info.trigger_bits = ev_.trigger;
     evt.info.timestamp = static_cast<uint64_t>(ev_.timestamp);
 
@@ -189,6 +192,8 @@ std::string RootReconDataSource::open(const std::string &path)
     n_entries_ = static_cast<int>(tree_->GetEntries());
 
     tree_->SetBranchAddress("event_num",    &ev_.event_num);
+    if (tree_->GetBranch("trigger_type"))
+        tree_->SetBranchAddress("trigger_type", &ev_.trigger_type);
     tree_->SetBranchAddress("trigger_bits", &ev_.trigger_bits);
     tree_->SetBranchAddress("timestamp",    &ev_.timestamp);
     tree_->SetBranchAddress("n_clusters",   &ev_.n_clusters);
@@ -242,6 +247,7 @@ std::string RootReconDataSource::decodeEvent(int index, fdec::EventData &evt,
     tree_->GetEntry(index);
     evt.clear();
     evt.info.event_number = ev_.event_num;
+    evt.info.trigger_type = ev_.trigger_type;
     evt.info.trigger_bits = ev_.trigger_bits;
     evt.info.timestamp = static_cast<uint64_t>(ev_.timestamp);
     if (ssp) ssp->clear();
@@ -251,6 +257,7 @@ std::string RootReconDataSource::decodeEvent(int index, fdec::EventData &evt,
 void RootReconDataSource::fillRecon(ReconEventData &recon) const
 {
     recon.event_num = ev_.event_num;
+    recon.trigger_type = ev_.trigger_type;
     recon.trigger_bits = ev_.trigger_bits;
     recon.timestamp = static_cast<uint64_t>(ev_.timestamp);
     recon.clusters.clear();

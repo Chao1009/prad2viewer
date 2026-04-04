@@ -70,6 +70,7 @@ float Replay::computeIntegral(const fdec::ChannelData &cd, float pedestal) const
 void Replay::clearEvent(EventVars &ev)
 {
     ev.event_num = 0;
+    ev.trigger_type = 0;
     ev.trigger = 0;
     ev.timestamp = 0;
     ev.nch = 0;
@@ -79,6 +80,7 @@ void Replay::clearEvent(EventVars &ev)
 void Replay::clearReconEvent(EventVars_Recon &ev)
 {
     ev.event_num = 0;
+    ev.trigger_type = 0;
     ev.trigger_bits = 0;
     ev.timestamp = 0;
     ev.n_clusters = 0;
@@ -87,9 +89,10 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
 
 void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
-    tree->Branch("event_num", &ev.event_num, "event_num/i");
-    tree->Branch("trigger",   &ev.trigger,   "trigger/i");
-    tree->Branch("timestamp", &ev.timestamp, "timestamp/L");
+    tree->Branch("event_num",    &ev.event_num,    "event_num/i");
+    tree->Branch("trigger_type", &ev.trigger_type, "trigger_type/b");
+    tree->Branch("trigger",      &ev.trigger,      "trigger/i");
+    tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
     tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
     tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
     tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
@@ -118,6 +121,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
 void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
 {
     tree->Branch("event_num",    &ev.event_num,    "event_num/i");
+    tree->Branch("trigger_type", &ev.trigger_type, "trigger_type/b");
     tree->Branch("trigger_bits", &ev.trigger_bits, "trigger_bits/i");
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
     tree->Branch("n_clusters",   &ev.n_clusters,   "n_clusters/I");
@@ -198,9 +202,10 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             if (max_events > 0 && total >= max_events) break;
 
             clearEvent(*ev);
-            ev->event_num = event->info.event_number;
-            ev->trigger   = event->info.trigger_bits;
-            ev->timestamp = event->info.timestamp;
+            ev->event_num    = event->info.event_number;
+            ev->trigger_type = event->info.trigger_type;
+            ev->trigger      = event->info.trigger_bits;
+            ev->timestamp    = event->info.timestamp;
 
             // decode HyCal FADC250 data
             int nch = 0;
@@ -396,9 +401,10 @@ if(!prad1){
             if (!ch.DecodeEvent(ie, *event, ssp_evt.get())) continue;
 
             clearReconEvent(*ev);
-            ev->event_num = event->info.event_number;
+            ev->event_num    = event->info.event_number;
+            ev->trigger_type = event->info.trigger_type;
             ev->trigger_bits = event->info.trigger_bits;
-            ev->timestamp = event->info.timestamp;
+            ev->timestamp    = event->info.timestamp;
 
             // decode and reconstruct HyCal data
             for (int r = 0; r < event->nrocs; ++r) {

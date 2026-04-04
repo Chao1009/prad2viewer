@@ -324,7 +324,6 @@ bool EvChannel::decodeTI(fdec::EventInfo &info) const
     }
 
     // --- TI data bank (0xE10A) from any ROC: trigger number, timestamp ------
-    // Also extract trigger bits here (PRad puts trigger type in every TI bank).
     auto *ti = FindFirstByTag(config.ti_bank_tag);
     if (ti) {
         const uint32_t *d = GetData(*ti);
@@ -334,14 +333,12 @@ bool EvChannel::decodeTI(fdec::EventInfo &info) const
             static_cast<size_t>(config.ti_trigger_word) < nw)
             info.trigger_number = static_cast<int32_t>(d[config.ti_trigger_word]);
 
-        // trigger bits from first TI bank (overridden later if TI master found)
-        if (config.ti_trigger_type_word >= 0 &&
-            static_cast<size_t>(config.ti_trigger_type_word) < nw)
-        {
-            info.trigger_bits = (d[config.ti_trigger_type_word]
-                                 >> config.ti_trigger_type_shift)
-                                & config.ti_trigger_type_mask;
-        }
+        // TI event header d[0] always contains the TS input pattern
+        // (tiLoadTriggerTable(3) encodes which TS inputs fired).
+        // Format: event_type(8) | 0x01(8) | nwords(16)
+        // This is the baseline trigger_bits — always available in every TI bank.
+        if (nw > 0)
+            info.trigger_bits = (d[0] >> 24) & 0xFF;
 
         int lo = config.ti_time_low_word;
         int hi = config.ti_time_high_word;
@@ -357,17 +354,19 @@ bool EvChannel::decodeTI(fdec::EventInfo &info) const
         }
     }
 
-    // --- TI master crate (tag 0x27): trigger bits + run info ----------------
-    // The TI master has a 7-word 0xE10A bank with FP trigger bits in word[5].
-    // Regular ROC TI banks are only 4 words and don't have trigger bits.
+    // --- TI master crate (tag 0x27): extended trigger bits + run info ------
+    // The TI master may have additional trigger data beyond the event header.
+    // If tiSetFPInputReadout(1) is called, word[5] has 32-bit FP trigger inputs.
+    // Otherwise, word[4] has the 8-bit TS trigger type pattern.
+    // The configurable ti_trigger_type_word selects which word to read.
     for (auto &n : nodes) {
         if (n.depth == 1 && n.tag == config.ti_master_tag) {
-            // find 0xE10A inside this crate
             for (size_t ci = 0; ci < n.child_count; ++ci) {
                 auto &child = nodes[n.child_first + ci];
                 if (child.tag == config.ti_bank_tag) {
                     const uint32_t *d = GetData(child);
                     size_t nw = child.data_words;
+                    // Override trigger_bits from TI master if configured word exists
                     if (config.ti_trigger_type_word >= 0 &&
                         static_cast<size_t>(config.ti_trigger_type_word) < nw)
                     {
@@ -410,8 +409,9 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     evt.info.type      = static_cast<uint8_t>(evtype);
 
     // Try CODA trigger bank first (0xFF2X / 0xFF1X), then fall back to JLab TI
-    if (!decodeTriggerBank(i, evt.info))
-        decodeTI(evt.info);
+    bool have_info = decodeTriggerBank(i, evt.info);
+    if (!have_info)
+        have_info = decodeTI(evt.info);
 
     // decode ADC data — dispatch based on configured format
     int roc_idx = 0;
@@ -548,7 +548,10 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
         }
     }
 
-    return roc_idx > 0 || ssp_decoded;
+    // Success if event info was extracted (trigger/timestamp), even without waveform data.
+    // Events like 0x00B0 monitoring triggers have crate structure with TI data
+    // but no FADC/SSP waveforms — these are valid events with nrocs==0.
+    return have_info || roc_idx > 0 || ssp_decoded;
 }
 
 // === Control event time extraction ==========================================

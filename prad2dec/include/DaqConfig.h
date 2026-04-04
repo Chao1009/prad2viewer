@@ -85,10 +85,14 @@ struct DaqConfig
     uint32_t ti_time_high_mask;
     int      ti_time_high_shift;    // right-shift before combining
 
-    // --- trigger bits extraction (from TI master's 7-word TI bank) -----------
-    // Per Sergey B.: 32 FP trigger bits are in word[5] of the TI master's
-    // 0xE10A bank. Bits 16-31 = v1495 triggers, bit 16 = LMS.
-    // Only the TI master crate (7-word bank) has this; ROC TI banks (4-word) don't.
+    // --- trigger bits extraction -----------------------------------------------
+    // Two-layer extraction:
+    //   1. Baseline (always): d[0] bits[31:24] = TI event_type = TS input pattern.
+    //      tiLoadTriggerTable(3) encodes which TS inputs fired.
+    //      event_tag = 0x80 + event_type (e.g. 0xB0 = monitoring, 0xA9 = physics).
+    //   2. TI master override: d[trigger_type_word] with configured mask/shift.
+    //      With tiSetFPInputReadout(1): d[5] = 32-bit FP trigger inputs.
+    //      Bits 16-31 = v1495 triggers, bit 16 = LMS.
     int ti_trigger_type_word;
     int ti_trigger_type_shift;
     uint32_t ti_trigger_type_mask;

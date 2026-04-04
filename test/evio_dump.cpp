@@ -358,6 +358,297 @@ static int doEvent(EvChannel &ch, int target)
     return 1;
 }
 
+// --- mode: trig-debug -------------------------------------------------------
+// Cross-correlates three trigger layers:
+//   1. Event tag (top-level) = 0x80 + TI_event_type
+//   2. TI event_type (d[0] bits 31:24) = TS trigger decision
+//   3. FP trigger bits (TI master d[5]) = raw 32-bit front panel input snapshot
+//
+// FP bit assignments (from prad_v0.trg):
+//   Bits 8-15:  SSP PRAD TRGBIT 0-7  (P2 outputs)
+//   Bit 23:     v1495 OR from SD/FADC
+//   Bit 24:     v1495 LMS
+//   Bit 25:     v1495 alpha
+//   Bit 26:     v1495 Faraday
+//   Bit 27:     v1495 Master OR
+//
+// TS monitors mask: 0x0F00FF00 (bits 8-15 and 24-27)
+
+struct TrigDebugEntry {
+    uint32_t event_tag;         // top-level bank tag
+    uint32_t ti_event_type;     // d[0] >> 24 (from any TI bank)
+    uint32_t ti_nwords;         // nwords from TI event header
+    uint32_t fp_trigger_bits;   // d[5] from TI master (0 if unavailable)
+    int32_t  event_number;      // from 0xC000 or TI d[1]
+    int      nrocs;             // number of FADC composite banks found
+    bool     has_ti_master;     // TI master bank found
+    bool     tag_matches;       // event_tag == 0x80 + ti_event_type
+};
+
+static const uint32_t TS_FP_MASK = 0x0F00FF00;
+
+struct FpBitInfo {
+    int bit;
+    uint32_t mask;
+    const char *name;
+};
+
+static const FpBitInfo fp_bits[] = {
+    {  8, 0x00000100, "SSP TRGBIT0 (RawSum>1000)" },
+    {  9, 0x00000200, "SSP TRGBIT1 (1clus>1GeV)"  },
+    { 10, 0x00000400, "SSP TRGBIT2 (2clus>1GeV)"  },
+    { 11, 0x00000800, "SSP TRGBIT3 (3clus>1GeV)"  },
+    { 12, 0x00001000, "SSP TRGBIT4 (disabled)"     },
+    { 13, 0x00002000, "SSP TRGBIT5 (disabled)"     },
+    { 14, 0x00004000, "SSP TRGBIT6 (disabled)"     },
+    { 15, 0x00008000, "SSP TRGBIT7 (100Hz pulser)" },
+    { 23, 0x00800000, "v1495 OR from SD/FADC"      },
+    { 24, 0x01000000, "v1495 LMS"                   },
+    { 25, 0x02000000, "v1495 alpha"                 },
+    { 26, 0x04000000, "v1495 Faraday"               },
+    { 27, 0x08000000, "v1495 Master OR"             },
+};
+static const int N_FP_BITS = sizeof(fp_bits) / sizeof(fp_bits[0]);
+
+static int doTrigDebug(EvChannel &ch, bool verbose)
+{
+    const auto &cfg = ch.GetConfig();
+    std::vector<TrigDebugEntry> entries;
+
+    // per-tag accumulators
+    struct TagStats {
+        int count = 0;
+        int has_fadc = 0;
+        uint32_t fp_or = 0;         // OR of all FP bits seen with this tag
+        uint32_t fp_and = 0xFFFFFFFF; // AND of all FP bits
+        int fp_bit_counts[32] = {};
+    };
+    std::map<uint32_t, TagStats> tag_stats;
+
+    int record = 0, physics = 0;
+
+    while (ch.Read() == status::success) {
+        record++;
+        if (!ch.Scan()) continue;
+        if (ch.GetNEvents() == 0) continue;
+
+        auto hdr = ch.GetEvHeader();
+        auto &nodes = ch.GetNodes();
+
+        for (int iev = 0; iev < ch.GetNEvents(); ++iev) {
+            TrigDebugEntry e = {};
+            e.event_tag = hdr.tag;
+
+            // --- extract from 0xC000 trigger bank ---
+            for (auto &n : nodes) {
+                if (n.tag == cfg.trigger_bank_tag && n.type == DATA_UINT32 && n.data_words >= 1) {
+                    e.event_number = static_cast<int32_t>(ch.GetData(n)[0]);
+                    break;
+                }
+            }
+
+            // --- extract TI event_type from first 0xE10A bank ---
+            for (auto &n : nodes) {
+                if (n.tag == cfg.ti_bank_tag && n.type == DATA_UINT32 && n.data_words >= 1) {
+                    const uint32_t *d = ch.GetData(n);
+                    e.ti_event_type = (d[0] >> 24) & 0xFF;
+                    e.ti_nwords = d[0] & 0xFFFF;
+                    if (n.data_words >= 2 && e.event_number == 0)
+                        e.event_number = static_cast<int32_t>(d[1]);
+                    break;
+                }
+            }
+
+            // --- extract FP trigger bits from TI master's 0xE10A ---
+            for (auto &n : nodes) {
+                if (n.depth == 1 && n.tag == cfg.ti_master_tag) {
+                    e.has_ti_master = true;
+                    for (size_t ci = 0; ci < n.child_count; ++ci) {
+                        auto &child = nodes[n.child_first + ci];
+                        if (child.tag == cfg.ti_bank_tag && child.type == DATA_UINT32) {
+                            const uint32_t *d = ch.GetData(child);
+                            size_t nw = child.data_words;
+                            // d[4] = 8-bit trigger type byte
+                            // d[5] = 32-bit FP trigger inputs (if FP readout enabled)
+                            if (nw > 5)
+                                e.fp_trigger_bits = d[5];
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            // --- count FADC composite banks ---
+            for (auto &n : nodes) {
+                if (n.tag == cfg.fadc_composite_tag && n.type == DATA_COMPOSITE)
+                    e.nrocs++;
+            }
+
+            // --- verify tag = 0x80 + event_type ---
+            e.tag_matches = (e.event_tag == (0x80u + e.ti_event_type));
+
+            // --- accumulate ---
+            physics++;
+            entries.push_back(e);
+
+            auto &ts = tag_stats[e.event_tag];
+            ts.count++;
+            if (e.nrocs > 0) ts.has_fadc++;
+            ts.fp_or |= e.fp_trigger_bits;
+            ts.fp_and &= e.fp_trigger_bits;
+            for (int b = 0; b < 32; ++b)
+                if (e.fp_trigger_bits & (1u << b)) ts.fp_bit_counts[b]++;
+        }
+    }
+
+    // === Per-event detail (-v) ===
+    if (verbose) {
+        std::cout << std::setw(8) << "event#"
+                  << std::setw(8) << "tag"
+                  << std::setw(8) << "TItype"
+                  << std::setw(6) << "chk"
+                  << std::setw(12) << "FP_bits"
+                  << std::setw(12) << "FP_masked"
+                  << std::setw(6) << "FADC"
+                  << "  active FP signals"
+                  << "\n";
+        std::cout << std::string(90, '-') << "\n";
+
+        for (auto &e : entries) {
+            uint32_t masked = e.fp_trigger_bits & TS_FP_MASK;
+            std::cout << std::setw(8) << e.event_number
+                      << "  0x" << std::hex << std::setw(4) << std::setfill('0') << e.event_tag
+                      << "    0x" << std::setw(2) << e.ti_event_type
+                      << std::setfill(' ') << std::dec
+                      << std::setw(6) << (e.tag_matches ? "OK" : "FAIL")
+                      << "  0x" << std::hex << std::setw(8) << std::setfill('0') << e.fp_trigger_bits
+                      << "  0x" << std::setw(8) << masked
+                      << std::setfill(' ') << std::dec
+                      << std::setw(6) << e.nrocs;
+
+            // list active FP bit names
+            std::cout << "  ";
+            bool first = true;
+            for (int i = 0; i < N_FP_BITS; ++i) {
+                if (e.fp_trigger_bits & fp_bits[i].mask) {
+                    if (!first) std::cout << ", ";
+                    std::cout << "b" << fp_bits[i].bit;
+                    first = false;
+                }
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n";
+    }
+
+    // === Per-tag summary ===
+    std::cout << "=== Trigger Debug Summary (" << physics << " physics events, "
+              << record << " records) ===\n\n";
+
+    std::cout << "--- Event Tag Summary ---\n";
+    std::cout << std::setw(8) << "tag"
+              << std::setw(8) << "TItype"
+              << std::setw(8) << "count"
+              << std::setw(8) << "w/FADC"
+              << std::setw(12) << "FP_OR"
+              << std::setw(12) << "FP_AND"
+              << "\n";
+    std::cout << std::string(56, '-') << "\n";
+
+    int mismatch_total = 0;
+    for (auto &[tag, ts] : tag_stats) {
+        uint32_t expected_type = tag - 0x80;
+        std::cout << "  0x" << std::hex << std::setw(4) << std::setfill('0') << tag
+                  << "    0x" << std::setw(2) << expected_type
+                  << std::setfill(' ') << std::dec
+                  << std::setw(8) << ts.count
+                  << std::setw(8) << ts.has_fadc
+                  << "  0x" << std::hex << std::setw(8) << std::setfill('0') << ts.fp_or
+                  << "  0x" << std::setw(8) << ts.fp_and
+                  << std::setfill(' ') << std::dec
+                  << "\n";
+    }
+
+    // === Tag verification ===
+    for (auto &e : entries)
+        if (!e.tag_matches) mismatch_total++;
+
+    std::cout << "\n--- Tag Verification ---\n";
+    std::cout << "  tag == 0x80 + TI_event_type: "
+              << (physics - mismatch_total) << " OK, "
+              << mismatch_total << " MISMATCH\n";
+    if (mismatch_total > 0) {
+        std::cout << "  First mismatches:\n";
+        int shown = 0;
+        for (auto &e : entries) {
+            if (!e.tag_matches && shown < 10) {
+                std::cout << "    event#=" << e.event_number
+                          << " tag=0x" << std::hex << e.event_tag
+                          << " TI_type=0x" << e.ti_event_type
+                          << " expected_tag=0x" << (0x80 + e.ti_event_type)
+                          << std::dec << "\n";
+                shown++;
+            }
+        }
+    }
+
+    // === FP bit activity per tag ===
+    std::cout << "\n--- FP Bit Activity (TS mask = 0x"
+              << std::hex << std::setw(8) << std::setfill('0') << TS_FP_MASK
+              << std::setfill(' ') << std::dec << ") ---\n";
+
+    // header
+    std::cout << std::setw(5) << "bit" << std::setw(12) << "hex"
+              << "  " << std::setw(30) << std::left << "name" << std::right
+              << std::setw(8) << "total";
+    for (auto &[tag, ts] : tag_stats)
+        std::cout << std::setw(8) << ("0x" + hex(tag).substr(2));
+    std::cout << "\n";
+    std::cout << std::string(55 + 8 * tag_stats.size(), '-') << "\n";
+
+    for (int i = 0; i < N_FP_BITS; ++i) {
+        int bit = fp_bits[i].bit;
+        bool in_mask = (TS_FP_MASK & fp_bits[i].mask) != 0;
+
+        // count total across all tags
+        int total = 0;
+        for (auto &[tag, ts] : tag_stats)
+            total += ts.fp_bit_counts[bit];
+
+        if (total == 0 && !in_mask) continue; // skip unused bits not in mask
+
+        std::cout << std::setw(5) << bit
+                  << "  0x" << std::hex << std::setw(8) << std::setfill('0')
+                  << fp_bits[i].mask << std::setfill(' ') << std::dec
+                  << (in_mask ? "* " : "  ")
+                  << std::setw(30) << std::left << fp_bits[i].name << std::right
+                  << std::setw(8) << total;
+
+        for (auto &[tag, ts] : tag_stats)
+            std::cout << std::setw(8) << ts.fp_bit_counts[bit];
+        std::cout << "\n";
+    }
+    std::cout << "\n  * = in TS_FP_INPUT_MASK\n";
+
+    // === Check d[4] vs d[0] consistency ===
+    std::cout << "\n--- TI Event Header vs d[4] ---\n";
+    int d4_match = 0, d4_mismatch = 0, d4_unavail = 0;
+    for (auto &e : entries) {
+        if (e.ti_nwords <= 3) { d4_unavail++; continue; }
+        // We don't have d[4] stored; but we can verify TI type from d[0]
+        // matches event_tag. Already done above.
+    }
+    std::cout << "  (d[4] check requires direct bank access — use -m event -n N for individual inspection)\n";
+    std::cout << "  TI event header nwords distribution:\n";
+    std::map<uint32_t, int> nwords_dist;
+    for (auto &e : entries) nwords_dist[e.ti_nwords]++;
+    for (auto &[nw, cnt] : nwords_dist)
+        std::cout << "    nwords=" << nw << ": " << cnt << " events\n";
+
+    return 0;
+}
+
 // --- mode: triggers ---------------------------------------------------------
 static int doTriggers(EvChannel &ch, bool verbose)
 {
@@ -420,7 +711,8 @@ static void usage(const char *prog)
         << "  -m tags       List all unique bank tags with stats\n"
         << "  -m epics      Dump all EPICS event text\n"
         << "  -m event      Detailed dump of a single record\n"
-        << "  -m triggers   List trigger bit counts (add -v for per-event detail)\n\n"
+        << "  -m triggers   List trigger bit counts (add -v for per-event detail)\n"
+        << "  -m trig-debug Cross-correlate event tags, TI event type, and FP trigger bits\n\n"
         << "Options:\n"
         << "  -D <file>     DAQ configuration (auto-searches daq_config.json if omitted)\n"
         << "  -n <N>        Number of events (tree mode, default 5) or event number (event mode)\n"
@@ -473,12 +765,13 @@ int main(int argc, char *argv[])
     }
 
     int rc;
-    if      (mode == "tree")     rc = doTree(ch, num);
-    else if (mode == "tags")     rc = doTags(ch);
-    else if (mode == "epics")    rc = doEpics(ch);
-    else if (mode == "triggers") rc = doTriggers(ch, verbose);
-    else if (mode == "event")    rc = doEvent(ch, num);
-    else                         rc = doSummary(ch);
+    if      (mode == "tree")       rc = doTree(ch, num);
+    else if (mode == "tags")       rc = doTags(ch);
+    else if (mode == "epics")      rc = doEpics(ch);
+    else if (mode == "triggers")   rc = doTriggers(ch, verbose);
+    else if (mode == "trig-debug") rc = doTrigDebug(ch, verbose);
+    else if (mode == "event")      rc = doEvent(ch, num);
+    else                           rc = doSummary(ch);
 
     ch.Close();
     return rc;

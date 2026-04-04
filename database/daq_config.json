@@ -28,7 +28,7 @@
     },
 
     "ti_format": {
-        "_comment": "TI bank (0xE10A): word[1]=trigger#, word[2]=ts_low, word[3]=ts_high. Trigger bits from TI master's 7-word bank: word[5] = 32 FP trigger inputs (bits 16-31 = v1495, bit 16 = LMS).",
+        "_comment": "TI bank (0xE10A, after rol2 stripping): d[0]=event_header (event_type in bits 31:24 = TS input pattern), d[1]=trigger#, d[2]=ts_low, d[3]=ts_high|evtnum_high. TI master d[5] = 32-bit FP trigger inputs (tiSetFPInputReadout enabled). Baseline TS pattern always extracted from d[0] bits 31:24; TI master d[5] overrides with richer 32-bit FP data.",
         "trigger_word":       1,
         "time_low_word":      2,
         "time_high_word":     3,

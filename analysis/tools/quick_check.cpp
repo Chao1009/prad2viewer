@@ -101,7 +101,6 @@ int main(int argc, char *argv[])
     int run_id = 12345;
 
     // --- geometry constants (can be made configurable) ---
-    const float hycal_z = 6225.f; //5646 mm for prad1, 6225mm for prad2
     const float gem_z[4] = {5407.f + 39.71f/2, 5407.f - 39.71f/2,
                             5807.f + 39.71f/2, 5807.f - 39.71f/2};
     
@@ -183,7 +182,7 @@ int main(int argc, char *argv[])
 
         for (int j = 0; j < ev.n_clusters; j++) {
             float r = std::sqrt(ev.cl_x[j]*ev.cl_x[j] + ev.cl_y[j]*ev.cl_y[j]);
-            float theta = std::atan(r / hycal_z) * 180.f / M_PI;
+            float theta = std::atan(r / ev.cl_z[j]) * 180.f / M_PI;
 
             physics.FillEnergyVsModule(ev.cl_center[j], ev.cl_energy[j]);
             physics.FillEnergyVsTheta(theta, ev.cl_energy[j]);

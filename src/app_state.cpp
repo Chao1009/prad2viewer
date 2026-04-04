@@ -232,6 +232,10 @@ void AppState::init(const std::string &db_dir,
             if (dcj3.contains("roc_tags")) {
                 for (auto &entry : dcj3["roc_tags"]) {
                     if (entry.contains("crate") && entry.contains("tag")) {
+                        // only use data ROCs (type "roc") for crate→tag mapping;
+                        // ti_slaves share crate numbers but have different tags
+                        std::string rtype = entry.value("type", "");
+                        if (!rtype.empty() && rtype != "roc" && rtype != "gem") continue;
                         int crate = entry["crate"].get<int>();
                         uint32_t tag = evc::parse_hex(entry["tag"]);
                         crate_roc_json[std::to_string(crate)] = tag;

@@ -3,6 +3,7 @@
   {"bit": 9,  "name": "SSP1",     "label": "1 Cluster"},
   {"bit": 10, "name": "SSP2",     "label": "2 Clusters"},
   {"bit": 11, "name": "SSP3",     "label": "3 Clusters"},
+  {"bit": 15, "name": "Pulser",   "label": "100Hz Pulser"},
   {"bit": 24, "name": "LMS",      "label": "LMS"},
   {"bit": 25, "name": "Alpha",    "label": "Alpha"},
   {"bit": 26, "name": "Faraday",  "label": "Faraday"},

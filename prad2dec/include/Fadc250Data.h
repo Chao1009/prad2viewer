@@ -67,10 +67,20 @@ struct RocData {
 // --- event-level information (extracted from TI bank + trigger bank) ---------
 struct EventInfo {
     uint8_t  type;              // evc::EventType cast to uint8_t
-    uint8_t  trigger_type;      // TI event_type from d[0] bits 31:24 (TS trigger decision)
-                                // Related to event_tag: tag = 0x80 + trigger_type
-                                // Maps to FP trigger source via tiLoadTriggerTable(3)
-    uint32_t trigger_bits;      // 32 FP trigger input bits from TI master (word[5])
+
+    // --- two independent trigger fields (see database/trigger_bit.json) ------
+    //
+    // trigger_type: WHICH trigger caused this event (single, from TI event header)
+    //   TI d[0] bits 31:24 = TS trigger table output (tiLoadTriggerTable(3))
+    //   event_tag = 0x80 + trigger_type
+    //   e.g. 0x29 = SSP raw sum, 0x30 = 100Hz pulser, 0x39 = LMS
+    //
+    // trigger_bits: WHAT signals were active at trigger time (multiple, from TI master d[5])
+    //   32-bit FP input snapshot — multiple bits can fire simultaneously
+    //   e.g. 0x01000100 = LMS (bit24) + SSP TRGBIT0 (bit8) both active
+    //
+    uint8_t  trigger_type;      // TI event_type — which trigger (single)
+    uint32_t trigger_bits;      // FP trigger inputs — what fired (multi-bit)
     uint32_t event_tag;         // top-level bank tag (raw)
     int32_t  event_number;      // from trigger bank (0xC000) or TI
     int32_t  trigger_number;    // from TI data bank

@@ -214,7 +214,10 @@ void EvChannel::decodeTIBank(const EvNode &node, fdec::EventInfo &info,
     size_t nw = node.data_words;
     if (nw == 0) return;
 
-    // d[0] event header: trigger_type (TS trigger table output)
+    // d[0] event header: trigger_type = TI event_type (TS trigger table output).
+    // Single value per event — identifies which trigger CAUSED this event.
+    // Maps to event_tag via: tag = 0x80 + trigger_type.
+    // See database/trigger_bit.json "trigger_type" section.
     info.trigger_type = static_cast<uint8_t>((d[0] >> 24) & 0xFF);
 
     // d[1] event/trigger number
@@ -236,8 +239,10 @@ void EvChannel::decodeTIBank(const EvNode &node, fdec::EventInfo &info,
         info.timestamp = (time_high << 32) | time_low;
     }
 
-    // Trigger bits: baseline from event_type, master overrides with FP inputs
-    info.trigger_bits = info.trigger_type;
+    // d[5] (TI master only): 32-bit FP trigger input snapshot.
+    // Multiple bits can fire simultaneously — tells you which detector
+    // signals were active at trigger time. Independent of trigger_type.
+    // See database/trigger_bit.json "trigger_bits" section.
     if (is_master && config.ti_trigger_type_word >= 0 &&
         static_cast<size_t>(config.ti_trigger_type_word) < nw)
     {
@@ -470,6 +475,9 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             roc_idx++;
             continue;
         }
+
+        // -- skip composite internals (format descriptor + data payload) --
+        if (n.parent >= 0 && nodes[n.parent].type == DATA_COMPOSITE) continue;
 
         // -- unhandled data bank: warn once per tag --
         if (n.data_words > 0 && !IsContainer(n.type)) {

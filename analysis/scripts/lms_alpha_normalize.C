@@ -141,22 +141,39 @@ void lms_alpha_normalize(const char *data_dir, int run_number,
 
     // --- load configs ---
     evc::DaqConfig cfg;
+    printf("Loading DAQ config: %s\n", cfgFile.Data());
     if (!evc::load_daq_config(cfgFile.Data(), cfg)) {
         std::cerr << "FATAL: failed to load " << cfgFile << "\n";
+        std::cerr << "  Without daq_config.json, physics event tags (0x82, 0xFE, ...)\n"
+                  << "  are not recognized — GetNEvents() will always return 0.\n"
+                  << "  Set PRAD2_DATABASE_DIR or pass the path explicitly.\n";
         return;
     }
+    printf("  Physics tags  :");
+    for (auto t : cfg.physics_tags) printf(" 0x%X", t);
+    printf("\n");
+    printf("  ADC format    : %s\n", cfg.adc_format.c_str());
+    printf("  ROC crates    : %zu\n", cfg.roc_tags.size());
+    printf("  TI master tag : 0x%X\n", cfg.ti_master_tag);
 
+    printf("Loading DAQ map: %s\n", mapFile.Data());
     loadDaqMap(mapFile.Data());
     if (gNMod == 0) {
         std::cerr << "FATAL: no HyCal modules found in daq_map\n";
         return;
     }
-    printf("HyCal modules: %d\n", gNMod);
+    printf("  HyCal modules : %d\n", gNMod);
+    printf("  LMS refs      :");
+    for (auto &[addr, ci] : gCh)
+        if (ci.is_lms) printf(" %s(crate %d)", ci.name.c_str(), addr / 10000);
+    printf("\n");
 
     // build ROC tag -> crate lookup from daq_config
     std::map<uint32_t, int> tagToCrate;
-    for (auto &re : cfg.roc_tags)
+    for (auto &re : cfg.roc_tags) {
         tagToCrate[re.tag] = re.crate;
+        printf("  ROC 0x%02X -> crate %d (%s)\n", re.tag, re.crate, re.name.c_str());
+    }
 
     // --- discover files ---
     auto files = discoverFiles(data_dir, run_number);

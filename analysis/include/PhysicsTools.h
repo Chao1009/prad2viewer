@@ -31,18 +31,19 @@ struct HCHit {
     float z = 0.f;
     float energy = 0.f;
     int center_id = 0; // index of central block
+    int flag = -1;
 };
+
+//transfrom detector coordinates to target and beam center coordinates
+// only used for offline analysis
+void TransformDetData(std::vector<HCHit> &hc_hits,  float beamX, float beamY, float ZfromTarget);
+void TransformDetData(std::vector<GEMHit> &gem_hits, float beamX, float beamY, float ZfromTarget);
 
 class PhysicsTools
 {
 public:
     explicit PhysicsTools(fdec::HyCalSystem &hycal);
     ~PhysicsTools();
-
-    //transfrom detector coordinates to target and beam center coordinates
-    // only used for offline analysis
-    void TransformDetData(std::vector<HCHit> &hc_hits,  float beamX, float beamY, float ZfromTarget);
-    void TransformDetData(std::vector<GEMHit> &gem_hits, float beamX, float beamY, float ZfromTarget);
 
     // --- per-module cluster energy histograms --------------------------------
     void FillModuleEnergy(int module_index, float energy);

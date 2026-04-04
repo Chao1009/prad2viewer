@@ -25,6 +25,7 @@ add_analysis_tool(replay_recon_m tools/replay_recon_m.cpp)
 add_analysis_tool(epCalib tools/epCalib.cpp)
 add_analysis_tool(analysis_example tools/analysis_example.cpp)
 add_analysis_tool(cosmic_test tools/cosmic_test.cpp)
+add_analysis_tool(quick_check tools/quick_check.cpp)
 
-install(TARGETS replay_rawdata replay_rawdata_m replay_recon replay_recon_m epCalib analysis_example cosmic_test
+install(TARGETS replay_rawdata replay_rawdata_m replay_recon replay_recon_m epCalib analysis_example cosmic_test quick_check
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

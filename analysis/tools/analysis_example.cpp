@@ -10,6 +10,7 @@
 #include "PhysicsTools.h"
 #include "HyCalSystem.h"
 #include "MatchingTools.h"
+#include "EventData.h"
 
 #include <TFile.h>
 #include <TTree.h>
@@ -35,52 +36,50 @@ int run_id = 12345;
 const int kMaxCl = 100;
 const int kMaxGEMHits = 400;
 
-struct EventVars_Recon {
-    uint32_t event_num = 0;
-    uint32_t trigger_bits = 0;
-    Long64_t timestamp = 0;
-    int n_clusters = 0;
-    float cl_x[kMaxCl];
-    float cl_y[kMaxCl];
-    float cl_energy[kMaxCl];
-    int cl_nblocks[kMaxCl];
-    int cl_center[kMaxCl];
-    // GEM part
-    int n_gem_hits = 0;
-    uint8_t det_id[kMaxGEMHits];
-    float gem_x[kMaxGEMHits];
-    float gem_y[kMaxGEMHits];
-    float gem_x_charge[kMaxGEMHits];
-    float gem_y_charge[kMaxGEMHits];
-    float gem_x_peak[kMaxGEMHits];
-    float gem_y_peak[kMaxGEMHits];
-    int gem_x_size[kMaxGEMHits];
-    int gem_y_size[kMaxGEMHits];
-};
-
+// Aliases for the shared replay data structures
+using EventVars_Recon = prad2::ReconEventData;
 void setupReconBranches(TTree *tree, EventVars_Recon &ev)
 {
-    tree->SetBranchAddress("event_num",    &ev.event_num);
-    tree->SetBranchAddress("trigger_bits", &ev.trigger_bits);
-    tree->SetBranchAddress("timestamp",    &ev.timestamp);
-    tree->SetBranchAddress("n_clusters",   &ev.n_clusters);
-    tree->SetBranchAddress("cl_x",         ev.cl_x);
-    tree->SetBranchAddress("cl_y",         ev.cl_y);
-    tree->SetBranchAddress("cl_energy",    ev.cl_energy);
-    tree->SetBranchAddress("cl_nblocks",   ev.cl_nblocks);
-    tree->SetBranchAddress("cl_center",    ev.cl_center);
+    tree->Branch("event_num",    &ev.event_num,    "event_num/i");
+    tree->Branch("trigger_bits", &ev.trigger_bits, "trigger_bits/i");
+    tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
+    tree->Branch("total_energy", &ev.total_energy, "total_energy/F");
+    // HyCal cluster branches
+    tree->Branch("n_clusters",   &ev.n_clusters,   "n_clusters/I");
+    tree->Branch("cl_x",         ev.cl_x,          "cl_x[n_clusters]/F");
+    tree->Branch("cl_y",         ev.cl_y,          "cl_y[n_clusters]/F");
+    tree->Branch("cl_z",         ev.cl_z,          "cl_z[n_clusters]/F");
+    tree->Branch("cl_energy",    ev.cl_energy,     "cl_energy[n_clusters]/F");
+    tree->Branch("cl_nblocks",   ev.cl_nblocks,    "cl_nblocks[n_clusters]/b");
+    tree->Branch("cl_center",    ev.cl_center,     "cl_center[n_clusters]/s");
+    tree->Branch("cl_flag",      ev.cl_flag,       "cl_flag[n_clusters]/i");
     // GEM part
-    tree->SetBranchAddress("n_gem_hits",   &ev.n_gem_hits);
-    tree->SetBranchAddress("det_id",       ev.det_id);
-    tree->SetBranchAddress("gem_x",        ev.gem_x);
-    tree->SetBranchAddress("gem_y",        ev.gem_y);
-    tree->SetBranchAddress("gem_x_charge", ev.gem_x_charge);
-    tree->SetBranchAddress("gem_y_charge", ev.gem_y_charge);
-    tree->SetBranchAddress("gem_x_peak",   ev.gem_x_peak);
-    tree->SetBranchAddress("gem_y_peak",   ev.gem_y_peak);
-    tree->SetBranchAddress("gem_x_size",   ev.gem_x_size);
-    tree->SetBranchAddress("gem_y_size",   ev.gem_y_size);
-}
+    tree->Branch("n_gem_hits",   &ev.n_gem_hits,   "n_gem_hits/I");
+    tree->Branch("det_id",       ev.det_id,        "det_id[n_gem_hits]/b");
+    tree->Branch("gem_x",        ev.gem_x,         "gem_x[n_gem_hits]/F");
+    tree->Branch("gem_y",        ev.gem_y,         "gem_y[n_gem_hits]/F");
+    tree->Branch("gem_x_charge", ev.gem_x_charge,  "gem_x_charge[n_gem_hits]/F");
+    tree->Branch("gem_y_charge", ev.gem_y_charge,  "gem_y_charge[n_gem_hits]/F");
+    tree->Branch("gem_x_peak",   ev.gem_x_peak,    "gem_x_peak[n_gem_hits]/F");
+    tree->Branch("gem_y_peak",   ev.gem_y_peak,    "gem_y_peak[n_gem_hits]/F");
+    tree->Branch("gem_x_size",   ev.gem_x_size,    "gem_x_size[n_gem_hits]/b");
+    tree->Branch("gem_y_size",   ev.gem_y_size,    "gem_y_size[n_gem_hits]/b");
+    // Matching results
+    tree->Branch("match_num",       &ev.match_num,       "match_num/I");
+    tree->Branch("matchHC_x",       ev.matchHC_x,        "matchHC_x[match_num]/F");
+    tree->Branch("matchHC_y",       ev.matchHC_y,        "matchHC_y[match_num]/F");
+    tree->Branch("matchHC_z",       ev.matchHC_z,        "matchHC_z[match_num]/F");
+    tree->Branch("matchHC_energy",  ev.matchHC_energy,   "matchHC_energy[match_num]/F");
+    tree->Branch("matchHC_center",  ev.matchHC_center,   "matchHC_center[match_num]/s");
+    tree->Branch("matchHC_flag",    ev.matchHC_flag,     "matchHC_flag[match_num]/i");
+    tree->Branch("matchG_x",        ev.matchG_x,         Form("matchG_x[match_num][2]/F"));
+    tree->Branch("matchG_y",        ev.matchG_y,         Form("matchG_y[match_num][2]/F"));
+    tree->Branch("matchG_z",        ev.matchG_z,         Form("matchG_z[match_num][2]/F"));
+    tree->Branch("matchG_det_id",   ev.matchG_det_id,    Form("matchG_det_id[match_num][2]/b"));
+
+    tree->Branch("gem.n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("gem.ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
+};
 
 //analysis histograms and variables
 TH2F *hit_pos = new TH2F("hit_pos", "Hit positions;X (mm);Y (mm)", 250, -500, 500, 250, -500, 500);
@@ -90,6 +89,9 @@ TH1F *clusters_energy = new TH1F("clusters_energy", "Energy of all clusters;Ener
 TH1F *total_energy = new TH1F("total_energy", "Total energy per event;Energy (MeV);Counts", 1000, 0, 4000);
 PhysicsTools::MollerEvent MollerPair;
 PhysicsTools::MollerData hycal_mollers;
+
+PhysicsTools::MollerData good_Hmollers;
+PhysicsTools::MollerData good_Gmollers[4];
 
 int main(int argc, char *argv[])
 {
@@ -183,8 +185,8 @@ int main(int argc, char *argv[])
             if(std::abs(ev.cl_energy[0] + ev.cl_energy[1] - Ebeam) < 3.*Ebeam*0.025/sqrt(Ebeam/1000.f)){
                 //save these 2-cluster events for Moller analysis
                 MollerPair = PhysicsTools::MollerEvent(
-                                {ev.cl_x[0], ev.cl_y[0], 0.f, ev.cl_energy[0]},
-                                {ev.cl_x[1], ev.cl_y[1], 0.f, ev.cl_energy[1]});
+                                {ev.cl_x[0], ev.cl_y[0], ev.cl_z[0], ev.cl_energy[0]},
+                                {ev.cl_x[1], ev.cl_y[1], ev.cl_z[1], ev.cl_energy[1]});
                 hycal_mollers.push_back(MollerPair);
                 //fill Moller phi difference histogram
                 float phi_diff = physics.GetMollerPhiDiff(MollerPair);
@@ -194,7 +196,8 @@ int main(int argc, char *argv[])
                 physics.Fill2armMollerPosHist(MollerPair.second.x, MollerPair.second.y);
             }
         }
-    }
+    }//end of event loop
+
     //analyze Moller events saved in the loop,
     // get detector position information and z-vertex distribution, fill histograms
     for (int i = 0; i < hycal_mollers.size(); i++) {
@@ -218,25 +221,27 @@ int main(int argc, char *argv[])
         std::vector<HCHit> hc_hits;
         std::vector<GEMHit> gem_hits[4]; // separate vector for each GEM
         for( int j = 0; j < ev.n_clusters; j++) {
-            float depth = physics.GetShowerDepth(ev.cl_center[j], ev.cl_energy[j]);
-            hc_hits.push_back(HCHit{ev.cl_x[j], ev.cl_y[j], depth,
-                               ev.cl_energy[j], ev.cl_center[j]});
+            hc_hits.push_back(HCHit{ev.cl_x[j], ev.cl_y[j], ev.cl_z[j],
+                               ev.cl_energy[j], ev.cl_center[j], ev.cl_flag[j]});
         }
         for (int j = 0; j < ev.n_gem_hits; j++) {
-            gem_hits[ev.det_id[j]].push_back(GEMHit{ev.gem_x[j], ev.gem_y[j], gem_z[ev.det_id[j]], ev.det_id[j]});
+            gem_hits[ev.det_id[j]].push_back(GEMHit{ev.gem_x[j], ev.gem_y[j], 0.f, ev.det_id[j]});
         }
 
         //transform detector coordinates to target and beam center coordinates
-        physics.TransformDetData(hc_hits, 0.f, 0.f, hycal_z); // assuming beamX=beamY=0 for now
+        TransformDetData(hc_hits, 0.f, 0.f, hycal_z); // assuming beamX=beamY=0 for now
         for(int d = 0; d < 4; d++) 
-            physics.TransformDetData(gem_hits[d], 0.f, 0.f, gem_z[d]);
+            TransformDetData(gem_hits[d], 0.f, 0.f, gem_z[d]);
 
         //then matching between GEM hits and HyCal clusters
+        //matching.SetMatchRange(5.0f); // matching radius in mm
+        //matching.SetSquareSelection(true); // use square cut instead of circular cut
         std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
         //show how to access the matching result
         for (auto &m : matched_hits) { 
             HCHit hycal_hit = m.hycal_hit;  //the HyCal cluster be matched
-            GEMHit gem_hit = m.gem;  //the best-matched GEM hit (if any)
+            GEMHit gem_up_hit = m.gem[0];    //best-matched GEM hit from upstream pair (GEM1/GEM2)
+            GEMHit gem_down_hit = m.gem[1]; //best-matched GEM hit from downstream pair (GEM3/GEM4)
             std::vector<GEMHit> gem1_matches = m.gem1_hits;
             std::vector<GEMHit> gem2_matches = m.gem2_hits;
             std::vector<GEMHit> gem3_matches = m.gem3_hits;
@@ -245,7 +250,43 @@ int main(int argc, char *argv[])
             int hycal_idx = m.hycal_idx;  //index of the cluster in the original vector
         }
         
-    }
+        //select good e-e events
+        if (matched_hits.size() == 2){
+            auto &m = matched_hits;
+            float energy_sum = m[0].hycal_hit.energy + m[1].hycal_hit.energy;
+            if(std::abs(energy_sum - Ebeam) < 5.*Ebeam*0.025/sqrt(Ebeam/1000.f)){
+                //save these 2-cluster events for Moller analysis
+                MollerPair = PhysicsTools::MollerEvent(
+                                {m[0].hycal_hit.x, m[0].hycal_hit.y, m[0].hycal_hit.z, m[0].hycal_hit.energy},
+                                {m[1].hycal_hit.x, m[1].hycal_hit.y, m[1].hycal_hit.z, m[1].hycal_hit.energy});
+                good_Hmollers.push_back(MollerPair);
+                
+                // check upstream GEM pair (GEM1/GEM2)
+                if(m[0].gem[0].det_id == m[1].gem[0].det_id && m[0].gem[0].det_id != 0){
+                    MollerPair = PhysicsTools::MollerEvent(
+                                    {m[0].gem[0].x, m[0].gem[0].y, m[0].gem[0].z, m[0].hycal_hit.energy},
+                                    {m[1].gem[0].x, m[1].gem[0].y, m[1].gem[0].z, m[1].hycal_hit.energy});
+                    good_Gmollers[m[0].gem[0].det_id].push_back(MollerPair);
+                }
+                // check downstream GEM pair (GEM3/GEM4)
+                if(m[0].gem[1].det_id == m[1].gem[1].det_id && m[0].gem[1].det_id != 0){
+                    MollerPair = PhysicsTools::MollerEvent(
+                                    {m[0].gem[1].x, m[0].gem[1].y, m[0].gem[1].z, m[0].hycal_hit.energy},
+                                    {m[1].gem[1].x, m[1].gem[1].y, m[1].gem[1].z, m[1].hycal_hit.energy});
+                    good_Gmollers[m[0].gem[1].det_id].push_back(MollerPair);
+                }
+            }
+        }
+
+        //select good e-p events
+        if (matched_hits.size() == 1){
+            auto &m = matched_hits[0];
+            float energy = m.hycal_hit.energy;
+            if(std::abs(energy - Ebeam) < 3.*Ebeam*0.025/sqrt(Ebeam/1000.f)){
+                //save these 1-cluster events for elastic e-p analysis
+            }
+        }
+    }//end of event loop
 
     // write histograms into output ROOT file
     outfile.cd();

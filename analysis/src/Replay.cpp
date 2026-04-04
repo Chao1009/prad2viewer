@@ -8,6 +8,7 @@
 #include "GemSystem.h"
 #include "HyCalCluster.h"
 #include "GemCluster.h"
+#include "MatchingTools.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -81,8 +82,10 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
     ev.event_num = 0;
     ev.trigger_bits = 0;
     ev.timestamp = 0;
+    ev.total_energy = 0.f;
     ev.n_clusters = 0;
     ev.n_gem_hits = 0;
+    ev.match_num = 0;
 }
 
 void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
@@ -94,9 +97,9 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
     tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
     tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
-    tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/I");
+    tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
     tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
-    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/I", fdec::MAX_SAMPLES));
+    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
     tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
     tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
     tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
@@ -111,8 +114,10 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("gem.mpd_crate",  ev.mpd_crate,  "mpd_crate[gem_nch]/b");
     tree->Branch("gem.mpd_fiber",  ev.mpd_fiber,  "mpd_fiber[gem_nch]/b");
     tree->Branch("gem.apv",        ev.apv,        "apv[gem_nch]/b");
-    tree->Branch("gem.strip",      ev.strip,      "strip[gem_nch]/b");
-    tree->Branch("gem.ssp_samples",ev.ssp_samples,Form("ssp_samples[gem_nch][%d]/F", ssp::SSP_TIME_SAMPLES));
+    tree->Branch("gem.strip",        ev.strip,        "strip[gem_nch]/b");
+    tree->Branch("gem.ssp_samples",  ev.ssp_samples,  Form("ssp_samples[gem_nch][%d]/S", ssp::SSP_TIME_SAMPLES));
+    tree->Branch("gem.n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("gem.ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
 void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
@@ -120,12 +125,16 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("event_num",    &ev.event_num,    "event_num/i");
     tree->Branch("trigger_bits", &ev.trigger_bits, "trigger_bits/i");
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
+    tree->Branch("total_energy", &ev.total_energy, "total_energy/F");
+    // HyCal cluster branches
     tree->Branch("n_clusters",   &ev.n_clusters,   "n_clusters/I");
     tree->Branch("cl_x",         ev.cl_x,          "cl_x[n_clusters]/F");
     tree->Branch("cl_y",         ev.cl_y,          "cl_y[n_clusters]/F");
+    tree->Branch("cl_z",         ev.cl_z,          "cl_z[n_clusters]/F");
     tree->Branch("cl_energy",    ev.cl_energy,     "cl_energy[n_clusters]/F");
-    tree->Branch("cl_nblocks",   ev.cl_nblocks,    "cl_nblocks[n_clusters]/I");
-    tree->Branch("cl_center",    ev.cl_center,     "cl_center[n_clusters]/I");
+    tree->Branch("cl_nblocks",   ev.cl_nblocks,    "cl_nblocks[n_clusters]/b");
+    tree->Branch("cl_center",    ev.cl_center,     "cl_center[n_clusters]/s");
+    tree->Branch("cl_flag",      ev.cl_flag,       "cl_flag[n_clusters]/i");
     // GEM part
     tree->Branch("n_gem_hits",   &ev.n_gem_hits,   "n_gem_hits/I");
     tree->Branch("det_id",       ev.det_id,        "det_id[n_gem_hits]/b");
@@ -135,8 +144,23 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("gem_y_charge", ev.gem_y_charge,  "gem_y_charge[n_gem_hits]/F");
     tree->Branch("gem_x_peak",   ev.gem_x_peak,    "gem_x_peak[n_gem_hits]/F");
     tree->Branch("gem_y_peak",   ev.gem_y_peak,    "gem_y_peak[n_gem_hits]/F");
-    tree->Branch("gem_x_size",   ev.gem_x_size,    "gem_x_size[n_gem_hits]/I");
-    tree->Branch("gem_y_size",   ev.gem_y_size,    "gem_y_size[n_gem_hits]/I");
+    tree->Branch("gem_x_size",   ev.gem_x_size,    "gem_x_size[n_gem_hits]/b");
+    tree->Branch("gem_y_size",   ev.gem_y_size,    "gem_y_size[n_gem_hits]/b");
+    // Matching results
+    tree->Branch("match_num",       &ev.match_num,       "match_num/I");
+    tree->Branch("matchHC_x",       ev.matchHC_x,        "matchHC_x[match_num]/F");
+    tree->Branch("matchHC_y",       ev.matchHC_y,        "matchHC_y[match_num]/F");
+    tree->Branch("matchHC_z",       ev.matchHC_z,        "matchHC_z[match_num]/F");
+    tree->Branch("matchHC_energy",  ev.matchHC_energy,   "matchHC_energy[match_num]/F");
+    tree->Branch("matchHC_center",  ev.matchHC_center,   "matchHC_center[match_num]/s");
+    tree->Branch("matchHC_flag",    ev.matchHC_flag,     "matchHC_flag[match_num]/i");
+    tree->Branch("matchG_x",        ev.matchG_x,         Form("matchG_x[match_num][2]/F"));
+    tree->Branch("matchG_y",        ev.matchG_y,         Form("matchG_y[match_num][2]/F"));
+    tree->Branch("matchG_z",        ev.matchG_z,         Form("matchG_z[match_num][2]/F"));
+    tree->Branch("matchG_det_id",   ev.matchG_det_id,    Form("matchG_det_id[match_num][2]/b"));
+
+    tree->Branch("gem.n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("gem.ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
 bool Replay::Process(const std::string &input_evio, const std::string &output_root,
@@ -335,6 +359,8 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     fdec::ClusterConfig cl_cfg;
     clusterer.SetConfig(cl_cfg);
 
+    MatchingTools matching;
+
     // Initialize GEM system and clusterer
     std::unique_ptr<gem::GemSystem> gem_sys;
     std::unique_ptr<gem::GemCluster> gem_clusterer;
@@ -409,7 +435,7 @@ if(!prad1){
                 int crate = cit->second;
                 for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
                     if (!roc.slots[s].present) continue;
-                    for (int c = 0; c < 160; ++c) {
+                    for (int c = 0; c < 160; ++c) { //should be 16, a bigger number to adapt PRad1 data
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0) continue;
@@ -425,6 +451,7 @@ if(!prad1){
                         }
                         float energy = static_cast<float>(mod->energize(adc));
                         clusterer.AddHit(mod->index, energy);
+                        ev->total_energy += energy;
                     }
                 }
             }
@@ -436,9 +463,11 @@ if(!prad1){
             for (int i = 0; i < ev->n_clusters; ++i) {
                 ev->cl_x[i]       = hits[i].x;
                 ev->cl_y[i]       = hits[i].y;
+                ev->cl_z[i]       = PhysicsTools::GetShowerDepth(hits[i].center_id, hits[i].energy);
                 ev->cl_energy[i]  = hits[i].energy;
                 ev->cl_nblocks[i] = hits[i].nblocks;
                 ev->cl_center[i]  = hits[i].center_id;
+                ev->cl_flag[i]    = hits[i].flag;
             }
 
             //decode GEM data and reconstruct GEM hits
@@ -467,7 +496,44 @@ if(!prad1){
                 ev->gem_x_size[i] = h.x_size;
                 ev->gem_y_size[i] = h.y_size;
             }
-        }
+
+            // Perform matching between HyCal clusters and GEM hits
+            //store all the hits on HyCal and GEMs in this event
+            std::vector<HCHit> hc_hits;
+            std::vector<GEMHit> gem_hits[4]; // separate vector for each GEM
+            for (int i = 0; i < ev->n_clusters; ++i)
+                hc_hits.push_back({ev->cl_x[i], ev->cl_y[i], ev->cl_z[i], ev->cl_energy[i], ev->cl_center[i], ev->cl_flag[i]});
+            for (int i = 0; i < ev->n_gem_hits; ++i)
+                gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], 0.f, ev->det_id[i]});
+            //transform the coordinates of detector data
+            // (now the default position, TO DO: read from database)
+            float gem_z[4] = {5407.+39.71/2., 5407.-39.71/2.,
+                              5807.+39.71/2., 5807.-39.71/2.}; //mm, the center of the two GEMs
+            TransformDetData(hc_hits, 0.f, 0.f, 6225.f);
+            for(int i = 0; i < 4; ++i)
+                TransformDetData(gem_hits[i], 0.f, 0.f, gem_z[i]);
+
+            //matching.SetMatchRange(5.0f); // matching radius in mm, 15mm default
+            matching.SetSquareSelection(true); // use square cut instead of circular cut
+            std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
+
+            ev->match_num = std::min((int)matched_hits.size(), prad2::kMaxClusters);
+            for (int i = 0; i < ev->match_num; i++){
+                ev->matchHC_x[i] = matched_hits[i].hycal_hit.x;
+                ev->matchHC_y[i] = matched_hits[i].hycal_hit.y;
+                ev->matchHC_z[i] = matched_hits[i].hycal_hit.z;
+                ev->matchHC_energy[i] = matched_hits[i].hycal_hit.energy;
+                ev->matchHC_center[i] = matched_hits[i].hycal_hit.center_id;
+                ev->matchHC_flag[i] = matched_hits[i].hycal_hit.flag;
+                for (int j = 0; j < 2; j++) {
+                    ev->matchG_x[i][j] = matched_hits[i].gem[j].x;
+                    ev->matchG_y[i][j] = matched_hits[i].gem[j].y;
+                    ev->matchG_z[i][j] = matched_hits[i].gem[j].z;
+                    ev->matchG_det_id[i][j] = matched_hits[i].gem[j].det_id;
+                }
+            }
+
+        } //end of if(PRad1)
             tree->Fill();
             total++;
             if (total % 1000 == 0)

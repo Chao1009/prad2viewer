@@ -43,9 +43,9 @@ class MatchHit
             : hycal_hit(hycal_hit), gem1_hits(g1), gem2_hits(g2), gem3_hits(g3), gem4_hits(g4) {}
 
         // --- added for matching logic ----------------------------------------
-        analysis::GEMHit gem{};         // best-matched GEM hit
-        uint32_t     mflag = 0;     // matching flags (see MatchFlag enum)
-        size_t       hycal_idx = 0; // index into original hycal vector
+        analysis::GEMHit gem[2];       // best-matched upstream and downstream GEM hits
+        uint32_t   mflag;     // matching flags (see MatchFlag enum)
+        uint16_t    hycal_idx = 0; // index into original hycal vector
 };
 
 class MatchingTools

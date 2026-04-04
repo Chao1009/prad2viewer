@@ -354,41 +354,44 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             continue;
         }
 
-        // Non-container at depth 1: unexpected
-        if (!IsContainer(roc.type) && roc.type != DATA_BANK2) {
-            uint64_t key = (uint64_t(1) << 32) | roc.tag;
-            if (warned_tags.insert(key).second)
-                std::cerr << "DecodeEvent: unexpected non-container at depth 1"
-                          << " tag=0x" << std::hex << roc.tag
-                          << " type=" << TypeName(roc.type)
-                          << " words=" << std::dec << roc.data_words << "\n";
-            continue;
-        }
+        // Determine if this is a ROC container (built event) or a data bank
+        // at depth 1 (flat/non-built single-ROC event).
+        //
+        // Built event:      event → ROC containers → data banks (3 levels)
+        // Non-built event:  event → data banks directly (2 levels)
+        bool is_container = IsContainer(roc.type) || roc.type == DATA_BANK2;
 
-        // Identify ROC type from config
-        bool is_ti_master = (roc.tag == config.ti_master_tag);
+        // For containers: identify ROC and iterate children
+        bool is_ti_master = false;
         int crate_id = -1;
         std::string roc_type;
-        bool roc_known = is_ti_master;
-        for (auto &re : config.roc_tags) {
-            if (re.tag == roc.tag) {
-                crate_id = re.crate; roc_type = re.type;
-                roc_known = true;
-                break;
+
+        if (is_container) {
+            is_ti_master = (roc.tag == config.ti_master_tag);
+            bool roc_known = is_ti_master;
+            for (auto &re : config.roc_tags) {
+                if (re.tag == roc.tag) {
+                    crate_id = re.crate; roc_type = re.type;
+                    roc_known = true;
+                    break;
+                }
+            }
+            if (!roc_known) {
+                uint64_t key = (uint64_t(1) << 32) | roc.tag;
+                if (warned_tags.insert(key).second)
+                    std::cerr << "DecodeEvent: unknown ROC crate at depth 1"
+                              << " tag=0x" << std::hex << roc.tag << std::dec
+                              << " (" << roc.data_words << "w)"
+                              << " — add to roc_tags in daq_config.json\n";
             }
         }
-        if (!roc_known) {
-            uint64_t key = (uint64_t(1) << 32) | roc.tag;
-            if (warned_tags.insert(key).second)
-                std::cerr << "DecodeEvent: unknown ROC crate at depth 1"
-                          << " tag=0x" << std::hex << roc.tag << std::dec
-                          << " (" << roc.data_words << "w)"
-                          << " — add to roc_tags in daq_config.json\n";
-        }
 
-        // ---- depth 2: iterate data banks inside this ROC -------------------
-        for (size_t di = 0; di < roc.child_count; ++di) {
-            auto &bank = nodes[roc.child_first + di];
+        // Iterate data banks: either depth-2 children (built) or the depth-1
+        // node itself (flat). For flat events, we process roc as a single
+        // "virtual child" bank.
+        size_t n_banks = is_container ? roc.child_count : 1;
+        for (size_t di = 0; di < n_banks; ++di) {
+            auto &bank = is_container ? nodes[roc.child_first + di] : roc;
 
             // -- 0xE10A: TI data (in every ROC) --
             if (bank.tag == config.ti_bank_tag && bank.type == DATA_UINT32) {
@@ -422,7 +425,7 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
 
                 fdec::RocData &rd = evt.rocs[roc_idx];
                 rd.present = true;
-                rd.tag = roc.tag;
+                rd.tag = is_container ? roc.tag : ev.tag;
                 fdec::Fadc250Decoder::DecodeRoc(payload, nbytes, rd);
                 evt.roc_index[roc_idx] = roc_idx;
                 roc_idx++;
@@ -435,7 +438,7 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             {
                 fdec::RocData &rd = evt.rocs[roc_idx];
                 rd.present = true;
-                rd.tag = roc.tag;
+                rd.tag = is_container ? roc.tag : ev.tag;
                 fdec::Fadc250RawDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
                 evt.roc_index[roc_idx] = roc_idx;
                 roc_idx++;
@@ -459,7 +462,7 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             {
                 fdec::RocData &rd = evt.rocs[roc_idx];
                 rd.present = true;
-                rd.tag = roc.tag;
+                rd.tag = is_container ? roc.tag : ev.tag;
                 fdec::Adc1881mDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
 
                 // pedestal subtraction + zero suppression (ADC1881M only)

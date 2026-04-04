@@ -210,7 +210,28 @@ bool EvChannel::decodeTriggerBank(int event_idx, fdec::EventInfo &info) const
             }
         }
     }
-    if (!tb || tb->child_count < 1) return false;
+    if (!tb || tb->child_count < 1) {
+        // Legacy fallback: 0xC000 trigger bank + TS ROC E10A data
+        // 0xC000 bank contains [event_number, event_type, 0]
+        for (auto &n : nodes) {
+            if (n.depth == 1 && n.tag == 0xC000 && n.type == DATA_UINT32 && n.data_words >= 1) {
+                const uint32_t *d = GetData(n);
+                info.event_number = static_cast<int32_t>(d[0]) + event_idx;
+                break;
+            }
+        }
+        // TS ROC has an E10A sub-bank with >4 words (regular TI ROCs have 4).
+        // Word 5 contains the FP trigger input bits, word 2 is the timestamp.
+        for (auto &n : nodes) {
+            if (n.depth == 2 && n.tag == 0xE10A && n.type == DATA_UINT32 && n.data_words > 4) {
+                const uint32_t *d = GetData(n);
+                if (n.data_words >= 3) info.timestamp = d[2];
+                if (n.data_words >= 6) info.trigger_bits = d[5];
+                break;
+            }
+        }
+        return info.event_number > 0;
+    }
 
     uint32_t tb_tag = tb->tag;
     bool is_built = DaqConfig::is_built_trigger_bank(tb_tag);

@@ -372,7 +372,7 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     }
 
     // --- decode detector data: flat scan all nodes by tag -------------------
-    // Matches data banks regardless of depth (works for built and flat events).
+    // Works for built (3-level), flat (2-level), and mixed event structures.
     int roc_idx = 0;
     bool ssp_decoded = false;
     static std::set<uint64_t> warned_tags;
@@ -380,23 +380,29 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     for (size_t ni = 0; ni < nodes.size(); ++ni) {
         auto &n = nodes[ni];
 
-        // skip banks already handled above (TI, trigger, run info, strings)
-        if (n.tag == config.ti_bank_tag) continue;
-        if (n.tag == config.trigger_bank_tag) continue;
-        if (n.tag == config.run_info_tag) continue;
+        // === phase 1: skip nodes that are not dispatchable data banks ===
+        if (IsContainer(n.type))    continue;  // ROC wrappers, event bank
+        if (n.data_words == 0)      continue;  // empty banks
+        if (n.parent >= 0 &&                   // composite internals (0x000D, 0x0000)
+            nodes[n.parent].type == DATA_COMPOSITE) continue;
+        if (n.tag == config.ti_bank_tag)        continue;  // handled above
+        if (n.tag == config.trigger_bank_tag)   continue;  // handled above
+        if (n.tag == config.run_info_tag)       continue;  // handled above
+        if (n.tag == config.daq_config_tag)     continue;  // config string, not data
         if (n.type == DATA_CHARSTAR8 || n.type == DATA_CHAR8) continue;
 
-        // parent ROC tag (for crate_id lookup)
+        // parent ROC tag (for crate_id lookup; 0 if flat/top-level)
         uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
 
-        // -- 0xE101: FADC250 composite waveforms --
+        // === phase 2: dispatch by tag to the appropriate decoder ===
+
+        // FADC250 composite waveforms (0xE101)
         if (n.tag == config.fadc_composite_tag && n.type == DATA_COMPOSITE
             && roc_idx < fdec::MAX_ROCS)
         {
             size_t nbytes;
             auto *payload = GetCompositePayload(n, nbytes);
             if (!payload) continue;
-
             fdec::RocData &rd = evt.rocs[roc_idx];
             rd.present = true;
             rd.tag = roc_tag;
@@ -406,9 +412,9 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             continue;
         }
 
-        // -- 0xE109: FADC250 raw hardware format (fallback) --
+        // FADC250 raw hardware format (0xE109, fallback)
         if (n.tag == config.fadc_raw_tag && n.type == DATA_UINT32
-            && n.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+            && roc_idx < fdec::MAX_ROCS)
         {
             fdec::RocData &rd = evt.rocs[roc_idx];
             rd.present = true;
@@ -419,29 +425,26 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
             continue;
         }
 
-        // -- 0xE10C / 0x0DEA: SSP/MPD data (GEM) --
-        if (ssp_evt && config.is_ssp_bank(n.tag)
-            && n.type == DATA_UINT32 && n.data_words > 0)
+        // SSP/MPD data — GEM (0xE10C, 0x0DEA)
+        if (ssp_evt && config.is_ssp_bank(n.tag) && n.type == DATA_UINT32)
         {
             int crate_id = -1;
             for (auto &re : config.roc_tags)
                 if (re.tag == roc_tag) { crate_id = re.crate; break; }
-
-            ssp::SspDecoder::DecodeRoc(GetData(n), n.data_words,
-                                       crate_id, *ssp_evt);
-            ssp_decoded = true;
+            int napvs = ssp::SspDecoder::DecodeRoc(GetData(n), n.data_words,
+                                                    crate_id, *ssp_evt);
+            if (napvs > 0) ssp_decoded = true;  // only count if actual APV data found
             continue;
         }
 
-        // -- ADC1881M raw data (PRad legacy) --
+        // ADC1881M raw data — PRad legacy
         if (config.adc_format == "adc1881m"
             && n.tag == config.adc1881m_bank_tag
-            && n.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+            && roc_idx < fdec::MAX_ROCS)
         {
             int crate_id = -1;
             for (auto &re : config.roc_tags)
                 if (re.tag == roc_tag) { crate_id = re.crate; break; }
-
             fdec::RocData &rd = evt.rocs[roc_idx];
             rd.present = true;
             rd.tag = roc_tag;
@@ -470,39 +473,37 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
                     }
                 }
             }
-
             evt.roc_index[roc_idx] = roc_idx;
             roc_idx++;
             continue;
         }
 
-        // -- skip composite internals (format descriptor + data payload) --
-        if (n.parent >= 0 && nodes[n.parent].type == DATA_COMPOSITE) continue;
-
-        // -- unhandled data bank: warn once per tag --
-        if (n.data_words > 0 && !IsContainer(n.type)) {
-            uint64_t key = (uint64_t(roc_tag) << 32) | n.tag;
-            if (warned_tags.insert(key).second) {
-                auto *known = lookupKnownTag(n.tag);
-                if (known && !known->has_decoder)
-                    std::cerr << "DecodeEvent: skipping " << known->hardware
-                              << " bank (0x" << std::hex << n.tag << std::dec
-                              << ", " << n.data_words << "w)"
-                              << " in ROC 0x" << std::hex << roc_tag << std::dec
-                              << " — no decoder implemented\n";
-                else if (!known)
-                    std::cerr << "DecodeEvent: unknown bank"
-                              << " tag=0x" << std::hex << n.tag
-                              << " type=" << TypeName(n.type)
-                              << std::dec << " (" << n.data_words << "w)"
-                              << " in ROC 0x" << std::hex << roc_tag << std::dec
-                              << " — not in known tags, check ROL source\n";
-            }
+        // === phase 3: warn about unhandled data banks (once per tag) ===
+        uint64_t key = (uint64_t(roc_tag) << 32) | n.tag;
+        if (warned_tags.insert(key).second) {
+            auto *known = lookupKnownTag(n.tag);
+            if (known && !known->has_decoder)
+                std::cerr << "DecodeEvent: skipping " << known->hardware
+                          << " bank (0x" << std::hex << n.tag << std::dec
+                          << ", " << n.data_words << "w)"
+                          << " in ROC 0x" << std::hex << roc_tag << std::dec
+                          << " — no decoder implemented\n";
+            else if (!known)
+                std::cerr << "DecodeEvent: unknown bank"
+                          << " tag=0x" << std::hex << n.tag
+                          << " type=" << TypeName(n.type)
+                          << std::dec << " (" << n.data_words << "w)"
+                          << " in ROC 0x" << std::hex << roc_tag << std::dec
+                          << " — not in known tags, check ROL source\n";
         }
     }
 
     evt.nrocs = roc_idx;
-    return have_info || roc_idx > 0 || ssp_decoded;
+    // Return true only when actual detector data was decoded (FADC waveforms
+    // or GEM strips).  Event info (event#, timestamp, trigger_type/bits) is
+    // always populated in evt.info regardless — callers can use it even when
+    // this returns false (e.g. monitoring events with TI data but no waveforms).
+    return roc_idx > 0 || ssp_decoded;
 }
 
 // === Control event time extraction ==========================================

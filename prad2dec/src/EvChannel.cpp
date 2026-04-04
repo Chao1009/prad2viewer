@@ -332,188 +332,163 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     if (i < 0 || i >= nevents) return false;
     if (nodes.empty()) return false;
 
-    // --- depth 0: top-level event bank --------------------------------------
-    auto &ev = nodes[0];
-    evt.info.event_tag = ev.tag;
+    BankHeader evh(&buffer[0]);
+    evt.info.event_tag = evh.tag;
     evt.info.type = static_cast<uint8_t>(evtype);
 
+    // --- extract event info: scan all nodes for trigger/TI banks ------------
+    // Works for both built (3-level) and flat (2-level) event structures.
+
+    // 0xC000: trigger bank → event number
+    if (auto *tb = FindFirstByTag(config.trigger_bank_tag))
+        decodeTriggerInfo(*tb, evt.info);
+
+    // 0xE10A: first TI bank → trigger_type, trigger_number, timestamp
     bool have_info = false;
+    if (auto *ti = FindFirstByTag(config.ti_bank_tag)) {
+        decodeTIBank(*ti, evt.info, false);
+        have_info = true;
+    }
+
+    // TI master (0x27): override trigger_bits with FP inputs + run info
+    for (auto &n : nodes) {
+        if (n.depth == 1 && n.tag == config.ti_master_tag) {
+            for (size_t ci = 0; ci < n.child_count; ++ci) {
+                auto &child = nodes[n.child_first + ci];
+                if (child.tag == config.ti_bank_tag && child.type == DATA_UINT32) {
+                    decodeTIBank(child, evt.info, true);
+                    have_info = true;
+                }
+                if (child.tag == config.run_info_tag && child.type == DATA_UINT32)
+                    decodeRunInfo(child, evt.info);
+            }
+            break;
+        }
+    }
+
+    // --- decode detector data: flat scan all nodes by tag -------------------
+    // Matches data banks regardless of depth (works for built and flat events).
     int roc_idx = 0;
     bool ssp_decoded = false;
+    static std::set<uint64_t> warned_tags;
 
-    // --- depth 1: iterate ROC crate banks -----------------------------------
-    for (size_t ci = 0; ci < ev.child_count; ++ci) {
-        auto &roc = nodes[ev.child_first + ci];
+    for (size_t ni = 0; ni < nodes.size(); ++ni) {
+        auto &n = nodes[ni];
 
-        // warn once per unknown tag (static across calls to avoid flooding)
-        static std::set<uint64_t> warned_tags;
+        // skip banks already handled above (TI, trigger, run info, strings)
+        if (n.tag == config.ti_bank_tag) continue;
+        if (n.tag == config.trigger_bank_tag) continue;
+        if (n.tag == config.run_info_tag) continue;
+        if (n.type == DATA_CHARSTAR8 || n.type == DATA_CHAR8) continue;
 
-        // ---- 0xC000: trigger bank (event number, event tag) ----------------
-        if (roc.tag == config.trigger_bank_tag && roc.type == DATA_UINT32) {
-            decodeTriggerInfo(roc, evt.info);
+        // parent ROC tag (for crate_id lookup)
+        uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
+
+        // -- 0xE101: FADC250 composite waveforms --
+        if (n.tag == config.fadc_composite_tag && n.type == DATA_COMPOSITE
+            && roc_idx < fdec::MAX_ROCS)
+        {
+            size_t nbytes;
+            auto *payload = GetCompositePayload(n, nbytes);
+            if (!payload) continue;
+
+            fdec::RocData &rd = evt.rocs[roc_idx];
+            rd.present = true;
+            rd.tag = roc_tag;
+            fdec::Fadc250Decoder::DecodeRoc(payload, nbytes, rd);
+            evt.roc_index[roc_idx] = roc_idx;
+            roc_idx++;
             continue;
         }
 
-        // Determine if this is a ROC container (built event) or a data bank
-        // at depth 1 (flat/non-built single-ROC event).
-        //
-        // Built event:      event → ROC containers → data banks (3 levels)
-        // Non-built event:  event → data banks directly (2 levels)
-        bool is_container = IsContainer(roc.type) || roc.type == DATA_BANK2;
-
-        // For containers: identify ROC and iterate children
-        bool is_ti_master = false;
-        int crate_id = -1;
-        std::string roc_type;
-
-        if (is_container) {
-            is_ti_master = (roc.tag == config.ti_master_tag);
-            bool roc_known = is_ti_master;
-            for (auto &re : config.roc_tags) {
-                if (re.tag == roc.tag) {
-                    crate_id = re.crate; roc_type = re.type;
-                    roc_known = true;
-                    break;
-                }
-            }
-            if (!roc_known) {
-                uint64_t key = (uint64_t(1) << 32) | roc.tag;
-                if (warned_tags.insert(key).second)
-                    std::cerr << "DecodeEvent: unknown ROC crate at depth 1"
-                              << " tag=0x" << std::hex << roc.tag << std::dec
-                              << " (" << roc.data_words << "w)"
-                              << " — add to roc_tags in daq_config.json\n";
-            }
+        // -- 0xE109: FADC250 raw hardware format (fallback) --
+        if (n.tag == config.fadc_raw_tag && n.type == DATA_UINT32
+            && n.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+        {
+            fdec::RocData &rd = evt.rocs[roc_idx];
+            rd.present = true;
+            rd.tag = roc_tag;
+            fdec::Fadc250RawDecoder::DecodeRoc(GetData(n), n.data_words, rd);
+            evt.roc_index[roc_idx] = roc_idx;
+            roc_idx++;
+            continue;
         }
 
-        // Iterate data banks: either depth-2 children (built) or the depth-1
-        // node itself (flat). For flat events, we process roc as a single
-        // "virtual child" bank.
-        size_t n_banks = is_container ? roc.child_count : 1;
-        for (size_t di = 0; di < n_banks; ++di) {
-            auto &bank = is_container ? nodes[roc.child_first + di] : roc;
+        // -- 0xE10C / 0x0DEA: SSP/MPD data (GEM) --
+        if (ssp_evt && config.is_ssp_bank(n.tag)
+            && n.type == DATA_UINT32 && n.data_words > 0)
+        {
+            int crate_id = -1;
+            for (auto &re : config.roc_tags)
+                if (re.tag == roc_tag) { crate_id = re.crate; break; }
 
-            // -- 0xE10A: TI data (in every ROC) --
-            if (bank.tag == config.ti_bank_tag && bank.type == DATA_UINT32) {
-                if (!have_info) {
-                    decodeTIBank(bank, evt.info, is_ti_master);
-                    have_info = true;
-                } else if (is_ti_master) {
-                    // TI master overrides trigger_bits with FP inputs
-                    decodeTIBank(bank, evt.info, true);
-                }
-                continue;
-            }
+            ssp::SspDecoder::DecodeRoc(GetData(n), n.data_words,
+                                       crate_id, *ssp_evt);
+            ssp_decoded = true;
+            continue;
+        }
 
-            // -- 0xE10F: run info (TI master only) --
-            if (bank.tag == config.run_info_tag && bank.type == DATA_UINT32) {
-                decodeRunInfo(bank, evt.info);
-                continue;
-            }
+        // -- ADC1881M raw data (PRad legacy) --
+        if (config.adc_format == "adc1881m"
+            && n.tag == config.adc1881m_bank_tag
+            && n.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+        {
+            int crate_id = -1;
+            for (auto &re : config.roc_tags)
+                if (re.tag == roc_tag) { crate_id = re.crate; break; }
 
-            // -- 0xE10E: DAQ config string (skip) --
-            if (bank.type == DATA_CHARSTAR8 || bank.type == DATA_CHAR8)
-                continue;
+            fdec::RocData &rd = evt.rocs[roc_idx];
+            rd.present = true;
+            rd.tag = roc_tag;
+            fdec::Adc1881mDecoder::DecodeRoc(GetData(n), n.data_words, rd);
 
-            // -- 0xE101: FADC250 composite waveforms --
-            if (bank.tag == config.fadc_composite_tag && bank.type == DATA_COMPOSITE
-                && roc_idx < fdec::MAX_ROCS)
-            {
-                size_t nbytes;
-                auto *payload = GetCompositePayload(bank, nbytes);
-                if (!payload) continue;
-
-                fdec::RocData &rd = evt.rocs[roc_idx];
-                rd.present = true;
-                rd.tag = is_container ? roc.tag : ev.tag;
-                fdec::Fadc250Decoder::DecodeRoc(payload, nbytes, rd);
-                evt.roc_index[roc_idx] = roc_idx;
-                roc_idx++;
-                continue;
-            }
-
-            // -- 0xE109: FADC250 raw hardware format (fallback) --
-            if (bank.tag == config.fadc_raw_tag && bank.type == DATA_UINT32
-                && bank.data_words > 0 && roc_idx < fdec::MAX_ROCS)
-            {
-                fdec::RocData &rd = evt.rocs[roc_idx];
-                rd.present = true;
-                rd.tag = is_container ? roc.tag : ev.tag;
-                fdec::Fadc250RawDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
-                evt.roc_index[roc_idx] = roc_idx;
-                roc_idx++;
-                continue;
-            }
-
-            // -- 0xE10C / 0x0DEA: SSP/MPD data (GEM) --
-            if (ssp_evt && config.is_ssp_bank(bank.tag)
-                && bank.type == DATA_UINT32 && bank.data_words > 0)
-            {
-                ssp::SspDecoder::DecodeRoc(GetData(bank), bank.data_words,
-                                           crate_id, *ssp_evt);
-                ssp_decoded = true;
-                continue;
-            }
-
-            // -- ADC1881M raw data (PRad legacy) --
-            if (config.adc_format == "adc1881m"
-                && bank.tag == config.adc1881m_bank_tag
-                && bank.data_words > 0 && roc_idx < fdec::MAX_ROCS)
-            {
-                fdec::RocData &rd = evt.rocs[roc_idx];
-                rd.present = true;
-                rd.tag = is_container ? roc.tag : ev.tag;
-                fdec::Adc1881mDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
-
-                // pedestal subtraction + zero suppression (ADC1881M only)
-                if (!config.pedestals.empty() && crate_id >= 0) {
-                    for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
-                        auto &slot = rd.slots[s];
-                        if (!slot.present) continue;
-                        for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
-                            if (!(slot.channel_mask & (1ull << c))) continue;
-                            auto &cd = slot.channels[c];
-                            if (cd.nsamples != 1) continue;
-                            auto *ped = config.get_pedestal(crate_id, s, c);
-                            if (!ped) continue;
-                            float raw = static_cast<float>(cd.samples[0]);
-                            float threshold = ped->mean + config.sparsify_sigma * ped->rms;
-                            if (config.sparsify_sigma > 0.f && raw < threshold) {
-                                cd.nsamples = 0;
-                                slot.channel_mask &= ~(1ull << c);
-                                slot.nchannels--;
-                            } else {
-                                int sub = static_cast<int>(raw) - static_cast<int>(ped->mean + 0.5f);
-                                cd.samples[0] = (sub > 0) ? static_cast<uint16_t>(sub) : 0;
-                            }
+            if (!config.pedestals.empty() && crate_id >= 0) {
+                for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+                    auto &slot = rd.slots[s];
+                    if (!slot.present) continue;
+                    for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                        if (!(slot.channel_mask & (1ull << c))) continue;
+                        auto &cd = slot.channels[c];
+                        if (cd.nsamples != 1) continue;
+                        auto *ped = config.get_pedestal(crate_id, s, c);
+                        if (!ped) continue;
+                        float raw = static_cast<float>(cd.samples[0]);
+                        float threshold = ped->mean + config.sparsify_sigma * ped->rms;
+                        if (config.sparsify_sigma > 0.f && raw < threshold) {
+                            cd.nsamples = 0;
+                            slot.channel_mask &= ~(1ull << c);
+                            slot.nchannels--;
+                        } else {
+                            int sub = static_cast<int>(raw) - static_cast<int>(ped->mean + 0.5f);
+                            cd.samples[0] = (sub > 0) ? static_cast<uint16_t>(sub) : 0;
                         }
                     }
                 }
-
-                evt.roc_index[roc_idx] = roc_idx;
-                roc_idx++;
-                continue;
             }
 
-            // -- unhandled data bank: warn once per (roc_tag, bank_tag) pair --
-            if (bank.data_words > 0) {
-                uint64_t key = (uint64_t(roc.tag) << 32) | bank.tag;
-                if (warned_tags.insert(key).second) {
-                    auto *known = lookupKnownTag(bank.tag);
-                    if (known && !known->has_decoder)
-                        std::cerr << "DecodeEvent: skipping " << known->hardware
-                                  << " bank (0x" << std::hex << bank.tag << std::dec
-                                  << ", " << bank.data_words << "w)"
-                                  << " in ROC 0x" << std::hex << roc.tag << std::dec
-                                  << " — no decoder implemented\n";
-                    else if (!known)
-                        std::cerr << "DecodeEvent: unknown bank"
-                                  << " tag=0x" << std::hex << bank.tag
-                                  << " type=" << TypeName(bank.type)
-                                  << std::dec << " (" << bank.data_words << "w)"
-                                  << " in ROC 0x" << std::hex << roc.tag << std::dec
-                                  << " — not in known tags, check ROL source\n";
-                }
+            evt.roc_index[roc_idx] = roc_idx;
+            roc_idx++;
+            continue;
+        }
+
+        // -- unhandled data bank: warn once per tag --
+        if (n.data_words > 0 && !IsContainer(n.type)) {
+            uint64_t key = (uint64_t(roc_tag) << 32) | n.tag;
+            if (warned_tags.insert(key).second) {
+                auto *known = lookupKnownTag(n.tag);
+                if (known && !known->has_decoder)
+                    std::cerr << "DecodeEvent: skipping " << known->hardware
+                              << " bank (0x" << std::hex << n.tag << std::dec
+                              << ", " << n.data_words << "w)"
+                              << " in ROC 0x" << std::hex << roc_tag << std::dec
+                              << " — no decoder implemented\n";
+                else if (!known)
+                    std::cerr << "DecodeEvent: unknown bank"
+                              << " tag=0x" << std::hex << n.tag
+                              << " type=" << TypeName(n.type)
+                              << std::dec << " (" << n.data_words << "w)"
+                              << " in ROC 0x" << std::hex << roc_tag << std::dec
+                              << " — not in known tags, check ROL source\n";
             }
         }
     }

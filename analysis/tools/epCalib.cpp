@@ -14,6 +14,7 @@
 #include "HyCalCluster.h"
 #include "DaqConfig.h"
 #include "WaveAnalyzer.h"
+#include "EventData.h"
 
 #include <TFile.h>
 #include <TTree.h>
@@ -29,50 +30,27 @@
 #define DATABASE_DIR "."
 #endif
 
-float hycal_z = 6225.f; // distance from target to HyCal front face in mm, used for kinematics
-
-// per-event data (sized to worst case, reused)
-static constexpr int kMaxCh = fdec::MAX_ROCS * fdec::MAX_SLOTS * 16;
-
-struct EventVars {
-    int     event_num = 0;
-    int     trigger = 0;
-    Long64_t timestamp = 0;
-    int     nch = 0;
-    int     crate[kMaxCh] = {};
-    int     slot[kMaxCh] = {};
-    int     channel[kMaxCh] = {};
-    int     module_id[kMaxCh] = {};
-    int     nsamples[kMaxCh] = {};
-    int     samples[kMaxCh][fdec::MAX_SAMPLES] = {};
-    float   ped_mean[kMaxCh] = {};
-    float   ped_rms[kMaxCh] = {};
-    float   integral[kMaxCh] = {};
-    int     npeaks[kMaxCh] = {};
-    float   peak_height[kMaxCh][fdec::MAX_PEAKS] = {};
-    float   peak_time[kMaxCh][fdec::MAX_PEAKS] = {};
-    float   peak_integral[kMaxCh][fdec::MAX_PEAKS] = {};
-};
-
+using EventVars       = prad2::RawEventData;
 void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
-    tree->SetBranchAddress("event_num", &ev.event_num);
-    tree->SetBranchAddress("trigger",   &ev.trigger);
-    tree->SetBranchAddress("timestamp", &ev.timestamp);
-    tree->SetBranchAddress("nch",       &ev.nch);
-    tree->SetBranchAddress("crate",     ev.crate);
-    tree->SetBranchAddress("slot",      ev.slot);
-    tree->SetBranchAddress("channel",   ev.channel);
-    tree->SetBranchAddress("module_id", ev.module_id);
-    tree->SetBranchAddress("nsamples",  ev.nsamples);
-    tree->SetBranchAddress("ped_mean",  ev.ped_mean);
-    tree->SetBranchAddress("ped_rms",   ev.ped_rms);
-    tree->SetBranchAddress("integral",  ev.integral);
+    tree->Branch("event_num", &ev.event_num, "event_num/i");
+    tree->Branch("trigger",   &ev.trigger,   "trigger/i");
+    tree->Branch("timestamp", &ev.timestamp, "timestamp/L");
+    tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
+    tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
+    tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
+    tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
+    tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
+    tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
+    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
+    tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
+    tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
+    tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
     if (write_peaks) {
-        tree->SetBranchAddress("npeaks",       ev.npeaks);
-        tree->SetBranchAddress("peak_height",  ev.peak_height);
-        tree->SetBranchAddress("peak_time",    ev.peak_time);
-        tree->SetBranchAddress("peak_integral",ev.peak_integral);
+        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/b");
+        tree->Branch("hycal.peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("hycal.peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("hycal.peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
     }
 }
 
@@ -85,6 +63,7 @@ int main(int argc, char *argv[])
 
     //hardcoded beam energy for yield histograms, can be made configurable if needed
     float Ebeam = 3500.f; // MeV
+    float hycal_z = 6225.f; // distance from target to HyCal front face in mm, used for kinematics
 
     int opt;
     while ((opt = getopt(argc, argv, "o:D:n:")) != -1) {
@@ -154,7 +133,7 @@ int main(int argc, char *argv[])
             if (!mod || !mod->is_hycal()) continue;
             if (ev->npeaks[j] <= 0) continue;
             float adc = ev->peak_integral[j][0];
-            float energy = (mod->cal_factor > 0.) ?
+            float energy = (mod->cal_factor > 0.2) ?
                 static_cast<float>(mod->energize(adc)) : adc;
             clusterer.AddHit(mod->index, energy);
         }

@@ -86,8 +86,8 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("matchG_z",        ev.matchG_z);
     tree->SetBranchAddress("matchG_det_id",   ev.matchG_det_id);
 
-    tree->SetBranchAddress("gem.n_ssp_triggers", &ev.n_ssp_triggers);
-    tree->SetBranchAddress("gem.ssp_trigger_tags", ev.ssp_trigger_tags);
+    tree->SetBranchAddress("n_ssp_triggers", &ev.n_ssp_triggers);
+    tree->SetBranchAddress("ssp_trigger_tags", ev.ssp_trigger_tags);
 };
 
 static std::vector<std::string> collectRootFiles(const std::string &path);

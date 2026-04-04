@@ -107,7 +107,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
     tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
     if (write_peaks) {
-        tree->Branch("hycal.npeaks",       ev.npeaks,       "npeaks[nch]/b");
+        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/b");
         tree->Branch("hycal.peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
         tree->Branch("hycal.peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
         tree->Branch("hycal.peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
@@ -119,8 +119,8 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("gem.apv",        ev.apv,        "apv[gem_nch]/b");
     tree->Branch("gem.strip",        ev.strip,        "strip[gem_nch]/b");
     tree->Branch("gem.ssp_samples",  ev.ssp_samples,  Form("ssp_samples[gem_nch][%d]/S", ssp::SSP_TIME_SAMPLES));
-    tree->Branch("gem.n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
-    tree->Branch("gem.ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
+    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
 void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
@@ -163,8 +163,8 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("matchG_z",        ev.matchG_z,         Form("matchG_z[match_num][2]/F"));
     tree->Branch("matchG_det_id",   ev.matchG_det_id,    Form("matchG_det_id[match_num][2]/b"));
 
-    tree->Branch("gem.n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
-    tree->Branch("gem.ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
+    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
 bool Replay::Process(const std::string &input_evio, const std::string &output_root,

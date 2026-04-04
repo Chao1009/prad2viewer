@@ -31,7 +31,7 @@ struct HCHit {
     float z = 0.f;
     float energy = 0.f;
     int center_id = 0; // index of central block
-    int flag = -1;
+    uint32_t flag = -1;
 };
 
 //transfrom detector coordinates to target and beam center coordinates

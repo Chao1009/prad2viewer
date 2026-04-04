@@ -22,7 +22,7 @@ struct GEMHit {
     float x = 0.f;
     float y = 0.f;
     float z = 0.f;
-    int det_id = -1; // 1-4 for GEM1-GEM4
+    uint8_t det_id = -1; // 1-4 for GEM1-GEM4
 };
 
 struct HCHit {
@@ -30,7 +30,7 @@ struct HCHit {
     float y = 0.f;
     float z = 0.f;
     float energy = 0.f;
-    int center_id = 0; // index of central block
+    uint16_t center_id = 0; // index of central block
     uint32_t flag = -1;
 };
 

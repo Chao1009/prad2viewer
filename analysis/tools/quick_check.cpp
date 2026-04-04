@@ -40,13 +40,9 @@
 using namespace analysis;
 namespace fs = std::filesystem;
 
-// ── Tree branch struct ───────────────────────────────────────────────────
-
-static const int kMaxCl = 100;
-static const int kMaxGEMHits = 400;
-
 // Aliases for the shared replay data structures
 using EventVars_Recon = prad2::ReconEventData;
+// ── Tree branch struct ───────────────────────────────────────────────────
 void setupReconBranches(TTree *tree, EventVars_Recon &ev)
 {
     tree->SetBranchAddress("event_num",    &ev.event_num);

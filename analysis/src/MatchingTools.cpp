@@ -24,11 +24,29 @@ namespace analysis {
 // Projection
 // ============================================================================
 
-ProjectHit MatchingTools::GetProjectionHits(float x, float y, float z,
-                                            float projection_z) const
-{
+ProjectHit GetProjectionHits(float x, float y, float z,
+                                            float projection_z)
+{   
+    // simple linear projection from (x,y,z) to (x_proj, y_proj, projection_z)
+    // in target and beam center coordinates
     float scale = projection_z / z;
     return ProjectHit(x * scale, y * scale, projection_z);
+}
+
+void GetProjection(HCHit &hc, float projection_z)
+{
+    ProjectHit proj = GetProjectionHits(hc.x, hc.y, hc.z, projection_z);
+    hc.x = proj.x_proj;
+    hc.y = proj.y_proj;
+    hc.z = proj.z_proj;
+}
+
+void GetProjection(GEMHit &gem, float projection_z)
+{
+    ProjectHit proj = GetProjectionHits(gem.x, gem.y, gem.z, projection_z);
+    gem.x = proj.x_proj;
+    gem.y = proj.y_proj;
+    gem.z = proj.z_proj;
 }
 
 // Distance between HyCal cluster and GEM hit after projecting GEM to HyCal z

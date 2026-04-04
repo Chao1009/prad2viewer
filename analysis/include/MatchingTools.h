@@ -29,6 +29,10 @@ struct ProjectHit
     ProjectHit(float x, float y, float z) : x_proj(x), y_proj(y), z_proj(z) {};
 };
 
+ProjectHit GetProjectionHits(float x, float y, float z, float projection_z);
+void GetProjection(HCHit &hc, float projection_z);
+void GetProjection(GEMHit &gem, float projection_z);
+
 class MatchHit
 {
     public:
@@ -52,8 +56,6 @@ class MatchingTools
 {
 public:
     MatchingTools() = default;
-
-    ProjectHit GetProjectionHits(float x, float y, float z, float projection_z) const;
 
     std::vector<MatchHit> Match(std::vector<analysis::HCHit> &hycalHits,
                             const std::vector<analysis::GEMHit> &gem1_hits,

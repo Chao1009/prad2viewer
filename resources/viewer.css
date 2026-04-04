@@ -23,27 +23,25 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 }
 .clear-all-btn:hover { background:#e74c3c; }
 
-/* --- trigger filter bar --- */
-.trigger-filter-bar {
-    display:flex; align-items:center; gap:8px;
-    padding:4px 16px; background:var(--panel); border-bottom:1px solid var(--border);
-    font-size:12px;
+/* --- trigger filter (inline in tab bar, right-aligned) --- */
+.trig-filter-inline {
+    display:flex; align-items:center; gap:6px;
+    margin-left:auto; padding:0 4px; font-size:11px;
 }
 .trig-filter-label { color:var(--dim); font-weight:600; white-space:nowrap; }
-.trig-filter-checks { display:flex; flex-wrap:wrap; gap:4px 12px; }
+.trig-filter-checks { display:flex; gap:2px 8px; flex-wrap:nowrap; }
 .trig-filter-checks label {
-    display:flex; align-items:center; gap:3px; cursor:pointer;
-    color:var(--text); white-space:nowrap;
+    display:flex; align-items:center; gap:2px; cursor:pointer;
+    color:var(--text); white-space:nowrap; font-size:11px;
 }
-.trig-filter-checks input[type="checkbox"] { accent-color:var(--accent); }
+.trig-filter-checks input[type="checkbox"] { accent-color:var(--accent); margin:0; width:13px; height:13px; }
 .trig-filter-checks .trig-accept { color:#51cf66; }
 .trig-filter-checks .trig-reject { color:#ff6b6b; }
 .trig-filter-btn {
-    background:var(--border); border:none; color:var(--text); padding:2px 8px;
-    border-radius:3px; cursor:pointer; font-family:inherit; font-size:11px;
-    margin-left:auto;
+    background:none; border:1px solid var(--border); color:var(--dim); padding:1px 5px;
+    border-radius:3px; cursor:pointer; font-family:inherit; font-size:10px; line-height:1;
 }
-.trig-filter-btn:hover { background:var(--accent); color:#000; }
+.trig-filter-btn:hover { background:var(--accent); color:#000; border-color:var(--accent); }
 
 /* --- tab bar --- */
 .tab-bar {

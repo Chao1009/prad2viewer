@@ -185,19 +185,16 @@ function buildTriggerFilterUI(){
     const container=document.getElementById('trigger-filter-checks');
     if(!container) return;
     container.innerHTML='';
-    if(!triggerBitsDef.length && !triggerTypeDef.length){ bar.style.display='none'; return; }
+    if(!triggerBitsDef.length){ bar.style.display='none'; return; }
     bar.style.display='flex';
 
-    // use trigger_type if available (main triggers), else fall back to trigger_bits
-    const defs = triggerTypeDef.length ? triggerTypeDef : triggerBitsDef;
-    const useBit = !triggerTypeDef.length;
-
-    for(const d of defs){
-        const bit = useBit ? d.bit : d.primary_bit;
+    for(const d of triggerBitsDef){
+        const bit = d.bit;
         if(bit===undefined) continue;
         const mask = 1 << bit;
+        const name = d.label || d.name;
         const lbl=document.createElement('label');
-        lbl.title=`Bit ${bit}: ${d.label||d.name}`;
+        lbl.title=`${name} — FP bit ${bit}`;
         const cb=document.createElement('input');
         cb.type='checkbox';
         cb.dataset.bit=bit;
@@ -216,7 +213,7 @@ function buildTriggerFilterUI(){
             saveTrigFilterToTab();
         });
         lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(d.name||d.label));
+        lbl.appendChild(document.createTextNode(`${name}(${bit})`));
         container.appendChild(lbl);
     }
 
@@ -277,16 +274,19 @@ function loadEventData(reqId, data) {
 
     // trigger filter: if event doesn't pass, auto-skip in nav direction
     const tf=trigFilter();
-    if (mode==='file' && (tf.accept||tf.reject)) {
+    if (tf.accept || tf.reject) {
         const tb = data.trigger_bits || 0;
         if (!passesTriggerFilter(tb)) {
-            const next = data.event + navDirection;
-            if (next >= 1 && next <= totalEvents) {
-                loadEvent(next);
-            } else {
-                document.getElementById('status-bar').textContent =
-                    `No matching event (trigger filter active)`;
+            if (mode==='file') {
+                const next = data.event + navDirection;
+                if (next >= 1 && next <= totalEvents) {
+                    loadEvent(next);
+                } else {
+                    document.getElementById('status-bar').textContent =
+                        `No matching event (trigger filter active)`;
+                }
             }
+            // in online mode, just discard this event silently
             return;
         }
     }

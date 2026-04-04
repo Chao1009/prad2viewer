@@ -349,22 +349,36 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     if (auto *tb = FindFirstByTag(config.trigger_bank_tag))
         decodeTriggerInfo(*tb, evt.info);
 
-    // 0xE10A: first TI bank → trigger_number, timestamp
+    // Scan all TI banks (0xE10A) for event info.
+    // The first TI bank found provides trigger_number and timestamp.
+    // The longest TI bank (TI master, 7 words) provides FP trigger_bits from d[5].
+    // Run info (0xE10F) is extracted from the TI master crate (0x0027).
     bool have_info = false;
-    if (auto *ti = FindFirstByTag(config.ti_bank_tag)) {
-        decodeTIBank(*ti, evt.info, false);
-        have_info = true;
+    for (auto &n : nodes) {
+        if (n.tag != config.ti_bank_tag || n.type != DATA_UINT32) continue;
+
+        // first TI bank: extract trigger_number + timestamp
+        if (!have_info) {
+            decodeTIBank(n, evt.info, false);
+            have_info = true;
+        }
+
+        // any TI bank with enough words: extract FP trigger bits from d[5]
+        if (evt.info.trigger_bits == 0 && config.ti_trigger_type_word >= 0 &&
+            static_cast<size_t>(config.ti_trigger_type_word) < n.data_words)
+        {
+            const uint32_t *d = GetData(n);
+            evt.info.trigger_bits = (d[config.ti_trigger_type_word]
+                                     >> config.ti_trigger_type_shift)
+                                    & config.ti_trigger_type_mask;
+        }
     }
 
-    // TI master (0x27): override trigger_bits with FP inputs + run info
+    // TI master crate (0x27): extract run info
     for (auto &n : nodes) {
         if (n.depth == 1 && n.tag == config.ti_master_tag) {
             for (size_t ci = 0; ci < n.child_count; ++ci) {
                 auto &child = nodes[n.child_first + ci];
-                if (child.tag == config.ti_bank_tag && child.type == DATA_UINT32) {
-                    decodeTIBank(child, evt.info, true);
-                    have_info = true;
-                }
                 if (child.tag == config.run_info_tag && child.type == DATA_UINT32)
                     decodeRunInfo(child, evt.info);
             }

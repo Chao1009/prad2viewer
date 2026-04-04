@@ -700,6 +700,274 @@ static int doTriggers(EvChannel &ch, bool verbose)
     return 0;
 }
 
+// --- mode: bank-debug -------------------------------------------------------
+// Walks the event tree the same way DecodeEvent does, verifying the dispatch
+// logic: which banks appear at which depth, container vs flat layout, and
+// whether every bank is recognized by the decoder.
+
+struct BankStat {
+    int count = 0;
+    size_t min_words = SIZE_MAX, max_words = 0;
+    std::set<uint32_t> parent_tags;
+    std::set<int> depths;
+};
+
+// Known data-bank tags (mirrors EvChannel.cpp table + infrastructure banks)
+struct BankTagInfo {
+    uint32_t    tag;
+    const char *name;
+    const char *status;   // "decoded", "skipped", "info"
+};
+static const BankTagInfo bank_tag_info[] = {
+    { 0xC000, "CODA trigger bank",    "decoded" },
+    { 0xE10A, "TI/TS",                "decoded" },
+    { 0xE101, "FADC250 composite",    "decoded" },
+    { 0xE109, "FADC250 raw",          "decoded" },
+    { 0xE120, "ADC1881M (Fastbus)",   "decoded" },
+    { 0xE10C, "SSP",                  "decoded" },
+    { 0x0DEA, "VTP/MPD (GEM)",        "decoded" },
+    { 0xE10F, "Run info",             "decoded" },
+    { 0xE10E, "DAQ config string",    "info"    },
+    { 0xE10B, "V1190/V1290 TDC",      "no decoder" },
+    { 0xE141, "FAV3 (FADC v3)",       "no decoder" },
+    { 0xE104, "VSCM",                 "no decoder" },
+    { 0xE105, "DCRB/DC/Vetroc",       "no decoder" },
+    { 0xE115, "DSC2 scaler",          "no decoder" },
+    { 0xE112, "HEAD bank",            "no decoder" },
+    { 0xE123, "SSP-RICH",             "no decoder" },
+    { 0xE125, "Per-slot data",        "no decoder" },
+    { 0xE131, "VFTDC",                "no decoder" },
+    { 0xE133, "Helicity Decoder",     "no decoder" },
+    { 0xE140, "Special (pid=0)",      "no decoder" },
+};
+
+static const BankTagInfo *findBankInfo(uint32_t tag)
+{
+    for (auto &b : bank_tag_info)
+        if (b.tag == tag) return &b;
+    return nullptr;
+}
+
+static int doBankDebug(EvChannel &ch, bool verbose)
+{
+    const auto &cfg = ch.GetConfig();
+
+    // --- per-depth, per-tag stats ---
+    // key: (depth << 16 | is_container << 15 | 0) for containers, (depth << 16 | tag) for leaf
+    std::map<uint32_t, BankStat> depth0_tags;   // event-level tags
+    std::map<uint32_t, BankStat> depth1_tags;   // ROC or flat data banks
+    std::map<uint64_t, BankStat> depth2_tags;   // data banks keyed by (parent_tag << 32 | tag)
+
+    int nrecords = 0, nphysics = 0;
+    int n_built = 0, n_flat = 0, n_mixed = 0;  // event structure types
+
+    while (ch.Read() == status::success) {
+        nrecords++;
+        if (!ch.Scan()) continue;
+        if (ch.GetNEvents() == 0) continue;
+        nphysics++;
+
+        auto &nodes = ch.GetNodes();
+        if (nodes.empty()) continue;
+        auto &ev = nodes[0];
+
+        // track event tag
+        auto &es = depth0_tags[ev.tag];
+        es.count++;
+        es.min_words = std::min(es.min_words, ev.data_words);
+        es.max_words = std::max(es.max_words, ev.data_words);
+        es.depths.insert(0);
+
+        // classify event structure: built (all depth-1 children are containers)
+        // vs flat (some depth-1 children are data banks)
+        bool has_container = false, has_leaf = false;
+        for (size_t ci = 0; ci < ev.child_count; ++ci) {
+            auto &child = nodes[ev.child_first + ci];
+            bool is_cont = IsContainer(child.type) || child.type == DATA_BANK2;
+            if (is_cont) has_container = true;
+            else         has_leaf = true;
+        }
+        if (has_container && !has_leaf)      n_built++;
+        else if (!has_container && has_leaf) n_flat++;
+        else if (has_container && has_leaf)  n_mixed++;
+
+        // walk depth-1 children
+        for (size_t ci = 0; ci < ev.child_count; ++ci) {
+            auto &d1 = nodes[ev.child_first + ci];
+            bool is_cont = IsContainer(d1.type) || d1.type == DATA_BANK2;
+
+            auto &d1s = depth1_tags[d1.tag];
+            d1s.count++;
+            d1s.min_words = std::min(d1s.min_words, d1.data_words);
+            d1s.max_words = std::max(d1s.max_words, d1.data_words);
+            d1s.depths.insert(is_cont ? 1 : -1); // -1 = flat leaf at depth 1
+            d1s.parent_tags.insert(ev.tag);
+
+            // if container, walk depth-2 children
+            if (is_cont) {
+                for (size_t di = 0; di < d1.child_count; ++di) {
+                    auto &d2 = nodes[d1.child_first + di];
+                    uint64_t key = (uint64_t(d1.tag) << 32) | d2.tag;
+                    auto &d2s = depth2_tags[key];
+                    d2s.count++;
+                    d2s.min_words = std::min(d2s.min_words, d2.data_words);
+                    d2s.max_words = std::max(d2s.max_words, d2.data_words);
+                    d2s.depths.insert(2);
+                    d2s.parent_tags.insert(d1.tag);
+                }
+            }
+        }
+    }
+
+    // === Output ===
+    std::cout << "=== Bank Structure Debug (" << nphysics << " physics events, "
+              << nrecords << " records) ===\n\n";
+
+    // event structure classification
+    std::cout << "--- Event Structure ---\n"
+              << "  Built (ROC containers at depth 1): " << n_built << "\n"
+              << "  Flat  (data banks at depth 1):     " << n_flat << "\n"
+              << "  Mixed (both):                      " << n_mixed << "\n\n";
+
+    // depth 0: event tags
+    std::cout << "--- Depth 0: Event Tags ---\n"
+              << std::setw(10) << "tag" << std::setw(8) << "count"
+              << std::setw(16) << "size (words)" << "  label\n"
+              << std::string(52, '-') << "\n";
+    for (auto &[tag, s] : depth0_tags) {
+        std::cout << "  " << hex(tag) << std::setw(8) << s.count << "  ";
+        if (s.min_words == s.max_words)
+            std::cout << std::setw(14) << s.min_words;
+        else
+            std::cout << std::setw(6) << s.min_words << " - " << std::setw(6) << s.max_words;
+        std::cout << "  " << tag_label(tag) << "\n";
+    }
+
+    // depth 1: ROC crates and flat data banks
+    std::cout << "\n--- Depth 1: ROC Crates / Flat Data Banks ---\n"
+              << std::setw(10) << "tag" << std::setw(8) << "count"
+              << std::setw(16) << "size (words)" << std::setw(10) << "layout"
+              << "  identity\n"
+              << std::string(75, '-') << "\n";
+    for (auto &[tag, s] : depth1_tags) {
+        bool as_container = s.depths.count(1) > 0;
+        bool as_flat = s.depths.count(-1) > 0;
+
+        std::cout << "  " << hex(tag) << std::setw(8) << s.count << "  ";
+        if (s.min_words == s.max_words)
+            std::cout << std::setw(14) << s.min_words;
+        else
+            std::cout << std::setw(6) << s.min_words << " - " << std::setw(6) << s.max_words;
+
+        // layout column
+        if (as_container && as_flat)      std::cout << std::setw(10) << "BOTH";
+        else if (as_container)            std::cout << std::setw(10) << "container";
+        else                              std::cout << std::setw(10) << "flat";
+
+        // identity
+        std::cout << "  ";
+        if (tag == cfg.trigger_bank_tag)  std::cout << "TRIGGER BANK";
+        else if (tag == cfg.ti_master_tag) std::cout << "TI MASTER";
+        else {
+            // check roc_tags
+            bool found = false;
+            for (auto &re : cfg.roc_tags) {
+                if (re.tag == tag) {
+                    std::cout << re.name;
+                    if (!re.type.empty()) std::cout << " [" << re.type << "]";
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                // check known data bank tags (for flat events)
+                auto *bi = findBankInfo(tag);
+                if (bi) std::cout << bi->name << " (" << bi->status << ")";
+                else    std::cout << "*** UNKNOWN ***";
+            }
+        }
+        std::cout << "\n";
+    }
+
+    // depth 2: data banks inside ROC containers
+    std::cout << "\n--- Depth 2: Data Banks Inside ROC Crates ---\n"
+              << std::setw(10) << "parent" << std::setw(10) << "tag"
+              << std::setw(8) << "count" << std::setw(16) << "size (words)"
+              << "  identity / dispatch\n"
+              << std::string(80, '-') << "\n";
+
+    for (auto &[key, s] : depth2_tags) {
+        uint32_t parent = static_cast<uint32_t>(key >> 32);
+        uint32_t tag = static_cast<uint32_t>(key & 0xFFFFFFFF);
+
+        std::cout << "  " << hex(parent) << "  " << hex(tag)
+                  << std::setw(8) << s.count << "  ";
+        if (s.min_words == s.max_words)
+            std::cout << std::setw(14) << s.min_words;
+        else
+            std::cout << std::setw(6) << s.min_words << " - " << std::setw(6) << s.max_words;
+
+        // dispatch status
+        std::cout << "  ";
+        if (tag == cfg.ti_bank_tag)           std::cout << "-> decodeTIBank()";
+        else if (tag == cfg.run_info_tag)     std::cout << "-> decodeRunInfo()";
+        else if (tag == cfg.fadc_composite_tag) std::cout << "-> Fadc250Decoder";
+        else if (tag == cfg.fadc_raw_tag)     std::cout << "-> Fadc250RawDecoder";
+        else if (cfg.is_ssp_bank(tag))        std::cout << "-> SspDecoder";
+        else if (tag == cfg.adc1881m_bank_tag) std::cout << "-> Adc1881mDecoder";
+        else if (tag == cfg.daq_config_tag)   std::cout << "-> skip (config string)";
+        else {
+            auto *bi = findBankInfo(tag);
+            if (bi)  std::cout << bi->name << " (" << bi->status << ")";
+            else     std::cout << "*** UNKNOWN — not dispatched ***";
+        }
+        // flag if parent is not a known ROC
+        bool parent_known = (parent == cfg.ti_master_tag);
+        for (auto &re : cfg.roc_tags)
+            if (re.tag == parent) { parent_known = true; break; }
+        if (!parent_known)
+            std::cout << " [parent ROC unknown]";
+
+        std::cout << "\n";
+    }
+
+    // summary of dispatch coverage
+    std::cout << "\n--- Dispatch Coverage ---\n";
+    int total_d2 = 0, dispatched_d2 = 0, skipped_d2 = 0, unknown_d2 = 0;
+    for (auto &[key, s] : depth2_tags) {
+        uint32_t tag = static_cast<uint32_t>(key & 0xFFFFFFFF);
+        total_d2 += s.count;
+        if (tag == cfg.ti_bank_tag || tag == cfg.run_info_tag ||
+            tag == cfg.fadc_composite_tag || tag == cfg.fadc_raw_tag ||
+            cfg.is_ssp_bank(tag) || tag == cfg.adc1881m_bank_tag)
+            dispatched_d2 += s.count;
+        else if (tag == cfg.daq_config_tag ||
+                 (findBankInfo(tag) && std::string(findBankInfo(tag)->status) == "info"))
+            skipped_d2 += s.count;
+        else {
+            auto *bi = findBankInfo(tag);
+            if (bi)  skipped_d2 += s.count;   // known but no decoder
+            else     unknown_d2 += s.count;
+        }
+    }
+    std::cout << "  Total depth-2 banks:  " << total_d2 << "\n"
+              << "  Dispatched (decoded): " << dispatched_d2 << "\n"
+              << "  Known (no decoder):   " << skipped_d2 << "\n"
+              << "  Unknown:              " << unknown_d2 << "\n";
+
+    if (verbose) {
+        // per-event detail: print the first few events showing their structure
+        std::cout << "\n--- First 5 Event Structures ---\n";
+        EvChannel ch2;
+        ch2.SetConfig(cfg);
+        // reopen not practical; this would need a separate pass.
+        // Instead, point user to -m tree mode.
+        std::cout << "  (use -m tree -n 5 for per-event bank tree)\n";
+    }
+
+    return 0;
+}
+
 // --- main -------------------------------------------------------------------
 static void usage(const char *prog)
 {
@@ -713,7 +981,8 @@ static void usage(const char *prog)
         << "  -m epics      Dump all EPICS event text\n"
         << "  -m event      Detailed dump of a single record\n"
         << "  -m triggers   List trigger bit counts (add -v for per-event detail)\n"
-        << "  -m trig-debug Cross-correlate event tags, TI event type, and FP trigger bits\n\n"
+        << "  -m trig-debug Cross-correlate event tags, TI event type, and FP trigger bits\n"
+        << "  -m bank-debug Verify bank structure, depth layout, and dispatch coverage\n\n"
         << "Options:\n"
         << "  -D <file>     DAQ configuration (auto-searches daq_config.json if omitted)\n"
         << "  -n <N>        Number of events (tree mode, default 5) or event number (event mode)\n"
@@ -771,6 +1040,7 @@ int main(int argc, char *argv[])
     else if (mode == "epics")      rc = doEpics(ch);
     else if (mode == "triggers")   rc = doTriggers(ch, verbose);
     else if (mode == "trig-debug") rc = doTrigDebug(ch, verbose);
+    else if (mode == "bank-debug") rc = doBankDebug(ch, verbose);
     else if (mode == "event")      rc = doEvent(ch, num);
     else                           rc = doSummary(ch);
 

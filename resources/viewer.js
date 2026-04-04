@@ -6,9 +6,9 @@ let modules=[], totalEvents=0, currentEvent=1;
 let currentEventNumber=0, currentTriggerBits=0;  // DAQ event number + trigger from last loaded event
 let triggerBitsDef=[];  // [{bit, mask, name, label}, ...]
 let triggerTypeDef=[];  // [{type, tag, name, label, primary_bit}, ...]
-// per-tab trigger filter masks: { tabName: {accept: mask, reject: mask} }
+// per-tab trigger_type filter: { tabName: {accept: Set, reject: Set} }
 const tabTrigFilter={};
-function trigFilter(){ return tabTrigFilter[activeTab]||(tabTrigFilter[activeTab]={accept:0,reject:0}); }
+function trigFilter(){ return tabTrigFilter[activeTab]||(tabTrigFilter[activeTab]={accept:new Set(),reject:new Set()}); }
 let eventChannels={};
 let selectedModule=null, hoveredModule=null;
 const PC=['#00b4d8','#ff6b6b','#51cf66','#ffd43b','#cc5de8','#ff922b','#20c997','#f06595'];
@@ -185,35 +185,34 @@ function buildTriggerFilterUI(){
     const container=document.getElementById('trigger-filter-checks');
     if(!container) return;
     container.innerHTML='';
-    if(!triggerBitsDef.length){ bar.style.display='none'; return; }
+    if(!triggerTypeDef.length){ bar.style.display='none'; return; }
     bar.style.display='flex';
 
-    for(const d of triggerBitsDef){
-        const bit = d.bit;
-        if(bit===undefined) continue;
-        const mask = 1 << bit;
+    for(const d of triggerTypeDef){
+        const typeVal = parseInt(d.type, 16);
         const name = d.label || d.name;
         const lbl=document.createElement('label');
-        lbl.title=`${name} — FP bit ${bit}`;
+        lbl.title=`Trigger type 0x${typeVal.toString(16)} → tag 0x${(0x80+typeVal).toString(16)}`;
         const cb=document.createElement('input');
         cb.type='checkbox';
-        cb.dataset.bit=bit;
-        cb.dataset.mask=mask;
+        cb.dataset.trigtype=typeVal;
         cb.dataset.state='0'; // 0=ignore, 1=accept, 2=reject
         cb.indeterminate=false;
         cb.checked=false;
-        cb.addEventListener('click', e=>{
-            e.preventDefault();
+        cb.addEventListener('click', ()=>{
             let st=parseInt(cb.dataset.state);
             st=(st+1)%3;
             cb.dataset.state=String(st);
-            if(st===0){ cb.checked=false; cb.indeterminate=false; lbl.className=''; }
-            else if(st===1){ cb.checked=true; cb.indeterminate=false; lbl.className='trig-accept'; }
-            else { cb.checked=false; cb.indeterminate=true; lbl.className='trig-reject'; }
+            // defer visual update to override browser's native toggle
+            setTimeout(()=>{
+                if(st===0){ cb.checked=false; cb.indeterminate=false; lbl.className=''; }
+                else if(st===1){ cb.checked=true; cb.indeterminate=false; lbl.className='trig-accept'; }
+                else { cb.checked=false; cb.indeterminate=true; lbl.className='trig-reject'; }
+            },0);
             saveTrigFilterToTab();
         });
         lbl.appendChild(cb);
-        lbl.appendChild(document.createTextNode(`${name}(${bit})`));
+        lbl.appendChild(document.createTextNode(name));
         container.appendChild(lbl);
     }
 
@@ -226,27 +225,27 @@ function buildTriggerFilterUI(){
     };
 }
 
-// save checkbox states → active tab's accept/reject masks
+// save checkbox states → active tab's accept/reject sets
 function saveTrigFilterToTab(){
     const tf=trigFilter();
-    tf.accept=0; tf.reject=0;
+    tf.accept.clear(); tf.reject.clear();
     for(const cb of document.querySelectorAll('#trigger-filter-checks input[type="checkbox"]')){
-        const m=parseInt(cb.dataset.mask);
+        const t=parseInt(cb.dataset.trigtype);
         const st=cb.dataset.state;
-        if(st==='1') tf.accept|=m;
-        else if(st==='2') tf.reject|=m;
+        if(st==='1') tf.accept.add(t);
+        else if(st==='2') tf.reject.add(t);
     }
     if(mode==='file' && totalEvents>0) loadEvent(currentEvent);
 }
 
-// restore checkboxes from active tab's masks
+// restore checkboxes from active tab's sets
 function restoreTrigFilterFromTab(){
     const tf=trigFilter();
     for(const cb of document.querySelectorAll('#trigger-filter-checks input[type="checkbox"]')){
-        const m=parseInt(cb.dataset.mask);
+        const t=parseInt(cb.dataset.trigtype);
         let st='0';
-        if(tf.accept & m) st='1';
-        else if(tf.reject & m) st='2';
+        if(tf.accept.has(t)) st='1';
+        else if(tf.reject.has(t)) st='2';
         cb.dataset.state=st;
         const lbl=cb.parentElement;
         if(st==='0'){ cb.checked=false; cb.indeterminate=false; lbl.className=''; }
@@ -255,10 +254,10 @@ function restoreTrigFilterFromTab(){
     }
 }
 
-function passesTriggerFilter(triggerBits){
+function passesTriggerFilter(triggerType){
     const tf=trigFilter();
-    if(tf.reject && (triggerBits & tf.reject)) return false;
-    if(tf.accept && !(triggerBits & tf.accept)) return false;
+    if(tf.reject.has(triggerType)) return false;
+    if(tf.accept.size>0 && !tf.accept.has(triggerType)) return false;
     return true;
 }
 
@@ -274,9 +273,9 @@ function loadEventData(reqId, data) {
 
     // trigger filter: if event doesn't pass, auto-skip in nav direction
     const tf=trigFilter();
-    if (tf.accept || tf.reject) {
-        const tb = data.trigger_bits || 0;
-        if (!passesTriggerFilter(tb)) {
+    if (tf.accept.size || tf.reject.size) {
+        const tt = data.trigger_type || 0;
+        if (!passesTriggerFilter(tt)) {
             if (mode==='file') {
                 const next = data.event + navDirection;
                 if (next >= 1 && next <= totalEvents) {
@@ -1197,10 +1196,13 @@ function applyConfig(data){
     refLines=data.ref_lines||{};
     triggerBitsDef=data.trigger_bits||[];
     triggerTypeDef=data.trigger_type||[];
-    // load per-tab trigger filters from server config
+    // load per-tab trigger_type filters from server config
     const tf=data.trigger_filter||{};
     for(const [tab, filt] of Object.entries(tf)){
-        tabTrigFilter[tab]={accept:filt.trigger_accept||0, reject:filt.trigger_reject||0};
+        tabTrigFilter[tab]={
+            accept:new Set(filt.accept||[]),
+            reject:new Set(filt.reject||[])
+        };
     }
     buildTriggerFilterUI();
     restoreTrigFilterFromTab();

@@ -754,8 +754,8 @@ void ViewerServer::etReaderThread()
 
                     int seq = app_online_.events_processed.load();
 
-                    if (app_online_.lms_trigger.accept != 0 &&
-                        app_online_.lms_trigger(event.info.trigger_bits)) {
+                    if (!app_online_.lms_trigger.accept.empty() &&
+                        app_online_.lms_trigger(event.info.trigger_type)) {
                         auto now = std::chrono::steady_clock::now();
                         if (now - last_lms_notify >= lms_notify_interval) {
                             last_lms_notify = now;

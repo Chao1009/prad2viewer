@@ -2,9 +2,8 @@
     "_comment": "DAQ configuration for prad2decoder — JLab single-event mode (tag 0xB1)",
 
     "event_tags": {
-        "_comment": "CODA2/JLab legacy control tags (confirmed in PRad-II data). Built-in physics trigger 0xFF50 - 0xFF8F and 0x00A0 - 0x00BF auto-detected. Monitoring tags have TI data but no waveforms — skipped in file viewer and iteration.",
+        "_comment": "CODA2/JLab legacy control tags (confirmed in PRad-II data). Built-in physics trigger 0xFF50 - 0xFF8F and 0x00A0 - 0x00BF auto-detected.",
         "physics":      ["0x82", "0xFE", "0xFA"],
-        "monitoring":   ["0xB0", "0xBA", "0xBC"],
         "prestart":     "0x11",
         "go":           "0x12",
         "end":          "0x14",

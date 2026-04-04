@@ -76,7 +76,7 @@ void AppState::init(const std::string &db_dir,
     // Try "waveform" section from config.json (loaded later in reco_file),
     // then fall back to separate hist_config.json, then -H override.
     auto loadWaveformConfig = [&](const json &w) {
-        waveform_trigger.parse(w);
+        waveform_trigger.parse(w, trigger_type_def);
         if (w.contains("time_cut")) {
             auto &tc = w["time_cut"];
             if (tc.contains("min")) hist_cfg.time_min = tc["min"];
@@ -127,6 +127,23 @@ void AppState::init(const std::string &db_dir,
         }
     };
 
+    // load trigger definitions first — needed for name resolution in trigger filters
+    {
+        std::string tbpath = findFile("trigger_bits.json", db_dir);
+        std::string tbs = readFile(tbpath);
+        if (!tbs.empty()) {
+            auto tb = json::parse(tbs, nullptr, false);
+            if (tb.is_array()) {
+                trigger_bits_def = tb;
+            } else if (tb.is_object()) {
+                if (tb.contains("trigger_bits"))
+                    trigger_bits_def = tb["trigger_bits"];
+                if (tb.contains("trigger_type"))
+                    trigger_type_def = tb["trigger_type"];
+            }
+        }
+    }
+
     // load waveform config from main config, or legacy hist_config.json
     bool waveform_loaded = false;
     if (!main_config.empty()) {
@@ -138,25 +155,6 @@ void AppState::init(const std::string &db_dir,
             else if (j.contains("hist")) { loadLegacyHistConfig(j); waveform_loaded = true; }
             if (j.contains("ref_lines") && j["ref_lines"].is_object())
                 ref_lines = j["ref_lines"];
-        }
-    }
-
-    // load trigger definitions
-    {
-        std::string tbpath = findFile("trigger_bits.json", db_dir);
-        std::string tbs = readFile(tbpath);
-        if (!tbs.empty()) {
-            auto tb = json::parse(tbs, nullptr, false);
-            if (tb.is_array()) {
-                // legacy flat array format: just trigger bits
-                trigger_bits_def = tb;
-            } else if (tb.is_object()) {
-                // new format: {trigger_bits: [...], trigger_type: [...]}
-                if (tb.contains("trigger_bits"))
-                    trigger_bits_def = tb["trigger_bits"];
-                if (tb.contains("trigger_type"))
-                    trigger_type_def = tb["trigger_type"];
-            }
         }
     }
     if (!waveform_loaded) {
@@ -289,7 +287,7 @@ void AppState::init(const std::string &db_dir,
                 if (j.contains("log_weight_thres"))   cfg.log_weight_thres   = j["log_weight_thres"];
             };
             loadCfg(cc, cluster_cfg);
-            cluster_trigger.parse(cc);
+            cluster_trigger.parse(cc, trigger_type_def);
             if (cc.contains("energy_hist")) {
                 auto &eh = cc["energy_hist"];
                 if (eh.contains("min"))  cl_hist_min  = eh["min"];
@@ -318,7 +316,7 @@ void AppState::init(const std::string &db_dir,
 
         if (rcfg.contains("lms_monitor")) {
             auto &lm = rcfg["lms_monitor"];
-            lms_trigger.parse(lm);
+            lms_trigger.parse(lm, trigger_type_def);
             if (lm.contains("warn_threshold")) lms_warn_thresh     = lm["warn_threshold"];
             if (lm.contains("warn_min_mean"))  lms_warn_min_mean  = lm["warn_min_mean"];
             if (lm.contains("max_history"))    lms_max_history    = lm["max_history"];
@@ -405,7 +403,7 @@ void AppState::init(const std::string &db_dir,
 
         if (rcfg.contains("physics")) {
             auto &ph = rcfg["physics"];
-            physics_trigger.parse(ph);
+            physics_trigger.parse(ph, trigger_type_def);
             if (ph.contains("energy_angle_hist")) {
                 auto &ea = ph["energy_angle_hist"];
                 if (ea.contains("angle_min"))   ea_angle_min   = ea["angle_min"];
@@ -593,7 +591,7 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
 json AppState::computeClustersJson(fdec::EventData &event, int ev_id,
                                    fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
-    if (!cluster_trigger(event.info.trigger_bits))
+    if (!cluster_trigger(event.info.trigger_type))
         return {{"event", ev_id}, {"hits", json::object()}, {"clusters", json::array()},
                 {"info", "trigger filtered"}};
 
@@ -694,10 +692,10 @@ void AppState::processEvent(fdec::EventData &event,
                             fdec::WaveAnalyzer &ana, fdec::WaveResult &wres)
 {
     // --- check which consumers need this event ---
-    uint32_t tb = event.info.trigger_bits;
-    bool do_hist    = waveform_trigger(tb);
-    bool do_cluster = cluster_trigger(tb);
-    bool do_lms     = lms_trigger.accept != 0 && lms_trigger(tb);
+    uint8_t tt = event.info.trigger_type;
+    bool do_hist    = waveform_trigger(tt);
+    bool do_cluster = cluster_trigger(tt);
+    bool do_lms     = !lms_trigger.accept.empty() && lms_trigger(tt);
 
     if (!do_hist && !do_cluster && !do_lms) {
         std::lock_guard<std::mutex> lk(data_mtx);
@@ -854,7 +852,7 @@ void AppState::processEvent(fdec::EventData &event,
         nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
         cluster_events_processed++;
 
-        bool physics_accept = physics_trigger(tb);
+        bool physics_accept = physics_trigger(tt);
         if (physics_accept) {
             for (size_t i = 0; i < reco_hits.size(); ++i) {
                 energy_angle_hist.fill(cinfo[i].theta, reco_hits[i].energy,
@@ -885,9 +883,9 @@ void AppState::processEvent(fdec::EventData &event,
 
 void AppState::processReconEvent(const ReconEventData &recon)
 {
-    uint32_t tb = recon.trigger_bits;
-    bool do_cluster = cluster_trigger(tb);
-    bool do_physics = physics_trigger(tb);
+    uint8_t tt = recon.trigger_type;
+    bool do_cluster = cluster_trigger(tt);
+    bool do_physics = physics_trigger(tt);
 
     std::lock_guard<std::mutex> lk(data_mtx);
     events_processed++;

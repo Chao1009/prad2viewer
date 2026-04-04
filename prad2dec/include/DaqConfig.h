@@ -26,11 +26,6 @@ struct DaqConfig
     // Built-trigger mode: 0xFF50-0xFF8F (num = event count)
     std::vector<uint32_t> physics_tags;
 
-    // monitoring event tags — physics events with TI data but no waveforms
-    // (e.g. 100Hz pulser, scaler triggers). Classified as physics by is_physics()
-    // but skipped in file viewer navigation and event iteration.
-    std::vector<uint32_t> monitoring_tags;
-
     // control event tags (CODA2/JLab legacy — confirmed in PRad-II data)
     // CODA3 uses 0xFFD0-0xFFD4, recognized via is_control() range check
     uint32_t prestart_tag;
@@ -154,13 +149,6 @@ struct DaqConfig
             return true;
         // single-event tags
         for (auto t : physics_tags)
-            if (tag == t) return true;
-        return false;
-    }
-
-    bool is_monitoring(uint32_t tag) const
-    {
-        for (auto t : monitoring_tags)
             if (tag == t) return true;
         return false;
     }

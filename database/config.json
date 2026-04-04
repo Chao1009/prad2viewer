@@ -18,8 +18,8 @@
         "theta": {"min": 0.0, "max": 10.0, "step": 0.2}
     },
     "waveform": {
-        "accept_trigger_bits": [],
-        "reject_trigger_bits": [],
+        "accept_trigger_type": [],
+        "reject_trigger_type": ["Pulser", "Alpha", "MasterOR"],
         "time_cut": {"min": 160, "max": 220},
         "height_hist": {"min": 0, "max": 4000, "step": 10},
         "integral_hist": {"min": 0, "max": 20000, "step": 100},
@@ -30,8 +30,8 @@
         }
     },
     "clustering": {
-        "accept_trigger_bits": [0, 1, 8],
-        "reject_trigger_bits": [24],
+        "accept_trigger_type": ["SSP_RawSum", "LMS"],
+        "reject_trigger_type": ["Pulser"],
         "min_module_energy": 1.0,
         "min_center_energy": 10.0,
         "min_cluster_energy": 50.0,
@@ -57,7 +57,7 @@
         }
     },
     "lms_monitor": {
-        "accept_trigger_bits": [24],
+        "accept_trigger_type": ["LMS"],
         "warn_threshold": 0.1,
         "warn_min_mean": 100,
         "max_history": 5000,
@@ -79,7 +79,7 @@
         ]
     },
     "physics": {
-        "accept_trigger_bits": [0, 1],
+        "accept_trigger_type": ["SSP_RawSum", "LMS"],
         "energy_angle_hist": {
             "angle_min": 0.0,
             "angle_max": 8.0,

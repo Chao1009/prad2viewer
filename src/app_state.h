@@ -30,41 +30,81 @@ struct ReconEventData;
 #include <mutex>
 #include <atomic>
 
-// Trigger filter: reject overrides accept. accept==0 means accept all.
+// Trigger filter based on trigger_type (uint8, from event tag).
+// Reject overrides accept. Empty accept = accept all.
 struct TriggerFilter {
-    uint32_t accept = 0;  // 0 = accept all
-    uint32_t reject = 0;  // 0 = reject none
+    std::vector<uint8_t> accept;  // empty = accept all
+    std::vector<uint8_t> reject;  // empty = reject none
 
-    bool operator()(uint32_t bits) const {
-        if (reject && (bits & reject)) return false;
-        return accept == 0 || (bits & accept);
+    bool operator()(uint8_t type) const {
+        for (auto t : reject) if (t == type) return false;
+        if (accept.empty()) return true;
+        for (auto t : accept) if (t == type) return true;
+        return false;
     }
 
-    // parse from JSON section containing accept_trigger_bits / reject_trigger_bits
-    void parse(const nlohmann::json &section) {
-        accept = maskFrom(section, "accept_trigger_bits");
-        reject = maskFrom(section, "reject_trigger_bits");
+    // parse from JSON section containing accept_trigger_type / reject_trigger_type
+    // values can be: names ("LMS", "Pulser"), hex ("0x29"), or integers (41)
+    // names are resolved against the trigger_type_def lookup table
+    void parse(const nlohmann::json &section,
+               const nlohmann::json &type_defs = nlohmann::json::array()) {
+        accept = parseList(section, "accept_trigger_type", type_defs);
+        reject = parseList(section, "reject_trigger_type", type_defs);
     }
 
-    // emit to JSON
     nlohmann::json toJson() const {
-        return {{"trigger_accept", accept}, {"trigger_reject", reject}};
+        auto toArr = [](const std::vector<uint8_t> &v) {
+            nlohmann::json a = nlohmann::json::array();
+            for (auto t : v) a.push_back(t);
+            return a;
+        };
+        return {{"accept", toArr(accept)}, {"reject", toArr(reject)}};
     }
 
-    // log line fragment: "trigger accept=0x3 reject=0x0"
     friend std::ostream &operator<<(std::ostream &os, const TriggerFilter &f) {
-        return os << "trigger accept=0x" << std::hex << f.accept
-                  << " reject=0x" << f.reject << std::dec;
+        os << "trigger accept=[";
+        for (size_t i = 0; i < f.accept.size(); ++i)
+            os << (i ? "," : "") << "0x" << std::hex << (int)f.accept[i];
+        os << "] reject=[";
+        for (size_t i = 0; i < f.reject.size(); ++i)
+            os << (i ? "," : "") << "0x" << std::hex << (int)f.reject[i];
+        return os << "]" << std::dec;
     }
 
 private:
-    static uint32_t maskFrom(const nlohmann::json &section, const char *key) {
-        if (!section.contains(key)) return 0;
+    static std::vector<uint8_t> parseList(const nlohmann::json &section, const char *key,
+                                           const nlohmann::json &type_defs) {
+        std::vector<uint8_t> v;
+        if (!section.contains(key)) return v;
         auto &arr = section[key];
-        if (!arr.is_array() || arr.empty()) return 0;
-        uint32_t m = 0;
-        for (auto &b : arr) m |= (1u << b.get<int>());
-        return m;
+        if (!arr.is_array()) return v;
+        for (auto &item : arr) {
+            if (item.is_number()) {
+                v.push_back(static_cast<uint8_t>(item.get<int>()));
+            } else if (item.is_string()) {
+                auto s = item.get<std::string>();
+                // try name lookup against trigger_type definitions
+                bool found = false;
+                for (auto &def : type_defs) {
+                    if (def.value("name", "") == s || def.value("label", "") == s) {
+                        auto ts = def.value("type", "");
+                        if (!ts.empty()) {
+                            v.push_back(static_cast<uint8_t>(std::stoul(ts, nullptr, 0)));
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                // fallback: try as hex/int string
+                if (!found) {
+                    try { v.push_back(static_cast<uint8_t>(std::stoul(s, nullptr, 0))); }
+                    catch (...) {
+                        std::cerr << "TriggerFilter: unknown trigger type name '" << s << "'\n";
+                    }
+                }
+            }
+        }
+        return v;
     }
 };
 

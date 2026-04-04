@@ -7,6 +7,7 @@
 #include <cstring>
 #include <iostream>
 #include <iomanip>
+#include <set>
 
 using namespace evc;
 
@@ -178,225 +179,150 @@ const uint8_t *EvChannel::GetCompositePayload(const EvNode &n, size_t &nbytes) c
     return reinterpret_cast<const uint8_t*>(&buffer[inner.data_begin]);
 }
 
-// === CODA built trigger bank decoding (spec pages 21, 26, 31) ===============
-//
-// Physics Event structure:
-//   Top-level bank (tag 0xFFXX, type 0x10, num = M events)
-//     Built Trigger Bank (tag 0xFF2X, type 0x20 = bank of segments, num = N ROCs)
-//       Segment 1 (tag=EB_id, type=0xa ULONG64): first_event_number(64), [avg_ts(64)]xM, [run_info(64)]
-//       Segment 2 (tag=EB_id, type=0x05 USHORT16): event_type[0..M-1]
-//       ROC segment (tag=roc_id, type=0x01 UINT32): [ts_low, ts_high, misc] per event
-//     Data Bank 1 (ROC 1 data)
-//     ...
-//
-// Trigger bank tag encodes content (page 26):
-//   bit 0: has timestamps, bit 1: has run#/type, bit 2: no run-specific data
+// =============================================================================
+// Depth-2 data bank decoders
+// =============================================================================
 
-bool EvChannel::decodeTriggerBank(int event_idx, fdec::EventInfo &info) const
+// --- 0xC000: CODA trigger bank [event_number, event_tag, reserved] ----------
+void EvChannel::decodeTriggerInfo(const EvNode &node, fdec::EventInfo &info) const
 {
-    // find the built trigger bank at depth 1 (direct child of top-level event)
-    const EvNode *tb = nullptr;
-    for (auto &n : nodes) {
-        if (n.depth == 1 && DaqConfig::is_built_trigger_bank(n.tag)) {
-            tb = &n;
-            break;
-        }
-    }
-    // fallback: try raw trigger bank (0xFF1X) from ROC raw data
-    if (!tb) {
-        for (auto &n : nodes) {
-            if (n.depth == 1 && DaqConfig::is_raw_trigger_bank(n.tag)) {
-                tb = &n;
-                break;
-            }
-        }
-    }
-    if (!tb || tb->child_count < 1) return false;
-
-    uint32_t tb_tag = tb->tag;
-    bool is_built = DaqConfig::is_built_trigger_bank(tb_tag);
-    bool has_timestamps = DaqConfig::trigger_bank_has_timestamps(tb_tag);
-    bool has_run_info   = DaqConfig::trigger_bank_has_run_info(tb_tag);
-
-    if (is_built) {
-        // --- Built trigger bank (0xFF2X) per page 31 ---
-        if (tb->child_count < 2) return false;
-
-        // Segment 1: common data (type 0xa = ULONG64)
-        // Contains: first_event_number(64-bit), [avg_timestamps(64-bit) x M], [run#_type(64-bit)]
-        auto &seg1 = nodes[tb->child_first];
-        if (seg1.type == DATA_ULONG64 && seg1.data_words >= 2) {
-            const uint32_t *d = GetData(seg1);
-
-            // 64-bit first event number (low word first)
-            uint64_t first_event = (uint64_t)d[0] | ((uint64_t)d[1] << 32);
-            info.event_number = static_cast<int32_t>(first_event + event_idx);
-
-            size_t pos = 2; // past event number (2 words for 64-bit)
-
-            if (has_timestamps) {
-                // M average timestamps, each 64-bit (2 words)
-                size_t ts_off = pos + 2 * event_idx;
-                if (ts_off + 1 < seg1.data_words) {
-                    uint64_t ts_low  = d[ts_off];
-                    uint64_t ts_high = d[ts_off + 1];
-                    info.timestamp = ts_low | (ts_high << 32);
-                }
-                pos += 2 * nevents;
-            }
-
-            if (has_run_info && pos + 1 < seg1.data_words) {
-                // 64-bit value: run# in high 32, run type in low 32
-                info.run_number = d[pos + 1];  // high word = run number
-                // d[pos] = run type (low word), not stored currently
-            }
-        }
-
-        // Segment 2: event types (type 0x05 = USHORT16)
-        // Packed as unsigned shorts: 2 per 32-bit word, low 16 first
-        auto &seg2 = nodes[tb->child_first + 1];
-        if (seg2.type == DATA_USHORT16 && seg2.data_words > 0) {
-            const uint32_t *d = GetData(seg2);
-            int word_idx = event_idx / 2;
-            int shift    = (event_idx & 1) * 16;
-            if (static_cast<size_t>(word_idx) < seg2.data_words) {
-                info.trigger_bits = static_cast<uint8_t>((d[word_idx] >> shift) & 0xFF);
-            }
-        }
-
-        // ROC segments (type 0x01 = UINT32): per-ROC timestamps
-        // These start at child_first + 2 (after the 2 common segments)
-        // Each ROC segment has: [ts_low, ts_high, misc] per event
-        // We can use these for more precise per-ROC timestamps if avg is missing
-        if (!has_timestamps && tb->child_count > 2) {
-            auto &roc_seg = nodes[tb->child_first + 2]; // first ROC
-            if (roc_seg.type == DATA_UINT32) {
-                const uint32_t *d = GetData(roc_seg);
-                // words per event: at least 2 (ts_low, ts_high), possibly more (misc)
-                size_t words_per_evt = (nevents > 0) ? roc_seg.data_words / nevents : 0;
-                if (words_per_evt >= 2) {
-                    size_t off = words_per_evt * event_idx;
-                    if (off + 1 < roc_seg.data_words) {
-                        uint64_t ts_low  = d[off];
-                        uint64_t ts_high = d[off + 1] & 0xFFFF; // upper 16 bits of 48-bit ts
-                        info.timestamp = ts_low | (ts_high << 32);
-                    }
-                }
-            }
-        }
-
-    } else {
-        // --- Raw trigger bank (0xFF1X) per page 21 ---
-        // Children are segments, one per event:
-        //   segment tag = event ID / trigger type
-        //   segment data: event_number, [ts_low, ts_high], [misc]
-        if (event_idx >= static_cast<int>(tb->child_count)) return false;
-
-        auto &seg = nodes[tb->child_first + event_idx];
-        info.trigger_bits = static_cast<uint8_t>(seg.tag); // trigger type in segment tag
-
-        const uint32_t *d = GetData(seg);
-        size_t nw = seg.data_words;
-        if (nw >= 1)
-            info.event_number = static_cast<int32_t>(d[0]);
-        if (has_timestamps && nw >= 3) {
-            uint64_t ts_low  = d[1];
-            uint64_t ts_high = d[2] & 0xFFFF; // bits 47-32
-            info.timestamp = ts_low | (ts_high << 32);
-        }
-    }
-
-    return true;
+    const uint32_t *d = GetData(node);
+    size_t nw = node.data_words;
+    if (config.trig_event_number_word >= 0 &&
+        static_cast<size_t>(config.trig_event_number_word) < nw)
+        info.event_number = static_cast<int32_t>(d[config.trig_event_number_word]);
 }
 
-// === JLab TI bank fallback (0xE10A) =========================================
-// Used when no CODA trigger bank is present (single-event mode, legacy data)
-
-bool EvChannel::decodeTI(fdec::EventInfo &info) const
+// --- 0xE10A: TI hardware data (after rol2 block-header stripping) -----------
+//
+// Slave (4 words, nwords=3):
+//   d[0]: event_header  — event_type(8) | 0x01(8) | nwords(16)
+//   d[1]: event_number  — 32-bit
+//   d[2]: timestamp_low — 32-bit
+//   d[3]: ts_high[15:0] | evnum_high[19:16]
+//
+// Master (7 words, nwords=6):
+//   d[0]-d[3]: same as slave
+//   d[4]: trigger type byte (often zero)
+//   d[5]: 32-bit FP trigger inputs (if tiSetFPInputReadout enabled)
+//   d[6]: additional TI flags
+//
+void EvChannel::decodeTIBank(const EvNode &node, fdec::EventInfo &info,
+                             bool is_master) const
 {
-    // --- JLab trigger bank (0xC000): event number and type ------------------
-    if (auto *tb = FindFirstByTag(config.trigger_bank_tag)) {
-        const uint32_t *d = GetData(*tb);
-        size_t nw = tb->data_words;
-        if (config.trig_event_number_word >= 0 &&
-            static_cast<size_t>(config.trig_event_number_word) < nw)
-            info.event_number = static_cast<int32_t>(d[config.trig_event_number_word]);
+    const uint32_t *d = GetData(node);
+    size_t nw = node.data_words;
+    if (nw == 0) return;
+
+    // d[0] event header: trigger_type (TS trigger table output)
+    info.trigger_type = static_cast<uint8_t>((d[0] >> 24) & 0xFF);
+
+    // d[1] event/trigger number
+    if (config.ti_trigger_word >= 0 &&
+        static_cast<size_t>(config.ti_trigger_word) < nw)
+        info.trigger_number = static_cast<int32_t>(d[config.ti_trigger_word]);
+
+    // d[2], d[3]: 48-bit timestamp
+    int lo = config.ti_time_low_word;
+    int hi = config.ti_time_high_word;
+    if (lo >= 0 && hi >= 0 &&
+        static_cast<size_t>(lo) < nw &&
+        static_cast<size_t>(hi) < nw)
+    {
+        uint64_t time_low  = d[lo];
+        uint64_t time_high = (d[hi] & config.ti_time_high_mask);
+        if (config.ti_time_high_shift > 0)
+            time_high >>= config.ti_time_high_shift;
+        info.timestamp = (time_high << 32) | time_low;
     }
 
-    // --- TI data bank (0xE10A) from any ROC: trigger number, timestamp ------
-    auto *ti = FindFirstByTag(config.ti_bank_tag);
-    if (ti) {
-        const uint32_t *d = GetData(*ti);
-        size_t nw = ti->data_words;
-
-        if (config.ti_trigger_word >= 0 &&
-            static_cast<size_t>(config.ti_trigger_word) < nw)
-            info.trigger_number = static_cast<int32_t>(d[config.ti_trigger_word]);
-
-        // TI event header d[0] always contains the TS trigger decision.
-        // Format: event_type(8) | 0x01(8) | nwords(16)
-        // event_type encodes trigger table output; event_tag = 0x80 + event_type.
-        // This is the baseline trigger_bits — always available in every TI bank.
-        // TI master d[5] overrides with richer 32-bit FP trigger inputs (below).
-        if (nw > 0) {
-            info.trigger_type = static_cast<uint8_t>((d[0] >> 24) & 0xFF);
-            info.trigger_bits = info.trigger_type;
-        }
-
-        int lo = config.ti_time_low_word;
-        int hi = config.ti_time_high_word;
-        if (lo >= 0 && hi >= 0 &&
-            static_cast<size_t>(lo) < nw &&
-            static_cast<size_t>(hi) < nw)
-        {
-            uint64_t time_low  = d[lo];
-            uint64_t time_high = (d[hi] & config.ti_time_high_mask);
-            if (config.ti_time_high_shift > 0)
-                time_high >>= config.ti_time_high_shift;
-            info.timestamp = (time_high << 32) | time_low;
-        }
+    // Trigger bits: baseline from event_type, master overrides with FP inputs
+    info.trigger_bits = info.trigger_type;
+    if (is_master && config.ti_trigger_type_word >= 0 &&
+        static_cast<size_t>(config.ti_trigger_type_word) < nw)
+    {
+        info.trigger_bits = (d[config.ti_trigger_type_word]
+                             >> config.ti_trigger_type_shift)
+                            & config.ti_trigger_type_mask;
     }
-
-    // --- TI master crate (tag 0x27): extended trigger bits + run info ------
-    // The TI master may have additional trigger data beyond the event header.
-    // If tiSetFPInputReadout(1) is called, word[5] has 32-bit FP trigger inputs.
-    // Otherwise, word[4] has the 8-bit TS trigger type pattern.
-    // The configurable ti_trigger_type_word selects which word to read.
-    for (auto &n : nodes) {
-        if (n.depth == 1 && n.tag == config.ti_master_tag) {
-            for (size_t ci = 0; ci < n.child_count; ++ci) {
-                auto &child = nodes[n.child_first + ci];
-                if (child.tag == config.ti_bank_tag) {
-                    const uint32_t *d = GetData(child);
-                    size_t nw = child.data_words;
-                    // Override trigger_bits from TI master if configured word exists
-                    if (config.ti_trigger_type_word >= 0 &&
-                        static_cast<size_t>(config.ti_trigger_type_word) < nw)
-                    {
-                        info.trigger_bits = (d[config.ti_trigger_type_word]
-                                             >> config.ti_trigger_type_shift)
-                                            & config.ti_trigger_type_mask;
-                    }
-                }
-                if (child.tag == config.run_info_tag) {
-                    const uint32_t *d = GetData(child);
-                    size_t nw = child.data_words;
-                    if (config.ri_run_number_word >= 0 &&
-                        static_cast<size_t>(config.ri_run_number_word) < nw)
-                        info.run_number = d[config.ri_run_number_word];
-                    if (config.ri_unix_time_word >= 0 &&
-                        static_cast<size_t>(config.ri_unix_time_word) < nw)
-                        info.unix_time = d[config.ri_unix_time_word];
-                }
-            }
-            break;
-        }
-    }
-
-    return ti != nullptr;
 }
 
-// === DecodeEvent ============================================================
+// --- 0xE10F: Run info bank [hdr, run#, evt_count, unix_time, ...] -----------
+void EvChannel::decodeRunInfo(const EvNode &node, fdec::EventInfo &info) const
+{
+    const uint32_t *d = GetData(node);
+    size_t nw = node.data_words;
+    if (config.ri_run_number_word >= 0 &&
+        static_cast<size_t>(config.ri_run_number_word) < nw)
+        info.run_number = d[config.ri_run_number_word];
+    if (config.ri_unix_time_word >= 0 &&
+        static_cast<size_t>(config.ri_unix_time_word) < nw)
+        info.unix_time = d[config.ri_unix_time_word];
+}
+
+// =============================================================================
+// DecodeEvent — hierarchical dispatch by depth and bank tag
+//
+// CODA2 single-event structure (see docs/rols/banktags.md):
+//
+//   [Physics Event: tag = 0x80 + TI_event_type] (depth 0)
+//    +-- [0xC000 UINT32]       trigger bank (event#, event_tag)
+//    +-- [0x0027 BANK]         TI master crate
+//    |    +-- [0xE10A UINT32]  TI data (7 words: trigger#, timestamp, FP bits)
+//    |    +-- [0xE10C UINT32]  SSP trigger data
+//    |    +-- [0xE10F UINT32]  run info (run#, unix_time)
+//    |    +-- [0xE10E STRING]  DAQ config string
+//    +-- [0x0080 BANK]         HyCal FADC crate (even tags)
+//    |    +-- [0xE10A UINT32]  TI data (4 words)
+//    |    +-- [0xE101 COMPOSITE] FADC250 waveforms (physics triggers only)
+//    +-- [0x0081 BANK]         TI slave (odd tags, TI only)
+//    |    +-- [0xE10A UINT32]  TI data
+//    +-- [0x0031 BANK]         GEM VTP/MPD crate (when present)
+//    |    +-- [0xE10A UINT32]  TI data
+//    |    +-- [0x0DEA UINT32]  MPD strip data (SSP bitfield format)
+//    +-- ...
+// =============================================================================
+
+// --- Known bank tags from JLab ROLs (rol1.c, rol2.c, vtp1mpd.c) ------------
+// Used to provide informative warnings for banks we recognize but don't decode.
+struct KnownBankTag {
+    uint32_t    tag;
+    const char *hardware;
+    bool        has_decoder;   // true if prad2dec implements a decoder
+};
+
+static const KnownBankTag known_bank_tags[] = {
+    // Tags with decoders
+    { 0xE10A, "TI/TS",                    true  },
+    { 0xE101, "FADC250 composite",         true  },
+    { 0xE109, "FADC250 raw",               true  },
+    { 0xE120, "ADC1881M (Fastbus)",        true  },
+    { 0xE10C, "SSP",                       true  },
+    { 0x0DEA, "VTP/MPD (GEM)",             true  },
+    { 0xE10F, "Run info",                  true  },
+    { 0xE10E, "DAQ config string",         true  },
+    { 0xC000, "CODA trigger bank",         true  },
+    // Tags from ROLs without decoders
+    { 0xE10B, "V1190/V1290 TDC",           false },
+    { 0xE141, "FAV3 (FADC v3)",            false },
+    { 0xE104, "VSCM",                      false },
+    { 0xE105, "DCRB/DC/Vetroc",            false },
+    { 0xE115, "DSC2 scaler",               false },
+    { 0xE112, "HEAD bank",                 false },
+    { 0xE123, "SSP-RICH",                  false },
+    { 0xE125, "Per-slot data",             false },
+    { 0xE131, "VFTDC",                     false },
+    { 0xE133, "Helicity Decoder",          false },
+    { 0xE140, "Special (pid=0)",           false },
+};
+static const int N_KNOWN_TAGS = sizeof(known_bank_tags) / sizeof(known_bank_tags[0]);
+
+static const KnownBankTag *lookupKnownTag(uint32_t tag)
+{
+    for (int i = 0; i < N_KNOWN_TAGS; ++i)
+        if (known_bank_tags[i].tag == tag) return &known_bank_tags[i];
+    return nullptr;
+}
 
 bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
                             ssp::SspEventData *ssp_evt) const
@@ -404,156 +330,192 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     evt.clear();
     if (ssp_evt) ssp_evt->clear();
     if (i < 0 || i >= nevents) return false;
+    if (nodes.empty()) return false;
 
-    BankHeader evh(&buffer[0]);
+    // --- depth 0: top-level event bank --------------------------------------
+    auto &ev = nodes[0];
+    evt.info.event_tag = ev.tag;
+    evt.info.type = static_cast<uint8_t>(evtype);
 
-    // fill event info
-    evt.info.event_tag = evh.tag;
-    evt.info.type      = static_cast<uint8_t>(evtype);
-
-    // Try CODA trigger bank first (0xFF2X / 0xFF1X), then fall back to JLab TI
-    bool have_info = decodeTriggerBank(i, evt.info);
-    if (!have_info)
-        have_info = decodeTI(evt.info);
-
-    // decode ADC data — dispatch based on configured format
+    bool have_info = false;
     int roc_idx = 0;
     bool ssp_decoded = false;
 
-    if (config.adc_format == "adc1881m") {
-        // ADC1881M: find raw data banks matching configured tag
-        for (size_t ni = 0; ni < nodes.size() && roc_idx < fdec::MAX_ROCS; ++ni) {
-            auto &n = nodes[ni];
-            if (n.tag != config.adc1881m_bank_tag) continue;
-            if (n.data_words == 0) continue;
+    // --- depth 1: iterate ROC crate banks -----------------------------------
+    for (size_t ci = 0; ci < ev.child_count; ++ci) {
+        auto &roc = nodes[ev.child_first + ci];
 
-            uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
+        // warn once per unknown tag (static across calls to avoid flooding)
+        static std::set<uint64_t> warned_tags;
 
-            fdec::RocData &roc = evt.rocs[roc_idx];
-            roc.present = true;
-            roc.tag = roc_tag;
+        // ---- 0xC000: trigger bank (event number, event tag) ----------------
+        if (roc.tag == config.trigger_bank_tag && roc.type == DATA_UINT32) {
+            decodeTriggerInfo(roc, evt.info);
+            continue;
+        }
 
-            fdec::Adc1881mDecoder::DecodeRoc(GetData(n), n.data_words, roc);
+        // Non-container at depth 1: unexpected
+        if (!IsContainer(roc.type) && roc.type != DATA_BANK2) {
+            uint64_t key = (uint64_t(1) << 32) | roc.tag;
+            if (warned_tags.insert(key).second)
+                std::cerr << "DecodeEvent: unexpected non-container at depth 1"
+                          << " tag=0x" << std::hex << roc.tag
+                          << " type=" << TypeName(roc.type)
+                          << " words=" << std::dec << roc.data_words << "\n";
+            continue;
+        }
 
-            // pedestal subtraction + zero suppression
-            if (!config.pedestals.empty()) {
-                int crate = -1;
-                for (auto &re : config.roc_tags)
-                    if (re.tag == roc_tag) { crate = re.crate; break; }
-                if (crate >= 0) {
+        // Identify ROC type from config
+        bool is_ti_master = (roc.tag == config.ti_master_tag);
+        int crate_id = -1;
+        std::string roc_type;
+        bool roc_known = is_ti_master;
+        for (auto &re : config.roc_tags) {
+            if (re.tag == roc.tag) {
+                crate_id = re.crate; roc_type = re.type;
+                roc_known = true;
+                break;
+            }
+        }
+        if (!roc_known) {
+            uint64_t key = (uint64_t(1) << 32) | roc.tag;
+            if (warned_tags.insert(key).second)
+                std::cerr << "DecodeEvent: unknown ROC crate at depth 1"
+                          << " tag=0x" << std::hex << roc.tag << std::dec
+                          << " (" << roc.data_words << "w)"
+                          << " — add to roc_tags in daq_config.json\n";
+        }
+
+        // ---- depth 2: iterate data banks inside this ROC -------------------
+        for (size_t di = 0; di < roc.child_count; ++di) {
+            auto &bank = nodes[roc.child_first + di];
+
+            // -- 0xE10A: TI data (in every ROC) --
+            if (bank.tag == config.ti_bank_tag && bank.type == DATA_UINT32) {
+                if (!have_info) {
+                    decodeTIBank(bank, evt.info, is_ti_master);
+                    have_info = true;
+                } else if (is_ti_master) {
+                    // TI master overrides trigger_bits with FP inputs
+                    decodeTIBank(bank, evt.info, true);
+                }
+                continue;
+            }
+
+            // -- 0xE10F: run info (TI master only) --
+            if (bank.tag == config.run_info_tag && bank.type == DATA_UINT32) {
+                decodeRunInfo(bank, evt.info);
+                continue;
+            }
+
+            // -- 0xE10E: DAQ config string (skip) --
+            if (bank.type == DATA_CHARSTAR8 || bank.type == DATA_CHAR8)
+                continue;
+
+            // -- 0xE101: FADC250 composite waveforms --
+            if (bank.tag == config.fadc_composite_tag && bank.type == DATA_COMPOSITE
+                && roc_idx < fdec::MAX_ROCS)
+            {
+                size_t nbytes;
+                auto *payload = GetCompositePayload(bank, nbytes);
+                if (!payload) continue;
+
+                fdec::RocData &rd = evt.rocs[roc_idx];
+                rd.present = true;
+                rd.tag = roc.tag;
+                fdec::Fadc250Decoder::DecodeRoc(payload, nbytes, rd);
+                evt.roc_index[roc_idx] = roc_idx;
+                roc_idx++;
+                continue;
+            }
+
+            // -- 0xE109: FADC250 raw hardware format (fallback) --
+            if (bank.tag == config.fadc_raw_tag && bank.type == DATA_UINT32
+                && bank.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+            {
+                fdec::RocData &rd = evt.rocs[roc_idx];
+                rd.present = true;
+                rd.tag = roc.tag;
+                fdec::Fadc250RawDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
+                evt.roc_index[roc_idx] = roc_idx;
+                roc_idx++;
+                continue;
+            }
+
+            // -- 0xE10C / 0x0DEA: SSP/MPD data (GEM) --
+            if (ssp_evt && config.is_ssp_bank(bank.tag)
+                && bank.type == DATA_UINT32 && bank.data_words > 0)
+            {
+                ssp::SspDecoder::DecodeRoc(GetData(bank), bank.data_words,
+                                           crate_id, *ssp_evt);
+                ssp_decoded = true;
+                continue;
+            }
+
+            // -- ADC1881M raw data (PRad legacy) --
+            if (config.adc_format == "adc1881m"
+                && bank.tag == config.adc1881m_bank_tag
+                && bank.data_words > 0 && roc_idx < fdec::MAX_ROCS)
+            {
+                fdec::RocData &rd = evt.rocs[roc_idx];
+                rd.present = true;
+                rd.tag = roc.tag;
+                fdec::Adc1881mDecoder::DecodeRoc(GetData(bank), bank.data_words, rd);
+
+                // pedestal subtraction + zero suppression (ADC1881M only)
+                if (!config.pedestals.empty() && crate_id >= 0) {
                     for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
-                        auto &slot = roc.slots[s];
+                        auto &slot = rd.slots[s];
                         if (!slot.present) continue;
                         for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
                             if (!(slot.channel_mask & (1ull << c))) continue;
                             auto &cd = slot.channels[c];
                             if (cd.nsamples != 1) continue;
-                            auto *ped = config.get_pedestal(crate, s, c);
-                            if (ped) {
-                                float raw = static_cast<float>(cd.samples[0]);
-                                float threshold = ped->mean + config.sparsify_sigma * ped->rms;
-                                if (config.sparsify_sigma > 0.f && raw < threshold) {
-                                    // below threshold: suppress channel
-                                    cd.nsamples = 0;
-                                    slot.channel_mask &= ~(1ull << c);
-                                    slot.nchannels--;
-                                } else {
-                                    int sub = static_cast<int>(raw) - static_cast<int>(ped->mean + 0.5f);
-                                    cd.samples[0] = (sub > 0) ? static_cast<uint16_t>(sub) : 0;
-                                }
+                            auto *ped = config.get_pedestal(crate_id, s, c);
+                            if (!ped) continue;
+                            float raw = static_cast<float>(cd.samples[0]);
+                            float threshold = ped->mean + config.sparsify_sigma * ped->rms;
+                            if (config.sparsify_sigma > 0.f && raw < threshold) {
+                                cd.nsamples = 0;
+                                slot.channel_mask &= ~(1ull << c);
+                                slot.nchannels--;
+                            } else {
+                                int sub = static_cast<int>(raw) - static_cast<int>(ped->mean + 0.5f);
+                                cd.samples[0] = (sub > 0) ? static_cast<uint16_t>(sub) : 0;
                             }
                         }
                     }
                 }
-            }
-
-            evt.roc_index[roc_idx] = roc_idx;
-            roc_idx++;
-        }
-    } else {
-        // FADC250 composite + SSP: scan all banks, dispatch by tag
-        for (size_t ni = 0; ni < nodes.size(); ++ni) {
-            auto &n = nodes[ni];
-
-            // --- FADC250 composite banks ---
-            if (n.tag == config.fadc_composite_tag && n.type == DATA_COMPOSITE
-                && roc_idx < fdec::MAX_ROCS)
-            {
-                size_t nbytes;
-                auto *payload = GetCompositePayload(n, nbytes);
-                if (!payload) continue;
-
-                uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
-
-                fdec::RocData &roc = evt.rocs[roc_idx];
-                roc.present = true;
-                roc.tag = roc_tag;
-
-                fdec::Fadc250Decoder::DecodeRoc(payload, nbytes, roc);
 
                 evt.roc_index[roc_idx] = roc_idx;
                 roc_idx++;
                 continue;
             }
 
-            // --- FADC250 hardware-format raw banks (fallback when composite unavailable) ---
-            if (n.tag == config.fadc_raw_tag && n.type == DATA_UINT32
-                && n.data_words > 0 && roc_idx < fdec::MAX_ROCS)
-            {
-                uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
-
-                fdec::RocData &roc = evt.rocs[roc_idx];
-                roc.present = true;
-                roc.tag = roc_tag;
-
-                fdec::Fadc250RawDecoder::DecodeRoc(GetData(n), n.data_words, roc);
-
-                evt.roc_index[roc_idx] = roc_idx;
-                roc_idx++;
-                continue;
-            }
-
-            // --- SSP/MPD raw data banks (GEM) ---
-            if (ssp_evt && config.is_ssp_bank(n.tag)
-                && n.data_words > 0 && n.type == DATA_UINT32)
-            {
-                uint32_t roc_tag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
-
-                // map ROC tag to crate_id
-                int crate_id = -1;
-                for (auto &re : config.roc_tags)
-                    if (re.tag == roc_tag) { crate_id = re.crate; break; }
-
-                ssp::SspDecoder::DecodeRoc(GetData(n), n.data_words,
-                                           crate_id, *ssp_evt);
-                ssp_decoded = true;
+            // -- unhandled data bank: warn once per (roc_tag, bank_tag) pair --
+            if (bank.data_words > 0) {
+                uint64_t key = (uint64_t(roc.tag) << 32) | bank.tag;
+                if (warned_tags.insert(key).second) {
+                    auto *known = lookupKnownTag(bank.tag);
+                    if (known && !known->has_decoder)
+                        std::cerr << "DecodeEvent: skipping " << known->hardware
+                                  << " bank (0x" << std::hex << bank.tag << std::dec
+                                  << ", " << bank.data_words << "w)"
+                                  << " in ROC 0x" << std::hex << roc.tag << std::dec
+                                  << " — no decoder implemented\n";
+                    else if (!known)
+                        std::cerr << "DecodeEvent: unknown bank"
+                                  << " tag=0x" << std::hex << bank.tag
+                                  << " type=" << TypeName(bank.type)
+                                  << std::dec << " (" << bank.data_words << "w)"
+                                  << " in ROC 0x" << std::hex << roc.tag << std::dec
+                                  << " — not in known tags, check ROL source\n";
+                }
             }
         }
     }
 
     evt.nrocs = roc_idx;
-
-    // diagnostic: log depth-2 data banks that didn't match any configured tag
-    if (config.verbose_decode && roc_idx == 0 && !ssp_decoded) {
-        for (auto &n : nodes) {
-            if (n.depth < 2 || n.data_words == 0) continue;
-            if (n.tag == config.ti_bank_tag) continue;
-            if (n.tag == config.fadc_composite_tag) continue;
-            if (n.tag == config.fadc_raw_tag) continue;
-            if (config.is_ssp_bank(n.tag)) continue;
-            if (n.tag == config.run_info_tag || n.tag == config.daq_config_tag) continue;
-            if (n.type == DATA_CHARSTAR8 || n.type == DATA_CHAR8) continue;
-            uint32_t ptag = (n.parent >= 0) ? nodes[n.parent].tag : 0;
-            std::cerr << "DecodeEvent: unmatched bank tag=0x" << std::hex << n.tag
-                      << " type=" << TypeName(n.type) << " words=" << std::dec
-                      << n.data_words << " in ROC=0x" << std::hex << ptag
-                      << std::dec << "\n";
-        }
-    }
-
-    // Success if event info was extracted (trigger/timestamp), even without waveform data.
-    // Events like 0x00B0 monitoring triggers have crate structure with TI data
-    // but no FADC/SSP waveforms — these are valid events with nrocs==0.
     return have_info || roc_idx > 0 || ssp_decoded;
 }
 

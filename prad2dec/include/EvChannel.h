@@ -115,12 +115,10 @@ protected:
     int nevents = 0;
     EventType evtype = EventType::Unknown;
 
-    // CODA built trigger bank decoding (spec pages 21, 26, 31)
-    // Extracts event number, timestamps, trigger type, run info from 0xFF2X bank.
-    bool decodeTriggerBank(int event_idx, fdec::EventInfo &info) const;
-
-    // JLab TI bank fallback (0xE10A) — used when no CODA trigger bank is present
-    bool decodeTI(fdec::EventInfo &info) const;
+    // --- depth-2 data bank decoders (called per-ROC) --------------------------
+    void decodeTriggerInfo(const EvNode &node, fdec::EventInfo &info) const;
+    void decodeTIBank(const EvNode &node, fdec::EventInfo &info, bool is_master) const;
+    void decodeRunInfo(const EvNode &node, fdec::EventInfo &info) const;
 
     size_t scanBank      (size_t off, int depth, int parent);
     size_t scanSegment   (size_t off, int depth, int parent);

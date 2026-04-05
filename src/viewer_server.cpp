@@ -757,23 +757,32 @@ void ViewerServer::etReaderThread()
                     auto now = hrc::now();
                     if (now - last_bench >= bench_interval) {
                         auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_bench).count();
-                        std::cerr << "ET bench (" << elapsed_ms << "ms): "
-                                  << n_read << " read, " << n_empty << " empty, "
-                                  << n_scan << " scanned, " << n_decode << " decoded, "
-                                  << n_filtered << " filtered | "
-                                  << "read=" << us_read/1000 << "ms "
-                                  << "scan=" << us_scan/1000 << "ms "
-                                  << "decode=" << us_decode/1000 << "ms "
-                                  << "process=" << us_process/1000 << "ms "
-                                  << "ring=" << us_ring/1000 << "ms\n";
-                        if (!bench_tt_decoded.empty() || !bench_tt_filtered.empty()) {
-                            std::cerr << "  decoded:";
-                            for (auto &[tt,c] : bench_tt_decoded)
-                                std::cerr << " 0x" << std::hex << (int)tt << "=" << std::dec << c;
-                            std::cerr << " | filtered:";
-                            for (auto &[tt,c] : bench_tt_filtered)
-                                std::cerr << " 0x" << std::hex << (int)tt << "=" << std::dec << c;
-                            std::cerr << " | nrocs=" << event.nrocs << "\n";
+                        // build bench line as single string to avoid interleaved cerr
+                        {
+                            char buf[512];
+                            snprintf(buf, sizeof(buf),
+                                "ET bench (%ldms): %ld read, %ld empty, %ld scanned, "
+                                "%ld decoded, %ld filtered | "
+                                "read=%ldms scan=%ldms decode=%ldms process=%ldms ring=%ldms",
+                                (long)elapsed_ms, (long)n_read, (long)n_empty, (long)n_scan,
+                                (long)n_decode, (long)n_filtered,
+                                (long)(us_read/1000), (long)(us_scan/1000), (long)(us_decode/1000),
+                                (long)(us_process/1000), (long)(us_ring/1000));
+                            std::string line(buf);
+                            if (!bench_tt_decoded.empty() || !bench_tt_filtered.empty()) {
+                                line += "\n  decoded:";
+                                for (auto &[tt,c] : bench_tt_decoded) {
+                                    snprintf(buf, sizeof(buf), " 0x%02x=%d", (int)tt, c);
+                                    line += buf;
+                                }
+                                line += " | filtered:";
+                                for (auto &[tt,c] : bench_tt_filtered) {
+                                    snprintf(buf, sizeof(buf), " 0x%02x=%d", (int)tt, c);
+                                    line += buf;
+                                }
+                            }
+                            line += "\n";
+                            std::cerr << line;
                         }
                         n_read = n_empty = n_scan = n_decode = n_filtered = 0;
                         us_read = us_scan = us_decode = us_process = us_ring = 0;

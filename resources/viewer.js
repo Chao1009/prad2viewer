@@ -93,7 +93,7 @@ function geoHandleClick(cx,cy){
             currentHist={};
             document.getElementById('detail-header').innerHTML=
                 '<div class="empty-msg">Click a module to view details</div>';
-            Plotly.react('waveform-div',[],{...PL,xaxis:{...PL.xaxis,title:'Time (ns)'},yaxis:{...PL.yaxis,title:'ADC'}},PC2);
+            Plotly.react('waveform-div',[], wfLayout('', wfWindowNs()), PC2);
             Plotly.react('heighthist-div',[],{...PL,title:{text:'Height Histogram',font:{size:10,color:'#555'}}},PC2);
             Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
             Plotly.react('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:'#555'}}},PC2);
@@ -890,16 +890,6 @@ function init(){
         geoDq();
         if(selectedModule) showWaveform(selectedModule);
     };
-    document.getElementById('tcut-min').onchange=e=>{
-        histConfig.time_min=parseFloat(e.target.value);
-        geoDq();
-        if(selectedModule) showWaveform(selectedModule);
-    };
-    document.getElementById('tcut-max').onchange=e=>{
-        histConfig.time_max=parseFloat(e.target.value);
-        geoDq();
-        if(selectedModule) showWaveform(selectedModule);
-    };
 
     // --- file browser ---
     document.getElementById('btn-open').onclick = openFileDialog;
@@ -965,6 +955,22 @@ function init(){
         ()=>getGeoRange('cluster','energy')[1],
         v=>{const r=getGeoRange('cluster','energy');setGeoRange('cluster','energy',r[0],v);},
         clRangeApply);
+
+    // Time cut range editors
+    function tcutApply(){
+        geoDq();
+        if(selectedModule) showWaveform(selectedModule);
+    }
+    function updateTcutDisplay(){
+        document.getElementById('tcut-min-show').textContent=
+            histConfig.time_min!==undefined ? histConfig.time_min : '?';
+        document.getElementById('tcut-max-show').textContent=
+            histConfig.time_max!==undefined ? histConfig.time_max : '?';
+    }
+    setupRangeEdit('tcut-min-btn','tcut-min','tcut-min-show',
+        ()=>histConfig.time_min, v=>{histConfig.time_min=v; updateTcutDisplay();}, tcutApply);
+    setupRangeEdit('tcut-max-btn','tcut-max','tcut-max-show',
+        ()=>histConfig.time_max, v=>{histConfig.time_max=v; updateTcutDisplay();}, tcutApply);
 
     // --- online mode nav ---
     document.getElementById('ring-select').onchange=e=>{
@@ -1136,7 +1142,7 @@ function clearFrontend(){
     selectedModule=null;
     document.getElementById('detail-header').innerHTML=
         '<div class="empty-msg">Click a module to view details</div>';
-    Plotly.react('waveform-div',[],{...PL,xaxis:{...PL.xaxis,title:'Time (ns)'},yaxis:{...PL.yaxis,title:'ADC'}},PC2);
+    Plotly.react('waveform-div',[], wfLayout('', wfWindowNs()), PC2);
     Plotly.react('heighthist-div',[],{...PL,title:{text:'Height Histogram',font:{size:10,color:'#555'}}},PC2);
     Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
     Plotly.react('poshist-div',[],{...PL,title:{text:'Peak Position',font:{size:10,color:'#555'}}},PC2);
@@ -1208,11 +1214,13 @@ function applyConfig(data){
     totalEvents=data.total_events||0;
     histEnabled=data.hist_enabled||false;
     histConfig=data.hist||{};
-    // populate time cut inputs
-    if(histConfig.time_min!==undefined)
-        document.getElementById('tcut-min').value=histConfig.time_min;
-    if(histConfig.time_max!==undefined)
-        document.getElementById('tcut-max').value=histConfig.time_max;
+    // populate time cut display
+    if(document.getElementById('tcut-min-show'))
+        document.getElementById('tcut-min-show').textContent=
+            histConfig.time_min!==undefined ? histConfig.time_min : '?';
+    if(document.getElementById('tcut-max-show'))
+        document.getElementById('tcut-max-show').textContent=
+            histConfig.time_max!==undefined ? histConfig.time_max : '?';
     refLines=data.ref_lines||{};
     triggerBitsDef=data.trigger_bits||[];
     triggerTypeDef=data.trigger_type||[];

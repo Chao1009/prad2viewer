@@ -127,11 +127,6 @@
                 <option value="pedestal">Pedestal</option>
                 <option value="occupancy">Occupancy</option>
             </select>
-            <label id="tcut-label">Time Cut</label>
-            <input type="checkbox" id="time-cut">
-            <input type="number" id="tcut-min" class="tcut-input" title="Time cut min (ns)">
-            <span style="color:var(--dim)">–</span>
-            <input type="number" id="tcut-max" class="tcut-input" title="Time cut max (ns)">
             <label>Log</label>
             <input type="checkbox" id="log-scale" checked>
             <div class="color-bar">
@@ -142,6 +137,18 @@
                 <span class="range-val" id="range-max-show">max</span>
                 <input class="range-edit" id="range-max-edit" type="number" step="any">
                 <span class="range-btn" id="range-max-btn" title="Edit max">✎</span>
+            </div>
+            <div class="tcut-bar">
+                <input type="checkbox" id="time-cut">
+                <label for="time-cut">Time Cut</label>
+                <span class="range-val" id="tcut-min-show">0</span>
+                <input class="range-edit" id="tcut-min" type="number" step="any">
+                <span class="range-btn" id="tcut-min-btn" title="Edit min">✎</span>
+                <span style="color:var(--dim)">–</span>
+                <span class="range-val" id="tcut-max-show">0</span>
+                <input class="range-edit" id="tcut-max" type="number" step="any">
+                <span class="range-btn" id="tcut-max-btn" title="Edit max">✎</span>
+                <span style="color:var(--dim);font-size:10px">ns</span>
             </div>
         </div>
         <div class="geo-toolbar" id="geo-toolbar-cl" style="display:none">

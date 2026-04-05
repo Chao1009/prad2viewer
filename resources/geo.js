@@ -86,13 +86,7 @@ function syncDqRange(){
 }
 
 function updateTimeCutLabel(){
-    const el=document.getElementById('tcut-label');
-    if(!el) return;
-    const h=histConfig;
-    if(h.time_min!==undefined && h.time_max!==undefined)
-        el.textContent=`Time Cut [${h.time_min}, ${h.time_max}] ns`;
-    else
-        el.textContent='Time Cut';
+    // values now shown in editable range fields (tcut-min-show, tcut-max-show)
 }
 
 function updateRangeDisplay(){

@@ -8,6 +8,41 @@ let currentHist={};  // {divId: {x:[], y:[]}} for histogram copy
 let lastHistModule = '';
 let wfRequestId = 0;  // sequence guard for async waveform fetches
 
+const NS_PER_SAMPLE = 4;  // FADC250: 250 MHz → 4 ns/sample
+
+// Default waveform window from config (in ns). Used for x-range on empty plots.
+function wfWindowNs(){
+    // ptw (programmable time window) in samples, default 100 samples = 400 ns
+    const ptw = histConfig.ptw || 100;
+    return ptw * NS_PER_SAMPLE;
+}
+
+// Build time-cut shapes for waveform plot (dimmed regions + dashed lines)
+function timeCutShapes(xMax){
+    const shapes = refShapes('waveform') || [];
+    if (isTimeCut()) {
+        const dim = {type:'rect', yref:'paper', y0:0, y1:1,
+            fillcolor:'rgba(0,0,0,0.35)', line:{width:0}, layer:'above'};
+        shapes.push({...dim, xref:'x', x0:0, x1:histConfig.time_min});
+        shapes.push({...dim, xref:'x', x0:histConfig.time_max, x1:xMax});
+        const edge = {type:'line', yref:'paper', y0:0, y1:1,
+            line:{color:'rgba(255,200,50,0.5)', width:1, dash:'dash'}};
+        shapes.push({...edge, x0:histConfig.time_min, x1:histConfig.time_min});
+        shapes.push({...edge, x0:histConfig.time_max, x1:histConfig.time_max});
+    }
+    return shapes;
+}
+
+// Waveform plot layout with proper x-range and time cut
+function wfLayout(title, xMax){
+    return {...PL,
+        title:{text:title, font:{size:11,color:'#ccc'}},
+        xaxis:{...PL.xaxis, title:'Time (ns)', range:[0, xMax]},
+        yaxis:{...PL.yaxis, title:'ADC'},
+        shapes:timeCutShapes(xMax),
+    };
+}
+
 // =========================================================================
 // Waveform
 // =========================================================================
@@ -36,11 +71,10 @@ function showWaveform(mod){
     if(!d){
         if(!wfStackEnabled){
             currentWaveform=null;
-            Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — No data`,font:{size:11,color:'#555'}}},PC2);
+            Plotly.react('waveform-div',[], wfLayout(`${mod.n} — No data`, wfWindowNs()), PC2);
             document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No data</td></tr>';
         } else if(wfStackTraces.length===0){
-            // stacking mode, new module with no data yet — show empty plot
-            Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — Stacked (0)`,font:{size:11,color:'#555'}}},PC2);
+            Plotly.react('waveform-div',[], wfLayout(`${mod.n} — Stacked (0)`, wfWindowNs()), PC2);
         }
         showHistograms(mod); redrawGeo(); return;
     }
@@ -70,12 +104,11 @@ function renderWaveform(mod, key, d, samples){
     if(!samples){
         if(wfStackEnabled) return;  // skip empty events, keep existing stack
         currentWaveform=null;
-        Plotly.react('waveform-div',[],{...PL,title:{text:`${mod.n} — No samples`,font:{size:11,color:'#555'}}},PC2);
+        Plotly.react('waveform-div',[], wfLayout(`${mod.n} — No samples`, wfWindowNs()), PC2);
         document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No waveform data</td></tr>';
         return;
     }
 
-    const NS_PER_SAMPLE = 4;  // FADC250: 250 MHz → 4 ns/sample
     const peaks=d.pk||[], x=samples.map((_,i)=>i*NS_PER_SAMPLE);
     const tMax = (samples.length-1)*NS_PER_SAMPLE;
     currentWaveform={x, y:Array.from(samples)};
@@ -102,25 +135,10 @@ function renderWaveform(mod, key, d, samples){
         for(const w of wfStackTraces) for(const v of w.y){ if(v<ylo) ylo=v; if(v>yhi) yhi=v; }
         const pad=(yhi-ylo)*0.05||5;
 
-        // time cut shading in stack mode (only when checkbox is checked)
-        const stackShapes = [];
-        if (isTimeCut()) {
-            const dim = {type:'rect', yref:'paper', y0:0, y1:1,
-                fillcolor:'rgba(0,0,0,0.35)', line:{width:0}, layer:'above'};
-            stackShapes.push({...dim, xref:'x', x0:0, x1:histConfig.time_min});
-            stackShapes.push({...dim, xref:'x', x0:histConfig.time_max, x1:tMax});
-            const edge = {type:'line', yref:'paper', y0:0, y1:1,
-                line:{color:'rgba(255,200,50,0.5)', width:1, dash:'dash'}};
-            stackShapes.push({...edge, x0:histConfig.time_min, x1:histConfig.time_min});
-            stackShapes.push({...edge, x0:histConfig.time_max, x1:histConfig.time_max});
-        }
-
         document.getElementById('wf-stack-count').textContent=`${wfStackTraces.length}/${maxStack}`;
-        Plotly.react('waveform-div',traces,{...PL,
-            title:{text:`${mod.n} — Stacked (${wfStackTraces.length})`,font:{size:11,color:'#ccc'}},
-            xaxis:{...PL.xaxis,title:'Time (ns)'},yaxis:{...PL.yaxis,title:'ADC',range:[ylo-pad,yhi+pad],autorange:false},
-            shapes:stackShapes,
-        },PC2);
+        const stackLayout = wfLayout(`${mod.n} — Stacked (${wfStackTraces.length})`, tMax);
+        stackLayout.yaxis = {...stackLayout.yaxis, range:[ylo-pad,yhi+pad], autorange:false};
+        Plotly.react('waveform-div', traces, stackLayout, PC2);
 
         document.getElementById('peaks-tbody').innerHTML=
             '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">Stack mode — peaks hidden</td></tr>';
@@ -147,25 +165,9 @@ function renderWaveform(mod, key, d, samples){
             marker:{color:col,size:7,symbol:'diamond'},showlegend:false});
     });
 
-    // time cut: dim regions outside the window (only when checkbox is checked)
-    const shapes = refShapes('waveform') || [];
-    if (isTimeCut()) {
-        const dim = {type:'rect', yref:'paper', y0:0, y1:1,
-            fillcolor:'rgba(0,0,0,0.35)', line:{width:0}, layer:'above'};
-        shapes.push({...dim, xref:'x', x0:0, x1:histConfig.time_min});
-        shapes.push({...dim, xref:'x', x0:histConfig.time_max, x1:tMax});
-        const edge = {type:'line', yref:'paper', y0:0, y1:1,
-            line:{color:'rgba(255,200,50,0.5)', width:1, dash:'dash'}};
-        shapes.push({...edge, x0:histConfig.time_min, x1:histConfig.time_min});
-        shapes.push({...edge, x0:histConfig.time_max, x1:histConfig.time_max});
-    }
-
-    Plotly.react('waveform-div',traces,{...PL,
-        title:{text:`${mod.n} — Event ${currentEvent}`,font:{size:11,color:'#ccc'}},
-        xaxis:{...PL.xaxis,title:'Time (ns)'},yaxis:{...PL.yaxis,title:'ADC'},
-        legend:{x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}},
-        shapes,
-    },PC2);
+    const layout = wfLayout(`${mod.n} — Event ${currentEvent}`, tMax);
+    layout.legend = {x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}};
+    Plotly.react('waveform-div', traces, layout, PC2);
 
     // peaks table
     let rows='';

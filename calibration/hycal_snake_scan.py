@@ -718,6 +718,7 @@ class ModuleInfoDialog(QDialog):
 class SnakeScanWindow(QMainWindow):
     _logSignal = pyqtSignal(str, str)
     AUTOGEN = "(autogen)"
+    NONE = "(none)"
 
     def __init__(self, epics, simulation, all_modules, profiles=None, observer=False):
         super().__init__()
@@ -920,7 +921,8 @@ class SnakeScanWindow(QMainWindow):
 
         r = QHBoxLayout(); r.addWidget(QLabel("Path:"))
         self._profile_combo = QComboBox()
-        self._profile_combo.addItems([self.AUTOGEN] + sorted(self._profiles.keys()))
+        self._profile_combo.addItems([self.NONE, self.AUTOGEN] + sorted(self._profiles.keys()))
+        self._profile_combo.setCurrentText(self.AUTOGEN)
         self._profile_combo.activated.connect(self._onPathProfileChanged)
         r.addWidget(self._profile_combo, stretch=1); lo.addLayout(r)
 
@@ -1134,6 +1136,16 @@ class SnakeScanWindow(QMainWindow):
         if name == self.AUTOGEN:
             self._lg_spin.setEnabled(True); self._onLgLayersChanged(force=True); return
         self._lg_spin.setEnabled(False)
+        if name == self.NONE:
+            self.scan_modules = []; self._scan_names = set()
+            self.engine = ScanEngine(self.ep, [], self._log)
+            self._scan_name_to_idx = {}; self._selected_start_idx = 0
+            self._start_combo.clear(); self._count_spin.setMaximum(0); self._count_spin.setValue(0)
+            self._map.setPathPreview([]); self._map.setDashPreview([])
+            self._map.setHighlight(None); self._selected_mod_name = None
+            self._updateCanvasLabel()
+            self._log("Path: none (direct control only)")
+            return
         mod_by_name = {m.name: m for m in self.all_modules}
         path_mods = [mod_by_name[n] for n in self._profiles.get(name, []) if n in mod_by_name]
         if not path_mods:
@@ -1339,14 +1351,18 @@ class SnakeScanWindow(QMainWindow):
         if self.observer: return
         eng = self.engine
         running = eng.state in (ScanState.MOVING, ScanState.DWELLING, ScanState.PAUSED, ScanState.ERROR)
-        self._btn_start.setEnabled(not running); self._btn_pause.setEnabled(running)
+        has_path = len(eng.path) > 0
+        self._btn_start.setEnabled(not running and has_path)
+        self._btn_pause.setEnabled(running)
         self._btn_stop.setEnabled(True)
         self._btn_skip.setEnabled(eng.state == ScanState.DWELLING)
         self._btn_ack.setEnabled(eng.state == ScanState.ERROR)
-        self._start_combo.setEnabled(not running); self._count_spin.setEnabled(not running)
+        self._start_combo.setEnabled(not running and has_path)
+        self._count_spin.setEnabled(not running and has_path)
         self._profile_combo.setEnabled(not running)
         self._lg_spin.setEnabled(not running and self._active_profile == self.AUTOGEN)
-        self._btn_move.setEnabled(not running); self._btn_reset.setEnabled(not running)
+        self._btn_move.setEnabled(not running and has_path)
+        self._btn_reset.setEnabled(not running)
 
     def closeEvent(self, e):
         if self._log_file: self._log_file.close()

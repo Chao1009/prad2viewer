@@ -717,48 +717,17 @@ void ViewerServer::etReaderThread()
             auto last_lms_notify = last_ring_push;
             constexpr auto lms_notify_interval = std::chrono::milliseconds(200);
 
-            // --- performance counters ---
-            using hrc = std::chrono::high_resolution_clock;
-            int64_t n_read = 0, n_empty = 0, n_scan = 0, n_decode = 0, n_filtered = 0;
-            int64_t us_read = 0, us_scan = 0, us_decode = 0, us_process = 0, us_ring = 0;
-            auto last_bench = hrc::now();
-
             while (running_ && et_active_ && et_generation_.load() == gen) {
-                auto t0 = hrc::now();
                 auto st = ch.Read();
-                us_read += std::chrono::duration_cast<std::chrono::microseconds>(hrc::now() - t0).count();
-
                 if (st == status::empty) {
-                    n_empty++;
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    auto now = hrc::now();
-                    if (now - last_bench >= std::chrono::seconds(10)) {
-                        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_bench).count();
-                        char buf[256];
-                        snprintf(buf, sizeof(buf),
-                            "ET bench (%ldms): %ld read, %ld empty, %ld scan, %ld decoded, %ld filtered"
-                            " | read=%ldms scan=%ldms dec=%ldms proc=%ldms ring=%ldms\n",
-                            (long)ms, (long)n_read, (long)n_empty, (long)n_scan,
-                            (long)n_decode, (long)n_filtered,
-                            (long)(us_read/1000), (long)(us_scan/1000), (long)(us_decode/1000),
-                            (long)(us_process/1000), (long)(us_ring/1000));
-                        std::cerr << buf;
-                        n_read=n_empty=n_scan=n_decode=n_filtered=0;
-                        us_read=us_scan=us_decode=us_process=us_ring=0;
-                        last_bench=now;
-                    }
                     continue;
                 }
                 if (st != status::success) {
                     std::cerr << "ET: read error, reconnecting\n";
                     break;
                 }
-                n_read++;
-
-                { auto t = hrc::now();
                 if (!ch.Scan()) continue;
-                us_scan += std::chrono::duration_cast<std::chrono::microseconds>(hrc::now() - t).count();
-                n_scan++; }
 
                 if (app_online_.sync_unix == 0) {
                     uint32_t ct = ch.GetControlTime();
@@ -777,22 +746,16 @@ void ViewerServer::etReaderThread()
 
                 for (int i = 0; i < ch.GetNEvents(); ++i) {
                     ssp_evt.clear();
-                    auto td = hrc::now();
-                    bool ok = ch.DecodeEvent(i, event, &ssp_evt);
-                    us_decode += std::chrono::duration_cast<std::chrono::microseconds>(hrc::now() - td).count();
-                    if (!ok) { n_filtered++; continue; }
-                    n_decode++;
+                    if (!ch.DecodeEvent(i, event, &ssp_evt)) continue;
                     last_ti_ts = event.info.timestamp;
 
-                    auto tp = hrc::now();
                     app_online_.processGemEvent(ssp_evt);
                     app_online_.processEvent(event, ana, wres);
-                    us_process += std::chrono::duration_cast<std::chrono::microseconds>(hrc::now() - tp).count();
 
                     int seq = app_online_.events_processed.load();
 
-                    if (!app_online_.lms_trigger.accept.empty() &&
-                        app_online_.lms_trigger(event.info.trigger_type)) {
+                    if (app_online_.lms_trigger.accept != 0 &&
+                        app_online_.lms_trigger(event.info.trigger_bits)) {
                         auto now = std::chrono::steady_clock::now();
                         if (now - last_lms_notify >= lms_notify_interval) {
                             last_lms_notify = now;
@@ -804,7 +767,7 @@ void ViewerServer::etReaderThread()
                     auto now = std::chrono::steady_clock::now();
                     if (now - last_ring_push >= ring_interval) {
                         last_ring_push = now;
-                        auto tr = hrc::now();
+
                         std::string evjson = app_online_.encodeEventJson(
                             event, seq, ana, wres, true).dump();
                         std::string cljson = app_online_.computeClustersJson(
@@ -820,7 +783,6 @@ void ViewerServer::etReaderThread()
 
                         wsBroadcast("{\"type\":\"new_event\",\"seq\":" +
                                     std::to_string(seq) + "}");
-                        us_ring += std::chrono::duration_cast<std::chrono::microseconds>(hrc::now() - tr).count();
                     }
                 }
             }
@@ -1121,27 +1083,6 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         }
 #endif
         reply(decodeEvent(evnum).dump()); return;
-    }
-
-    // --- trigger_types/<from>/<count> (batch trigger_type query for filter scanning) ---
-    if (uri.rfind("/api/trigger_types/", 0) == 0) {
-        std::string rest = uri.substr(18);
-        auto slash = rest.find('/');
-        int from = std::atoi(rest.c_str());
-        int count = (slash != std::string::npos) ? std::atoi(rest.c_str() + slash + 1) : 100;
-        count = std::min(count, 1000);  // cap batch size
-
-        json arr = json::array();
-        std::lock_guard<std::mutex> lk(data_source_mtx_);
-        if (data_source_) {
-            auto event_ptr = std::make_unique<fdec::EventData>();
-            for (int i = from; i < from + count; ++i) {
-                std::string err = data_source_->decodeEvent(i - 1, *event_ptr, nullptr);
-                if (err.empty())
-                    arr.push_back({{"ev", i}, {"tt", event_ptr->info.trigger_type}});
-            }
-        }
-        reply(arr.dump()); return;
     }
 
     // --- waveform/<n>/<key> (file mode only — on-demand single-channel samples) ---

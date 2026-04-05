@@ -888,7 +888,10 @@ function init(){
     document.getElementById('log-scale').onchange=geoDq;
     document.getElementById('time-cut').onchange=()=>{
         geoDq();
-        if(selectedModule) showWaveform(selectedModule);
+        if(selectedModule){
+            lastHistModule=''; // force histogram refresh
+            showWaveform(selectedModule);
+        }
     };
 
     // --- file browser ---
@@ -959,7 +962,10 @@ function init(){
     // Time cut range editors
     function tcutApply(){
         geoDq();
-        if(selectedModule) showWaveform(selectedModule);
+        if(selectedModule){
+            lastHistModule=''; // force histogram refresh
+            showWaveform(selectedModule);
+        }
     }
     function updateTcutDisplay(){
         document.getElementById('tcut-min-show').textContent=

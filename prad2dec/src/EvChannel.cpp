@@ -390,7 +390,7 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     // Works for built (3-level), flat (2-level), and mixed event structures.
     int roc_idx = 0;
     bool ssp_decoded = false;
-    thread_local std::set<uint64_t> warned_tags;
+    static std::set<uint64_t> warned_tags;
 
     for (size_t ni = 0; ni < nodes.size(); ++ni) {
         auto &n = nodes[ni];

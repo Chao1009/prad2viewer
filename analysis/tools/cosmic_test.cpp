@@ -134,7 +134,7 @@ int main(int argc, char *argv[])
     int event_num_module[3000] = {};
 
     int nentries = tree->GetEntries();
-    for(int i = 0; i < 10000; i++){
+    for(int i = 0; i < nentries; i++){
         tree->GetEntry(i);
         std::cout << "Event " << ev.event_num << ": nch = " << ev.nch << "\r" << std::flush;
         if (ev.nch > 100) continue; // skip noisy events

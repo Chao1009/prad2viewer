@@ -239,8 +239,6 @@ class GainEqualizerWindow(QMainWindow):
         self.scan_modules: List[Module] = []
         self._scan_names: set = set()
         self._scan_name_to_idx: Dict[str, int] = {}
-        self._ordered_path: List[Module] = []
-        self._use_profile_order = False
         self._selected_start_idx = 0
         self._selected_mod_name: Optional[str] = None
         self._mod_dlg = None
@@ -284,7 +282,7 @@ class GainEqualizerWindow(QMainWindow):
         else:                   suffix = "  [EXPERT OPERATOR]"
         self.setWindowTitle("HyCal Gain Equalizer" + suffix)
         self.setStyleSheet(DARK_QSS)
-        self.resize(1600, 900)
+        self.resize(1600, 1000)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -590,10 +588,10 @@ class GainEqualizerWindow(QMainWindow):
         lo.addLayout(bf)
 
         bf2 = QHBoxLayout()
-        self._btn_redo = QPushButton("Redo")
+        self._btn_redo = QPushButton("Redo Current")
         self._btn_redo.setProperty("cssClass", "accent")
         self._btn_redo.clicked.connect(self._cmdRedo); bf2.addWidget(self._btn_redo)
-        self._btn_skip = QPushButton("Skip")
+        self._btn_skip = QPushButton("Skip Current")
         self._btn_skip.clicked.connect(self._cmdSkip); bf2.addWidget(self._btn_skip)
         lo.addLayout(bf2)
 
@@ -691,8 +689,6 @@ class GainEqualizerWindow(QMainWindow):
             server_url=server_url, hv_url=hv_url,
             hv_password=hv_pw, read_only=ro,
             modules=self.scan_modules, log_fn=self._log, key_map=key_map)
-        if self._use_profile_order:
-            eng.path = list(self._ordered_path)
         eng.target_adc = self._ge_target.value()
         eng.min_counts = self._ge_counts.value()
         eng.max_iterations = self._ge_maxiter.value()
@@ -735,7 +731,7 @@ class GainEqualizerWindow(QMainWindow):
         self._onStartSelected(0)
         names = [m.name for m in (self._gain_engine.path if self._gain_engine else [])]
         if not names: return
-        path = self._ordered_path
+        path = self.scan_modules
         if self._selected_start_idx >= len(path): return
         mod = path[self._selected_start_idx]
         px, py = module_to_ptrans(mod.x, mod.y)
@@ -754,7 +750,7 @@ class GainEqualizerWindow(QMainWindow):
 
     def _onStartSelected(self, _):
         name = self._start_combo.currentText()
-        path = self._ordered_path
+        path = self.scan_modules
         for i, m in enumerate(path):
             if m.name == name:
                 self._selected_start_idx = i
@@ -770,19 +766,14 @@ class GainEqualizerWindow(QMainWindow):
             self._lg_spin.setEnabled(True); self._onLgLayersChanged(force=True); return
         self._lg_spin.setEnabled(False)
         if name == self.NONE:
-            self.scan_modules = []; self._scan_names = set()
-            self._scan_name_to_idx = {}; self._ordered_path = []
-            self._selected_start_idx = 0; self._use_profile_order = False
-            self._start_combo.clear(); self._count_spin.setMaximum(0); self._count_spin.setValue(0)
-            self._map.setPathPreview([]); self._map.setDashPreview([])
-            self._map.setModuleColors({}); self._map.update()
-            self._map.setHighlight(None); self._selected_mod_name = None
-            self._updateCanvasLabel(); self._log("Path: none"); return
+            self._setPath([])
+            self._log("Path: none")
+            return
         mod_by_name = {m.name: m for m in self.all_modules}
         path_mods = [mod_by_name[n] for n in self._profiles.get(name, []) if n in mod_by_name]
         if not path_mods:
             self._log(f"Profile '{name}' empty", level="error"); return
-        self._setPath(path_mods, use_profile_order=True)
+        self._setPath(path_mods)
         self._log(f"Path profile: {name} ({len(path_mods)} modules)")
 
     def _onLgLayersChanged(self, value=0, force=False):
@@ -791,25 +782,26 @@ class GainEqualizerWindow(QMainWindow):
         if nl == self._lg_layers and not force: return
         self._lg_layers = nl
         mods = filter_scan_modules(self.all_modules, nl, self._lg_sx, self._lg_sy)
-        self._setPath(mods)
-        np_ = sum(1 for m in mods if m.mod_type == "PbWO4")
-        ng = sum(1 for m in mods if m.mod_type == "PbGlass")
-        self._log(f"LG layers: {nl} ({np_} PbWO4 + {ng} PbGlass = {len(mods)})")
+        # generate the snake path once at autogen — from now on the order is fixed
+        path, _ = build_scan_path(mods)
+        self._setPath(path)
+        np_ = sum(1 for m in path if m.mod_type == "PbWO4")
+        ng = sum(1 for m in path if m.mod_type == "PbGlass")
+        self._log(f"LG layers: {nl} ({np_} PbWO4 + {ng} PbGlass = {len(path)})")
 
-    def _setPath(self, mods, use_profile_order=False):
-        self.scan_modules = mods
-        self._scan_names = {m.name for m in mods}
-        self._use_profile_order = use_profile_order
-        if use_profile_order:
-            path = mods  # preserve order from paths.json
-        else:
-            path, _ = build_scan_path(mods)
-        self._ordered_path = path
+    def _setPath(self, path):
+        """Set the scan path. ``path`` is the final ordered list of modules."""
+        self.scan_modules = path
+        self._scan_names = {m.name for m in path}
         self._scan_name_to_idx = {m.name: i for i, m in enumerate(path)}
         self._selected_start_idx = 0
         ns = [m.name for m in path]
         self._start_combo.clear(); self._start_combo.addItems(ns)
         self._count_spin.setMaximum(len(ns)); self._count_spin.setValue(0)
+        if not path:
+            self._map.setPathPreview([]); self._map.setDashPreview([])
+            self._map.setModuleColors({}); self._map.update()
+            self._map.setHighlight(None); self._selected_mod_name = None
         self._updateCanvasLabel()
 
     # -- canvas -------------------------------------------------------------
@@ -820,8 +812,8 @@ class GainEqualizerWindow(QMainWindow):
         base = f"Scan Path: {n_pwo4} PbWO4 + {n_lg} LG" if n_lg else f"Scan Path: {n_pwo4} PbWO4"
         if not self.scan_modules:
             base = "Scan Path: none"
-        elif self._ordered_path and 0 <= self._selected_start_idx < len(self._ordered_path):
-            start_name = self._ordered_path[self._selected_start_idx].name
+        elif self.scan_modules and 0 <= self._selected_start_idx < len(self.scan_modules):
+            start_name = self.scan_modules[self._selected_start_idx].name
             base += f"  start: {start_name}"
         self._canvas_label.setText(f" {base} ")
 
@@ -837,7 +829,7 @@ class GainEqualizerWindow(QMainWindow):
                                   else C.MOD_PWO4_BG if m.mod_type == "PbWO4" else C.MOD_LMS)
 
         # scan path modules
-        path = self._ordered_path
+        path = self.scan_modules
         if eng and eng.state not in (GainScanState.IDLE, GainScanState.COMPLETED):
             for i, mod in enumerate(path):
                 if i == eng.current_idx and eng.state in (GainScanState.MOVING,):
@@ -874,7 +866,7 @@ class GainEqualizerWindow(QMainWindow):
         self._map.update()
 
     def _drawPathPreview(self):
-        path = self._ordered_path
+        path = self.scan_modules
         s = self._selected_start_idx
         if s >= len(path): self._map.setPathPreview([]); return
         c = self._count_spin.value()

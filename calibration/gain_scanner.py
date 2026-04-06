@@ -24,7 +24,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from scan_utils import Module, module_to_ptrans, ptrans_in_limits
 from scan_epics import epics_move_to, epics_is_moving, epics_stop, SPMG
-from scan_engine import build_scan_path
 
 
 # ============================================================================
@@ -364,7 +363,7 @@ class GainScanEngine:
     pos_threshold: float = 0.5       # mm
     beam_threshold: float = 0.3      # nA
     collect_poll_sec: float = 2.0    # occupancy poll interval
-    move_timeout: float = 300.0      # seconds
+    move_timeout: float = 900.0      # seconds (15 min — long y-axis traversals)
     edge_adc_min: float = 500.0      # reject edges below this
     edge_adc_max: float = 3900.0     # reject edges above this
     use_log_y: bool = True           # log y scale for report snapshots
@@ -379,7 +378,8 @@ class GainScanEngine:
         self._hv_url = hv_url
         self._hv_password = hv_password
         self._read_only = read_only
-        self.path, _ = build_scan_path(modules)
+        # ``modules`` is already the ordered path (caller-prepared)
+        self.path = list(modules)
         self.log = log_fn
         self.key_map = key_map
         self.analyzer = SpectrumAnalyzer(target_adc=self.target_adc)
@@ -541,11 +541,19 @@ class GainScanEngine:
 
         # -- move --
         self.state = GainScanState.MOVING
-        self.log(f"Moving to {mod.name}  ptrans({px:.3f}, {py:.3f})")
+        # estimate move time from current position and motor velocities
+        rx = self.ep.get("x_rbv", 0.0) or 0.0
+        ry = self.ep.get("y_rbv", 0.0) or 0.0
+        vx = self.ep.get("x_velo", 50.0) or 50.0
+        vy = self.ep.get("y_velo", 5.0) or 5.0
+        eta = max(abs(px - rx) / max(vx, 0.1), abs(py - ry) / max(vy, 0.1))
+        timeout = eta + 300.0  # ETA + 5 min margin
+        self.log(f"Moving to {mod.name}  ptrans({px:.3f}, {py:.3f})  "
+                 f"ETA={eta:.0f}s  timeout={timeout:.0f}s")
         if not epics_move_to(self.ep, px, py):
             self.log(f"SKIPPED {mod.name}: outside limits", level="warn")
             return
-        if not self._wait_move_done():
+        if not self._wait_move_done(timeout):
             return
 
         # check DAQ key
@@ -813,7 +821,9 @@ class GainScanEngine:
         img.save(path)
         self.log(f"Report saved: {fname}")
 
-    def _wait_move_done(self) -> bool:
+    def _wait_move_done(self, timeout: float = None) -> bool:
+        if timeout is None:
+            timeout = self.move_timeout
         t0 = time.time()
         while not self._stop.is_set():
             self._check_paused()
@@ -821,8 +831,8 @@ class GainScanEngine:
                 return False
             if not epics_is_moving(self.ep):
                 return True
-            if time.time() - t0 > self.move_timeout:
-                self.log(f"MOVE TIMEOUT after {self.move_timeout:.0f}s", level="error")
+            if time.time() - t0 > timeout:
+                self.log(f"MOVE TIMEOUT after {timeout:.0f}s", level="error")
                 return False
             time.sleep(0.1)
         return False

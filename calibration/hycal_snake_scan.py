@@ -850,28 +850,14 @@ class SnakeScanWindow(QMainWindow):
             self._lg_spin.setEnabled(True); self._onLgLayersChanged(force=True); return
         self._lg_spin.setEnabled(False)
         if name == self.NONE:
-            self.scan_modules = []; self._scan_names = set()
-            self.engine = ScanEngine(self.ep, [], self._log)
-            self._scan_name_to_idx = {}; self._selected_start_idx = 0
-            self._start_combo.clear(); self._count_spin.setMaximum(0); self._count_spin.setValue(0)
-            self._map.setPathPreview([]); self._map.setDashPreview([])
-            self._map.setHighlight(None); self._selected_mod_name = None
-            self._updateCanvasLabel()
+            self._setPath([])
             self._log("Path: none (direct control only)")
             return
         mod_by_name = {m.name: m for m in self.all_modules}
         path_mods = [mod_by_name[n] for n in self._profiles.get(name, []) if n in mod_by_name]
         if not path_mods:
             self._log(f"Profile '{name}' empty", level="error"); return
-        self.scan_modules = path_mods; self._scan_names = {m.name for m in path_mods}
-        self.engine = ScanEngine(self.ep, path_mods, self._log)
-        self.engine.path = path_mods
-        self._scan_name_to_idx = {m.name: i for i, m in enumerate(self.engine.path)}
-        self._selected_start_idx = 0
-        ns = [m.name for m in self.engine.path]
-        self._start_combo.clear(); self._start_combo.addItems(ns)
-        self._count_spin.setMaximum(len(ns)); self._count_spin.setValue(0)
-        self._updateCanvasLabel()
+        self._setPath(path_mods)
         self._log(f"Path profile: {name} ({len(path_mods)} modules)")
 
     def _onLgLayersChanged(self, value=0, force=False):
@@ -879,18 +865,30 @@ class SnakeScanWindow(QMainWindow):
         nl = self._lg_spin.value()
         if nl == self._lg_layers and not force: return
         self._lg_layers = nl
-        self.scan_modules = filter_scan_modules(self.all_modules, nl, self._lg_sx, self._lg_sy)
-        self._scan_names = {m.name for m in self.scan_modules}
-        self.engine = ScanEngine(self.ep, self.scan_modules, self._log)
-        self._scan_name_to_idx = {m.name: i for i, m in enumerate(self.engine.path)}
+        mods = filter_scan_modules(self.all_modules, nl, self._lg_sx, self._lg_sy)
+        # generate the snake path once at autogen — from now on the order is fixed
+        path, n_unopt = build_scan_path(mods)
+        if n_unopt:
+            self._log(f"WARNING: {n_unopt} modules with unoptimized path", level="warn")
+        self._setPath(path)
+        np_ = sum(1 for m in path if m.mod_type == "PbWO4")
+        ng = sum(1 for m in path if m.mod_type == "PbGlass")
+        self._log(f"LG layers: {nl} ({np_} PbWO4 + {ng} PbGlass = {len(path)})")
+
+    def _setPath(self, path):
+        """Set the scan path. ``path`` is the final ordered list of modules."""
+        self.scan_modules = path
+        self._scan_names = {m.name for m in path}
+        self.engine = ScanEngine(self.ep, path, self._log)
+        self._scan_name_to_idx = {m.name: i for i, m in enumerate(path)}
         self._selected_start_idx = 0
-        ns = [m.name for m in self.engine.path]
+        ns = [m.name for m in path]
         self._start_combo.clear(); self._start_combo.addItems(ns)
         self._count_spin.setMaximum(len(ns)); self._count_spin.setValue(0)
+        if not path:
+            self._map.setPathPreview([]); self._map.setDashPreview([])
+            self._map.setHighlight(None); self._selected_mod_name = None
         self._updateCanvasLabel()
-        np_ = sum(1 for m in self.scan_modules if m.mod_type == "PbWO4")
-        ng = sum(1 for m in self.scan_modules if m.mod_type == "PbGlass")
-        self._log(f"LG layers: {nl} ({np_} PbWO4 + {ng} PbGlass = {len(self.scan_modules)})")
 
     def _cmdStart(self):
         self._onStartSelected(0)

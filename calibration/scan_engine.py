@@ -26,7 +26,7 @@ from scan_epics import (
 DEFAULT_DWELL = 120.0         # seconds
 DEFAULT_POS_THRESHOLD = 0.5   # mm
 DEFAULT_BEAM_THRESHOLD = 0.3  # nA
-MOVE_TIMEOUT = 300.0          # seconds per single move
+MOVE_TIMEOUT = 900.0          # seconds per single move (15 min)
 DEFAULT_VELO_X = 50.0         # mm/s
 DEFAULT_VELO_Y = 5.0          # mm/s
 MAX_LG_LAYERS = 2
@@ -113,10 +113,9 @@ class ScanEngine:
     def __init__(self, epics, modules, log_fn):
         self.ep = epics
         self.all_modules = modules
-        self.path, n_unopt = build_scan_path(modules)
+        # ``modules`` is already the ordered path (caller-prepared)
+        self.path = list(modules)
         self.log = log_fn
-        if n_unopt:
-            self.log(f"WARNING: {n_unopt} modules with unoptimized path", level="warn")
 
         self.dwell_time = DEFAULT_DWELL
         self.pos_threshold = DEFAULT_POS_THRESHOLD

@@ -11,19 +11,19 @@ PRad-II, Jefferson Lab Hall B
 On a counting house machine, logged in as **clasrun**:
 
 ```bash
-cd ~/prad2_daq/prad2evviewer
+cd /home/clasrun/prad2_daq/prad2evviewer
 python calibration/hycal_gain_equalizer.py --expert
 ```
 
 The default settings (server, HV address, password, target ADC, min counts, etc.)
-should work out of the box. **Do not change settings unless instructed by the Run
-Coordinator (RC).**
+should work out of the box. **Discuss with the Run Coordinator (RC) before changing
+the settings.**
 
 ### Running a Gain Scan
 
-1. Select **Path**: use `snake-all-pwo-r` unless told otherwise by RC.
-2. Set **Start** module: ask RC for the starting point. Plan is to finish the
-   bottom part first, then return to the top.
+1. Select **Path**: `snake-all-pwo-r`.
+2. Set **Start** module. The plan is to finish the bottom part first, then
+   return to the top. Ask the RC if you do not know which module to start from.
 3. Click **Start**.
 
 ### During the Scan
@@ -37,23 +37,25 @@ Pay attention to:
 
 ### On ERROR (Scan Stops)
 
-An `ERROR` causes the scan to stop automatically.
+An `ERROR` stops the scan automatically.
 
 1. Note the module name and error message from the log.
-2. Click **Start** to resume from the next module.
-3. If the same error repeats, **contact the RC**.
+2. The **Start** combo updates to show the failed module — verify it is correct.
+3. Click **Start** to retry from that module.
+4. If the same error repeats, **contact the RC**.
 
 ### After Each Row
 
-1. Find the screenshot files in `calibration/logs/`:
+1. Find the screenshot files in
+   `/home/clasrun/prad2_daq/prad2evviewer/calibration/logs/`:
    ```
    GE_20260406_143025_W100_success.png
    GE_20260406_143530_W101_failure.png
    ```
-   Files are named `GE_{timestamp}_{module}_{status}.png`, sorted by time.
+   Files are named `GE_{timestamp}_{module}_{status}.png` and sort by time.
 2. Post a log entry to **PRADLOG** with all screenshots from the completed row.
-3. Failed modules need a redo or manual gain equalization — discuss with RC if
-   unsure.
+3. Failed modules need a redo or manual gain equalization — discuss with the RC
+   if you are not sure how to proceed.
 
 ### Event Log Files
 
@@ -67,7 +69,7 @@ Upload these with the PRADLOG entry.
 ### Quick Start
 
 ```bash
-cd ~/prad2_daq/prad2evviewer
+cd /home/clasrun/prad2_daq/prad2evviewer
 python calibration/hycal_snake_scan.py --expert
 ```
 
@@ -90,7 +92,8 @@ Verify that:
 
 ### Resume After Interruption
 
-1. Find the last completed module (blue on map or in event log).
+1. Find the last completed module (the **Done** colour on the map, or check
+   the event log).
 2. Select the next module as **Start**.
 3. Click **Start Scan**.
 
@@ -113,15 +116,15 @@ Verify that:
 ### Command-Line Modes
 
 ```bash
-python calibration/hycal_gain_equalizer.py              # simulation (read-only)
-python calibration/hycal_gain_equalizer.py --expert      # expert (full control)
-python calibration/hycal_gain_equalizer.py --observer    # observer (read-only)
+python calibration/hycal_gain_equalizer.py             # simulation (read-only)
+python calibration/hycal_gain_equalizer.py --expert    # expert (full control)
+python calibration/hycal_gain_equalizer.py --observer  # observer (read-only)
 
-python calibration/hycal_snake_scan.py                   # simulation
-python calibration/hycal_snake_scan.py --expert          # expert
-python calibration/hycal_snake_scan.py --observer        # observer
+python calibration/hycal_snake_scan.py                 # simulation
+python calibration/hycal_snake_scan.py --expert        # expert
+python calibration/hycal_snake_scan.py --observer      # observer
 
-python calibration/scan_path_editor.py                   # path editor
+python calibration/scan_path_editor.py                 # path editor
 ```
 
 ## Coordinate System
@@ -139,7 +142,11 @@ ptrans_y **-672.50** to **692.72** mm.
 
 ## Safety
 
-- **Expert mode** writes to four EPICS PVs: `ptrans_{x,y}.VAL` and `ptrans_{x,y}.SPMG`.
-- **Gain equalizer** additionally sends HTTP commands to `prad2hvd` (HV set) and
-  `prad2_server` (histogram clear). HV limits are enforced server-side.
-- **Observer/simulation** modes block all writes.
+- **Expert mode** writes to four motor PVs only:
+  `ptrans_{x,y}.VAL` and `ptrans_{x,y}.SPMG`.
+- **Gain equalizer** additionally sends HTTP commands to `prad2hvd` (HV set)
+  and `prad2_server` (histogram clear). HV limits are enforced server-side
+  by `prad2hvd`.
+- **Observer mode** uses real EPICS reads but blocks all writes.
+- **Simulation mode** uses a fake motor (no real EPICS writes) and blocks all
+  HV/server writes.

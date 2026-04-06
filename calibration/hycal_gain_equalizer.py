@@ -406,14 +406,16 @@ class GainEqualizerWindow(QMainWindow):
         # RIGHT: control panel | histogram | event log (vertical splitter)
         right_splitter = QSplitter(Qt.Orientation.Vertical)
 
-        # row 1: control panel (scrollable)
+        # row 1: control panel (scrollable, vertical only)
         ctrl_scroll = QScrollArea()
         ctrl_scroll.setWidgetResizable(True)
         ctrl_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        ctrl_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         ctrl_w = QWidget(); ctrl_lo = QVBoxLayout(ctrl_w)
         ctrl_lo.setSpacing(4); ctrl_lo.setContentsMargins(0, 0, 0, 0)
         self._buildPathControl(ctrl_lo)
         self._buildGainControl(ctrl_lo)
+        self._buildControlPanel(ctrl_lo)
         self._buildPositionCheck(ctrl_lo)
         ctrl_lo.addStretch()
         ctrl_scroll.setWidget(ctrl_w)
@@ -424,6 +426,8 @@ class GainEqualizerWindow(QMainWindow):
         hist_lo = QVBoxLayout(hist_group); hist_lo.setContentsMargins(4, 4, 4, 4)
         self._histogram = HistogramWidget()
         hist_lo.addWidget(self._histogram)
+        self._hist_group = hist_group
+        hist_group.setVisible(False)
         right_splitter.addWidget(hist_group)
 
         # row 3: event log
@@ -475,48 +479,58 @@ class GainEqualizerWindow(QMainWindow):
         pc = QGroupBox("Scan Path"); lo = QVBoxLayout(pc)
         self._path_group = pc
 
+        # Row 1: Path + LG layers
         r = QHBoxLayout(); r.addWidget(QLabel("Path:"))
         self._profile_combo = QComboBox()
         self._profile_combo.addItems([self.NONE, self.AUTOGEN] + sorted(self._profiles.keys()))
         self._profile_combo.setCurrentText(self.NONE)
         self._profile_combo.activated.connect(self._onPathProfileChanged)
-        r.addWidget(self._profile_combo, stretch=1); lo.addLayout(r)
-
-        r = QHBoxLayout(); r.addWidget(QLabel("LG layers:"))
+        r.addWidget(self._profile_combo, stretch=1)
+        r.addWidget(QLabel("LG:"))
         self._lg_spin = QSpinBox(); self._lg_spin.setRange(0, MAX_LG_LAYERS)
+        self._lg_spin.setMaximumWidth(60)
         self._lg_spin.valueChanged.connect(self._onLgLayersChanged)
         r.addWidget(self._lg_spin); lo.addLayout(r)
 
+        # Row 2: Start + Count
         r = QHBoxLayout(); r.addWidget(QLabel("Start:"))
         self._start_combo = QComboBox(); self._start_combo.setEditable(True)
-        self._start_combo.setMinimumWidth(80)
+        self._start_combo.setMinimumWidth(70)
+        self._start_combo.setMaximumWidth(100)
         self._start_combo.activated.connect(self._onStartSelected)
         r.addWidget(self._start_combo)
+        r.addStretch()
         r.addWidget(QLabel("Count:"))
         self._count_spin = QSpinBox(); self._count_spin.setRange(0, 0)
         self._count_spin.setSpecialValueText("all")
+        self._count_spin.setMaximumWidth(110)
+        self._count_spin.setMinimumWidth(100)
         self._count_spin.valueChanged.connect(lambda _: self._drawPathPreview())
         r.addWidget(self._count_spin); lo.addLayout(r)
 
+        # Row 3: Thresholds: Pos (mm) + Curr (nA) — Curr right-aligned
         r = QHBoxLayout()
-        r.addWidget(QLabel("Pos. threshold (mm):"))
+        r.addWidget(QLabel("Thres.  Pos. (mm)"))
         self._thresh_spin = QDoubleSpinBox(); self._thresh_spin.setRange(0.01, 10.0)
         self._thresh_spin.setValue(DEFAULT_POS_THRESHOLD)
         self._thresh_spin.setSingleStep(0.1); self._thresh_spin.setDecimals(2)
-        r.addWidget(self._thresh_spin); lo.addLayout(r)
-
-        r = QHBoxLayout()
-        r.addWidget(QLabel("Beam threshold (nA):"))
+        self._thresh_spin.setMaximumWidth(100)
+        r.addWidget(self._thresh_spin)
+        r.addStretch()
+        r.addWidget(QLabel("Curr. (nA)"))
         self._beam_thresh_spin = QDoubleSpinBox(); self._beam_thresh_spin.setRange(0.0, 1000.0)
         self._beam_thresh_spin.setValue(DEFAULT_BEAM_THRESHOLD)
         self._beam_thresh_spin.setSingleStep(0.1); self._beam_thresh_spin.setDecimals(2)
         self._beam_thresh_spin.setSpecialValueText("off")
-        r.addWidget(self._beam_thresh_spin); lo.addLayout(r)
+        self._beam_thresh_spin.setMaximumWidth(100)
+        r.addWidget(self._beam_thresh_spin)
+        lo.addLayout(r)
 
         parent.addWidget(pc)
 
     def _buildGainControl(self, parent):
-        ge = QGroupBox("Gain Equalizer"); lo = QVBoxLayout(ge)
+        ge = QGroupBox("Gain Equalization"); lo = QVBoxLayout(ge)
+        self._gain_group = ge
 
         r = QHBoxLayout(); r.addWidget(QLabel("Server:"))
         self._ge_server_edit = QLineEdit("http://clondaq6:5051")
@@ -555,7 +569,13 @@ class GainEqualizerWindow(QMainWindow):
         self._ge_log_y = QPushButton("LogY: ON")
         self._ge_log_y.setCheckable(True); self._ge_log_y.setChecked(True)
         self._ge_log_y.clicked.connect(self._toggleLogY)
+        self._updateLogYBtnStyle(True)
         r.addWidget(self._ge_log_y); lo.addLayout(r)
+
+        parent.addWidget(ge)
+
+    def _buildControlPanel(self, parent):
+        cp = QGroupBox("Control"); lo = QVBoxLayout(cp)
 
         bf = QHBoxLayout()
         self._btn_start = QPushButton("Start")
@@ -570,9 +590,11 @@ class GainEqualizerWindow(QMainWindow):
         lo.addLayout(bf)
 
         bf2 = QHBoxLayout()
-        self._btn_skip = QPushButton("Skip Module")
+        self._btn_redo = QPushButton("Redo")
+        self._btn_redo.setProperty("cssClass", "accent")
+        self._btn_redo.clicked.connect(self._cmdRedo); bf2.addWidget(self._btn_redo)
+        self._btn_skip = QPushButton("Skip")
         self._btn_skip.clicked.connect(self._cmdSkip); bf2.addWidget(self._btn_skip)
-        bf2.addStretch()
         lo.addLayout(bf2)
 
         self._lbl_progress = QLabel("Progress: --/--"); lo.addWidget(self._lbl_progress)
@@ -582,7 +604,17 @@ class GainEqualizerWindow(QMainWindow):
         self._lbl_ge_detail = QLabel("")
         self._lbl_ge_detail.setStyleSheet(f"color:{C.DIM};"); lo.addWidget(self._lbl_ge_detail)
 
-        parent.addWidget(ge)
+        parent.addWidget(cp)
+
+    def _updateLogYBtnStyle(self, on: bool):
+        if on:
+            self._ge_log_y.setStyleSheet(
+                "QPushButton{background:#1f6feb;color:white;"
+                "border:1px solid #388bfd;border-radius:3px;padding:5px 12px;"
+                "font:bold 13pt 'Consolas';}"
+                "QPushButton:hover{background:#388bfd;}")
+        else:
+            self._ge_log_y.setStyleSheet("")
 
     def _buildPositionCheck(self, parent):
         pe = QGroupBox("Position Check"); lo = QVBoxLayout(pe)
@@ -595,7 +627,7 @@ class GainEqualizerWindow(QMainWindow):
 
     def _disableControls(self):
         for w in (self._btn_start, self._btn_pause, self._btn_stop,
-                  self._btn_skip):
+                  self._btn_redo, self._btn_skip):
             w.setEnabled(False)
 
     # -- commands -----------------------------------------------------------
@@ -603,6 +635,7 @@ class GainEqualizerWindow(QMainWindow):
     def _toggleLogY(self):
         on = self._ge_log_y.isChecked()
         self._ge_log_y.setText("LogY: ON" if on else "LogY: OFF")
+        self._updateLogYBtnStyle(on)
         self._histogram.setLogY(on)
 
     def _cmdStart(self):
@@ -610,9 +643,10 @@ class GainEqualizerWindow(QMainWindow):
                 GainScanState.IDLE, GainScanState.COMPLETED, GainScanState.FAILED):
             return
 
-        # resume from failure — reuse existing engine
-        if self._gain_engine and self._gain_engine.state == GainScanState.FAILED:
-            self._gain_engine.start()
+        # resume from failure or stop — reuse existing engine, retry from current module
+        eng = self._gain_engine
+        if eng and eng._has_run and eng.state in (GainScanState.FAILED, GainScanState.IDLE):
+            eng.start()
             return
 
         if not self.scan_modules:
@@ -686,6 +720,10 @@ class GainEqualizerWindow(QMainWindow):
         else:
             epics_stop(self.ep); self._log("Motors stopped")
 
+    def _cmdRedo(self):
+        if self._gain_engine:
+            self._gain_engine.redo_module()
+
     def _cmdSkip(self):
         if self._gain_engine:
             self._gain_engine.skip_module()
@@ -733,9 +771,11 @@ class GainEqualizerWindow(QMainWindow):
         self._lg_spin.setEnabled(False)
         if name == self.NONE:
             self.scan_modules = []; self._scan_names = set()
-            self._scan_name_to_idx = {}; self._selected_start_idx = 0
+            self._scan_name_to_idx = {}; self._ordered_path = []
+            self._selected_start_idx = 0; self._use_profile_order = False
             self._start_combo.clear(); self._count_spin.setMaximum(0); self._count_spin.setValue(0)
             self._map.setPathPreview([]); self._map.setDashPreview([])
+            self._map.setModuleColors({}); self._map.update()
             self._map.setHighlight(None); self._selected_mod_name = None
             self._updateCanvasLabel(); self._log("Path: none"); return
         mod_by_name = {m.name: m for m in self.all_modules}
@@ -951,13 +991,27 @@ class GainEqualizerWindow(QMainWindow):
         if eng is None: return
         running = eng.state not in (GainScanState.IDLE, GainScanState.COMPLETED, GainScanState.FAILED)
         self._path_group.setVisible(not running)
+        self._gain_group.setVisible(not running)
+        # show histogram while running, or when it has data (after pause/stop/fail)
+        has_data = bool(eng.last_bins) or bool(eng.iteration_history)
+        self._hist_group.setVisible(running or has_data)
         self._btn_start.setEnabled(not running)
+        # sync combo to current_idx when stopped/failed so operator sees resume point
+        if not running and eng._has_run and 0 <= eng.current_idx < len(eng.path):
+            name = eng.path[eng.current_idx].name
+            if self._start_combo.currentText() != name:
+                idx = self._start_combo.findText(name)
+                if idx >= 0:
+                    self._start_combo.setCurrentIndex(idx)
+                self._selected_start_idx = eng.current_idx
+                self._updateCanvasLabel()
         for w in (self._ge_server_edit, self._ge_hv_edit, self._ge_hv_pw,
                   self._ge_target, self._ge_counts, self._ge_maxiter, self._ge_tol,
                   self._ge_edge_frac, self._ge_log_y):
             w.setEnabled(not running)
         self._btn_pause.setEnabled(running)
         self._btn_stop.setEnabled(running)
+        self._btn_redo.setEnabled(running)
         self._btn_skip.setEnabled(running)
         sc = {GainScanState.IDLE: C.DIM, GainScanState.MOVING: C.YELLOW,
               GainScanState.COLLECTING: C.ACCENT, GainScanState.ANALYZING: C.ACCENT,

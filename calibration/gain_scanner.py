@@ -411,7 +411,9 @@ class GainScanEngine:
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._skip = threading.Event()
+        self._redo = threading.Event()
         self._paused = False
+        self._has_run = False  # True after first start, for resume detection
 
     @property
     def current_module(self) -> Optional[Module]:
@@ -420,22 +422,34 @@ class GainScanEngine:
         return None
 
     def start(self, start_idx: int = 0, count: int = 0):
+        """Start or resume the gain scan.
+
+        If resuming after FAILED or STOP: retries from ``current_idx``
+        (the failed/stopped module), keeping previous converged/failed results.
+        Otherwise: fresh start from ``start_idx``, clearing all results.
+        """
         if self._thread and self._thread.is_alive():
             return
-        resuming = self.state == GainScanState.FAILED
         self._stop.clear()
         self._skip.clear()
+        self._redo.clear()
         self._paused = False
-        if resuming:
-            # resume from next module after the failed one
-            self._start_idx = self.current_idx + 1
-            self.log(f"Resuming from module {self._start_idx + 1}/{len(self.path)}")
+
+        resuming = self._has_run and self.state in (GainScanState.FAILED, GainScanState.IDLE)
+        if resuming and 0 <= self.current_idx < len(self.path):
+            # resume: retry from current_idx, keep _end_idx and results
+            self._start_idx = self.current_idx
+            mod = self.path[self.current_idx]
+            self.log(f"Resuming from {mod.name} [{self._start_idx + 1}/{len(self.path)}]")
         else:
+            # fresh start
             self.current_idx = start_idx
             self._start_idx = start_idx
             self._end_idx = min(start_idx + count, len(self.path)) if count > 0 else len(self.path)
             self.converged.clear()
             self.failed.clear()
+
+        self._has_run = True
         self.state = GainScanState.MOVING
         self.analyzer.target_adc = self.target_adc
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -460,6 +474,9 @@ class GainScanEngine:
 
     def skip_module(self):
         self._skip.set()
+
+    def redo_module(self):
+        self._redo.set()
 
     # -- main loop ----------------------------------------------------------
 
@@ -538,14 +555,26 @@ class GainScanEngine:
             return
 
         # -- iterate: collect → analyze → adjust --
-        for iteration in range(self.max_iterations):
+        iteration = 0
+        while iteration < self.max_iterations:
             if self._stop.is_set():
                 return
             if self._skip.is_set():
                 self._skip.clear()
                 self.log(f"Module {mod.name} skipped")
                 return
-            self.current_iteration = iteration + 1
+            if self._redo.is_set():
+                self._redo.clear()
+                iteration = 0
+                self.iteration_history = []
+                self.last_edge_adc = None
+                self.last_edge_bin = None
+                self.last_dv = None
+                self.last_bins = []
+                self.log(f"Module {mod.name} redo — restarting iterations")
+                continue
+            iteration += 1
+            self.current_iteration = iteration
 
             # collect
             self.state = GainScanState.COLLECTING
@@ -690,7 +719,12 @@ class GainScanEngine:
             # header
             p.setPen(QColor("#58a6ff"))
             p.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
-            title = f"{mod.name}  iter {snap['iteration']}"
+            total_counts = sum(bins)
+            mode = "LOG" if self.analyzer.use_log_cumul else "LIN"
+            frac_pct = self.analyzer.edge_fraction * 100
+            title = (f"{mod.name}  iter {snap['iteration']}  "
+                     f"N={total_counts}  "
+                     f"({snap['edge_adc']:.0f}:{frac_pct:.0f}%-{mode})")
             p.drawText(QRectF(PAD_L, y0 + 4, pw, PAD_T - 4),
                        Qt.AlignmentFlag.AlignLeft, title)
             p.setPen(QColor("#8b949e"))
@@ -700,7 +734,6 @@ class GainScanEngine:
                 info += f"  VMon={snap['vmon']:.1f}"
             if snap.get("vset") is not None:
                 info += f"  VSet={snap['vset']:.1f}"
-            info += f"  edge={snap['edge_adc']:.0f}"
             p.drawText(QRectF(PAD_L, y0 + 4, pw, PAD_T - 4),
                        Qt.AlignmentFlag.AlignRight, info)
 
@@ -804,7 +837,7 @@ class GainScanEngine:
         prev_time = time.time()
         low_rate_streak = 0
         self.collect_rate = 0.0
-        while not self._stop.is_set() and not self._skip.is_set():
+        while not self._stop.is_set() and not self._skip.is_set() and not self._redo.is_set():
             self._check_paused()
             if self._stop.is_set():
                 return False
@@ -868,10 +901,10 @@ class GainScanEngine:
             time.sleep(0.1)
 
     def _wait_paused(self, seconds: float):
-        """Sleep for *seconds*, respecting pause and stop."""
+        """Sleep for *seconds*, respecting pause, stop, redo, and skip."""
         end = time.time() + seconds
         while time.time() < end:
-            if self._stop.is_set():
+            if self._stop.is_set() or self._redo.is_set() or self._skip.is_set():
                 return
             self._check_paused()
             time.sleep(min(0.2, end - time.time()))

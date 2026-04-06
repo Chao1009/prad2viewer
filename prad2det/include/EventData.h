@@ -64,8 +64,8 @@ struct RawEventData {
     int16_t ssp_samples[kMaxGemStrips][ssp::SSP_TIME_SAMPLES] = {};
 
     // ssp trigger bank tag
-    uint8_t n_ssp_triggers = 0;
-    uint32_t ssp_trigger_tags[ssp::SSP_TIME_SAMPLES] = {};
+    int n_ssp_triggers = 0;
+    uint32_t ssp_trigger_tags[256][ssp::SSP_TIME_SAMPLES] = {};
 };
 
 // ── Reconstructed replay ("recon" tree) ──────────────────────────────────
@@ -113,8 +113,8 @@ struct ReconEventData {
     uint8_t matchG_det_id[kMaxClusters][2] = {};
 
     // ssp trigger bank tag
-    uint8_t n_ssp_triggers = 0;
-    uint32_t ssp_trigger_tags[ssp::SSP_TIME_SAMPLES] = {};
+    int n_ssp_triggers = 0;
+    uint32_t ssp_trigger_tags[256][ssp::SSP_TIME_SAMPLES] = {};
 };
 
 } // namespace prad2

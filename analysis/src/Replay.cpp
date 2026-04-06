@@ -119,7 +119,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("gem.apv",        ev.apv,        "apv[gem_nch]/b");
     tree->Branch("gem.strip",        ev.strip,        "strip[gem_nch]/b");
     tree->Branch("gem.ssp_samples",  ev.ssp_samples,  Form("ssp_samples[gem_nch][%d]/S", ssp::SSP_TIME_SAMPLES));
-    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/I");
     tree->Branch("ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
@@ -166,7 +166,7 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("matchG_z",        ev.matchG_z,         Form("matchG_z[match_num][2]/F"));
     tree->Branch("matchG_det_id",   ev.matchG_det_id,    Form("matchG_det_id[match_num][2]/b"));
 
-    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/b");
+    tree->Branch("n_ssp_triggers", &ev.n_ssp_triggers, "n_ssp_triggers/I");
     tree->Branch("ssp_trigger_tags", ev.ssp_trigger_tags, Form("ssp_trigger_tags[n_ssp_triggers][%d]/i", ssp::SSP_TIME_SAMPLES));
 }
 
@@ -452,7 +452,7 @@ if(!prad1){
                 int crate = cit->second;
                 for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
                     if (!roc.slots[s].present) continue;
-                    for (int c = 0; c < 160; ++c) { //should be 16, a bigger number to adapt PRad1 data
+                    for (int c = 0; c < 64; ++c) { //should be 16, a bigger number to adapt PRad1 data
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0) continue;

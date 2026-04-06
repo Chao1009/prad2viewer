@@ -23,24 +23,24 @@ static constexpr int kMaxCh = fdec::MAX_ROCS * fdec::MAX_SLOTS * 16;
 using EventVars       = prad2::RawEventData;
 void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
-    tree->Branch("event_num", &ev.event_num, "event_num/i");
-    tree->Branch("trigger",   &ev.trigger,   "trigger/i");
-    tree->Branch("timestamp", &ev.timestamp, "timestamp/L");
-    tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
-    tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
-    tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
-    tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
-    tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
-    tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
-    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
-    tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
-    tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
-    tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
+    tree->SetBranchAddress("event_num", &ev.event_num);
+    tree->SetBranchAddress("trigger",   &ev.trigger);
+    tree->SetBranchAddress("timestamp", &ev.timestamp);
+    tree->SetBranchAddress("hycal.nch",       &ev.nch);
+    tree->SetBranchAddress("hycal.crate",     ev.crate);
+    tree->SetBranchAddress("hycal.slot",      ev.slot);
+    tree->SetBranchAddress("hycal.channel",   ev.channel);
+    tree->SetBranchAddress("hycal.module_id", ev.module_id);
+    tree->SetBranchAddress("hycal.nsamples",  ev.nsamples);
+    tree->SetBranchAddress("hycal.samples",   ev.samples);
+    tree->SetBranchAddress("hycal.ped_mean",  ev.ped_mean);
+    tree->SetBranchAddress("hycal.ped_rms",   ev.ped_rms);
+    tree->SetBranchAddress("hycal.integral",  ev.integral);
     if (write_peaks) {
-        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/b");
-        tree->Branch("hycal.peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->SetBranchAddress("hycal.npeaks",       &ev.npeaks);
+        tree->SetBranchAddress("hycal.peak_height",  ev.peak_height);
+        tree->SetBranchAddress("hycal.peak_time",    ev.peak_time);
+        tree->SetBranchAddress("hycal.peak_integral",ev.peak_integral);
     }
 }
 

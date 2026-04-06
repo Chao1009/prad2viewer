@@ -10,6 +10,9 @@
 #include <TString.h>
 #include <TSystem.h>
 #include <TChain.h>
+#include <TLatex.h>
+#include <TCanvas.h>
+#include <TF1.h>
 
 #include <iostream>
 #include <string>
@@ -72,6 +75,7 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
 
 static std::vector<std::string> collectRootFiles(const std::string &path);
 void projectToHyCalSurface(PhysicsTools::MollerData &m_data, float hycal_z);
+double fitAndDraw(TH1F* hist, const std::string& out_path, const double fit_range = 4.);
 
 // ── Main ─────────────────────────────────────────────────────────────────
 
@@ -235,6 +239,28 @@ int main(int argc, char *argv[])
         }
     }
 
+    //fit histograms, and get the beam position and vertex distance for each detector plane
+    double hycal_vertex_z = fitAndDraw(vertex_hycal, "calib_result/hycal_vertex_z", 100.);
+    double hycal_center_x = fitAndDraw(center_hycal_x, "calib_result/hycal_center_x", 2.);
+    double hycal_center_y = fitAndDraw(center_hycal_y, "calib_result/hycal_center_y", 2.);
+    double gem_vertex_z[4];
+    double gem_center_x[4];
+    double gem_center_y[4];
+    for (int d = 0; d < 4; d++) {
+        gem_vertex_z[d] = fitAndDraw(vertex_gem[d], Form("calib_result/gem%d_vertex_z", d), 50.);
+        gem_center_x[d] = fitAndDraw(center_gem_x[d], Form("calib_result/gem%d_center_x", d), 1.);
+        gem_center_y[d] = fitAndDraw(center_gem_y[d], Form("calib_result/gem%d_center_y", d), 4.);
+    }
+    //print summary of calibration results
+    std::cerr << "HyCal vertex z distance: " << hycal_vertex_z << " mm (pre-entered number " << hycal_z << " mm)" << "\n";
+    std::cerr << "HyCal center x: " << hycal_center_x << " mm\n";
+    std::cerr << "HyCal center y: " << hycal_center_y << " mm\n";
+    for (int d = 0; d < 4; d++) {
+        std::cerr << "GEM " << d << " vertex z distance: " << gem_vertex_z[d] << " mm\n";
+        std::cerr << "GEM " << d << " center x: " << gem_center_x[d] << " mm\n";
+        std::cerr << "GEM " << d << " center y: " << gem_center_y[d] << " mm\n";
+    }
+
     //save histograms
     outfile.cd();
     vertex_hycal->Write();
@@ -280,4 +306,19 @@ void projectToHyCalSurface(PhysicsTools::MollerData &m_data, float hycal_z)
             dp->z = hycal_z;
         }
     }
+}
+
+double fitAndDraw(TH1F* hist, const std::string& out_path, const double fit_range){
+    TCanvas *c = new TCanvas("", "", 800, 600);
+    double mean = hist->GetBinCenter(hist->GetMaximumBin());
+    hist->Fit("gaus", "rq", "", mean-fit_range, mean+fit_range);
+    hist->Draw();
+    TLatex *latex = new TLatex();
+    latex->SetNDC();
+    latex->SetTextSize(0.04);
+    latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1), hist->GetFunction("gaus")->GetParError(1)));
+    c->SaveAs((out_path + ".png").c_str());
+    delete c;
+
+    return hist->GetFunction("gaus")->GetParameter(1);
 }

@@ -3,7 +3,8 @@
 // get the ratio of expected/measured peak position, and write to a database file. 
 //=============================================================================
 //
-// Usage: epCalib <input_raw.root|dir> [-o output_calib_file] [-D daq_config.json] [-n max_events]
+// Usage: epCalib <input_raw.root|dir> [-o output_calib_file] [-r output_root_file] 
+//                                      [-D daq_config.json] [-n max_events]
 //
 // Reads rawdata(adc level).root (peak mode), runs HyCal clustering, fills per-module energy histograms
 //=============================================================================
@@ -62,7 +63,7 @@ static std::vector<std::string> collectRootFiles(const std::string &path);
 
 int main(int argc, char *argv[])
 {
-    std::string output_calib_file, config_file, daq_config_file;
+    std::string output_calib_file, output_root_file, config_file, daq_config_file;
     std::string db_dir = DATABASE_DIR;
     if (const char *env = std::getenv("PRAD2_DATABASE_DIR"))  db_dir = env;
     int max_events = -1;
@@ -72,9 +73,10 @@ int main(int argc, char *argv[])
     float hycal_z = 6225.f; // distance from target to HyCal front face in mm, used for kinematics
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:D:n:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:r:D:n:")) != -1) {
         switch (opt) {
             case 'o': output_calib_file = optarg; break;
+            case 'r': output_root_file = optarg; break;
             case 'D': daq_config_file = optarg; break;
             case 'n': max_events = std::atoi(optarg); break;
         }
@@ -88,7 +90,7 @@ int main(int argc, char *argv[])
     }
     if (root_files.empty()) {
         std::cerr << "No input files specified.\n";
-        std::cerr << "Usage: quick_check <input_raw.root|dir> [more files...] [-o out.root] [-n max_events]\n";
+        std::cerr << "Usage: quick_check <input_raw.root|dir> [more files...] [-o out_calib.txt] [-r out_root.root] [-n max_events]\n";
         return 1;
     }
 
@@ -108,11 +110,13 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    TFile outfile("ep_calib.root", "RECREATE");
-    if (!outfile.IsOpen()) {
-        std::cerr << "Cannot create ep_calib.root\n";
-        return 1;
+    // --- output file ---
+    TString outName = output_root_file;
+    if (outName.IsNull()) {
+        outName = root_files[0];
+        outName.ReplaceAll("_recon.root", "_epCalibResult.root");
     }
+    TFile outfile(outName, "RECREATE");
 
     auto ev = std::make_unique<EventVars>();
     SetReadBranches(tree, *ev, true);

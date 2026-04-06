@@ -43,7 +43,7 @@ DB_DIR = SCRIPT_DIR / ".." / "database"
 MODULES_JSON = DB_DIR / "hycal_modules.json"
 
 SCALER_PV = "B_DET_HYCAL_FADC_{label}:c"
-POLL_INTERVAL_MS = 3_000   # 1 seconds
+POLL_INTERVAL_MS = 2_500   # 1 seconds
 
 
 # ===========================================================================

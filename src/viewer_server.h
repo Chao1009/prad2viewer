@@ -180,6 +180,13 @@ private:
 
     void etReaderThread();
     void sleepMs(int ms);
+
+    // LIVETIME — temporary: poll external command for live time
+    std::string livetime_cmd_ = "tcpClient trig0 tsBusy";
+    static constexpr int livetime_poll_sec_ = 5;
+    std::atomic<double> livetime_{-1.0};   // <0 = not available
+    std::thread livetime_thread_;
+    void livetimePollThread();
 #endif
 
     void joinAll();      // join all background threads (safe to call multiple times)

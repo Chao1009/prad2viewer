@@ -168,6 +168,8 @@ function applyConfig(data){
     // show/hide mode-specific UI
     document.getElementById('nav-file').style.display   = mode!=='online'?'flex':'none';
     document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
+    // LIVETIME — temporary
+    if(mode==='online') startLivetimePolling(); else stopLivetimePolling();
     document.getElementById('btn-open').style.display='';
 
     // mode toggle button — visible whenever ET is available

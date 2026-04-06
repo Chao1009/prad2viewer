@@ -169,4 +169,37 @@ void ViewerServer::etReaderThread()
     }
 }
 
+// LIVETIME — temporary: poll external command every 30s while ET is active
+void ViewerServer::livetimePollThread()
+{
+    while (running_) {
+        while (running_ && !et_active_)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (!running_) break;
+
+        double val = -1.0;
+        FILE *p = popen(livetime_cmd_.c_str(), "r");
+        if (p) {
+            char buf[512];
+            std::string out;
+            while (fgets(buf, sizeof(buf), p)) out += buf;
+            pclose(p);
+            // parse "Livetime = XX.X%" from output
+            auto pos = out.find("Livetime");
+            if (pos != std::string::npos) {
+                auto eq = out.find('=', pos);
+                if (eq != std::string::npos) {
+                    try { val = std::stod(out.substr(eq + 1)); }
+                    catch (...) {}
+                }
+            }
+        }
+        livetime_.store(val);
+
+        // sleep livetime_poll_sec_, but wake early if shutting down or ET deactivated
+        for (int i = 0; i < livetime_poll_sec_ * 10 && running_ && et_active_; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+}
+
 #endif // WITH_ET

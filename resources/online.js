@@ -44,6 +44,34 @@ function updateFollowStatus() {
     }
 }
 
+// LIVETIME — temporary: poll server for DAQ livetime
+const LIVETIME_POLL_MS=5000;
+let livetimeTimer=null;
+function pollLivetime(){
+    fetch('/api/livetime').then(r=>r.json()).then(d=>{
+        const el=document.getElementById('livetime-display');
+        if(!el) return;
+        el.style.display='';
+        if(d.livetime>=0){
+            el.textContent='Livetime: '+d.livetime.toFixed(1)+'%';
+            el.style.color='#51cf66';
+        } else {
+            el.textContent='Livetime: N/A';
+            el.style.color='#888';
+        }
+    }).catch(()=>{});
+}
+function startLivetimePolling(){
+    if(livetimeTimer) return;
+    pollLivetime();
+    livetimeTimer=setInterval(pollLivetime,LIVETIME_POLL_MS);
+}
+function stopLivetimePolling(){
+    if(livetimeTimer){clearInterval(livetimeTimer);livetimeTimer=null;}
+    const el=document.getElementById('livetime-display');
+    if(el) el.style.display='none';
+}
+
 function connectWebSocket() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     ws = new WebSocket(`${proto}//${location.host}`);

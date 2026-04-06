@@ -351,6 +351,17 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     // --- progress ---
     if (uri == "/api/progress") { reply(progress_.toJson().dump()); return; }
 
+    // LIVETIME — temporary
+    if (uri == "/api/livetime") {
+#ifdef WITH_ET
+        double v = livetime_.load();
+        reply(json({{"livetime", v}}).dump());
+#else
+        reply(json({{"livetime", -1}}).dump());
+#endif
+        return;
+    }
+
     // --- clear endpoints (always available, clears active mode's data) ---
     // --- filter endpoints ---
     if (uri == "/api/filter") {

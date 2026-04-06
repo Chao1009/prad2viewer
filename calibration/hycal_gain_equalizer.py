@@ -579,8 +579,14 @@ class GainEqualizerWindow(QMainWindow):
         # sync start index from combo selection
         self._onStartSelected(0)
 
+        ro = self.simulation
+        if not ro and not self._ge_hv_pw.text().strip():
+            self._log("Expert mode requires HV password", level="error")
+            QMessageBox.warning(self, "HV Password Required",
+                                "Enter the prad2hvd password before starting in expert mode.")
+            return
+
         try:
-            ro = self.simulation
             server = ServerClient(self._ge_server_edit.text().strip(),
                                   log_fn=self._log, read_only=ro)
             key_map = server.build_key_map()
@@ -593,9 +599,11 @@ class GainEqualizerWindow(QMainWindow):
             hv = HVClient(self._ge_hv_edit.text().strip(),
                           log_fn=self._log, read_only=ro)
             hv.connect(password=self._ge_hv_pw.text())
-            self._log("HV connected")
         except Exception as e:
-            self._log(f"HV error: {e}", level="error"); return
+            self._log(f"HV error: {e}", level="error")
+            if not ro:
+                QMessageBox.critical(self, "HV Connection Failed", str(e))
+            return
 
         eng = GainScanEngine(
             motor_ep=self.ep, server=server, hv=hv,

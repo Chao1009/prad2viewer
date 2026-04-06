@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 #local path for testing on farm
-sys.path.append('/home/wrightso/.local/bin/*')
+#sys.path.append('/home/wrightso/.local/bin/*')
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -518,12 +518,14 @@ class ScalerMapWindow(QMainWindow):
 
 
         self._map.set_values(self._values)
-        
+
+        #Convert Sums of rates to kHz
         W_totalSum = W_totalSum/1000.0
         y_asym = (topSum-botSum)/1000.0
         x_asym = (rightSum-leftSum)/1000.0
-        x_COM = x_asym/340.0
-        y_COM = y_asym/340.0
+        #Get Center of the Rate Relative to the center of the beam hole
+        x_COM = x_asym/(20.5*17)
+        y_COM = y_asym/(20.5*17)
 
         if self._auto_range_on and self._values:
             self._do_auto_range()

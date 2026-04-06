@@ -81,7 +81,7 @@ class ModuleInfoDialog(QDialog):
     without closing and re-opening the dialog.
     """
 
-    _FIELDS = ("Name", "Type", "Sector", "Row/Col", "Size", "HyCal", "Ptrans", "In limits")
+    _FIELDS = ("Scaler", "Name", "Type", "Sector", "Row/Col", "Size", "HyCal", "Ptrans", "In limits")
 
     def __init__(self, ep, log_fn, parent=None):
         super().__init__(parent)
@@ -118,11 +118,12 @@ class ModuleInfoDialog(QDialog):
         btn_row.addWidget(btn_close)
         lo.addLayout(btn_row)
 
-    def setModule(self, mod: Module):
+    def setModule(self, mod: Module, scaler_value: Optional[float] = None):
         self._mod = mod
         px, py = module_to_ptrans(mod.x, mod.y)
         in_limits = ptrans_in_limits(px, py)
         vals = {
+            "Scaler":    f"{scaler_value:.1f}" if scaler_value is not None else "--",
             "Name":      mod.name,
             "Type":      mod.mod_type,
             "Sector":    mod.sector or "--",
@@ -136,6 +137,8 @@ class ModuleInfoDialog(QDialog):
             lv.setText(vals.get(label, "--"))
             if label == "In limits" and not in_limits:
                 lv.setStyleSheet(f"color: {C.RED}; font: bold 13pt 'Consolas';")
+            elif label == "Scaler" and scaler_value is not None:
+                lv.setStyleSheet(f"color: {C.GREEN}; font: bold 13pt 'Consolas';")
             else:
                 lv.setStyleSheet("")
         self._btn_move.setText(f"Move To {mod.name}")
@@ -326,7 +329,7 @@ class SnakeScanWindow(QMainWindow):
 
         # reset button overlaid at bottom-right corner, outside the map drawing area
         self._btn_reset_view = QPushButton("Reset", self._map)
-        self._btn_reset_view.setFixedSize(50, 22)
+        self._btn_reset_view.setFixedSize(56, 28)
         self._btn_reset_view.setStyleSheet(
             f"QPushButton{{background:rgba(22,27,34,220);color:{C.DIM};"
             f"border:1px solid #30363d;border-radius:2px;padding:0;"
@@ -356,19 +359,19 @@ class SnakeScanWindow(QMainWindow):
 
         self._btn_scaler_toggle = QPushButton("Scalers: ON")
         self._btn_scaler_toggle.setStyleSheet(self._scaler_btn_ss(True))
-        self._btn_scaler_toggle.setFixedHeight(22)
+        self._btn_scaler_toggle.setFixedHeight(28)
         self._btn_scaler_toggle.clicked.connect(self._toggleScaler)
         sc_row.addWidget(self._btn_scaler_toggle)
 
         self._btn_scaler_auto = QPushButton("Auto")
-        self._btn_scaler_auto.setFixedHeight(22)
+        self._btn_scaler_auto.setFixedHeight(28)
         self._btn_scaler_auto.clicked.connect(self._toggleScalerAuto)
         self._scaler_auto_on = True
         self._updateScalerAutoBtn()
         sc_row.addWidget(self._btn_scaler_auto)
 
         self._scaler_min_edit = QLineEdit("0")
-        self._scaler_min_edit.setFixedWidth(50); self._scaler_min_edit.setFixedHeight(22)
+        self._scaler_min_edit.setFixedWidth(50); self._scaler_min_edit.setFixedHeight(28)
         self._scaler_min_edit.setFont(QFont("Consolas", 8))
         self._scaler_min_edit.setStyleSheet(
             "QLineEdit{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:2px;padding:1px 4px;}")
@@ -378,22 +381,22 @@ class SnakeScanWindow(QMainWindow):
         sc_row.addWidget(QLabel("-"))
 
         self._scaler_max_edit = QLineEdit("1000")
-        self._scaler_max_edit.setFixedWidth(50); self._scaler_max_edit.setFixedHeight(22)
+        self._scaler_max_edit.setFixedWidth(50); self._scaler_max_edit.setFixedHeight(28)
         self._scaler_max_edit.setFont(QFont("Consolas", 8))
         self._scaler_max_edit.setStyleSheet(self._scaler_min_edit.styleSheet())
         self._scaler_max_edit.returnPressed.connect(self._applyScalerRange)
         sc_row.addWidget(self._scaler_max_edit)
 
-        btn_apply = QPushButton("Apply"); btn_apply.setFixedHeight(22)
+        btn_apply = QPushButton("Apply"); btn_apply.setFixedHeight(28)
         btn_apply.clicked.connect(self._applyScalerRange)
         sc_row.addWidget(btn_apply)
 
-        self._btn_scaler_log = QPushButton("Log: OFF"); self._btn_scaler_log.setFixedHeight(22)
+        self._btn_scaler_log = QPushButton("Log: OFF"); self._btn_scaler_log.setFixedHeight(28)
         self._btn_scaler_log.setStyleSheet(self._small_btn_ss(C.DIM))
         self._btn_scaler_log.clicked.connect(self._toggleScalerLog)
         sc_row.addWidget(self._btn_scaler_log)
 
-        self._btn_palette = QPushButton(); self._btn_palette.setFixedSize(80, 22)
+        self._btn_palette = QPushButton(); self._btn_palette.setFixedSize(90, 28)
         self._btn_palette.setToolTip("Click to cycle colour palette")
         self._btn_palette.clicked.connect(self._cycleScalerPalette)
         self._updatePaletteBtn()
@@ -829,7 +832,8 @@ class SnakeScanWindow(QMainWindow):
             if mod:
                 if self._mod_dlg is None:
                     self._mod_dlg = ModuleInfoDialog(self.ep, self._log, parent=self)
-                self._mod_dlg.setModule(mod)
+                sv = self._map._scaler_values.get(mod.name)
+                self._mod_dlg.setModule(mod, sv)
                 self._mod_dlg.show()
                 self._mod_dlg.raise_()
 

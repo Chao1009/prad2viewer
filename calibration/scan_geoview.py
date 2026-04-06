@@ -105,6 +105,7 @@ class HyCalScanMapWidget(QWidget):
         self._scaler_vmax = 1000.0
         self._scaler_auto = True
         self._scaler_log = False
+        self._scaler_auto_exclude = 5  # exclude top N hot channels from auto range
         self._palette_idx = 0
         # --- zoom / pan state ---
         self._zoom = 1.0
@@ -139,11 +140,7 @@ class HyCalScanMapWidget(QWidget):
     def setScalerValues(self, vals: Dict[str, float]):
         self._scaler_values = vals
         if self._scaler_auto and vals:
-            v = list(vals.values())
-            self._scaler_vmin = min(v)
-            self._scaler_vmax = max(v)
-            if self._scaler_vmin == self._scaler_vmax:
-                self._scaler_vmax = self._scaler_vmin + 1.0
+            self._computeAutoRange()
         self.update()
 
     def setScalerEnabled(self, on: bool):
@@ -155,12 +152,25 @@ class HyCalScanMapWidget(QWidget):
     def setScalerAutoRange(self, on: bool):
         self._scaler_auto = on
         if on and self._scaler_values:
-            v = list(self._scaler_values.values())
-            self._scaler_vmin = min(v)
-            self._scaler_vmax = max(v)
-            if self._scaler_vmin == self._scaler_vmax:
-                self._scaler_vmax = self._scaler_vmin + 1.0
+            self._computeAutoRange()
         self.update()
+
+    def setScalerAutoExclude(self, n: int):
+        self._scaler_auto_exclude = max(0, n)
+        if self._scaler_auto and self._scaler_values:
+            self._computeAutoRange()
+            self.update()
+
+    def _computeAutoRange(self):
+        """Auto-range excluding the top N hottest channels."""
+        v = sorted(self._scaler_values.values())
+        if not v: return
+        n = self._scaler_auto_exclude
+        trimmed = v[:max(len(v) - n, 1)]
+        self._scaler_vmin = trimmed[0]
+        self._scaler_vmax = trimmed[-1]
+        if self._scaler_vmin == self._scaler_vmax:
+            self._scaler_vmax = self._scaler_vmin + 1.0
 
     def setScalerLogScale(self, on: bool):
         self._scaler_log = on; self.update()
@@ -287,13 +297,17 @@ class HyCalScanMapWidget(QWidget):
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawRect(self._rects[self._highlight])
 
-        # motor crosshair
+        # beam position marker (red dot with white outline + crosshair)
         if self._marker_hx is not None:
             cx = self._ox + (self._marker_hx - self._x_min) * self._scale
             cy = self._oy + (self._y_max - self._marker_hy) * self._scale
+            R, ARM = 3, 8
+            p.setPen(QPen(QColor("#ffffff"), 2.0))
+            p.setBrush(QColor(C.RED))
+            p.drawEllipse(QPointF(cx, cy), R, R)
             p.setPen(QPen(QColor(C.RED), 1.5))
-            p.drawLine(QPointF(cx - 5, cy), QPointF(cx + 5, cy))
-            p.drawLine(QPointF(cx, cy - 5), QPointF(cx, cy + 5))
+            p.drawLine(QPointF(cx - ARM, cy), QPointF(cx + ARM, cy))
+            p.drawLine(QPointF(cx, cy - ARM), QPointF(cx, cy + ARM))
 
         p.end()
 
@@ -351,7 +365,11 @@ class HyCalScanMapWidget(QWidget):
                 m = self._mod_by_name.get(found)
                 if m:
                     px, py = module_to_ptrans(m.x, m.y)
-                    self.setToolTip(f"{m.name} ({m.mod_type})\nHyCal({m.x:.1f}, {m.y:.1f})\nptrans({px:.1f}, {py:.1f})")
+                    tip = f"{m.name} ({m.mod_type})\nHyCal({m.x:.1f}, {m.y:.1f})\nptrans({px:.1f}, {py:.1f})"
+                    sv = self._scaler_values.get(m.name)
+                    if sv is not None:
+                        tip += f"\nScaler: {sv:.1f}"
+                    self.setToolTip(tip)
             else:
                 self.setToolTip("")
 

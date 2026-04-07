@@ -137,7 +137,10 @@ def main() -> int:
 
         has_vset = latest.get("VSet") is not None
         has_vmon = latest.get("VMon") is not None
-        if has_vset and has_vmon and not args.force:
+        has_addr = (latest.get("hv_crate") is not None
+                    and latest.get("hv_slot") is not None
+                    and latest.get("hv_channel") is not None)
+        if has_vset and has_vmon and has_addr and not args.force:
             n_unchanged += 1
             continue
 
@@ -165,11 +168,17 @@ def main() -> int:
         latest["VSet"] = round(float(new_vset), 2)
         if new_vmon is not None:
             latest["VMon"] = round(float(new_vmon), 2)
+        # HV crate/slot/channel addressing is what /api/load_settings needs to
+        # match channels — store it so cosmic_eq_propose can write it later.
+        if "crate" in info:   latest["hv_crate"]   = info["crate"]
+        if "slot" in info:    latest["hv_slot"]    = info["slot"]
+        if "channel" in info: latest["hv_channel"] = info["channel"]
         latest.setdefault("status", "OK")
         latest.setdefault("timestamp", timestamp)
         n_patched += 1
         if old_vset is None:
-            print(f"  {name:<8}  VSet={latest['VSet']:.1f}  VMon={latest.get('VMon', '—')}")
+            print(f"  {name:<8}  VSet={latest['VSet']:.1f}  VMon={latest.get('VMon', '—')}  "
+                  f"addr={latest.get('hv_crate')}/{latest.get('hv_slot')}/{latest.get('hv_channel')}")
         else:
             print(f"  {name:<8}  VSet {old_vset} → {latest['VSet']}  "
                   f"VMon {old_vmon} → {latest.get('VMon', '—')}")

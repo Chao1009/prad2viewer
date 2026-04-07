@@ -283,24 +283,56 @@ def propose_for_channel(name: str,
 # ============================================================================
 
 def build_channel_entries(proposals: List[Proposal],
-                          hv_lookup: Dict[str, dict]) -> List[Dict[str, Any]]:
-    """Build the per-channel dicts that go into prad2hvmon_settings_v1."""
-    out = []
+                          hv_lookup: Dict[str, dict],
+                          channels: Dict[str, List[Dict[str, Any]]]
+                         ) -> Tuple[List[Dict[str, Any]], int]:
+    """Build the per-channel dicts that go into prad2hvmon_settings_v1.
+
+    prad2hvd's /api/load_settings matches channels by HV crate/slot/channel
+    addressing — NOT by name. Without these fields the daemon reports the
+    entry as 'skipped'. We try, in order:
+        1. live hv_lookup  (populated when --query-hv or --apply was used)
+        2. hv_crate/hv_slot/hv_channel stored in the latest history entry
+           (recorded by cosmic_eq_patch_hv or by cosmic_eq_analyze's HV query)
+
+    Returns (entries, n_missing_addr).
+    """
+    out: List[Dict[str, Any]] = []
+    n_missing_addr = 0
     for p in proposals:
         if p.new_vset is None:
             continue
-        hv_info = hv_lookup.get(p.name)
         entry: Dict[str, Any] = {
             "name":   p.name,
             "params": {"V0Set": p.new_vset},
         }
-        # crate addressing if known (preferred by prad2hvd loader)
+
+        # source 1: live HV lookup
+        hv_info = hv_lookup.get(p.name)
+        crate = slot = chan = None
         if hv_info is not None:
-            for k in ("crate", "slot", "channel"):
-                if k in hv_info:
-                    entry[k] = hv_info[k]
+            crate = hv_info.get("crate")
+            slot  = hv_info.get("slot")
+            chan  = hv_info.get("channel")
+
+        # source 2: history-stored addressing (set by patch_hv / analyze)
+        if crate is None or slot is None or chan is None:
+            history = channels.get(p.name, [])
+            if history:
+                latest = history[-1]
+                if crate is None: crate = latest.get("hv_crate")
+                if slot  is None: slot  = latest.get("hv_slot")
+                if chan  is None: chan  = latest.get("hv_channel")
+
+        if crate is not None: entry["crate"]   = crate
+        if slot  is not None: entry["slot"]    = slot
+        if chan  is not None: entry["channel"] = chan
+
+        if crate is None or slot is None or chan is None:
+            n_missing_addr += 1
+
         out.append(entry)
-    return out
+    return out, n_missing_addr
 
 
 # ============================================================================
@@ -405,7 +437,7 @@ def main() -> int:
         print(f"  {marker} {count:>5}  {reason}")
 
     # Build batch JSON
-    chan_entries = build_channel_entries(proposals, hv_lookup)
+    chan_entries, n_missing_addr = build_channel_entries(proposals, hv_lookup, channels)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     settings  = build_batch_settings(timestamp, chan_entries)
 
@@ -413,6 +445,11 @@ def main() -> int:
         json.dump(settings, f, indent=2)
     print()
     print(f"Wrote {args.output}  —  {n_set} channels with new VSet")
+    if n_missing_addr > 0:
+        print(f"WARNING: {n_missing_addr} entries lack hv_crate/hv_slot/hv_channel — "
+              f"prad2hvd /api/load_settings will SKIP them. "
+              f"Run cosmic_eq_patch_hv.py first to populate addressing in the history "
+              f"JSON, or pass --query-hv to fetch it live now.")
 
     # Optional direct apply
     if args.apply:

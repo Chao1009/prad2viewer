@@ -597,6 +597,11 @@ def main() -> int:
             "VSet":               round(vset, 2) if vset is not None else None,
             "status":             status,
         }
+        # HV addressing — required by prad2hvd /api/load_settings
+        if hv_entry is not None:
+            if "crate"   in hv_entry: entry["hv_crate"]   = hv_entry["crate"]
+            if "slot"    in hv_entry: entry["hv_slot"]    = hv_entry["slot"]
+            if "channel" in hv_entry: entry["hv_channel"] = hv_entry["channel"]
         channels.setdefault(name, []).append(entry)
 
     save_history(args.history, channels)

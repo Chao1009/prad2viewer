@@ -487,7 +487,7 @@ class GainScanEngine:
         self._skip.set()
         self._paused = False
         epics_stop(self.ep)
-        self.log("Gain scan stopped", level="warn")
+        self.log("Gain scan stop requested", level="warn")
 
     def skip_module(self):
         self._skip.set()
@@ -545,14 +545,20 @@ class GainScanEngine:
 
                 # if this module failed, pause the scan for user intervention
                 if i in self.failed:
-                    self.log(f"{mod.name}: STOPPED — click Start to continue from next module",
+                    self.log(f"{mod.name}: STOPPED — click Resume to retry this module, or Reset to clear and pick a new starting point",
                              level="error")
                     return
 
         finally:
             if self._stop.is_set():
                 self.state = GainScanState.IDLE
-                self.log("Gain scan stopped by user")
+                mod = self.path[self.current_idx] if 0 <= self.current_idx < len(self.path) else None
+                if mod:
+                    self.log(f"Stopped at {mod.name} — click Resume to retry, "
+                             f"or Reset to clear and pick a new starting point",
+                             level="warn")
+                else:
+                    self.log("Gain scan stopped", level="warn")
             elif self.state != GainScanState.FAILED:
                 self.state = GainScanState.COMPLETED
                 self.log(f"Gain scan COMPLETE: {len(self.converged)} converged, "

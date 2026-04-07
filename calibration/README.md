@@ -37,11 +37,13 @@ Pay attention to:
 
 ### On ERROR (Scan Stops)
 
-An `ERROR` stops the scan automatically.
+An `ERROR` stops the scan automatically. The Start button changes to
+**Resume** and the Stop button changes to **Reset**.
 
 1. Note the module name and error message from the log.
-2. The **Start** combo updates to show the failed module — verify it is correct.
-3. Click **Start** to retry from that module.
+2. Click **Resume** to retry the failed module.
+3. If you instead want to start over from a different module, click **Reset**
+   to clear the scan, pick a new starting module, then click **Start**.
 4. If the same error repeats, **contact the RC**.
 
 ### After Each Row

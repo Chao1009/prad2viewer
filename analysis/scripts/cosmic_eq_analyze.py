@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gain_eq_analyze — pass 1 of the offline gain-equalization workflow.
+cosmic_eq_analyze — pass 1 of the offline gain-equalization workflow.
 
 Reads one or more ROOT files produced by ``replay_rawdata -p`` (which contain
 peak_height[nch][MAX_PEAKS] and peak_integral[nch][MAX_PEAKS] plus the FP
@@ -18,17 +18,17 @@ are provided.
 
 Typical use (one EVIO file → one ROOT file):
     replay_rawdata prad_023527.evio -o prad_023527.root -p
-    python3 gain_eq_analyze.py prad_023527.root --history gain_history.json
+    python3 cosmic_eq_analyze.py prad_023527.root --history gain_history.json
 
 Multiple EVIO splits (one ROOT file per split, all chained for one iteration):
     for f in /data/stage6/prad_023600/prad_023600.evio.000??; do
         replay_rawdata $f -o /tmp/$(basename $f).root -p
     done
-    python3 gain_eq_analyze.py /tmp/prad_023600.evio.*.root \\
+    python3 cosmic_eq_analyze.py /tmp/prad_023600.evio.*.root \\
             --history gain_history.json
 
 Glob form (shell expansion or --glob):
-    python3 gain_eq_analyze.py --glob '/tmp/prad_023600.evio.*.root' \\
+    python3 cosmic_eq_analyze.py --glob '/tmp/prad_023600.evio.*.root' \\
             --history gain_history.json
 """
 
@@ -43,7 +43,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import ROOT  # noqa: E402
 
-from gain_eq_common import (
+from cosmic_eq_common import (
     HVClient, filter_modules_by_type, latest_iteration, load_daq_map,
     load_history, load_hycal_modules, n_iterations, natural_module_sort_key,
     save_history,

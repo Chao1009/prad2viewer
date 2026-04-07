@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gain_eq_distribution — pass 2 of the offline gain-equalization workflow.
+cosmic_eq_distribution — pass 2 of the offline gain-equalization workflow.
 
 Reads the unified gain history JSON, picks one iteration (latest by default),
 and produces a histogram of per-channel mean values across all good fits.
@@ -16,9 +16,9 @@ Outputs:
     Stdout    — summary stats: n_channels, mean, median, group split estimate.
 
 Typical use:
-    python3 gain_eq_distribution.py gain_history.json
-    python3 gain_eq_distribution.py gain_history.json --iter 2
-    python3 gain_eq_distribution.py gain_history.json --max-sigma 200 --type W
+    python3 cosmic_eq_distribution.py gain_history.json
+    python3 cosmic_eq_distribution.py gain_history.json --iter 2
+    python3 cosmic_eq_distribution.py gain_history.json --max-sigma 200 --type W
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 import ROOT  # noqa: E402
 
-from gain_eq_common import (
+from cosmic_eq_common import (
     filter_modules_by_type, load_history, load_hycal_modules,
     natural_module_sort_key,
 )

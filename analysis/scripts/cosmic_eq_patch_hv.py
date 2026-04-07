@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-gain_eq_patch_hv — fill in VMon/VSet for the latest iteration entry of each
+cosmic_eq_patch_hv — fill in VMon/VSet for the latest iteration entry of each
 channel in a gain history JSON.
 
 Use case: a colleague sends you a JSON with fit results (peak_height_mean,
@@ -8,7 +8,7 @@ peak_integral_mean, count, ...) but no VMon/VSet because they don't have
 network access to prad2hvd. This script queries prad2hvd for each channel
 and writes the live VMon/VSet into the latest iteration entry, leaving all
 other fields untouched. After patching, the file is ready for
-gain_eq_propose.py.
+cosmic_eq_propose.py.
 
 By default the patch is idempotent: a channel whose latest entry already has
 both VMon and VSet is skipped. Use --force to overwrite.
@@ -22,9 +22,9 @@ Default behavior writes back in place with a .bak alongside. Use --output to
 write to a different file (then no .bak is created).
 
 Typical use:
-    python3 gain_eq_patch_hv.py colleague_results.json
-    python3 gain_eq_patch_hv.py colleague_results.json --output gain_history.json
-    python3 gain_eq_patch_hv.py gain_history.json --force --hv-url http://clonpc19:8765
+    python3 cosmic_eq_patch_hv.py colleague_results.json
+    python3 cosmic_eq_patch_hv.py colleague_results.json --output gain_history.json
+    python3 cosmic_eq_patch_hv.py gain_history.json --force --hv-url http://clonpc19:8765
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from gain_eq_common import HVClient, HISTORY_FORMAT, natural_module_sort_key
+from cosmic_eq_common import HVClient, HISTORY_FORMAT, natural_module_sort_key
 
 
 # ============================================================================
@@ -58,7 +58,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--dry-run", action="store_true",
                    help="Print what would change but do not write the file")
     p.add_argument("--no-format-stamp", action="store_true",
-                   help="Do not add the 'format: gain_eq_history_v1' envelope when missing")
+                   help="Do not add the 'format: cosmic_eq_history_v1' envelope when missing")
     return p.parse_args()
 
 
@@ -68,7 +68,7 @@ def parse_args() -> argparse.Namespace:
 
 def load_tolerant(path: str) -> Dict[str, List[Dict[str, Any]]]:
     """Load a history JSON. Accepts either:
-       - the canonical {"format": "gain_eq_history_v1", "channels": {...}} envelope
+       - the canonical {"format": "cosmic_eq_history_v1", "channels": {...}} envelope
        - a bare {channel_name: [iter, ...]} dict (colleague-style)
     Returns the channels dict in either case.
     """

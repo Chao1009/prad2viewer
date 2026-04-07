@@ -2,17 +2,17 @@
 Shared utilities for the offline HyCal gain-equalization workflow.
 
 Used by:
-    gain_eq_analyze.py      — pass 1: ROOT → fit results, append to JSON
-    gain_eq_distribution.py — pass 2: visualize the per-channel mean distribution
-    gain_eq_propose.py      — pass 3: history → batch VSet JSON for prad2hvd
+    cosmic_eq_analyze.py      — pass 1: ROOT → fit results, append to JSON
+    cosmic_eq_distribution.py — pass 2: visualize the per-channel mean distribution
+    cosmic_eq_propose.py      — pass 3: history → batch VSet JSON for prad2hvd
 
-Unified history JSON format (gain_eq_history_v1)
+Unified history JSON format (cosmic_eq_history_v1)
 ================================================
 One file per equalization campaign. Per channel, an array of iteration
-entries — one entry appended each time gain_eq_analyze runs:
+entries — one entry appended each time cosmic_eq_analyze runs:
 
     {
-        "format": "gain_eq_history_v1",
+        "format": "cosmic_eq_history_v1",
         "channels": {
             "W3": [
                 {
@@ -139,7 +139,7 @@ def natural_module_sort_key(name: str):
 #  History JSON I/O (the single source of truth across iterations)
 # ============================================================================
 
-HISTORY_FORMAT = "gain_eq_history_v1"
+HISTORY_FORMAT = "cosmic_eq_history_v1"
 
 
 def load_history(path: str) -> Dict[str, List[Dict[str, Any]]]:

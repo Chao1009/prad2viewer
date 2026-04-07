@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-gain_eq_propose — pass 3 of the offline gain-equalization workflow.
+cosmic_eq_propose — pass 3 of the offline gain-equalization workflow.
 
-Reads the unified gain history JSON (created by gain_eq_analyze) and writes
+Reads the unified gain history JSON (created by cosmic_eq_analyze) and writes
 a batch VSet JSON in the prad2hvmon_settings_v1 format that can be POSTed
 to prad2hvd /api/load_settings.
 
@@ -27,15 +27,15 @@ Outputs:
 
 Typical use:
     # iteration 1: blanket +100 V to underequalized channels
-    python3 gain_eq_propose.py gain_history.json \\
+    python3 cosmic_eq_propose.py gain_history.json \\
             --target-mean 2500 --output vset_iter1.json
 
     # iteration 2 and beyond: history now has ≥ 2 points → linear correction
-    python3 gain_eq_propose.py gain_history.json \\
+    python3 cosmic_eq_propose.py gain_history.json \\
             --target-mean 2500 --output vset_iter2.json
 
     # Apply directly via prad2hvd HTTP API (asks for password)
-    python3 gain_eq_propose.py gain_history.json \\
+    python3 cosmic_eq_propose.py gain_history.json \\
             --target-mean 2500 --output vset_iter1.json --apply
 """
 
@@ -49,7 +49,7 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from gain_eq_common import (
+from cosmic_eq_common import (
     HVClient, build_batch_settings, filter_modules_by_type,
     load_history, load_hycal_modules, load_voltage_limits,
     natural_module_sort_key, voltage_limit_for,
@@ -96,8 +96,29 @@ def parse_args() -> argparse.Namespace:
                    help="POST the batch JSON directly via /api/load_settings (asks for password)")
     p.add_argument("--no-limits", action="store_true",
                    help="Skip voltage_limits.json clamping (default: clamp)")
+    p.add_argument("--exclude-list", default=None,
+                   help="Path to a text file of module names to leave alone "
+                        "(one per line, '#' comments allowed). These channels "
+                        "are reported but never get a new VSet.")
     p.add_argument("--modules-db", default=None)
     return p.parse_args()
+
+
+def load_exclude_list(path: str) -> set:
+    """Read a text file of module names; return a set.
+
+    Format: one name per line. Blank lines and lines starting with '#' are
+    ignored. Inline '#' comments are stripped. Whitespace-trimmed.
+    """
+    out: set = set()
+    with open(path) as f:
+        for raw in f:
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            for token in line.split():
+                out.add(token)
+    return out
 
 
 # ============================================================================
@@ -129,10 +150,19 @@ def metric_keys(metric: str) -> Tuple[str, str, str]:
 def propose_for_channel(name: str,
                         entries: List[dict],
                         args: argparse.Namespace,
-                        v_limit: float) -> Proposal:
+                        v_limit: float,
+                        exclude: set) -> Proposal:
     """Decide what new VSet to propose for one channel."""
     p = Proposal(name)
     p.iter_count = len(entries)
+    if name in exclude:
+        p.reason = "excluded by list"
+        if entries:
+            latest = entries[-1]
+            p.current_vset = latest.get("VSet")
+            mean_key, _, _ = metric_keys(args.metric)
+            p.current_mean = latest.get(mean_key)
+        return p
     if not entries:
         p.reason = "no entries"
         return p
@@ -272,6 +302,14 @@ def main() -> int:
         if not limits:
             print("WARNING: voltage_limits.json not found — proceeding without limits")
 
+    # exclude list (channels with known-bad fits — touched VSet would be wrong)
+    exclude: set = set()
+    if args.exclude_list:
+        exclude = load_exclude_list(args.exclude_list)
+        in_scope = sum(1 for n in wanted if n in exclude)
+        print(f"Loaded {len(exclude)} names from {args.exclude_list} "
+              f"({in_scope} match the current type filter)")
+
     # Optional HV refresh
     hv_lookup: Dict[str, dict] = {}
     if args.query_hv or args.apply:
@@ -294,7 +332,7 @@ def main() -> int:
     for name in wanted:
         v_lim = voltage_limit_for(name, limits) if limits else 0.0
         proposals.append(propose_for_channel(name, channels.get(name, []),
-                                              args, v_lim))
+                                              args, v_lim, exclude))
 
     # Pretty print
     print()

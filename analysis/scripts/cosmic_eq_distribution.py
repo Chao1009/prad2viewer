@@ -59,8 +59,8 @@ def parse_args() -> argparse.Namespace:
                    default="peak_height",
                    help="Which fitted mean drives the iteration overlay and stats "
                         "(default: peak_height). The 2x2 overview always shows both.")
-    p.add_argument("--types", default="PbGlass,PWO",
-                   help="Module types to include (default: PbGlass,PWO; 'all' for everything)")
+    p.add_argument("--types", default="PbGlass,PbWO4",
+                   help="Module types to include (default: PbGlass,PbWO4; 'all' for everything)")
     p.add_argument("--max-sigma", type=float, default=0.0,
                    help="Quality cut: drop channels with <metric>_sigma above this. 0 = no cut.")
     p.add_argument("--max-chi2", type=float, default=0.0,

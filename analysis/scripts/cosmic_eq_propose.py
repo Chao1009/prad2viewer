@@ -75,20 +75,29 @@ def parse_args() -> argparse.Namespace:
                    help="Which fitted mean to drive: 'peak_height' (default) "
                         "uses peak_height_mean/sigma; 'peak_integral' uses "
                         "peak_integral_mean/sigma instead.")
-    p.add_argument("--types", default="PbGlass,PWO",
-                   help="Module types to include (default: PbGlass,PWO)")
+    p.add_argument("--types", default="PbGlass,PbWO4",
+                   help="Module types to include (default: PbGlass,PbWO4)")
     p.add_argument("--initial-step", type=float, default=100.0,
                    help="Constant ΔV applied on the first iteration (default: +100)")
     p.add_argument("--initial-threshold", type=float, default=0.0,
                    help="First-iteration only: apply the initial step ONLY when "
-                        "(target_mean - current_mean) > threshold. Channels at or "
-                        "above target - threshold are left untouched. Asymmetric: "
-                        "channels above target are also skipped. "
+                        "|target_mean - current_mean| > threshold. Bidirectional — "
+                        "channels significantly below target step UP, channels "
+                        "significantly above target step DOWN, channels within "
+                        "± threshold of target are left alone. "
                         "Default 0 = step in either direction (current behavior).")
     p.add_argument("--max-dv", type=float, default=80.0,
                    help="Cap on per-channel ΔV in subsequent iterations (default: 80)")
     p.add_argument("--tolerance", type=float, default=50.0,
-                   help="Channels within ± tolerance of target are left alone (default: 50)")
+                   help="Symmetric leave-alone window around target (default: 50). "
+                        "Channels with mean in [target - tolerance, target + tolerance] "
+                        "are not touched. Override per-side with --tolerance-low / --tolerance-high.")
+    p.add_argument("--tolerance-low", type=float, default=None,
+                   help="Asymmetric: how far BELOW target is acceptable (defaults to --tolerance). "
+                        "Channels with target - mean in [0, tolerance-low] are left alone.")
+    p.add_argument("--tolerance-high", type=float, default=None,
+                   help="Asymmetric: how far ABOVE target is acceptable (defaults to --tolerance). "
+                        "Channels with mean - target in [0, tolerance-high] are left alone.")
     p.add_argument("--min-rc", type=float, default=0.5,
                    help="Reject response constants below this (ADC/V) — too small to trust")
     p.add_argument("--max-rc", type=float, default=20.0,
@@ -202,19 +211,23 @@ def propose_for_channel(name: str,
     p.current_mean = mean
     p.current_vset = vset
 
-    diff = args.target_mean - mean
-    if abs(diff) < args.tolerance:
-        p.reason = "within tolerance"
+    diff = args.target_mean - mean   # > 0 → mean below target, < 0 → above
+    if diff >= 0 and diff <= args.tolerance_low:
+        p.reason = f"within low tolerance (diff={diff:+.1f})"
+        return p
+    if diff < 0 and -diff <= args.tolerance_high:
+        p.reason = f"within high tolerance (diff={diff:+.1f})"
         return p
 
     # Decide ΔV
     if len(entries) < 2:
         # First-iteration constant step (signed by direction toward target).
-        # If --initial-threshold is set, only step channels that are well
-        # below target (diff > threshold). Channels above target or only
-        # marginally below are left at their current voltage.
-        if args.initial_threshold > 0 and diff <= args.initial_threshold:
-            p.reason = (f"diff={diff:+.1f} not above initial threshold "
+        # If --initial-threshold is set, only step channels whose |diff| from
+        # target exceeds the threshold (bidirectional): channels well below
+        # target step UP, channels well above step DOWN, channels within
+        # ± threshold of target are left at their current voltage.
+        if args.initial_threshold > 0 and abs(diff) <= args.initial_threshold:
+            p.reason = (f"|diff|={abs(diff):.1f} <= initial threshold "
                         f"{args.initial_threshold:.1f}")
             return p
         step = abs(args.initial_step)
@@ -296,6 +309,12 @@ def build_channel_entries(proposals: List[Proposal],
 
 def main() -> int:
     args = parse_args()
+
+    # Asymmetric tolerance defaults: fall back to symmetric --tolerance
+    if args.tolerance_low is None:
+        args.tolerance_low = args.tolerance
+    if args.tolerance_high is None:
+        args.tolerance_high = args.tolerance
 
     channels = load_history(args.history)
     if not channels:

@@ -84,8 +84,8 @@ def parse_args() -> argparse.Namespace:
                    help="Process at most N events")
     p.add_argument("--exclusive", action="store_true",
                    help="Require ONLY the sum bit (reject events with any other bit set)")
-    p.add_argument("--types", default="PbGlass,PWO",
-                   help="Module types to include (default: PbGlass,PWO; 'all' for everything)")
+    p.add_argument("--types", default="PbGlass,PbWO4",
+                   help="Module types to include (default: PbGlass,PbWO4; 'all' for everything)")
     # peak-height histogram
     p.add_argument("--ph-min",  type=float, default=0.0,    help="Peak-height hist min ADC")
     p.add_argument("--ph-max",  type=float, default=4096.0, help="Peak-height hist max ADC")

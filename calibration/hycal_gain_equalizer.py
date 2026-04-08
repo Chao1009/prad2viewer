@@ -20,12 +20,8 @@ Usage
 from __future__ import annotations
 
 import argparse
-import html as html_mod
-import json
-import math
 import os
 import sys
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from PyQt6.QtWidgets import (
@@ -43,18 +39,21 @@ from scan_utils import (
     BEAM_CENTER_X, BEAM_CENTER_Y, DEFAULT_DB_PATH,
 )
 from scan_epics import (
-    SPMG, SPMG_LABELS, MotorEPICS, ObserverEPICS, SimulatedMotorEPICS,
-    ScalerPVGroup, SimulatedScalerEPICS,
-    epics_move_to, epics_stop,
+    SPMG, SPMG_LABELS, epics_move_to, epics_stop,
 )
 from scan_engine import (
     build_scan_path,
-    DEFAULT_POS_THRESHOLD, DEFAULT_BEAM_THRESHOLD,
-    DEFAULT_VELO_X, DEFAULT_VELO_Y, MAX_LG_LAYERS,
+    DEFAULT_POS_THRESHOLD, DEFAULT_BEAM_THRESHOLD, MAX_LG_LAYERS,
 )
 from scan_geoview import HyCalScanMapWidget, PALETTES, PALETTE_NAMES
 from gain_scanner import (
     GainScanEngine, GainScanState, ServerClient, HVClient,
+)
+from scan_gui_common import (
+    PATHS_FILE, SCALER_POLL_MS, POLL_MS,
+    open_session_log, format_log_line, append_log_line,
+    build_position_check_panel, update_position_check, EncoderDriftChecker,
+    load_profiles, setup_motor_epics, setup_scaler_epics,
 )
 
 
@@ -72,6 +71,8 @@ class HistogramWidget(QWidget):
         self._bins: List[int] = []
         self._target_bin: Optional[int] = None
         self._edge_bin: Optional[int] = None
+        self._bin_min: float = 0.0      # ADC offset of bin 0
+        self._bin_step: float = 1.0     # ADC width per bin
         self._title: str = ""
         self._info: str = ""
         self._log_y: bool = True  # log or linear y scale
@@ -80,6 +81,17 @@ class HistogramWidget(QWidget):
 
     def setLogY(self, on: bool):
         self._log_y = on; self.update()
+
+    def setBinning(self, bin_min: float, bin_step: float):
+        """Set the ADC mapping (bin index → ADC value).
+
+        Used by the x-axis tick labels.  Safe to call once when the
+        engine is created — the analyzer's binning is fixed for the
+        lifetime of a scan.
+        """
+        self._bin_min = float(bin_min)
+        self._bin_step = float(bin_step)
+        self.update()
 
     def setData(self, bins: List[int], target_bin: Optional[int] = None,
                 edge_bin: Optional[int] = None):
@@ -196,16 +208,60 @@ class HistogramWidget(QWidget):
                 p.drawText(QRectF(0, gy - 7, L - 4, 14),
                            Qt.AlignmentFlag.AlignRight, f"{gval}")
 
+        # x-axis tick labels in ADC units (from bin_min / bin_step)
+        if self._bin_step > 0:
+            adc_min = self._bin_min
+            adc_max = self._bin_min + n * self._bin_step
+            span = adc_max - adc_min
+            # target tick count adapts to plot width so labels don't collide.
+            # Budget is ~80 px per label so even when "nice" rounding lands
+            # on a smaller step (and we end up with more ticks than the
+            # target), adjacent 50-px label boxes still don't overlap.
+            target_ticks = max(2, int(pw / 80))
+            raw = span / target_ticks
+            if raw > 0:
+                mag = 10 ** _math.floor(_math.log10(raw))
+                norm = raw / mag
+                if   norm < 1.5: nice = 1
+                elif norm < 3.0: nice = 2
+                elif norm < 7.0: nice = 5
+                else:            nice = 10
+                tick_step = nice * mag
+                # round adc_min UP to a multiple of tick_step (with a tiny
+                # epsilon so values that land just barely above an integer
+                # multiple aren't pushed to the next tick)
+                first_tick = _math.ceil(adc_min / tick_step - 1e-9) * tick_step
+                p.setFont(QFont("Consolas", 8))
+                adc = first_tick
+                while adc <= adc_max + 1e-6:
+                    bin_idx = (adc - adc_min) / self._bin_step
+                    if 0 <= bin_idx <= n:
+                        x = L + bin_idx * bar_w
+                        p.setPen(QPen(QColor("#30363d"), 1))
+                        p.drawLine(int(x), T + ph, int(x), T + ph + 3)
+                        p.setPen(QColor(C.DIM))
+                        label = f"{int(adc)}" if tick_step >= 1 else f"{adc:g}"
+                        # keep edge labels inside the widget bounds:
+                        # left ticks → left-align, right ticks → right-align,
+                        # interior ticks → centered
+                        if x < L + 25:
+                            rect = QRectF(x - 2, T + ph + 4, 50, 14)
+                            align = Qt.AlignmentFlag.AlignLeft
+                        elif x > L + pw - 25:
+                            rect = QRectF(x - 48, T + ph + 4, 50, 14)
+                            align = Qt.AlignmentFlag.AlignRight
+                        else:
+                            rect = QRectF(x - 25, T + ph + 4, 50, 14)
+                            align = Qt.AlignmentFlag.AlignCenter
+                        p.drawText(rect, align, label)
+                    adc += tick_step
+
         p.end()
 
 
 # ============================================================================
 #  MAIN WINDOW
 # ============================================================================
-
-SCALER_POLL_MS = 5_000
-PATHS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paths.json")
-
 
 class GainEqualizerWindow(QMainWindow):
     _logSignal = pyqtSignal(str, str)
@@ -230,23 +286,7 @@ class GainEqualizerWindow(QMainWindow):
 
         self._mod_by_name = {m.name: m for m in all_modules}
         self._log_lines: List[str] = []
-
-        # observer mode is read-only and writes nothing to disk; simulation
-        # prefixes its logs/reports with SIM_ so they cannot be confused
-        # with real-data files.
-        if self.observer:
-            self._log_file = None
-        else:
-            log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-            os.makedirs(log_dir, exist_ok=True)
-            log_prefix = "SIM_" if self.simulation else ""
-            log_name = datetime.now().strftime(f"{log_prefix}gain_eq_%Y%m%d.log")
-            self._log_file = open(os.path.join(log_dir, log_name), "a")
-            self._log_file.write(
-                "\n" + "=" * 70 + "\n"
-                f"=== Session start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n"
-                + "=" * 70 + "\n")
-            self._log_file.flush()
+        self._log_file = open_session_log("gain_eq", self.simulation, self.observer)
 
         self.scan_modules: List[Module] = []
         self._scan_names: set = set()
@@ -256,8 +296,7 @@ class GainEqualizerWindow(QMainWindow):
         self._mod_dlg = None
         self._gain_engine: Optional[GainScanEngine] = None
 
-        self._enc_offset_x: Optional[float] = None
-        self._enc_offset_y: Optional[float] = None
+        self._encoder_checker = EncoderDriftChecker()
 
         self._target_px: Optional[float] = None
         self._target_py: Optional[float] = None
@@ -277,7 +316,7 @@ class GainEqualizerWindow(QMainWindow):
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
-        self._timer.start(200)
+        self._timer.start(POLL_MS)
 
         self._scaler_timer = QTimer(self)
         self._scaler_timer.timeout.connect(self._pollScalers)
@@ -627,13 +666,12 @@ class GainEqualizerWindow(QMainWindow):
             self._ge_log_y.setStyleSheet("")
 
     def _buildPositionCheck(self, parent):
-        pe = QGroupBox("Position Check"); lo = QVBoxLayout(pe)
-        self._lbl_expected = QLabel("Target: --"); lo.addWidget(self._lbl_expected)
-        self._lbl_actual = QLabel("Actual: --"); lo.addWidget(self._lbl_actual)
-        self._lbl_error = QLabel("Diff:   --")
-        self._lbl_error.setStyleSheet(f"font:bold 13pt 'Consolas';"); lo.addWidget(self._lbl_error)
-        self._lbl_drift = QLabel("Drift:   --"); lo.addWidget(self._lbl_drift)
-        parent.addWidget(pe)
+        labels = build_position_check_panel(parent)
+        self._lbl_expected = labels["target"]
+        self._lbl_actual = labels["actual"]
+        self._lbl_error = labels["diff"]
+        self._lbl_drift = labels["drift"]
+        self._pos_labels = labels
 
     def _disableControls(self):
         for w in (self._btn_start, self._btn_pause, self._btn_stop,
@@ -656,6 +694,7 @@ class GainEqualizerWindow(QMainWindow):
         # resume from failure or stop — reuse existing engine, retry from current module
         eng = self._gain_engine
         if eng and eng._has_run and eng.state in (GainScanState.FAILED, GainScanState.IDLE):
+            self._clearHistogramData()
             eng.start()
             return
 
@@ -724,6 +763,8 @@ class GainEqualizerWindow(QMainWindow):
         eng.analyzer.use_log_cumul = self._ge_log_y.isChecked()
         eng.use_log_y = self._ge_log_y.isChecked()
         self._gain_engine = eng
+        # tell the histogram widget how to map bin index → ADC value for x-ticks
+        self._histogram.setBinning(eng.analyzer.bin_min, eng.analyzer.bin_step)
         eng.start(self._selected_start_idx, count=self._count_spin.value())
 
     def _cmdPause(self):
@@ -754,10 +795,23 @@ class GainEqualizerWindow(QMainWindow):
     def _cmdRedo(self):
         if self._gain_engine:
             self._gain_engine.redo_module()
+            self._clearHistogramData()
 
     def _cmdSkip(self):
         if self._gain_engine:
             self._gain_engine.skip_module()
+            self._clearHistogramData()
+
+    def _clearHistogramData(self):
+        """Drop any visible histogram bars (target just changed).
+
+        Keeps the title/info banners; only the bars are wiped so the
+        operator doesn't see prior-module data while the next collection
+        spins up.  Resets the live-fetch timer so the next poll fetches
+        immediately once new counts start arriving.
+        """
+        self._histogram.setData([], None, None)
+        self._last_hist_fetch = 0
 
     def _setTarget(self, px, py, name=""):
         self._target_px = px; self._target_py = py; self._target_name = name
@@ -1003,19 +1057,14 @@ class GainEqualizerWindow(QMainWindow):
     # -- logging ------------------------------------------------------------
 
     def _log(self, msg, level="info"):
-        ts = datetime.now().strftime("%H:%M:%S")
-        line = f"[{ts}] {level.upper().ljust(5)} {msg}"
+        line = format_log_line(msg, level)
         self._log_lines.append(line)
         if self._log_file and not self._log_file.closed:
             self._log_file.write(line + "\n"); self._log_file.flush()
         self._logSignal.emit(line, level)
 
     def _appendLog(self, line, level):
-        colors = {"info": C.TEXT, "warn": C.YELLOW, "error": C.RED}
-        c = colors.get(level, C.DIM)
-        self._log_text.append(
-            f'<span style="color:{c};font-family:Consolas;font-size:13pt;">'
-            f'{html_mod.escape(line)}</span>')
+        append_log_line(self._log_text, line, level)
 
     # -- polling (5 Hz) -----------------------------------------------------
 
@@ -1049,6 +1098,14 @@ class GainEqualizerWindow(QMainWindow):
         # "resumable": scan was started, then stopped/failed mid-way
         resumable = (not running) and eng._has_run and \
                     eng.state != GainScanState.COMPLETED
+
+        # detect transition to a new module → drop stale histogram bars
+        # (covers natural progression and the post-skip transition once
+        # the engine processes the skip flag)
+        prev_idx = getattr(self, '_hist_last_idx', None)
+        if running and eng.current_idx != prev_idx:
+            self._clearHistogramData()
+        self._hist_last_idx = eng.current_idx if running else None
 
         # panel visibility
         self._path_group.setVisible(not running and not resumable)
@@ -1159,23 +1216,9 @@ class GainEqualizerWindow(QMainWindow):
             self._histogram.setData(eng.last_bins, target_bin, eng.last_edge_bin)
 
     def _updatePositionCheck(self):
-        # position check
-        rx, ry = self.ep.get("x_rbv", 0.0), self.ep.get("y_rbv", 0.0)
-        self._lbl_actual.setText(f"Actual: ({rx:.3f}, {ry:.3f})")
-        px, py = self._target_px, self._target_py
-        if px is not None and py is not None:
-            err = math.sqrt((rx - px)**2 + (ry - py)**2)
-            name_html = f' <b style="color:{C.ACCENT}">{self._target_name}</b>' if self._target_name else ""
-            self._lbl_expected.setText(f"Target: ({px:.3f}, {py:.3f}){name_html}")
-            vx = self.ep.get("x_velo", DEFAULT_VELO_X) or DEFAULT_VELO_X
-            vy = self.ep.get("y_velo", DEFAULT_VELO_Y) or DEFAULT_VELO_Y
-            dx, dy = abs(rx - px), abs(ry - py)
-            eta = max(dx / vx if vx > 0 else 0, dy / vy if vy > 0 else 0)
-            eta_str = f" ({int(eta)//60}m {int(eta)%60}s)" if eta >= 60 else (f" ({eta:.0f}s)" if eta >= 1 else "")
-            self._lbl_error.setText(f"Diff:   {err:.3f} mm{eta_str}")
-        else:
-            self._lbl_expected.setText("Target: --")
-            self._lbl_error.setText("Diff:   --")
+        update_position_check(self._pos_labels, self.ep,
+                              self._target_px, self._target_py,
+                              self._target_name)
 
     def _updateBeamDisplay(self):
         bc = self.ep.get("beam_cur", None)
@@ -1190,27 +1233,8 @@ class GainEqualizerWindow(QMainWindow):
             self._lbl_beam_val.setText(f"{bc:.2f} nA")
             self._lbl_beam_val.setStyleSheet(f"color:{C.GREEN};font:bold 18pt 'Consolas';background:transparent;border:none;")
 
-    ENCODER_DRIFT_WARN = 0.5
-    ENCODER_DRIFT_ERR  = 1.5
-
     def _checkEncoder(self):
-        enc_x = self.ep.get("x_encoder", None)
-        enc_y = self.ep.get("y_encoder", None)
-        rbv_x = self.ep.get("x_rbv", None)
-        rbv_y = self.ep.get("y_rbv", None)
-        if enc_x is None or enc_y is None or rbv_x is None or rbv_y is None: return
-        if self._enc_offset_x is None:
-            self._enc_offset_x = enc_x - rbv_x
-            self._enc_offset_y = enc_y - rbv_y
-            self._log(f"Encoder calibrated: offset X={self._enc_offset_x:.4f} Y={self._enc_offset_y:.4f}")
-            return
-        dx = abs((enc_x - self._enc_offset_x) - rbv_x)
-        dy = abs((enc_y - self._enc_offset_y) - rbv_y)
-        fx = C.RED if dx > self.ENCODER_DRIFT_ERR else (C.YELLOW if dx > self.ENCODER_DRIFT_WARN else C.GREEN)
-        fy = C.RED if dy > self.ENCODER_DRIFT_ERR else (C.YELLOW if dy > self.ENCODER_DRIFT_WARN else C.GREEN)
-        self._lbl_drift.setText(
-            f'Drift:   X <span style="color:{fx}">{dx:.4f}</span>  '
-            f'Y <span style="color:{fy}">{dy:.4f}</span>')
+        self._encoder_checker.update(self.ep, self._log, self._lbl_drift)
 
     def eventFilter(self, obj, event):
         if obj is self._map and event.type() == event.Type.Resize:
@@ -1253,26 +1277,15 @@ def main():
     for t, n in sorted(by_type.items()):
         print(f"  {t}: {n}")
 
-    profiles: Dict[str, List[str]] = {}
-    if os.path.exists(args.paths):
-        with open(args.paths) as f:
-            profiles = json.load(f)
+    profiles = load_profiles(args.paths)
+    if profiles:
         print(f"Loaded {len(profiles)} path profiles")
 
     observer = args.observer
     simulation = not args.expert and not observer
 
-    if observer:        motor_ep = ObserverEPICS()
-    elif simulation:    motor_ep = SimulatedMotorEPICS()
-    else:               motor_ep = MotorEPICS(writable=True)
-
-    n_ok, n_total = motor_ep.connect()
-    if not simulation:
-        print(f"EPICS: {n_ok}/{n_total} PVs connected")
-
-    if simulation:  scaler_ep = SimulatedScalerEPICS(all_modules)
-    else:           scaler_ep = ScalerPVGroup(all_modules)
-    scaler_ep.connect()
+    motor_ep = setup_motor_epics(observer, simulation)
+    scaler_ep = setup_scaler_epics(simulation, all_modules)
 
     app = QApplication(sys.argv)
     win = GainEqualizerWindow(motor_ep, scaler_ep, simulation, all_modules,

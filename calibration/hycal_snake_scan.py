@@ -34,12 +34,9 @@ Requirements
 from __future__ import annotations
 
 import argparse
-import html as html_mod
-import json
 import math
 import os
 import sys
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from PyQt6.QtWidgets import (
@@ -58,9 +55,7 @@ from scan_utils import (
     PTRANS_X_MIN, PTRANS_X_MAX, PTRANS_Y_MIN, PTRANS_Y_MAX,
 )
 from scan_epics import (
-    SPMG, SPMG_LABELS, MotorEPICS, ObserverEPICS, SimulatedMotorEPICS,
-    ScalerPVGroup, SimulatedScalerEPICS,
-    epics_move_to, epics_stop,
+    SPMG, SPMG_LABELS, epics_move_to, epics_stop,
 )
 from scan_engine import (
     ScanState, ScanEngine, build_scan_path, estimate_scan_time,
@@ -68,6 +63,12 @@ from scan_engine import (
     DEFAULT_VELO_X, DEFAULT_VELO_Y, MAX_LG_LAYERS,
 )
 from scan_geoview import HyCalScanMapWidget, PALETTES, PALETTE_NAMES
+from scan_gui_common import (
+    PATHS_FILE, SCALER_POLL_MS, POLL_MS,
+    open_session_log, format_log_line, append_log_line,
+    build_position_check_panel, EncoderDriftChecker,
+    load_profiles, setup_motor_epics, setup_scaler_epics,
+)
 
 
 # ============================================================================
@@ -162,8 +163,6 @@ class ModuleInfoDialog(QDialog):
 #  MAIN WINDOW
 # ============================================================================
 
-SCALER_POLL_MS = 5_000  # 5 seconds (default, adjustable via slider)
-
 
 class SnakeScanWindow(QMainWindow):
     _logSignal = pyqtSignal(str, str)
@@ -188,23 +187,7 @@ class SnakeScanWindow(QMainWindow):
 
         self._mod_by_name = {m.name: m for m in all_modules}
         self._log_lines = []
-
-        # observer mode is read-only and writes nothing to disk; simulation
-        # prefixes its log with SIM_ so it cannot be confused with real-data
-        # files.
-        if self.observer:
-            self._log_file = None
-        else:
-            log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
-            os.makedirs(log_dir, exist_ok=True)
-            log_prefix = "SIM_" if self.simulation else ""
-            log_name = datetime.now().strftime(f"{log_prefix}snake_scan_%Y%m%d.log")
-            self._log_file = open(os.path.join(log_dir, log_name), "a")
-            self._log_file.write(
-                "\n" + "=" * 70 + "\n"
-                f"=== Session start: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ===\n"
-                + "=" * 70 + "\n")
-            self._log_file.flush()
+        self._log_file = open_session_log("snake_scan", self.simulation, self.observer)
 
         self.scan_modules = []
         self.engine = ScanEngine(motor_ep, self.scan_modules, self._log)
@@ -215,8 +198,7 @@ class SnakeScanWindow(QMainWindow):
         self._mod_dlg: Optional[ModuleInfoDialog] = None
         self._status_labels: Dict[str, QLabel] = {}
 
-        self._enc_offset_x: Optional[float] = None
-        self._enc_offset_y: Optional[float] = None
+        self._encoder_checker = EncoderDriftChecker()
 
         # target position — set once when a move is commanded
         self._target_px: Optional[float] = None
@@ -239,9 +221,9 @@ class SnakeScanWindow(QMainWindow):
         # main poll timer (5 Hz)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
-        self._timer.start(200)
+        self._timer.start(POLL_MS)
 
-        # scaler poll timer (10 s)
+        # scaler poll timer
         self._scaler_timer = QTimer(self)
         self._scaler_timer.timeout.connect(self._pollScalers)
         self._scaler_timer.start(SCALER_POLL_MS)
@@ -698,14 +680,11 @@ class SnakeScanWindow(QMainWindow):
         parent.addWidget(ms)
 
     def _buildPositionCheck(self, parent):
-        pe = QGroupBox("Position Check"); lo = QVBoxLayout(pe)
-        self._lbl_expected = QLabel("Target: --"); lo.addWidget(self._lbl_expected)
-        self._lbl_actual = QLabel("Actual: --"); lo.addWidget(self._lbl_actual)
-        self._lbl_error = QLabel("Diff:   --")
-        self._lbl_error.setStyleSheet(f"font: bold 13pt 'Consolas';")
-        lo.addWidget(self._lbl_error)
-        self._lbl_drift = QLabel("Drift:   --"); lo.addWidget(self._lbl_drift)
-        parent.addWidget(pe)
+        labels = build_position_check_panel(parent)
+        self._lbl_expected = labels["target"]
+        self._lbl_actual = labels["actual"]
+        self._lbl_error = labels["diff"]
+        self._lbl_drift = labels["drift"]
 
     def _buildScalerControl(self, parent):
         sc = QGroupBox("Scalers"); lo = QVBoxLayout(sc)
@@ -965,19 +944,14 @@ class SnakeScanWindow(QMainWindow):
     # -- logging -------------------------------------------------------------
 
     def _log(self, msg, level="info"):
-        ts = datetime.now().strftime("%H:%M:%S")
-        line = f"[{ts}] {level.upper().ljust(5)} {msg}"
+        line = format_log_line(msg, level)
         self._log_lines.append(line)
         if self._log_file and not self._log_file.closed:
             self._log_file.write(line + "\n"); self._log_file.flush()
         self._logSignal.emit(line, level)
 
     def _appendLog(self, line, level):
-        colors = {"info": C.TEXT, "warn": C.YELLOW, "error": C.RED}
-        c = colors.get(level, C.DIM)
-        self._log_text.append(
-            f'<span style="color:{c}; font-family:Consolas; font-size:13pt;">'
-            f'{html_mod.escape(line)}</span>')
+        append_log_line(self._log_text, line, level)
 
     # -- polling (5 Hz) ------------------------------------------------------
 
@@ -1023,28 +997,8 @@ class SnakeScanWindow(QMainWindow):
             self._lbl_beam_val.setStyleSheet(f"color: {C.GREEN}; font: bold 18pt 'Consolas'; background: transparent; border: none;")
             self._lbl_beam_status.setText("")
 
-    ENCODER_DRIFT_WARN = 0.5   # mm — yellow threshold
-    ENCODER_DRIFT_ERR  = 1.5   # mm — red threshold
-
     def _checkEncoder(self):
-        enc_x = self.ep.get("x_encoder", None)
-        enc_y = self.ep.get("y_encoder", None)
-        rbv_x = self.ep.get("x_rbv", None)
-        rbv_y = self.ep.get("y_rbv", None)
-        if enc_x is None or enc_y is None or rbv_x is None or rbv_y is None:
-            return
-        if self._enc_offset_x is None:
-            self._enc_offset_x = enc_x - rbv_x
-            self._enc_offset_y = enc_y - rbv_y
-            self._log(f"Encoder calibrated: offset X={self._enc_offset_x:.4f} Y={self._enc_offset_y:.4f}")
-            return
-        dx = abs((enc_x - self._enc_offset_x) - rbv_x)
-        dy = abs((enc_y - self._enc_offset_y) - rbv_y)
-        fx = C.RED if dx > self.ENCODER_DRIFT_ERR else (C.YELLOW if dx > self.ENCODER_DRIFT_WARN else C.GREEN)
-        fy = C.RED if dy > self.ENCODER_DRIFT_ERR else (C.YELLOW if dy > self.ENCODER_DRIFT_WARN else C.GREEN)
-        self._lbl_drift.setText(
-            f'Drift:   X <span style="color:{fx}">{dx:.4f}</span>  '
-            f'Y <span style="color:{fy}">{dy:.4f}</span>')
+        self._encoder_checker.update(self.ep, self._log, self._lbl_drift)
 
     def _updateStatus(self):
         for key, lbl in self._status_labels.items():
@@ -1175,8 +1129,6 @@ class SnakeScanWindow(QMainWindow):
 #  MAIN
 # ============================================================================
 
-PATHS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "paths.json")
-
 
 def main():
     parser = argparse.ArgumentParser(description="HyCal Snake Scan")
@@ -1194,34 +1146,15 @@ def main():
     for t, n in sorted(by_type.items()):
         print(f"  {t}: {n}")
 
-    profiles: Dict[str, List[str]] = {}
-    if os.path.exists(args.paths):
-        with open(args.paths) as f:
-            profiles = json.load(f)
+    profiles = load_profiles(args.paths)
+    if profiles:
         print(f"Loaded {len(profiles)} path profiles")
 
     observer = args.observer
     simulation = not args.expert and not observer
 
-    # motor EPICS
-    if observer:        motor_ep = ObserverEPICS()
-    elif simulation:    motor_ep = SimulatedMotorEPICS()
-    else:               motor_ep = MotorEPICS(writable=True)
-
-    n_ok, n_total = motor_ep.connect()
-    if not simulation:
-        print(f"EPICS: {n_ok}/{n_total} PVs connected")
-        for pv in motor_ep.disconnected_pvs():
-            print(f"  NOT connected: {pv}")
-
-    # scaler EPICS
-    if simulation:
-        scaler_ep = SimulatedScalerEPICS(all_modules)
-    else:
-        scaler_ep = ScalerPVGroup(all_modules)
-    s_ok, s_total = scaler_ep.connect()
-    if not simulation:
-        print(f"Scalers: {s_ok}/{s_total} PVs connected")
+    motor_ep = setup_motor_epics(observer, simulation)
+    scaler_ep = setup_scaler_epics(simulation, all_modules)
 
     app = QApplication(sys.argv)
     win = SnakeScanWindow(motor_ep, scaler_ep, simulation, all_modules,

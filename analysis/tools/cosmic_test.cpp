@@ -199,11 +199,18 @@ int main(int argc, char *argv[])
     float peak_height[1156], rms_height[1156];
     for (int i = 0; i < 1156; i++) {
         if (peakHeight_hist_module[i]->GetEntries() > 0) {
+            float max_l1 = peakHeight_hist_module[i]->GetBinContent(peakHeight_hist_module[i]->GetMaximumBin()-1);
+            float max_l2 = peakHeight_hist_module[i]->GetBinContent(peakHeight_hist_module[i]->GetMaximumBin()-2);
+            if(max_l1 < 0.5 * peakHeight_hist_module[i]->GetBinContent(peakHeight_hist_module[i]->GetMaximumBin())
+               || max_l2 < 0.4 * peakHeight_hist_module[i]->GetBinContent(peakHeight_hist_module[i]->GetMaximumBin())){
+                for(int b = 1; b <= 8; b++){
+                    peakHeight_hist_module[i]->SetBinContent(b, 0);
+                }
+            }
             float max = peakHeight_hist_module[i]->GetBinCenter(peakHeight_hist_module[i]->GetMaximumBin());
             if(max < 20){
-                peak_height[i] = max;
+                peak_height[i] = peakHeight_hist_module[i]->GetMean();
                 rms_height[i] = 1.;
-                continue;
             }
             peakHeight_hist_module[i]->Fit("gaus", "Q", "r", max*0.7, max*1.5);
             TF1 *fit = peakHeight_hist_module[i]->GetFunction("gaus");

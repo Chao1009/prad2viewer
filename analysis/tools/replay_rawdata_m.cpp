@@ -116,6 +116,8 @@ int main(int argc, char *argv[])
         // each thread gets its own Replay instance (own EvChannel, own buffers)
         analysis::Replay replay;
         if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
+        replay.LoadDaqMap(db_dir + "/daq_map.json");
+        std::cerr << "Using DAQ map: " << db_dir + "/daq_map.json" << "\n";
 
         while (true) {
             int idx = next_file.fetch_add(1);

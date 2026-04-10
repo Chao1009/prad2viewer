@@ -42,9 +42,6 @@ void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("trigger",   &ev.trigger,   "trigger/i");
     tree->Branch("timestamp", &ev.timestamp, "timestamp/L");
     tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
-    tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
-    tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
-    tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
     tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
     tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
     tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
@@ -145,7 +142,7 @@ int main(int argc, char *argv[])
         //reconstruct clusters, fill histograms
         clusterer.Clear();
         for(int j = 0; j < ev->nch; j++){
-            const auto *mod = hycal.module_by_daq(ev->crate[j], ev->slot[j], ev->channel[j]);
+            const auto *mod = hycal.module_by_id(ev->module_id[j]);
             if (!mod || !mod->is_hycal()) continue;
             if (ev->npeaks[j] <= 0) continue;
             float adc = ev->peak_integral[j][0];

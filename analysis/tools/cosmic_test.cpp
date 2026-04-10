@@ -28,9 +28,6 @@ void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->SetBranchAddress("trigger",   &ev.trigger);
     tree->SetBranchAddress("timestamp", &ev.timestamp);
     tree->SetBranchAddress("hycal.nch",       &ev.nch);
-    tree->SetBranchAddress("hycal.crate",     ev.crate);
-    tree->SetBranchAddress("hycal.slot",      ev.slot);
-    tree->SetBranchAddress("hycal.channel",   ev.channel);
     tree->SetBranchAddress("hycal.module_id", ev.module_id);
     tree->SetBranchAddress("hycal.nsamples",  ev.nsamples);
     tree->SetBranchAddress("hycal.samples",   ev.samples);
@@ -134,7 +131,7 @@ int main(int argc, char *argv[])
         std::cout << "Event " << ev.event_num << ": nch = " << ev.nch << "\r" << std::flush;
         if (ev.nch > 900) {
                 for (int j = 0; j < ev.nch; j++) {
-                    const auto *mod = hycal.module_by_daq(ev.crate[j], ev.slot[j], ev.channel[j]);
+                    const auto *mod = hycal.module_by_id(ev.module_id[j]);
                     if (!mod || !mod->is_hycal()) continue;
                     if (ev.npeaks[j] <= 0) continue;
                     int module_id = mod->id-1000;
@@ -154,7 +151,7 @@ int main(int argc, char *argv[])
         }
         else if (ev.nch > 4 && ev.nch <= 70) {
             for (int j = 0; j < ev.nch; j++) {
-                const auto *mod = hycal.module_by_daq(ev.crate[j], ev.slot[j], ev.channel[j]);
+                const auto *mod = hycal.module_by_id(ev.module_id[j]);
                 if (!mod || !mod->is_hycal()) continue;
                 if (ev.npeaks[j] <= 0) continue;
                 event_num_module[mod->id]++;

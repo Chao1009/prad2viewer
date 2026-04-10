@@ -76,6 +76,8 @@ void Replay::clearEvent(EventVars &ev)
     ev.timestamp = 0;
     ev.nch = 0;
     ev.gem_nch = 0;
+    ev.veto_nch = 0;
+    ev.lms_nch = 0;
     ev.ssp_raw.clear();
 }
 
@@ -89,6 +91,8 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
     ev.n_clusters = 0;
     ev.n_gem_hits = 0;
     ev.match_num = 0;
+    ev.veto_nch = 0;
+    ev.lms_nch = 0;
     ev.ssp_raw.clear();
 }
 
@@ -99,20 +103,45 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("trigger",      &ev.trigger,      "trigger/i");
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
     tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
-    tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
-    tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
-    tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
     tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
-    tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
-    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
+    tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/I");
+    tree->Branch("hycal.samples",   ev.samples,    "samples[nch][hycal.nsamples]/s");
     tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
     tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
     tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
     if (write_peaks) {
-        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/b");
-        tree->Branch("hycal.peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/I");
+        tree->Branch("hycal.peak_height",  ev.peak_height,  "peak_height[nch][hycal.npeaks]/F");
+        tree->Branch("hycal.peak_time",    ev.peak_time,    "peak_time[nch][hycal.npeaks]/F");
+        tree->Branch("hycal.peak_integral",ev.peak_integral, "peak_integral[nch][hycal.npeaks]/F");
+    }
+    //veto branches
+    tree->Branch("veto.nch",       &ev.veto_nch,       "veto_nch/I");
+    tree->Branch("veto.id",        ev.veto_id,        "veto_id[veto_nch]/b");
+    tree->Branch("veto.nsamples",  ev.veto_nsamples,  "veto_nsamples[veto_nch]/I");
+    tree->Branch("veto.samples",   ev.veto_samples,   "veto_samples[veto_nch][veto.nsamples]/s");
+    tree->Branch("veto.ped_mean",  ev.veto_ped_mean,   "veto_ped_mean[veto_nch]/F");
+    tree->Branch("veto.ped_rms",   ev.veto_ped_rms,    "veto_ped_rms[veto_nch]/F");
+    tree->Branch("veto.integral",  ev.veto_integral,    "veto_integral[veto_nch]/F");
+    if (write_peaks) {
+        tree->Branch("veto.npeaks",       &ev.veto_npeaks,       "veto_npeaks[veto_nch]/I");
+        tree->Branch("veto.peak_height",  ev.veto_peak_height,  "veto_peak_height[veto_nch][veto.npeaks]/F");
+        tree->Branch("veto.peak_time",    ev.veto_peak_time,    "veto_peak_time[veto_nch][veto.npeaks]/F");
+        tree->Branch("veto.peak_integral",ev.veto_peak_integral, "veto_peak_integral[veto_nch][veto.npeaks]/F");
+    }
+    //LMS branches
+    tree->Branch("lms.nch",       &ev.lms_nch,       "lms_nch/I");
+    tree->Branch("lms.id",        ev.lms_id,        "lms_id[lms_nch]/b");
+    tree->Branch("lms.nsamples",  ev.lms_nsamples,   "lms_nsamples[lms_nch]/I");
+    tree->Branch("lms.samples",   ev.lms_samples,    "lms_samples[lms_nch][lms.nsamples]/s");
+    tree->Branch("lms.ped_mean",  ev.lms_ped_mean,   "lms_ped_mean[lms_nch]/F");
+    tree->Branch("lms.ped_rms",   ev.lms_ped_rms,    "lms_ped_rms[lms_nch]/F");
+    tree->Branch("lms.integral",  ev.lms_integral,    "lms_integral[lms_nch]/F");
+    if (write_peaks) {
+        tree->Branch("lms.npeaks",       &ev.lms_npeaks,       "lms_npeaks[lms_nch]/I");
+        tree->Branch("lms.peak_height",  ev.lms_peak_height,  "lms_peak_height[lms_nch][lms.npeaks]/F");
+        tree->Branch("lms.peak_time",    ev.lms_peak_time,    "lms_peak_time[lms_nch][lms.npeaks]/F");
+        tree->Branch("lms.peak_integral",ev.lms_peak_integral, "lms_peak_integral[lms_nch][lms.npeaks]/F");
     }
     //GEM part
     tree->Branch("gem.nch",        &ev.gem_nch,   "gem_nch/I");
@@ -163,11 +192,22 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("matchHC_energy",  ev.matchHC_energy,   "matchHC_energy[match_num]/F");
     tree->Branch("matchHC_center",  ev.matchHC_center,   "matchHC_center[match_num]/s");
     tree->Branch("matchHC_flag",    ev.matchHC_flag,     "matchHC_flag[match_num]/i");
-    tree->Branch("matchG_x",        ev.matchG_x,         Form("matchG_x[match_num][2]/F"));
-    tree->Branch("matchG_y",        ev.matchG_y,         Form("matchG_y[match_num][2]/F"));
-    tree->Branch("matchG_z",        ev.matchG_z,         Form("matchG_z[match_num][2]/F"));
-    tree->Branch("matchG_det_id",   ev.matchG_det_id,    Form("matchG_det_id[match_num][2]/b"));
-
+    tree->Branch("matchG_x",        ev.matchG_x,         "matchG_x[match_num][2]/F");
+    tree->Branch("matchG_y",        ev.matchG_y,         "matchG_y[match_num][2]/F");
+    tree->Branch("matchG_z",        ev.matchG_z,         "matchG_z[match_num][2]/F");
+    tree->Branch("matchG_det_id",   ev.matchG_det_id,    "matchG_det_id[match_num][2]/b");
+    //veto information
+    tree->Branch("veto_nch",       &ev.veto_nch,       "veto_nch/I");
+    tree->Branch("veto_id",        ev.veto_id,        "veto_id[veto_nch]/b");
+    tree->Branch("veto_npeaks",       &ev.veto_npeaks,       "veto_npeaks[veto_nch]/I");
+    tree->Branch("veto_peak_time",    ev.veto_peak_time,     "veto_peak_time[veto_nch][veto_npeaks]/F");
+    tree->Branch("veto_peak_integral",ev.veto_peak_integral, "veto_peak_integral[veto_nch][veto_npeaks]/F");
+    //LMS information
+    tree->Branch("lms_nch",       &ev.lms_nch,       "lms_nch/I");
+    tree->Branch("lms_id",        ev.lms_id,         "lms_id[lms_nch]/b");
+    tree->Branch("lms_npeaks",       &ev.lms_npeaks,       "lms_npeaks[lms_nch]/I");
+    tree->Branch("lms_peak_time",    ev.lms_peak_time,     "lms_peak_time[lms_nch][lms_npeaks]/F");
+    tree->Branch("lms_peak_integral",ev.lms_peak_integral, "lms_peak_integral[lms_nch][lms_npeaks]/F");
     // Raw 0xE10C SSP trigger bank words (variable-length per event)
     tree->Branch("ssp_raw", &ev.ssp_raw);
 }
@@ -247,6 +287,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
 
             // decode HyCal FADC250 data
             int nch = 0;
+            int veto_nch = 0;
+            int lms_nch = 0;
             for (int r = 0; r < event->nrocs; ++r) {
                 auto &roc = event->rocs[r];
                 if (!roc.present) continue;
@@ -260,11 +302,55 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0 || nch >= prad2::kMaxChannels) continue;
+                        int mod_id = moduleID(crate, s, c);
+                        if(mod_id < 0){
+                            std::string mod_name = moduleName(crate, s, c);
+                            if(mod_name[0] == 'V'){
+                                ev->veto_id[veto_nch] = mod_name[1] - '0';
+                                ev->veto_nsamples[veto_nch] = cd.nsamples;
+                                for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
+                                    ev->veto_samples[veto_nch][i] = cd.samples[i];
+                                ana.Analyze(cd.samples, cd.nsamples, wres);
+                                ev->veto_ped_mean[veto_nch] = wres.ped.mean;
+                                ev->veto_ped_rms[veto_nch]  = wres.ped.rms;
+                                ev->veto_integral[veto_nch] = computeIntegral(cd, wres.ped.mean);
+                                if (write_peaks) {
+                                    ev->veto_npeaks[veto_nch] = wres.npeaks;
+                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                        ev->veto_peak_height[veto_nch][p]   = wres.peaks[p].height;
+                                        ev->veto_peak_time[veto_nch][p]     = wres.peaks[p].time;
+                                        ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
+                                    }
+                                }
+                                veto_nch++;
+                            }
+                            else if(mod_name[0] == 'L'){
+                                if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
+                                else ev->lms_id[lms_nch] = mod_name[3] - '0';
+                                ev->lms_nsamples[lms_nch] = cd.nsamples;
+                                for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
+                                    ev->lms_samples[lms_nch][i] = cd.samples[i];
+                                ana.Analyze(cd.samples, cd.nsamples, wres);
+                                ev->lms_ped_mean[lms_nch] = wres.ped.mean;
+                                ev->lms_ped_rms[lms_nch]  = wres.ped.rms;
+                                ev->lms_integral[lms_nch] = computeIntegral(cd, wres.ped.mean);
+                                if (write_peaks) {
+                                    ev->lms_npeaks[lms_nch] = wres.npeaks;
+                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                        ev->lms_peak_height[lms_nch][p]   = wres.peaks[p].height;
+                                        ev->lms_peak_time[lms_nch][p]     = wres.peaks[p].time;
+                                        ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                    }
+                                }
+                                lms_nch++;
+                            }
+                            else{
+                                std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
+                            }
+                            continue;
+                        }
 
-                        ev->crate[nch]   = crate;
-                        ev->slot[nch]    = s;
-                        ev->channel[nch] = c;
-                        //ev->module_id[nch] = moduleID(roc.tag, s, c);
+                        ev->module_id[nch] = mod_id;
                         ev->nsamples[nch] = cd.nsamples;
                         for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
                             ev->samples[nch][i] = cd.samples[i];
@@ -460,7 +546,9 @@ if(!prad1){
             static constexpr uint32_t TBIT_sum = (1u << 8);
             if (!(ev->trigger_bits & TBIT_sum)) continue;
 
-            // decode and reconstruct HyCal data
+            // decode FADC250 and reconstruct HyCal data
+            int veto_nch = 0;
+            int lms_nch = 0;
             for (int r = 0; r < event->nrocs; ++r) {
                 auto &roc = event->rocs[r];
                 if (!roc.present) continue;
@@ -473,6 +561,34 @@ if(!prad1){
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0) continue;
+
+                        std::string mod_name = moduleName(crate, s, c);
+                        if(mod_name[0] != 'W' && mod_name[0] != 'G'){
+                            if(mod_name[0] == 'V'){
+                                ev->veto_id[veto_nch] = mod_name[1] - '0';
+                                ana.Analyze(cd.samples, cd.nsamples, wres);
+                                ev->veto_npeaks[veto_nch] = wres.npeaks;
+                                for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                    ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
+                                }
+                                veto_nch++;
+                            }
+                            else if(mod_name[0] == 'L'){
+                                if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
+                                else ev->lms_id[lms_nch] = mod_name[3] - '0';
+                                ana.Analyze(cd.samples, cd.nsamples, wres);
+                                ev->lms_npeaks[lms_nch] = wres.npeaks;
+                                for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                    ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                }
+                                lms_nch++;
+                            }
+                             else{
+                                std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
+                            }
+                            continue;
+                        }
+
                         const auto *mod = hycal.module_by_daq(crate, s, c);
                         if (!mod || !mod->is_hycal()) continue;
                         float adc = 0.f;
@@ -484,9 +600,9 @@ if(!prad1){
                             adc = wres.peaks[0].integral;
                         }
                         // TODO: use real calibration constants from database.
-                        // Currently using a flat 0.2 MeV/ADC for all modules as placeholder.
+                        // Currently using a flat 0.1 MeV/ADC for all modules as placeholder.
                         // PbWO4 and lead-glass have different gains — load from hycal_calibration.json.
-                        hycal.SetCalibConstant(mod->id, 0.2);
+                        hycal.SetCalibConstant(mod->id, 0.1);
                         float energy = static_cast<float>(mod->energize(adc));
                         clusterer.AddHit(mod->index, energy);
                         ev->total_energy += energy;

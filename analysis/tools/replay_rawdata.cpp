@@ -53,6 +53,8 @@ int main(int argc, char *argv[])
 
     analysis::Replay replay;
     if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
+    replay.LoadDaqMap(db_dir + "/daq_map.json");
+    std::cerr << "Using DAQ map: " << db_dir + "/daq_map.json" << "\n";
 
     if (!replay.Process(input, output, max_events, peaks, daq_config))
         return 1;

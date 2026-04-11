@@ -25,7 +25,7 @@ using EventVars       = prad2::RawEventData;
 void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
     tree->SetBranchAddress("event_num", &ev.event_num);
-    tree->SetBranchAddress("trigger",   &ev.trigger);
+    tree->SetBranchAddress("trigger_bits",   &ev.trigger_bits);
     tree->SetBranchAddress("timestamp", &ev.timestamp);
     tree->SetBranchAddress("hycal.nch",       &ev.nch);
     tree->SetBranchAddress("hycal.module_id", ev.module_id);

@@ -35,7 +35,7 @@ static constexpr int kMaxGemHits   = 400;
 struct RawEventData {
     int      event_num    = 0;
     uint8_t  trigger_type = 0;   // main trigger (from event tag: tag - 0x80)
-    uint32_t trigger      = 0;   // FP trigger bits (multi-bit, from TI master d[5])
+    uint32_t trigger_bits      = 0;   // FP trigger bits (multi-bit, from TI master d[5])
     long long  timestamp    = 0;
 
     // HyCal per-channel data

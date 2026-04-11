@@ -72,7 +72,7 @@ void Replay::clearEvent(EventVars &ev)
 {
     ev.event_num = 0;
     ev.trigger_type = 0;
-    ev.trigger = 0;
+    ev.trigger_bits = 0;
     ev.timestamp = 0;
     ev.nch = 0;
     ev.gem_nch = 0;
@@ -100,7 +100,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
     tree->Branch("event_num",    &ev.event_num,    "event_num/I");
     tree->Branch("trigger_type", &ev.trigger_type, "trigger_type/b");
-    tree->Branch("trigger",      &ev.trigger,      "trigger/i");
+    tree->Branch("trigger_bits", &ev.trigger_bits, "trigger_bits/i");
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
     tree->Branch("hycal.nch",       &ev.nch,       "hycal.nch/I");
     tree->Branch("hycal.module_id", ev.module_id,  "hycal.module_id[hycal.nch]/s");
@@ -281,7 +281,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             clearEvent(*ev);
             ev->event_num    = event->info.event_number;
             ev->trigger_type = event->info.trigger_type;
-            ev->trigger      = event->info.trigger_bits;
+            ev->trigger_bits      = event->info.trigger_bits;
             ev->timestamp    = event->info.timestamp;
             ev->ssp_raw      = ssp_raw_snapshot;
 

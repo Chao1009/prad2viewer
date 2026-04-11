@@ -1,0 +1,6938 @@
+[
+  {
+    "name": "W1",
+    "factor": 0.2233638597,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W2",
+    "factor": 0.103733579,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W3",
+    "factor": 0.1143379831,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W4",
+    "factor": 0.1091455215,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W5",
+    "factor": 0.1118748434,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W6",
+    "factor": 0.1035934496,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W7",
+    "factor": 0.09783587054,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W8",
+    "factor": 0.1147194192,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W9",
+    "factor": 0.1095088746,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W10",
+    "factor": 0.1122677181,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W11",
+    "factor": 0.1038745196,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W12",
+    "factor": 0.1035325299,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W13",
+    "factor": 0.1003073417,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W14",
+    "factor": 0.1066530151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W15",
+    "factor": 0.2759936323,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W16",
+    "factor": 0.1799506215,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W17",
+    "factor": 0.1098210795,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W18",
+    "factor": 0.1151209,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W19",
+    "factor": 0.1141041908,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W20",
+    "factor": 0.1079997581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W21",
+    "factor": 0.1216509494,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W22",
+    "factor": 0.1009648198,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W23",
+    "factor": 0.1084556351,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W24",
+    "factor": 0.1117418317,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W25",
+    "factor": 0.1018520782,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W26",
+    "factor": 0.1173488547,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W27",
+    "factor": 0.1020324871,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W28",
+    "factor": 0.1070851841,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W29",
+    "factor": 0.1111022229,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W30",
+    "factor": 0.1057789136,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W31",
+    "factor": 0.1620650983,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W32",
+    "factor": 0.1053789638,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W33",
+    "factor": 0.1064010895,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W34",
+    "factor": 0.1073205493,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W35",
+    "factor": 0.1136937273,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W36",
+    "factor": 0.1181993977,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W37",
+    "factor": 0.1144976986,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W38",
+    "factor": 0.09867187654,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W39",
+    "factor": 0.09962739355,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W40",
+    "factor": 0.1036363938,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W41",
+    "factor": 0.1058075657,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W42",
+    "factor": 0.1074672547,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W43",
+    "factor": 0.1109749818,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W44",
+    "factor": 0.1021208457,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W45",
+    "factor": 0.09775973785,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W46",
+    "factor": 0.105070271,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W47",
+    "factor": 0.1017438903,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W48",
+    "factor": 0.1065112455,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W49",
+    "factor": 0.1548265633,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W50",
+    "factor": 0.123470814,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W51",
+    "factor": 0.1061580141,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W52",
+    "factor": 0.1156545353,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W53",
+    "factor": 0.1108455744,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W54",
+    "factor": 0.1107846656,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W55",
+    "factor": 0.09940318329,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W56",
+    "factor": 0.1062098792,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W57",
+    "factor": 0.11377548,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W58",
+    "factor": 0.1194463423,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W59",
+    "factor": 0.1121624471,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W60",
+    "factor": 0.1080286924,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W61",
+    "factor": 0.1080114233,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W62",
+    "factor": 0.1066548351,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W63",
+    "factor": 0.11697384,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W64",
+    "factor": 0.1090393632,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W65",
+    "factor": 0.1055738785,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W66",
+    "factor": 0.2269652925,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W67",
+    "factor": 0.1864711455,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W68",
+    "factor": 0.1026533847,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W69",
+    "factor": 0.1001803246,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W70",
+    "factor": 0.1849440729,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W71",
+    "factor": 0.1079997581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W72",
+    "factor": 0.105833545,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W73",
+    "factor": 0.1076551418,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W74",
+    "factor": 0.1098374845,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W75",
+    "factor": 0.1047958786,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W76",
+    "factor": 0.1181580577,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W77",
+    "factor": 0.110598426,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W78",
+    "factor": 0.1102404565,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W79",
+    "factor": 0.1145459627,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W80",
+    "factor": 0.1214346779,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W81",
+    "factor": 0.1173015024,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W82",
+    "factor": 0.1113436957,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W83",
+    "factor": 0.1093378935,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W84",
+    "factor": 0.1119911124,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W85",
+    "factor": 0.107658387,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W86",
+    "factor": 0.1165370774,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W87",
+    "factor": 0.1182704135,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W88",
+    "factor": 0.121306814,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W89",
+    "factor": 0.1021650824,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W90",
+    "factor": 0.1085865935,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W91",
+    "factor": 0.1076746159,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W92",
+    "factor": 0.1142387132,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W93",
+    "factor": 0.1167204359,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W94",
+    "factor": 0.1311798844,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W95",
+    "factor": 0.1058698478,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W96",
+    "factor": 0.1127517747,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W97",
+    "factor": 0.1159414913,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W98",
+    "factor": 0.105082637,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W99",
+    "factor": 0.1173753005,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W100",
+    "factor": 0.1089153771,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W101",
+    "factor": 0.112231934,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W102",
+    "factor": 0.1070567529,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W103",
+    "factor": 0.1006708707,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W104",
+    "factor": 0.1062640534,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W105",
+    "factor": 0.116115428,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W106",
+    "factor": 0.1015744033,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W107",
+    "factor": 0.09838336455,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W108",
+    "factor": 0.1022407073,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W109",
+    "factor": 0.1098683777,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W110",
+    "factor": 0.1148242729,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W111",
+    "factor": 0.1098398974,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W112",
+    "factor": 0.1072818638,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W113",
+    "factor": 0.1116799342,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W114",
+    "factor": 0.1051042845,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W115",
+    "factor": 0.1100560405,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W116",
+    "factor": 0.109733348,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W117",
+    "factor": 0.1188930581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W118",
+    "factor": 0.1108205151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W119",
+    "factor": 0.1105465865,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W120",
+    "factor": 0.109305864,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W121",
+    "factor": 0.1061350292,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W122",
+    "factor": 0.1007999484,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W123",
+    "factor": 0.1089357845,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W124",
+    "factor": 0.1152487991,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W125",
+    "factor": 0.1121564088,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W126",
+    "factor": 0.1111718851,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W127",
+    "factor": 0.1145354671,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W128",
+    "factor": 0.1010926089,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W129",
+    "factor": 0.1079862296,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W130",
+    "factor": 0.1046721459,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W131",
+    "factor": 0.1074557068,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W132",
+    "factor": 0.1110795152,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W133",
+    "factor": 0.1058223454,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W134",
+    "factor": 0.1109705484,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W135",
+    "factor": 0.1078585758,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W136",
+    "factor": 0.1162152865,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W137",
+    "factor": 0.1116839256,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W138",
+    "factor": 0.1161057212,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W139",
+    "factor": 0.1205400193,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W140",
+    "factor": 0.1037507989,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W141",
+    "factor": 0.1036643266,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W142",
+    "factor": 0.1097579179,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W143",
+    "factor": 0.1035333874,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W144",
+    "factor": 0.1126481323,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W145",
+    "factor": 0.1120237311,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W146",
+    "factor": 0.109021294,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W147",
+    "factor": 0.1161019468,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W148",
+    "factor": 0.1042487626,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W149",
+    "factor": 0.1116275747,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W150",
+    "factor": 0.109262869,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W151",
+    "factor": 0.1343753695,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W152",
+    "factor": 0.1066061712,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W153",
+    "factor": 0.1170198325,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W154",
+    "factor": 0.111953499,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W155",
+    "factor": 0.1013939642,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W156",
+    "factor": 0.1139325884,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W157",
+    "factor": 0.1185772626,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W158",
+    "factor": 0.1464163143,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W159",
+    "factor": 0.1034100498,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W160",
+    "factor": 0.1069203102,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W161",
+    "factor": 0.1041133086,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W162",
+    "factor": 0.1128515325,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W163",
+    "factor": 0.107446932,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W164",
+    "factor": 0.1134254953,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W165",
+    "factor": 0.1050402514,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W166",
+    "factor": 0.1177257273,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W167",
+    "factor": 0.1259845694,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W168",
+    "factor": 0.1137708201,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W169",
+    "factor": 0.1027006154,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W170",
+    "factor": 0.1073371374,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W171",
+    "factor": 0.1055952828,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W172",
+    "factor": 0.1067910569,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W173",
+    "factor": 0.1084476371,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W174",
+    "factor": 0.1091383744,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W175",
+    "factor": 0.158482624,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W176",
+    "factor": 0.1947981112,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W177",
+    "factor": 0.1090674298,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W178",
+    "factor": 0.1038857423,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W179",
+    "factor": 0.105902138,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W180",
+    "factor": 0.1072961373,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W181",
+    "factor": 0.1189134168,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W182",
+    "factor": 0.1176775165,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W183",
+    "factor": 0.1146604903,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W184",
+    "factor": 0.1152620829,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W185",
+    "factor": 0.1130464666,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W186",
+    "factor": 0.111600666,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W187",
+    "factor": 0.1134780102,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W188",
+    "factor": 0.1065661819,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W189",
+    "factor": 0.1078306627,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W190",
+    "factor": 0.1051768022,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W191",
+    "factor": 0.1114593597,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W192",
+    "factor": 0.1135579054,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W193",
+    "factor": 0.108367722,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W194",
+    "factor": 0.1121866067,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W195",
+    "factor": 0.1085644308,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W196",
+    "factor": 0.1099659985,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W197",
+    "factor": 0.1062130379,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W198",
+    "factor": 0.1122536033,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W199",
+    "factor": 0.1082888627,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W200",
+    "factor": 0.1176343266,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W201",
+    "factor": 0.1146862643,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W202",
+    "factor": 0.117233844,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W203",
+    "factor": 0.1144562869,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W204",
+    "factor": 0.1139455705,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W205",
+    "factor": 0.1166578007,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W206",
+    "factor": 0.1089068367,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W207",
+    "factor": 0.1071007818,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W208",
+    "factor": 0.1089951519,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W209",
+    "factor": 0.1069340303,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W210",
+    "factor": 0.1166855697,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W211",
+    "factor": 0.1119499897,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W212",
+    "factor": 0.1149790048,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W213",
+    "factor": 0.09800270487,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W214",
+    "factor": 0.1045299081,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W215",
+    "factor": 0.1184890279,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W216",
+    "factor": 0.1075888899,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W217",
+    "factor": 0.1013808066,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W218",
+    "factor": 0.1062243203,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W219",
+    "factor": 0.1114201162,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W220",
+    "factor": 0.103060909,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W221",
+    "factor": 0.1068764295,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W222",
+    "factor": 0.1112347052,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W223",
+    "factor": 0.1146173842,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W224",
+    "factor": 0.1126212368,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W225",
+    "factor": 0.1321464817,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W226",
+    "factor": 0.111429552,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W227",
+    "factor": 0.1150260879,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W228",
+    "factor": 0.1093603731,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W229",
+    "factor": 0.1175458311,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W230",
+    "factor": 0.1143803559,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W231",
+    "factor": 0.1125624159,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W232",
+    "factor": 0.1103806366,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W233",
+    "factor": 0.1171898804,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W234",
+    "factor": 0.1024816968,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W235",
+    "factor": 0.1074192315,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W236",
+    "factor": 0.1090060825,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W237",
+    "factor": 0.1037568272,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W238",
+    "factor": 0.109832659,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W239",
+    "factor": 0.1098905929,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W240",
+    "factor": 0.1030099508,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W241",
+    "factor": 0.1050667384,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W242",
+    "factor": 0.1137775512,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W243",
+    "factor": 0.1053958457,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W244",
+    "factor": 0.1042053095,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W245",
+    "factor": 0.1047243237,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W246",
+    "factor": 0.1055043742,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W247",
+    "factor": 0.1080412977,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W248",
+    "factor": 0.1208371598,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W249",
+    "factor": 0.1032921267,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W250",
+    "factor": 0.1059286126,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W251",
+    "factor": 0.1325676227,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W252",
+    "factor": 0.1006554684,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W253",
+    "factor": 0.1167411475,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W254",
+    "factor": 0.1103455581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W255",
+    "factor": 0.1034040617,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W256",
+    "factor": 0.1082982447,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W257",
+    "factor": 0.1121604343,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W258",
+    "factor": 0.1173488547,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W259",
+    "factor": 0.119551443,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W260",
+    "factor": 0.1177318257,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W261",
+    "factor": 0.1065130606,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W262",
+    "factor": 0.1064087885,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W263",
+    "factor": 0.1114981335,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W264",
+    "factor": 0.1088859659,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W265",
+    "factor": 0.1077739506,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W266",
+    "factor": 0.102300953,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W267",
+    "factor": 0.1158909698,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W268",
+    "factor": 0.1268333765,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W269",
+    "factor": 0.1108716284,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W270",
+    "factor": 0.1045902572,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W271",
+    "factor": 0.1089429052,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W272",
+    "factor": 0.105293305,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W273",
+    "factor": 0.113333968,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W274",
+    "factor": 0.1083860451,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W275",
+    "factor": 0.1009281351,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W276",
+    "factor": 0.1126121054,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W277",
+    "factor": 0.1127070428,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W278",
+    "factor": 0.1088807494,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W279",
+    "factor": 0.1036849636,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W280",
+    "factor": 0.1046274635,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W281",
+    "factor": 0.1131856788,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W282",
+    "factor": 0.1184272856,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W283",
+    "factor": 0.1191503153,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W284",
+    "factor": 0.1092036867,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W285",
+    "factor": 0.1225165887,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W286",
+    "factor": 0.1056881354,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W287",
+    "factor": 0.1075551005,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W288",
+    "factor": 0.1181876631,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W289",
+    "factor": 0.1109375555,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W290",
+    "factor": 0.1131774804,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W291",
+    "factor": 0.1658198798,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W292",
+    "factor": 0.1224955779,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W293",
+    "factor": 0.1106821563,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W294",
+    "factor": 0.1696571568,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W295",
+    "factor": 0.1143045255,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W296",
+    "factor": 0.1149087165,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W297",
+    "factor": 0.09766807699,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W298",
+    "factor": 0.1120172058,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W299",
+    "factor": 0.1006801954,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W300",
+    "factor": 0.1200658922,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W301",
+    "factor": 0.1052130986,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W302",
+    "factor": 0.114776301,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W303",
+    "factor": 0.1100405389,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W304",
+    "factor": 0.1058456432,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W305",
+    "factor": 0.16496859,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W306",
+    "factor": 0.1134455688,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W307",
+    "factor": 0.1074940556,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W308",
+    "factor": 0.1081235376,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W309",
+    "factor": 0.1033476366,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W310",
+    "factor": 0.1012941339,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W311",
+    "factor": 0.1110652042,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W312",
+    "factor": 0.1227150458,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W313",
+    "factor": 0.1006741139,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W314",
+    "factor": 0.1052015873,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W315",
+    "factor": 0.1151102987,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W316",
+    "factor": 0.1070283368,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W317",
+    "factor": 0.09516051676,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W318",
+    "factor": 0.09953933197,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W319",
+    "factor": 0.09786842569,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W320",
+    "factor": 0.1003826587,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W321",
+    "factor": 0.1066521051,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W322",
+    "factor": 0.136948031,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W323",
+    "factor": 0.1086951796,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W324",
+    "factor": 0.1103718649,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W325",
+    "factor": 0.1002200833,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W326",
+    "factor": 0.1015772922,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W327",
+    "factor": 0.118410458,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W328",
+    "factor": 0.1072514876,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W329",
+    "factor": 0.1077465456,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W330",
+    "factor": 0.09815392105,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W331",
+    "factor": 0.1079139796,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W332",
+    "factor": 0.1102589321,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W333",
+    "factor": 0.1198770541,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W334",
+    "factor": 0.1146436646,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W335",
+    "factor": 0.1127965421,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W336",
+    "factor": 0.1072883094,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W337",
+    "factor": 0.09873422721,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W338",
+    "factor": 0.1065689075,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W339",
+    "factor": 0.1008792637,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W340",
+    "factor": 0.1005409101,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W341",
+    "factor": 0.1081511347,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W342",
+    "factor": 0.1430083231,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W343",
+    "factor": 0.1148137262,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W344",
+    "factor": 0.1053372266,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W345",
+    "factor": 0.1163136934,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W346",
+    "factor": 0.1232377009,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W347",
+    "factor": 0.09922367397,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W348",
+    "factor": 0.09941780931,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W349",
+    "factor": 0.1069701767,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W350",
+    "factor": 0.1037043182,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W351",
+    "factor": 0.1107199008,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W352",
+    "factor": 0.1039310895,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W353",
+    "factor": 0.09790598676,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W354",
+    "factor": 0.1128382892,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W355",
+    "factor": 0.09843411018,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W356",
+    "factor": 0.09982351203,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W357",
+    "factor": 0.1023893581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W358",
+    "factor": 0.1096779854,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W359",
+    "factor": 0.1083550405,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W360",
+    "factor": 0.1133360232,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W361",
+    "factor": 0.1188291997,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W362",
+    "factor": 0.1075912051,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W363",
+    "factor": 0.1020291559,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W364",
+    "factor": 0.1063345626,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W365",
+    "factor": 0.1152679288,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W366",
+    "factor": 0.1533149764,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W367",
+    "factor": 0.2298766022,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W368",
+    "factor": 0.1014071253,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W369",
+    "factor": 0.1006753301,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W370",
+    "factor": 0.100275155,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W371",
+    "factor": 0.1106072337,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W372",
+    "factor": 0.1053745221,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W373",
+    "factor": 0.1009256904,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W374",
+    "factor": 0.102724247,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W375",
+    "factor": 0.1026715128,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W376",
+    "factor": 0.1095242268,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W377",
+    "factor": 0.1025228831,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W378",
+    "factor": 0.1091221776,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W379",
+    "factor": 0.1176083173,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W380",
+    "factor": 0.1104816114,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W381",
+    "factor": 0.1027622493,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W382",
+    "factor": 0.1065598227,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W383",
+    "factor": 0.1059348966,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W384",
+    "factor": 0.1044399512,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W385",
+    "factor": 0.1054314042,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W386",
+    "factor": 0.1008593214,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W387",
+    "factor": 0.1028442609,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W388",
+    "factor": 0.09568352483,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W389",
+    "factor": 0.1044107267,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W390",
+    "factor": 0.1125072005,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W391",
+    "factor": 0.1138532022,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W392",
+    "factor": 0.1085375649,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W393",
+    "factor": 0.1032686596,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W394",
+    "factor": 0.1086257539,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W395",
+    "factor": 0.1067203968,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W396",
+    "factor": 0.1131308743,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W397",
+    "factor": 0.1096909786,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W398",
+    "factor": 0.1012670534,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W399",
+    "factor": 0.1144720093,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W400",
+    "factor": 0.1145391403,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W401",
+    "factor": 0.1023520501,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W402",
+    "factor": 0.1020533127,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W403",
+    "factor": 0.1020820658,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W404",
+    "factor": 0.1135537791,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W405",
+    "factor": 0.1070127602,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W406",
+    "factor": 0.1018844549,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W407",
+    "factor": 0.1085295548,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W408",
+    "factor": 0.1065071615,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W409",
+    "factor": 0.115053615,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W410",
+    "factor": 0.1014663923,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W411",
+    "factor": 0.1022306733,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W412",
+    "factor": 0.1132395106,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W413",
+    "factor": 0.1097049376,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W414",
+    "factor": 0.1125644431,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W415",
+    "factor": 0.1090103603,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W416",
+    "factor": 0.09887910645,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W417",
+    "factor": 0.1282241974,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W418",
+    "factor": 0.1014989363,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W419",
+    "factor": 0.1060252001,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W420",
+    "factor": 0.1038283593,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W421",
+    "factor": 0.09886698436,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W422",
+    "factor": 0.1025864085,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W423",
+    "factor": 0.1021504717,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W424",
+    "factor": 0.1043841336,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W425",
+    "factor": 0.09997120829,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W426",
+    "factor": 0.107598151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W427",
+    "factor": 0.1128566269,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W428",
+    "factor": 0.100256255,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W429",
+    "factor": 0.1158120509,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W430",
+    "factor": 0.1162590624,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W431",
+    "factor": 0.1029637074,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W432",
+    "factor": 0.1136854551,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W433",
+    "factor": 0.1017401638,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W434",
+    "factor": 0.1092027327,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W435",
+    "factor": 0.106160268,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W436",
+    "factor": 0.1118743427,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W437",
+    "factor": 0.1077790615,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W438",
+    "factor": 0.1100652467,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W439",
+    "factor": 0.1065893539,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W440",
+    "factor": 0.1085455761,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W441",
+    "factor": 0.1007617589,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W442",
+    "factor": 0.1079647776,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W443",
+    "factor": 0.1046765286,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W444",
+    "factor": 0.100579337,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W445",
+    "factor": 0.1095299849,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W446",
+    "factor": 0.1013943755,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W447",
+    "factor": 0.1001430042,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W448",
+    "factor": 0.09734179039,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W449",
+    "factor": 0.1081436494,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W450",
+    "factor": 0.09981753355,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W451",
+    "factor": 0.1170691504,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W452",
+    "factor": 0.1015830706,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W453",
+    "factor": 0.1145370413,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W454",
+    "factor": 0.1033151774,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W455",
+    "factor": 0.1039496717,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W456",
+    "factor": 0.1194549034,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W457",
+    "factor": 0.1107881022,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W458",
+    "factor": 0.1069921511,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W459",
+    "factor": 0.1085144802,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W460",
+    "factor": 0.1085658452,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W461",
+    "factor": 0.1257380825,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W462",
+    "factor": 0.1126212368,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W463",
+    "factor": 0.1070535439,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W464",
+    "factor": 0.1038844473,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W465",
+    "factor": 0.09491268033,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W466",
+    "factor": 0.09710661141,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W467",
+    "factor": 0.1132313044,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W468",
+    "factor": 0.1261944303,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W469",
+    "factor": 0.1516088734,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W470",
+    "factor": 0.1081067056,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W471",
+    "factor": 0.1033617371,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W472",
+    "factor": 0.09716133445,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W473",
+    "factor": 0.1060040706,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W474",
+    "factor": 0.09554566127,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W475",
+    "factor": 0.1192145194,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W476",
+    "factor": 0.1025939864,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W477",
+    "factor": 0.1306117331,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W478",
+    "factor": 0.1031514841,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W479",
+    "factor": 0.1003971712,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W480",
+    "factor": 0.1085257857,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W481",
+    "factor": 0.112728896,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W482",
+    "factor": 0.1117053838,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W483",
+    "factor": 0.1130296002,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W484",
+    "factor": 0.1084339962,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W485",
+    "factor": 0.1050883793,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W486",
+    "factor": 0.1132641365,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W487",
+    "factor": 0.1010027554,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W488",
+    "factor": 0.09826310142,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W489",
+    "factor": 0.120571412,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W490",
+    "factor": 0.1128387985,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W491",
+    "factor": 0.1065457443,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W492",
+    "factor": 0.1083959139,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W493",
+    "factor": 0.1255026381,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W494",
+    "factor": 0.1046082004,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W495",
+    "factor": 0.1031893773,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W496",
+    "factor": 0.1065566434,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W497",
+    "factor": 0.1171344235,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W498",
+    "factor": 0.1042066125,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W499",
+    "factor": 0.1179145167,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W500",
+    "factor": 0.1043688814,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W501",
+    "factor": 0.1105270371,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W502",
+    "factor": 0.0997613708,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W503",
+    "factor": 0.1241323151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W504",
+    "factor": 0.1181290252,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W505",
+    "factor": 0.1147657631,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W506",
+    "factor": 0.1136632295,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W507",
+    "factor": 0.1122238732,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W508",
+    "factor": 0.1127609288,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W509",
+    "factor": 0.1045491423,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W510",
+    "factor": 0.1094580513,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W511",
+    "factor": 0.1061399859,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W512",
+    "factor": 0.1239231082,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W513",
+    "factor": 0.1047519683,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W514",
+    "factor": 0.1183695307,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W515",
+    "factor": 0.1071907867,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W516",
+    "factor": 0.1184502912,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W517",
+    "factor": 0.113346814,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W518",
+    "factor": 0.1131329221,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W519",
+    "factor": 0.1138153642,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W520",
+    "factor": 0.1126014539,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W521",
+    "factor": 0.1032887126,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W522",
+    "factor": 0.1123292595,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W523",
+    "factor": 0.1181485647,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W524",
+    "factor": 0.1067750932,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W525",
+    "factor": 0.1152833434,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W526",
+    "factor": 0.09426278958,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W527",
+    "factor": 0.1079032669,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W528",
+    "factor": 0.1129902648,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W529",
+    "factor": 0.1138646104,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W530",
+    "factor": 0.105965879,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W531",
+    "factor": 0.1128433824,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W532",
+    "factor": 0.1091116998,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W533",
+    "factor": 0.1300450996,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W534",
+    "factor": 0.1095304648,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W535",
+    "factor": 0.11293769,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W536",
+    "factor": 0.09816047274,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W537",
+    "factor": 0.1063526569,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W538",
+    "factor": 0.09002423452,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W539",
+    "factor": 0.09947952313,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W540",
+    "factor": 0.111312463,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W541",
+    "factor": 0.1060234015,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W542",
+    "factor": 0.1015191323,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W543",
+    "factor": 0.09701353533,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W544",
+    "factor": 0.1046029481,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W545",
+    "factor": 0.1012600804,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W546",
+    "factor": 0.112951467,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W547",
+    "factor": 0.1125234049,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W548",
+    "factor": 0.1074922068,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W549",
+    "factor": 0.1006810063,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W550",
+    "factor": 0.1109774449,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W551",
+    "factor": 0.1146163333,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W552",
+    "factor": 0.1068887673,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W553",
+    "factor": 0.1064831182,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W554",
+    "factor": 0.1003544519,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W555",
+    "factor": 0.100022405,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W556",
+    "factor": 0.102456497,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W557",
+    "factor": 0.1075750013,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W558",
+    "factor": 0.1009265053,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W559",
+    "factor": 0.1079535886,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W560",
+    "factor": 0.1138262465,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W561",
+    "factor": 0,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W562",
+    "factor": 0,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W563",
+    "factor": 0.1167962326,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W564",
+    "factor": 0.1161057212,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W565",
+    "factor": 0.1045758196,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W566",
+    "factor": 0.1121206957,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W567",
+    "factor": 0.1210483758,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W568",
+    "factor": 0.1185266661,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W569",
+    "factor": 0.1392245748,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W570",
+    "factor": 0.1393572842,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W571",
+    "factor": 0.1050481961,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W572",
+    "factor": 0.1096178721,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W573",
+    "factor": 0.1103811239,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W574",
+    "factor": 0.09930565486,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W575",
+    "factor": 0.1136250011,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W576",
+    "factor": 0.1017256743,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W577",
+    "factor": 0.1215409447,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W578",
+    "factor": 0.09943243963,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W579",
+    "factor": 0.1078953501,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W580",
+    "factor": 0.1032524522,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W581",
+    "factor": 0.1006704653,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W582",
+    "factor": 0.1083987339,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W583",
+    "factor": 0.1094872929,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W584",
+    "factor": 0.1085936686,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W585",
+    "factor": 0.1117488244,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W586",
+    "factor": 0.1018006499,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W587",
+    "factor": 0.1180743491,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W588",
+    "factor": 0.1098703091,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W589",
+    "factor": 0.1150419673,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W590",
+    "factor": 0.1065539184,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W591",
+    "factor": 0.1120623963,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W592",
+    "factor": 0.1068837404,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W593",
+    "factor": 0.1182609025,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W594",
+    "factor": 0.1105011448,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W595",
+    "factor": 0,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W596",
+    "factor": 0,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W597",
+    "factor": 0.1168038723,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W598",
+    "factor": 0.09682079246,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W599",
+    "factor": 0.1050733622,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W600",
+    "factor": 0.1098949404,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W601",
+    "factor": 0.1099108843,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W602",
+    "factor": 0.103001887,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W603",
+    "factor": 0.09925834167,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W604",
+    "factor": 0.1085540599,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W605",
+    "factor": 0.1229613016,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W606",
+    "factor": 0.1132615708,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W607",
+    "factor": 0.1016797495,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W608",
+    "factor": 0.1145296953,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W609",
+    "factor": 0.09856023213,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W610",
+    "factor": 0.1043492779,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W611",
+    "factor": 0.1014902833,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W612",
+    "factor": 0.1024943013,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W613",
+    "factor": 0.1070068056,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W614",
+    "factor": 0.1079946262,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W615",
+    "factor": 0.1020037619,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W616",
+    "factor": 0.1094781832,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W617",
+    "factor": 0.102985339,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W618",
+    "factor": 0.1169010923,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W619",
+    "factor": 0.1042622404,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W620",
+    "factor": 0.1115225052,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W621",
+    "factor": 0.1061710883,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W622",
+    "factor": 0.1565033398,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W623",
+    "factor": 0.1133129068,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W624",
+    "factor": 0.1092771969,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W625",
+    "factor": 0.1101695289,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W626",
+    "factor": 0.1014738056,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W627",
+    "factor": 0.1067814781,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W628",
+    "factor": 0.1110015895,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W629",
+    "factor": 0.1083869849,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W630",
+    "factor": 0.1124439467,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W631",
+    "factor": 0.1190651953,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W632",
+    "factor": 0.1073537305,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W633",
+    "factor": 0.1051051682,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W634",
+    "factor": 0.1088271911,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W635",
+    "factor": 0.1073813972,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W636",
+    "factor": 0.1082490074,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W637",
+    "factor": 0.1110671779,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W638",
+    "factor": 0.110001804,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W639",
+    "factor": 0.1062008556,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W640",
+    "factor": 0.1056474924,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W641",
+    "factor": 0.1035063822,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W642",
+    "factor": 0.1086111244,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W643",
+    "factor": 0.1054216232,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W644",
+    "factor": 0.1075657442,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W645",
+    "factor": 0.1135068626,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W646",
+    "factor": 0.1015723398,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W647",
+    "factor": 0.121072411,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W648",
+    "factor": 0.09880798052,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W649",
+    "factor": 0.1045994469,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W650",
+    "factor": 0.1133432169,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W651",
+    "factor": 0.1031625512,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W652",
+    "factor": 0.1045089334,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W653",
+    "factor": 0.1073117966,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W654",
+    "factor": 0.09835356138,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W655",
+    "factor": 0.1064205656,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W656",
+    "factor": 0.1117887997,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W657",
+    "factor": 0.1172085609,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W658",
+    "factor": 0.1100899655,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W659",
+    "factor": 0.1019343054,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W660",
+    "factor": 0.1047388024,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W661",
+    "factor": 0.1052441032,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W662",
+    "factor": 0.1147420598,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W663",
+    "factor": 0.1062496016,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W664",
+    "factor": 0.115306739,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W665",
+    "factor": 0.1144128106,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W666",
+    "factor": 0.1079829646,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W667",
+    "factor": 0.1087599624,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W668",
+    "factor": 0.1064640726,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W669",
+    "factor": 0.1085206037,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W670",
+    "factor": 0.1131795299,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W671",
+    "factor": 0.1107194104,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W672",
+    "factor": 0.1046563713,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W673",
+    "factor": 0.1095165501,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W674",
+    "factor": 0.1062717326,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W675",
+    "factor": 0.1036402605,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W676",
+    "factor": 0.1032870057,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W677",
+    "factor": 0.1091374215,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W678",
+    "factor": 0.1017351955,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W679",
+    "factor": 0.09864579059,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W680",
+    "factor": 0.1041588548,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W681",
+    "factor": 0.1233483654,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W682",
+    "factor": 0.1034425687,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W683",
+    "factor": 0.1011371865,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W684",
+    "factor": 0.1078944188,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W685",
+    "factor": 0.1036058997,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W686",
+    "factor": 0.1016066036,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W687",
+    "factor": 0.1099640637,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W688",
+    "factor": 0.1019933582,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W689",
+    "factor": 0.1083052823,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W690",
+    "factor": 0.1132513092,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W691",
+    "factor": 0.1117628125,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W692",
+    "factor": 0.1141974886,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W693",
+    "factor": 0.1144651957,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W694",
+    "factor": 0.1100371485,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W695",
+    "factor": 0.1119254308,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W696",
+    "factor": 0.1133159884,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W697",
+    "factor": 0.1222015837,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W698",
+    "factor": 0.1120995803,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W699",
+    "factor": 0.1129769888,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W700",
+    "factor": 0.1052130986,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W701",
+    "factor": 0.1157793339,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W702",
+    "factor": 0.1126603156,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W703",
+    "factor": 0.1159377275,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W704",
+    "factor": 0.1056541896,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W705",
+    "factor": 0.1064201125,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W706",
+    "factor": 0.114633151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W707",
+    "factor": 0.098554404,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W708",
+    "factor": 0.1040392186,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W709",
+    "factor": 0.107812062,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W710",
+    "factor": 0.1154297218,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W711",
+    "factor": 0.104985554,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W712",
+    "factor": 0.1143876827,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W713",
+    "factor": 0.1074982155,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W714",
+    "factor": 0.1140526558,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W715",
+    "factor": 0.1035089535,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W716",
+    "factor": 0.1094369687,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W717",
+    "factor": 0.1052853232,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W718",
+    "factor": 0.1047998323,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W719",
+    "factor": 0.1278877044,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W720",
+    "factor": 0.1059798045,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W721",
+    "factor": 0.1012235908,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W722",
+    "factor": 0.1061927356,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W723",
+    "factor": 0.1071641369,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W724",
+    "factor": 0.1076463344,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W725",
+    "factor": 0.09914969224,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W726",
+    "factor": 0.1093268962,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W727",
+    "factor": 0.166105231,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W728",
+    "factor": 0.1154201293,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W729",
+    "factor": 0.1166708668,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W730",
+    "factor": 0.114068788,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W731",
+    "factor": 0.104489714,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W732",
+    "factor": 0.1059263685,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W733",
+    "factor": 0.1103884348,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W734",
+    "factor": 0.1218121754,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W735",
+    "factor": 0.1041193791,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W736",
+    "factor": 0.1076078769,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W737",
+    "factor": 0.1097902129,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W738",
+    "factor": 0.1030774813,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W739",
+    "factor": 0.1054571991,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W740",
+    "factor": 0.1143756462,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W741",
+    "factor": 0.1142194018,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W742",
+    "factor": 0.1054754411,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W743",
+    "factor": 0.1171130234,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W744",
+    "factor": 0.1077818495,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W745",
+    "factor": 0.1035582619,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W746",
+    "factor": 0.109469075,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W747",
+    "factor": 0.1566062793,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W748",
+    "factor": 0.1106640284,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W749",
+    "factor": 0.09902323481,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W750",
+    "factor": 0.1059066242,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W751",
+    "factor": 0.111170402,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W752",
+    "factor": 0.107010928,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W753",
+    "factor": 0.112135783,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W754",
+    "factor": 0.1072114725,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W755",
+    "factor": 0.1047510905,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W756",
+    "factor": 0.1044469326,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W757",
+    "factor": 0.1065589143,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W758",
+    "factor": 0.1112743134,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W759",
+    "factor": 0.1089728222,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W760",
+    "factor": 0.104491461,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W761",
+    "factor": 0.1018778118,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W762",
+    "factor": 0.1217552233,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W763",
+    "factor": 0.09615384615,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W764",
+    "factor": 0.1040253655,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W765",
+    "factor": 0.08333333333,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W766",
+    "factor": 0.128251825,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W767",
+    "factor": 0.1082949608,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W768",
+    "factor": 0.1139320691,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W769",
+    "factor": 0.1044779238,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W770",
+    "factor": 0.1069244258,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W771",
+    "factor": 0.1031702143,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W772",
+    "factor": 0.1099877694,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W773",
+    "factor": 0.1097786423,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W774",
+    "factor": 0.1083235842,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W775",
+    "factor": 0.1113863592,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W776",
+    "factor": 0.1079349454,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W777",
+    "factor": 0.1152291447,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W778",
+    "factor": 0.09437452341,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W779",
+    "factor": 0.1014890473,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W780",
+    "factor": 0.1092666894,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W781",
+    "factor": 0.1104303692,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W782",
+    "factor": 0.09794472783,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W783",
+    "factor": 0.1004508233,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W784",
+    "factor": 0.1226073182,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W785",
+    "factor": 0.1074146161,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W786",
+    "factor": 0.1049564641,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W787",
+    "factor": 0.1057668307,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W788",
+    "factor": 0.1021104181,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W789",
+    "factor": 0.1039712873,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W790",
+    "factor": 0.1049542609,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W791",
+    "factor": 0.1053754104,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W792",
+    "factor": 0.1030575102,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W793",
+    "factor": 0.1104137867,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W794",
+    "factor": 0.1053110467,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W795",
+    "factor": 0.1101821531,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W796",
+    "factor": 0.1114047245,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W797",
+    "factor": 0.0969428115,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W798",
+    "factor": 0.1077163699,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W799",
+    "factor": 0.1005510196,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W800",
+    "factor": 0.1027267796,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W801",
+    "factor": 0.1036690552,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W802",
+    "factor": 0.1084335259,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W803",
+    "factor": 0.1089467033,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W804",
+    "factor": 0.1076773985,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W805",
+    "factor": 0.09955122309,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W806",
+    "factor": 0.1128663076,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W807",
+    "factor": 0.104728272,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W808",
+    "factor": 0.1041011697,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W809",
+    "factor": 0.1060557853,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W810",
+    "factor": 0.1042957326,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W811",
+    "factor": 0.1173956939,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W812",
+    "factor": 0.09994163409,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W813",
+    "factor": 0.1353319151,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W814",
+    "factor": 0.1035977424,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W815",
+    "factor": 0.09851440281,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W816",
+    "factor": 0.1081375683,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W817",
+    "factor": 0.09768906742,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W818",
+    "factor": 0.1046213335,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W819",
+    "factor": 0.1002840043,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W820",
+    "factor": 0.1150091547,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W821",
+    "factor": 0.1057628036,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W822",
+    "factor": 0.1072620713,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W823",
+    "factor": 0.1267671338,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W824",
+    "factor": 0.1083010596,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W825",
+    "factor": 0.1056765199,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W826",
+    "factor": 0.1109513412,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W827",
+    "factor": 0.1113070115,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W828",
+    "factor": 0.1085201327,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W829",
+    "factor": 0.1030069798,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W830",
+    "factor": 0.107737259,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W831",
+    "factor": 0.1011506903,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W832",
+    "factor": 0.1088077715,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W833",
+    "factor": 0.1064219246,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W834",
+    "factor": 0.1070714252,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W835",
+    "factor": 0.119822471,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W836",
+    "factor": 0.1150737393,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W837",
+    "factor": 0.1089713972,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W838",
+    "factor": 0.1097897307,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W839",
+    "factor": 0.1049824679,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W840",
+    "factor": 0.1121936552,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W841",
+    "factor": 0.1229183773,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W842",
+    "factor": 0.1127878911,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W843",
+    "factor": 0.1209224935,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W844",
+    "factor": 0.1118663332,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W845",
+    "factor": 0.1057069044,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W846",
+    "factor": 0.1010043876,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W847",
+    "factor": 0.1125431603,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W848",
+    "factor": 0.100270731,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W849",
+    "factor": 0.1027326895,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W850",
+    "factor": 0.1027259354,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W851",
+    "factor": 0.1085427485,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W852",
+    "factor": 0.1178889392,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W853",
+    "factor": 0.1132482311,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W854",
+    "factor": 0.1011105988,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W855",
+    "factor": 0.09911785112,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W856",
+    "factor": 0.1006785736,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W857",
+    "factor": 0.1626238381,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W858",
+    "factor": 0.1129672892,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W859",
+    "factor": 0.1130137606,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W860",
+    "factor": 0.1030915081,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W861",
+    "factor": 0.108442933,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W862",
+    "factor": 0.1095376634,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W863",
+    "factor": 0.1046870485,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W864",
+    "factor": 0.1115404178,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W865",
+    "factor": 0.1155556377,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W866",
+    "factor": 0.1053598672,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W867",
+    "factor": 0.1038684776,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W868",
+    "factor": 0.1021475501,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W869",
+    "factor": 0.1223421175,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W870",
+    "factor": 0.1106797062,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W871",
+    "factor": 0.1783764886,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W872",
+    "factor": 0.1026259939,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W873",
+    "factor": 0.1153871006,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W874",
+    "factor": 0.107055836,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W875",
+    "factor": 0.1090997958,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W876",
+    "factor": 0.103779655,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W877",
+    "factor": 0.1174254701,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W878",
+    "factor": 0.1066239034,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W879",
+    "factor": 0.1191986039,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W880",
+    "factor": 0.1086281138,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W881",
+    "factor": 0.1042839862,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W882",
+    "factor": 0.1136627127,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W883",
+    "factor": 0.1050349556,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W884",
+    "factor": 0.1228018469,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W885",
+    "factor": 0.1031272301,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W886",
+    "factor": 0.1060328447,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W887",
+    "factor": 0.1355895433,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W888",
+    "factor": 0.1010378609,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W889",
+    "factor": 0.1109365709,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W890",
+    "factor": 0.1161386231,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W891",
+    "factor": 0.1439072547,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W892",
+    "factor": 0.1048178475,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W893",
+    "factor": 0.1010031634,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W894",
+    "factor": 0.1000572327,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W895",
+    "factor": 0.1060841375,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W896",
+    "factor": 0.103230282,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W897",
+    "factor": 0.1066207202,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W898",
+    "factor": 0.1086026317,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W899",
+    "factor": 0.1378610581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W900",
+    "factor": 0.1809561724,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W901",
+    "factor": 0.1237678906,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W902",
+    "factor": 0.1209927211,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W903",
+    "factor": 0.1086427479,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W904",
+    "factor": 0.1136575453,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W905",
+    "factor": 0.1108210063,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W906",
+    "factor": 0.1040431155,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W907",
+    "factor": 0.1041462714,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W908",
+    "factor": 0.1364971554,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W909",
+    "factor": 0.1013450515,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W910",
+    "factor": 0.1045526402,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W911",
+    "factor": 0.1586948932,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W912",
+    "factor": 0.09962739355,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W913",
+    "factor": 0.1229087083,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W914",
+    "factor": 0.1012900298,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W915",
+    "factor": 0.105702435,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W916",
+    "factor": 0.1045605113,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W917",
+    "factor": 0.1006190081,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W918",
+    "factor": 0.1069468389,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W919",
+    "factor": 0.1020833163,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W920",
+    "factor": 0.09285361442,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W921",
+    "factor": 0.09738160345,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W922",
+    "factor": 0.1096649954,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W923",
+    "factor": 0.09406877556,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W924",
+    "factor": 0.0965113092,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W925",
+    "factor": 0.1054927991,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W926",
+    "factor": 0.1037236801,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W927",
+    "factor": 0.1672330292,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W928",
+    "factor": 0.1049401631,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W929",
+    "factor": 0.107077387,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W930",
+    "factor": 0.1009917389,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W931",
+    "factor": 0.1001041083,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W932",
+    "factor": 0.1060296968,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W933",
+    "factor": 0.1094666783,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W934",
+    "factor": 0.1111106173,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W935",
+    "factor": 0.09689960039,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W936",
+    "factor": 0.1054558646,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W937",
+    "factor": 0.1075671326,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W938",
+    "factor": 0.1245429275,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W939",
+    "factor": 0.1042079156,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W940",
+    "factor": 0.1050945641,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W941",
+    "factor": 0.1189807632,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W942",
+    "factor": 0.1051568941,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W943",
+    "factor": 0.1077279739,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W944",
+    "factor": 0.1036961454,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W945",
+    "factor": 0.1006429069,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W946",
+    "factor": 0.1026765729,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W947",
+    "factor": 0.1115991715,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W948",
+    "factor": 0.1032545845,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W949",
+    "factor": 0.1061674813,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W950",
+    "factor": 0.1076361382,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W951",
+    "factor": 0.09388084643,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W952",
+    "factor": 0.1014639215,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W953",
+    "factor": 0.1034164664,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W954",
+    "factor": 0.09634765316,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W955",
+    "factor": 0.1030728065,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W956",
+    "factor": 0.105000546,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W957",
+    "factor": 0.1082977756,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W958",
+    "factor": 0.1041814257,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W959",
+    "factor": 0.106621175,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W960",
+    "factor": 0.1012391674,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W961",
+    "factor": 0.1055270867,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W962",
+    "factor": 0.1100982076,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W963",
+    "factor": 0.09830444493,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W964",
+    "factor": 0.1040942344,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W965",
+    "factor": 0.1122672139,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W966",
+    "factor": 0.1045460818,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W967",
+    "factor": 0.1097545449,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W968",
+    "factor": 0.1068061127,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W969",
+    "factor": 0.2042149975,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W970",
+    "factor": 0.1108883487,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W971",
+    "factor": 0.1025287696,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W972",
+    "factor": 0.09177814652,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W973",
+    "factor": 0.1133689161,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W974",
+    "factor": 0.1006113143,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W975",
+    "factor": 0.09789755217,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W976",
+    "factor": 0.1033151774,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W977",
+    "factor": 0.1113541105,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W978",
+    "factor": 0.1093192472,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W979",
+    "factor": 0.09815045287,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W980",
+    "factor": 0.109207503,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W981",
+    "factor": 0.1109321406,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W982",
+    "factor": 0.107538445,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W983",
+    "factor": 0.1072275669,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W984",
+    "factor": 0.1154339856,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W985",
+    "factor": 0.09920201896,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W986",
+    "factor": 0.1054692114,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W987",
+    "factor": 0.09710019964,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W988",
+    "factor": 0.09772458086,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W989",
+    "factor": 0.1023574979,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W990",
+    "factor": 0.1039146736,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W991",
+    "factor": 0.09197161388,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W992",
+    "factor": 0.1069903195,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W993",
+    "factor": 0.1198879767,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W994",
+    "factor": 0.1044709383,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W995",
+    "factor": 0.09301045065,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W996",
+    "factor": 0.1194463423,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W997",
+    "factor": 0.09945696497,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W998",
+    "factor": 0.1025603157,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W999",
+    "factor": 0.1060139599,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1000",
+    "factor": 0.1153429145,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1001",
+    "factor": 0.1106978392,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1002",
+    "factor": 0.1079358775,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1003",
+    "factor": 0.116614268,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1004",
+    "factor": 0.09929224488,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1005",
+    "factor": 0.1022586899,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1006",
+    "factor": 0.1036093348,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1007",
+    "factor": 0.1048912907,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1008",
+    "factor": 0.1040175748,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1009",
+    "factor": 0.1014565097,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1010",
+    "factor": 0.1044958285,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1011",
+    "factor": 0.1141073156,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1012",
+    "factor": 0.1015158344,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1013",
+    "factor": 0.1157385974,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1014",
+    "factor": 0.1011347317,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1015",
+    "factor": 0.09886151084,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1016",
+    "factor": 0.0953652489,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1017",
+    "factor": 0.09774444909,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1018",
+    "factor": 0.1054029555,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1019",
+    "factor": 0.1616104155,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1020",
+    "factor": 0.1863377185,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1021",
+    "factor": 0.09866681401,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1022",
+    "factor": 0.1027141179,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1023",
+    "factor": 0.1056640138,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1024",
+    "factor": 0.104416832,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1025",
+    "factor": 0.1103285142,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1026",
+    "factor": 0.1054919088,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1027",
+    "factor": 0.1026820553,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1028",
+    "factor": 0.09851828499,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1029",
+    "factor": 0.09724410215,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1030",
+    "factor": 0.1052219552,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1031",
+    "factor": 0.09796007931,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1032",
+    "factor": 0.1059034838,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1033",
+    "factor": 0.1065230452,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1034",
+    "factor": 0.1044216295,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1035",
+    "factor": 0.09655193722,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1036",
+    "factor": 0.09548180117,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1037",
+    "factor": 0.1032524522,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1038",
+    "factor": 0.1041649306,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1039",
+    "factor": 0.1069436364,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1040",
+    "factor": 0.1059173929,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1041",
+    "factor": 0.1102142123,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1042",
+    "factor": 0.1047752362,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1043",
+    "factor": 0.1057766758,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1044",
+    "factor": 0.1072593101,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1045",
+    "factor": 0.101588024,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1046",
+    "factor": 0.09688082496,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1047",
+    "factor": 0.1229431609,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1048",
+    "factor": 0.1172310953,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1049",
+    "factor": 0.1102774139,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1050",
+    "factor": 0.1001686841,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1051",
+    "factor": 0.105549809,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1052",
+    "factor": 0.09358458924,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1053",
+    "factor": 0.1030137709,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1054",
+    "factor": 0.111553856,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1055",
+    "factor": 0.1016925712,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1056",
+    "factor": 0.1145417642,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1057",
+    "factor": 0.09311195036,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1058",
+    "factor": 0.105833993,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1059",
+    "factor": 0.09567180743,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1060",
+    "factor": 0.1051785722,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1061",
+    "factor": 0.106458179,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1062",
+    "factor": 0.1100245575,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1063",
+    "factor": 0.1012178532,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1064",
+    "factor": 0.1148997385,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1065",
+    "factor": 0.1016537024,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1066",
+    "factor": 0.09755374236,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1067",
+    "factor": 0.1023386427,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1068",
+    "factor": 0.09773566022,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1069",
+    "factor": 0.09713679581,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1070",
+    "factor": 0.09908524502,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1071",
+    "factor": 0.09259396436,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1072",
+    "factor": 0.09903068763,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1073",
+    "factor": 0.1004455766,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1074",
+    "factor": 0.09609286414,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1075",
+    "factor": 0.1024418028,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1076",
+    "factor": 0.09499924001,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1077",
+    "factor": 0.1092561839,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1078",
+    "factor": 0.0926488682,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1079",
+    "factor": 0.1060153086,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1080",
+    "factor": 0.1032345448,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1081",
+    "factor": 0.1056559757,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1082",
+    "factor": 0.1023977456,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1083",
+    "factor": 0.1040206044,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1084",
+    "factor": 0.09418856551,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1085",
+    "factor": 0.09763031695,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1086",
+    "factor": 0.1093135111,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1087",
+    "factor": 0.103498669,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1088",
+    "factor": 0.0983056046,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1089",
+    "factor": 0.097103594,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1090",
+    "factor": 0.1105793473,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1091",
+    "factor": 0.1011130525,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1092",
+    "factor": 0.1053545391,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1093",
+    "factor": 0.103520526,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1094",
+    "factor": 0.1093211593,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1095",
+    "factor": 0.1085168353,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1096",
+    "factor": 0.1068138704,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1097",
+    "factor": 0.09335220293,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1098",
+    "factor": 0.09775973785,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1099",
+    "factor": 0.09662433233,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1100",
+    "factor": 0.1026167265,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1101",
+    "factor": 0.1532999344,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1102",
+    "factor": 0.09628494181,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1103",
+    "factor": 0.1136926932,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1104",
+    "factor": 0.0996107213,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1105",
+    "factor": 0.1023080701,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1106",
+    "factor": 0.1038223226,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1107",
+    "factor": 0.1066420963,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1108",
+    "factor": 0.1086673042,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1109",
+    "factor": 0.1004488053,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1110",
+    "factor": 0.1423755069,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1111",
+    "factor": 0.1037628562,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1112",
+    "factor": 0.0979048365,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1113",
+    "factor": 0.1022821186,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1114",
+    "factor": 0.1257709761,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1115",
+    "factor": 0.1007889761,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1116",
+    "factor": 0.09202815325,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1117",
+    "factor": 0.1012067898,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1118",
+    "factor": 0.09185604321,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1119",
+    "factor": 0.2414595748,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1120",
+    "factor": 0.1002261101,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1121",
+    "factor": 0.09940357853,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1122",
+    "factor": 0.09790215267,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1123",
+    "factor": 0.1042009662,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1124",
+    "factor": 0,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1125",
+    "factor": 0.1067504729,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1126",
+    "factor": 0.1131114238,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1127",
+    "factor": 0.1172761901,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1128",
+    "factor": 0.103434865,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1129",
+    "factor": 0.1033117618,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1130",
+    "factor": 0.1079638451,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1131",
+    "factor": 0.1165990392,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1132",
+    "factor": 0.1068714038,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1133",
+    "factor": 0.1048842497,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1134",
+    "factor": 0.09649827075,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1135",
+    "factor": 0.1027525349,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1136",
+    "factor": 0.1181067023,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1137",
+    "factor": 0.09866097327,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1138",
+    "factor": 0.2654773282,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1139",
+    "factor": 0.1153030163,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1140",
+    "factor": 0.1158796891,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1141",
+    "factor": 0.1019077124,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1142",
+    "factor": 0.1216036111,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1143",
+    "factor": 0.1082541635,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1144",
+    "factor": 0.09930052709,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1145",
+    "factor": 0.1037917191,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1146",
+    "factor": 0.0997625651,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1147",
+    "factor": 0.09328775915,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1148",
+    "factor": 0.09266844343,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1149",
+    "factor": 0.1111822678,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1150",
+    "factor": 0.1117788032,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1151",
+    "factor": 0.1041102736,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1152",
+    "factor": 0.1039544264,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1153",
+    "factor": 0.1352477197,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1154",
+    "factor": 0.109288662,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1155",
+    "factor": 0.1092614364,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  },
+  {
+    "name": "W1156",
+    "factor": 0.1050036331,
+    "base_energy": 25.0,
+    "non_linear": 0.0
+  }
+]

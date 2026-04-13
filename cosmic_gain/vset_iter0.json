@@ -1,0 +1,11040 @@
+{
+  "format": "prad2hvmon_settings_v1",
+  "timestamp": "2026-04-07 14:55:00",
+  "channels": [
+    {
+      "name": "W1",
+      "params": {
+        "V0Set": 1024.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 40
+    },
+    {
+      "name": "W2",
+      "params": {
+        "V0Set": 1079.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 45
+    },
+    {
+      "name": "W3",
+      "params": {
+        "V0Set": 1074.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 36
+    },
+    {
+      "name": "W4",
+      "params": {
+        "V0Set": 1051.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 3
+    },
+    {
+      "name": "W5",
+      "params": {
+        "V0Set": 1132.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 8
+    },
+    {
+      "name": "W6",
+      "params": {
+        "V0Set": 1130.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 13
+    },
+    {
+      "name": "W7",
+      "params": {
+        "V0Set": 1062.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 18
+    },
+    {
+      "name": "W8",
+      "params": {
+        "V0Set": 1109.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 23
+    },
+    {
+      "name": "W9",
+      "params": {
+        "V0Set": 1105.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 28
+    },
+    {
+      "name": "W10",
+      "params": {
+        "V0Set": 1209.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 40
+    },
+    {
+      "name": "W11",
+      "params": {
+        "V0Set": 1161.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 45
+    },
+    {
+      "name": "W12",
+      "params": {
+        "V0Set": 1083.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 36
+    },
+    {
+      "name": "W13",
+      "params": {
+        "V0Set": 1109.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 2
+    },
+    {
+      "name": "W14",
+      "params": {
+        "V0Set": 1107.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 7
+    },
+    {
+      "name": "W15",
+      "params": {
+        "V0Set": 1189.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 40
+    },
+    {
+      "name": "W16",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 45
+    },
+    {
+      "name": "W17",
+      "params": {
+        "V0Set": 1200.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 36
+    },
+    {
+      "name": "W18",
+      "params": {
+        "V0Set": 1068.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 40
+    },
+    {
+      "name": "W19",
+      "params": {
+        "V0Set": 1109.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 45
+    },
+    {
+      "name": "W20",
+      "params": {
+        "V0Set": 1182.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 36
+    },
+    {
+      "name": "W21",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 40
+    },
+    {
+      "name": "W22",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 45
+    },
+    {
+      "name": "W23",
+      "params": {
+        "V0Set": 1159.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 36
+    },
+    {
+      "name": "W24",
+      "params": {
+        "V0Set": 1122.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 2
+    },
+    {
+      "name": "W25",
+      "params": {
+        "V0Set": 1057.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 7
+    },
+    {
+      "name": "W26",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 3
+    },
+    {
+      "name": "W27",
+      "params": {
+        "V0Set": 1173.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 8
+    },
+    {
+      "name": "W28",
+      "params": {
+        "V0Set": 1038.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 13
+    },
+    {
+      "name": "W29",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 18
+    },
+    {
+      "name": "W30",
+      "params": {
+        "V0Set": 1098.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 23
+    },
+    {
+      "name": "W31",
+      "params": {
+        "V0Set": 1155.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 28
+    },
+    {
+      "name": "W32",
+      "params": {
+        "V0Set": 1128.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 40
+    },
+    {
+      "name": "W33",
+      "params": {
+        "V0Set": 1135.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 45
+    },
+    {
+      "name": "W34",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 36
+    },
+    {
+      "name": "W35",
+      "params": {
+        "V0Set": 1080.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 2
+    },
+    {
+      "name": "W36",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 7
+    },
+    {
+      "name": "W37",
+      "params": {
+        "V0Set": 1074.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 12
+    },
+    {
+      "name": "W38",
+      "params": {
+        "V0Set": 1081.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 33
+    },
+    {
+      "name": "W39",
+      "params": {
+        "V0Set": 1092.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 38
+    },
+    {
+      "name": "W40",
+      "params": {
+        "V0Set": 1081.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 43
+    },
+    {
+      "name": "W41",
+      "params": {
+        "V0Set": 1078.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 48
+    },
+    {
+      "name": "W42",
+      "params": {
+        "V0Set": 1114.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 31
+    },
+    {
+      "name": "W43",
+      "params": {
+        "V0Set": 1075.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 5
+    },
+    {
+      "name": "W44",
+      "params": {
+        "V0Set": 1146.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 12
+    },
+    {
+      "name": "W45",
+      "params": {
+        "V0Set": 1101.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 17
+    },
+    {
+      "name": "W46",
+      "params": {
+        "V0Set": 1102.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 22
+    },
+    {
+      "name": "W47",
+      "params": {
+        "V0Set": 1104.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 27
+    },
+    {
+      "name": "W48",
+      "params": {
+        "V0Set": 1110.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 32
+    },
+    {
+      "name": "W49",
+      "params": {
+        "V0Set": 1142.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 2
+    },
+    {
+      "name": "W50",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 12
+    },
+    {
+      "name": "W51",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 7
+    },
+    {
+      "name": "W52",
+      "params": {
+        "V0Set": 1220.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 2
+    },
+    {
+      "name": "W53",
+      "params": {
+        "V0Set": 1189.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 7
+    },
+    {
+      "name": "W54",
+      "params": {
+        "V0Set": 1217.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 12
+    },
+    {
+      "name": "W55",
+      "params": {
+        "V0Set": 1218.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 12
+    },
+    {
+      "name": "W56",
+      "params": {
+        "V0Set": 1111.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 17
+    },
+    {
+      "name": "W57",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 22
+    },
+    {
+      "name": "W58",
+      "params": {
+        "V0Set": 1166.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 27
+    },
+    {
+      "name": "W59",
+      "params": {
+        "V0Set": 1162.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 32
+    },
+    {
+      "name": "W60",
+      "params": {
+        "V0Set": 1164.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 33
+    },
+    {
+      "name": "W61",
+      "params": {
+        "V0Set": 1154.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 38
+    },
+    {
+      "name": "W62",
+      "params": {
+        "V0Set": 1214.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 43
+    },
+    {
+      "name": "W63",
+      "params": {
+        "V0Set": 1184.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 48
+    },
+    {
+      "name": "W64",
+      "params": {
+        "V0Set": 1146.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 31
+    },
+    {
+      "name": "W65",
+      "params": {
+        "V0Set": 1177.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 5
+    },
+    {
+      "name": "W66",
+      "params": {
+        "V0Set": 1173.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 2
+    },
+    {
+      "name": "W67",
+      "params": {
+        "V0Set": 1159.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 7
+    },
+    {
+      "name": "W68",
+      "params": {
+        "V0Set": 1131.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 12
+    },
+    {
+      "name": "W69",
+      "params": {
+        "V0Set": 1084.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 17
+    },
+    {
+      "name": "W70",
+      "params": {
+        "V0Set": 1171.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 22
+    },
+    {
+      "name": "W71",
+      "params": {
+        "V0Set": 1127.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 27
+    },
+    {
+      "name": "W72",
+      "params": {
+        "V0Set": 1136.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 10
+    },
+    {
+      "name": "W73",
+      "params": {
+        "V0Set": 1116.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 15
+    },
+    {
+      "name": "W74",
+      "params": {
+        "V0Set": 1155.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 20
+    },
+    {
+      "name": "W75",
+      "params": {
+        "V0Set": 1152.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 25
+    },
+    {
+      "name": "W76",
+      "params": {
+        "V0Set": 1109.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 30
+    },
+    {
+      "name": "W77",
+      "params": {
+        "V0Set": 1150.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 35
+    },
+    {
+      "name": "W78",
+      "params": {
+        "V0Set": 1071.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 37
+    },
+    {
+      "name": "W79",
+      "params": {
+        "V0Set": 1115.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 42
+    },
+    {
+      "name": "W80",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 47
+    },
+    {
+      "name": "W81",
+      "params": {
+        "V0Set": 1158.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 41
+    },
+    {
+      "name": "W82",
+      "params": {
+        "V0Set": 1167.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 4
+    },
+    {
+      "name": "W83",
+      "params": {
+        "V0Set": 1149.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 17
+    },
+    {
+      "name": "W84",
+      "params": {
+        "V0Set": 1140.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 22
+    },
+    {
+      "name": "W85",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 27
+    },
+    {
+      "name": "W86",
+      "params": {
+        "V0Set": 1158.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 17
+    },
+    {
+      "name": "W87",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 22
+    },
+    {
+      "name": "W88",
+      "params": {
+        "V0Set": 1141.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 27
+    },
+    {
+      "name": "W89",
+      "params": {
+        "V0Set": 1105.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 37
+    },
+    {
+      "name": "W90",
+      "params": {
+        "V0Set": 1160.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 42
+    },
+    {
+      "name": "W91",
+      "params": {
+        "V0Set": 1149.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 47
+    },
+    {
+      "name": "W92",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 41
+    },
+    {
+      "name": "W93",
+      "params": {
+        "V0Set": 1172.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 4
+    },
+    {
+      "name": "W94",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 10
+    },
+    {
+      "name": "W95",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 15
+    },
+    {
+      "name": "W96",
+      "params": {
+        "V0Set": 1184.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 20
+    },
+    {
+      "name": "W97",
+      "params": {
+        "V0Set": 1170.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 25
+    },
+    {
+      "name": "W98",
+      "params": {
+        "V0Set": 1088.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 30
+    },
+    {
+      "name": "W99",
+      "params": {
+        "V0Set": 1084.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 35
+    },
+    {
+      "name": "W100",
+      "params": {
+        "V0Set": 1071.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 17
+    },
+    {
+      "name": "W101",
+      "params": {
+        "V0Set": 1152.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 22
+    },
+    {
+      "name": "W102",
+      "params": {
+        "V0Set": 1168.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 27
+    },
+    {
+      "name": "W103",
+      "params": {
+        "V0Set": 1120.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 32
+    },
+    {
+      "name": "W104",
+      "params": {
+        "V0Set": 1207.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 37
+    },
+    {
+      "name": "W105",
+      "params": {
+        "V0Set": 1080.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 42
+    },
+    {
+      "name": "W106",
+      "params": {
+        "V0Set": 1093.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 40
+    },
+    {
+      "name": "W107",
+      "params": {
+        "V0Set": 1180.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 45
+    },
+    {
+      "name": "W108",
+      "params": {
+        "V0Set": 1110.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 36
+    },
+    {
+      "name": "W109",
+      "params": {
+        "V0Set": 1135.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 2
+    },
+    {
+      "name": "W110",
+      "params": {
+        "V0Set": 1202.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 7
+    },
+    {
+      "name": "W111",
+      "params": {
+        "V0Set": 1054.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 12
+    },
+    {
+      "name": "W112",
+      "params": {
+        "V0Set": 1171.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 9
+    },
+    {
+      "name": "W113",
+      "params": {
+        "V0Set": 1070.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 14
+    },
+    {
+      "name": "W114",
+      "params": {
+        "V0Set": 1104.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 19
+    },
+    {
+      "name": "W115",
+      "params": {
+        "V0Set": 1118.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 24
+    },
+    {
+      "name": "W116",
+      "params": {
+        "V0Set": 1109.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 29
+    },
+    {
+      "name": "W117",
+      "params": {
+        "V0Set": 1110.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 34
+    },
+    {
+      "name": "W118",
+      "params": {
+        "V0Set": 1089.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 32
+    },
+    {
+      "name": "W119",
+      "params": {
+        "V0Set": 1107.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 37
+    },
+    {
+      "name": "W120",
+      "params": {
+        "V0Set": 1121.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 32
+    },
+    {
+      "name": "W121",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 37
+    },
+    {
+      "name": "W122",
+      "params": {
+        "V0Set": 1123.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 9
+    },
+    {
+      "name": "W123",
+      "params": {
+        "V0Set": 1108.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 14
+    },
+    {
+      "name": "W124",
+      "params": {
+        "V0Set": 1163.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 19
+    },
+    {
+      "name": "W125",
+      "params": {
+        "V0Set": 1144.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 24
+    },
+    {
+      "name": "W126",
+      "params": {
+        "V0Set": 1127.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 29
+    },
+    {
+      "name": "W127",
+      "params": {
+        "V0Set": 1192.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 34
+    },
+    {
+      "name": "W128",
+      "params": {
+        "V0Set": 1117.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 40
+    },
+    {
+      "name": "W129",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 45
+    },
+    {
+      "name": "W130",
+      "params": {
+        "V0Set": 1108.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 36
+    },
+    {
+      "name": "W131",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 2
+    },
+    {
+      "name": "W132",
+      "params": {
+        "V0Set": 1165.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 7
+    },
+    {
+      "name": "W133",
+      "params": {
+        "V0Set": 1159.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 12
+    },
+    {
+      "name": "W134",
+      "params": {
+        "V0Set": 1122.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 32
+    },
+    {
+      "name": "W135",
+      "params": {
+        "V0Set": 1176.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 37
+    },
+    {
+      "name": "W136",
+      "params": {
+        "V0Set": 1165.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 42
+    },
+    {
+      "name": "W137",
+      "params": {
+        "V0Set": 1194.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 47
+    },
+    {
+      "name": "W138",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 41
+    },
+    {
+      "name": "W139",
+      "params": {
+        "V0Set": 1140.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 4
+    },
+    {
+      "name": "W140",
+      "params": {
+        "V0Set": 1160.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 17
+    },
+    {
+      "name": "W141",
+      "params": {
+        "V0Set": 1123.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 22
+    },
+    {
+      "name": "W142",
+      "params": {
+        "V0Set": 1126.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 27
+    },
+    {
+      "name": "W143",
+      "params": {
+        "V0Set": 1068.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 32
+    },
+    {
+      "name": "W144",
+      "params": {
+        "V0Set": 1141.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 37
+    },
+    {
+      "name": "W145",
+      "params": {
+        "V0Set": 1167.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 42
+    },
+    {
+      "name": "W146",
+      "params": {
+        "V0Set": 1160.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 39
+    },
+    {
+      "name": "W147",
+      "params": {
+        "V0Set": 1078.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 44
+    },
+    {
+      "name": "W148",
+      "params": {
+        "V0Set": 1107.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 46
+    },
+    {
+      "name": "W149",
+      "params": {
+        "V0Set": 1215.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 1
+    },
+    {
+      "name": "W150",
+      "params": {
+        "V0Set": 1151.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 6
+    },
+    {
+      "name": "W151",
+      "params": {
+        "V0Set": 1076.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 11
+    },
+    {
+      "name": "W152",
+      "params": {
+        "V0Set": 1112.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 42
+    },
+    {
+      "name": "W153",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 47
+    },
+    {
+      "name": "W154",
+      "params": {
+        "V0Set": 1133.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 42
+    },
+    {
+      "name": "W155",
+      "params": {
+        "V0Set": 1155.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 47
+    },
+    {
+      "name": "W156",
+      "params": {
+        "V0Set": 1108.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 39
+    },
+    {
+      "name": "W157",
+      "params": {
+        "V0Set": 1059.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 44
+    },
+    {
+      "name": "W158",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 46
+    },
+    {
+      "name": "W159",
+      "params": {
+        "V0Set": 1102.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 1
+    },
+    {
+      "name": "W160",
+      "params": {
+        "V0Set": 1095.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 6
+    },
+    {
+      "name": "W161",
+      "params": {
+        "V0Set": 1172.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 11
+    },
+    {
+      "name": "W162",
+      "params": {
+        "V0Set": 1179.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 17
+    },
+    {
+      "name": "W163",
+      "params": {
+        "V0Set": 1104.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 22
+    },
+    {
+      "name": "W164",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 27
+    },
+    {
+      "name": "W165",
+      "params": {
+        "V0Set": 1150.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 32
+    },
+    {
+      "name": "W166",
+      "params": {
+        "V0Set": 1117.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 37
+    },
+    {
+      "name": "W167",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 42
+    },
+    {
+      "name": "W168",
+      "params": {
+        "V0Set": 1179.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 47
+    },
+    {
+      "name": "W169",
+      "params": {
+        "V0Set": 1121.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 41
+    },
+    {
+      "name": "W170",
+      "params": {
+        "V0Set": 1135.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 4
+    },
+    {
+      "name": "W171",
+      "params": {
+        "V0Set": 1162.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 9
+    },
+    {
+      "name": "W172",
+      "params": {
+        "V0Set": 1164.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 14
+    },
+    {
+      "name": "W173",
+      "params": {
+        "V0Set": 1134.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 19
+    },
+    {
+      "name": "W174",
+      "params": {
+        "V0Set": 1117.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 47
+    },
+    {
+      "name": "W175",
+      "params": {
+        "V0Set": 1102.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 41
+    },
+    {
+      "name": "W176",
+      "params": {
+        "V0Set": 1163.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 4
+    },
+    {
+      "name": "W177",
+      "params": {
+        "V0Set": 1082.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 9
+    },
+    {
+      "name": "W178",
+      "params": {
+        "V0Set": 1142.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 14
+    },
+    {
+      "name": "W179",
+      "params": {
+        "V0Set": 1113.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 19
+    },
+    {
+      "name": "W180",
+      "params": {
+        "V0Set": 1134.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 16
+    },
+    {
+      "name": "W181",
+      "params": {
+        "V0Set": 1165.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 21
+    },
+    {
+      "name": "W182",
+      "params": {
+        "V0Set": 1099.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 26
+    },
+    {
+      "name": "W183",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 3
+    },
+    {
+      "name": "W184",
+      "params": {
+        "V0Set": 1147.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 8
+    },
+    {
+      "name": "W185",
+      "params": {
+        "V0Set": 1079.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 13
+    },
+    {
+      "name": "W186",
+      "params": {
+        "V0Set": 1119.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 41
+    },
+    {
+      "name": "W187",
+      "params": {
+        "V0Set": 1175.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 4
+    },
+    {
+      "name": "W188",
+      "params": {
+        "V0Set": 1114.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 41
+    },
+    {
+      "name": "W189",
+      "params": {
+        "V0Set": 1125.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 4
+    },
+    {
+      "name": "W190",
+      "params": {
+        "V0Set": 1139.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 16
+    },
+    {
+      "name": "W191",
+      "params": {
+        "V0Set": 1044.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 21
+    },
+    {
+      "name": "W192",
+      "params": {
+        "V0Set": 1153.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 26
+    },
+    {
+      "name": "W193",
+      "params": {
+        "V0Set": 1094.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 3
+    },
+    {
+      "name": "W194",
+      "params": {
+        "V0Set": 1133.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 8
+    },
+    {
+      "name": "W195",
+      "params": {
+        "V0Set": 1035.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 13
+    },
+    {
+      "name": "W196",
+      "params": {
+        "V0Set": 1023.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 47
+    },
+    {
+      "name": "W197",
+      "params": {
+        "V0Set": 1075.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 41
+    },
+    {
+      "name": "W198",
+      "params": {
+        "V0Set": 1149.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 4
+    },
+    {
+      "name": "W199",
+      "params": {
+        "V0Set": 1119.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 9
+    },
+    {
+      "name": "W200",
+      "params": {
+        "V0Set": 1134.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 14
+    },
+    {
+      "name": "W201",
+      "params": {
+        "V0Set": 1133.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 19
+    },
+    {
+      "name": "W202",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 9
+    },
+    {
+      "name": "W203",
+      "params": {
+        "V0Set": 1127.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 14
+    },
+    {
+      "name": "W204",
+      "params": {
+        "V0Set": 1156.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 19
+    },
+    {
+      "name": "W205",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 24
+    },
+    {
+      "name": "W206",
+      "params": {
+        "V0Set": 1139.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 29
+    },
+    {
+      "name": "W207",
+      "params": {
+        "V0Set": 1117.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 34
+    },
+    {
+      "name": "W208",
+      "params": {
+        "V0Set": 1102.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 39
+    },
+    {
+      "name": "W209",
+      "params": {
+        "V0Set": 1126.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 44
+    },
+    {
+      "name": "W210",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 46
+    },
+    {
+      "name": "W211",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 24
+    },
+    {
+      "name": "W212",
+      "params": {
+        "V0Set": 1085.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 29
+    },
+    {
+      "name": "W213",
+      "params": {
+        "V0Set": 1240.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 34
+    },
+    {
+      "name": "W214",
+      "params": {
+        "V0Set": 1123.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 18
+    },
+    {
+      "name": "W215",
+      "params": {
+        "V0Set": 1198.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 23
+    },
+    {
+      "name": "W216",
+      "params": {
+        "V0Set": 1160.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 28
+    },
+    {
+      "name": "W217",
+      "params": {
+        "V0Set": 1140.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 9
+    },
+    {
+      "name": "W218",
+      "params": {
+        "V0Set": 1111.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 14
+    },
+    {
+      "name": "W219",
+      "params": {
+        "V0Set": 1178.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 19
+    },
+    {
+      "name": "W220",
+      "params": {
+        "V0Set": 1205.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 24
+    },
+    {
+      "name": "W221",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 29
+    },
+    {
+      "name": "W222",
+      "params": {
+        "V0Set": 1165.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 9
+    },
+    {
+      "name": "W223",
+      "params": {
+        "V0Set": 1120.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 14
+    },
+    {
+      "name": "W224",
+      "params": {
+        "V0Set": 1162.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 19
+    },
+    {
+      "name": "W225",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 24
+    },
+    {
+      "name": "W226",
+      "params": {
+        "V0Set": 1209.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 29
+    },
+    {
+      "name": "W227",
+      "params": {
+        "V0Set": 1184.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 18
+    },
+    {
+      "name": "W228",
+      "params": {
+        "V0Set": 1171.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 23
+    },
+    {
+      "name": "W229",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 28
+    },
+    {
+      "name": "W230",
+      "params": {
+        "V0Set": 1158.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 24
+    },
+    {
+      "name": "W231",
+      "params": {
+        "V0Set": 1221.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 29
+    },
+    {
+      "name": "W232",
+      "params": {
+        "V0Set": 1189.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 34
+    },
+    {
+      "name": "W233",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 24
+    },
+    {
+      "name": "W234",
+      "params": {
+        "V0Set": 1126.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 29
+    },
+    {
+      "name": "W235",
+      "params": {
+        "V0Set": 1109.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 34
+    },
+    {
+      "name": "W236",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 39
+    },
+    {
+      "name": "W237",
+      "params": {
+        "V0Set": 1117.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 44
+    },
+    {
+      "name": "W238",
+      "params": {
+        "V0Set": 1185.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 46
+    },
+    {
+      "name": "W239",
+      "params": {
+        "V0Set": 1151.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 1
+    },
+    {
+      "name": "W240",
+      "params": {
+        "V0Set": 1115.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 6
+    },
+    {
+      "name": "W241",
+      "params": {
+        "V0Set": 1132.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 11
+    },
+    {
+      "name": "W242",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 3
+    },
+    {
+      "name": "W243",
+      "params": {
+        "V0Set": 1125.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 8
+    },
+    {
+      "name": "W244",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 13
+    },
+    {
+      "name": "W245",
+      "params": {
+        "V0Set": 1141.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 39
+    },
+    {
+      "name": "W246",
+      "params": {
+        "V0Set": 1158.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 44
+    },
+    {
+      "name": "W247",
+      "params": {
+        "V0Set": 1198.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 46
+    },
+    {
+      "name": "W248",
+      "params": {
+        "V0Set": 1218.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 33
+    },
+    {
+      "name": "W249",
+      "params": {
+        "V0Set": 1156.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 38
+    },
+    {
+      "name": "W250",
+      "params": {
+        "V0Set": 1185.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 43
+    },
+    {
+      "name": "W251",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 34
+    },
+    {
+      "name": "W252",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 39
+    },
+    {
+      "name": "W253",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 44
+    },
+    {
+      "name": "W254",
+      "params": {
+        "V0Set": 1186.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 46
+    },
+    {
+      "name": "W255",
+      "params": {
+        "V0Set": 1207.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 1
+    },
+    {
+      "name": "W256",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 34
+    },
+    {
+      "name": "W257",
+      "params": {
+        "V0Set": 1134.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 39
+    },
+    {
+      "name": "W258",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 44
+    },
+    {
+      "name": "W259",
+      "params": {
+        "V0Set": 1204.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 46
+    },
+    {
+      "name": "W260",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 1
+    },
+    {
+      "name": "W261",
+      "params": {
+        "V0Set": 1180.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 33
+    },
+    {
+      "name": "W262",
+      "params": {
+        "V0Set": 1144.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 38
+    },
+    {
+      "name": "W263",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 43
+    },
+    {
+      "name": "W264",
+      "params": {
+        "V0Set": 1137.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 39
+    },
+    {
+      "name": "W265",
+      "params": {
+        "V0Set": 1202.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 44
+    },
+    {
+      "name": "W266",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 46
+    },
+    {
+      "name": "W267",
+      "params": {
+        "V0Set": 1177.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 1
+    },
+    {
+      "name": "W268",
+      "params": {
+        "V0Set": 1110.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 6
+    },
+    {
+      "name": "W269",
+      "params": {
+        "V0Set": 1033.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 11
+    },
+    {
+      "name": "W270",
+      "params": {
+        "V0Set": 1162.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 16
+    },
+    {
+      "name": "W271",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 21
+    },
+    {
+      "name": "W272",
+      "params": {
+        "V0Set": 1140.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 26
+    },
+    {
+      "name": "W273",
+      "params": {
+        "V0Set": 1176.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 18
+    },
+    {
+      "name": "W274",
+      "params": {
+        "V0Set": 1183.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 23
+    },
+    {
+      "name": "W275",
+      "params": {
+        "V0Set": 1126.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 28
+    },
+    {
+      "name": "W276",
+      "params": {
+        "V0Set": 1127.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 33
+    },
+    {
+      "name": "W277",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 38
+    },
+    {
+      "name": "W278",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 43
+    },
+    {
+      "name": "W279",
+      "params": {
+        "V0Set": 1148.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 1
+    },
+    {
+      "name": "W280",
+      "params": {
+        "V0Set": 1125.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 6
+    },
+    {
+      "name": "W281",
+      "params": {
+        "V0Set": 1177.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 11
+    },
+    {
+      "name": "W282",
+      "params": {
+        "V0Set": 1173.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 48
+    },
+    {
+      "name": "W283",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 31
+    },
+    {
+      "name": "W284",
+      "params": {
+        "V0Set": 1176.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 5
+    },
+    {
+      "name": "W285",
+      "params": {
+        "V0Set": 1186.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 6
+    },
+    {
+      "name": "W286",
+      "params": {
+        "V0Set": 1173.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 11
+    },
+    {
+      "name": "W287",
+      "params": {
+        "V0Set": 1170.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 16
+    },
+    {
+      "name": "W288",
+      "params": {
+        "V0Set": 1200.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 21
+    },
+    {
+      "name": "W289",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 26
+    },
+    {
+      "name": "W290",
+      "params": {
+        "V0Set": 1155.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 6
+    },
+    {
+      "name": "W291",
+      "params": {
+        "V0Set": 1150.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 11
+    },
+    {
+      "name": "W292",
+      "params": {
+        "V0Set": 1154.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 16
+    },
+    {
+      "name": "W293",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 21
+    },
+    {
+      "name": "W294",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 26
+    },
+    {
+      "name": "W295",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 48
+    },
+    {
+      "name": "W296",
+      "params": {
+        "V0Set": 1153.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 31
+    },
+    {
+      "name": "W297",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 5
+    },
+    {
+      "name": "W298",
+      "params": {
+        "V0Set": 1188.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 1
+    },
+    {
+      "name": "W299",
+      "params": {
+        "V0Set": 1211.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 6
+    },
+    {
+      "name": "W300",
+      "params": {
+        "V0Set": 1071.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 11
+    },
+    {
+      "name": "W301",
+      "params": {
+        "V0Set": 1216.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 3
+    },
+    {
+      "name": "W302",
+      "params": {
+        "V0Set": 1127.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 8
+    },
+    {
+      "name": "W303",
+      "params": {
+        "V0Set": 1092.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 13
+    },
+    {
+      "name": "W304",
+      "params": {
+        "V0Set": 1109.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 18
+    },
+    {
+      "name": "W305",
+      "params": {
+        "V0Set": 1050.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 23
+    },
+    {
+      "name": "W306",
+      "params": {
+        "V0Set": 1140.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 28
+    },
+    {
+      "name": "W307",
+      "params": {
+        "V0Set": 1132.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 48
+    },
+    {
+      "name": "W308",
+      "params": {
+        "V0Set": 1184.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 31
+    },
+    {
+      "name": "W309",
+      "params": {
+        "V0Set": 1110.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 5
+    },
+    {
+      "name": "W310",
+      "params": {
+        "V0Set": 1090.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 10
+    },
+    {
+      "name": "W311",
+      "params": {
+        "V0Set": 1171.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 15
+    },
+    {
+      "name": "W312",
+      "params": {
+        "V0Set": 1128.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 20
+    },
+    {
+      "name": "W313",
+      "params": {
+        "V0Set": 1177.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 16
+    },
+    {
+      "name": "W314",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 21
+    },
+    {
+      "name": "W315",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 10,
+      "channel": 26
+    },
+    {
+      "name": "W316",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 10
+    },
+    {
+      "name": "W317",
+      "params": {
+        "V0Set": 1153.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 15
+    },
+    {
+      "name": "W318",
+      "params": {
+        "V0Set": 1103.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 20
+    },
+    {
+      "name": "W319",
+      "params": {
+        "V0Set": 1131.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 3
+    },
+    {
+      "name": "W320",
+      "params": {
+        "V0Set": 1103.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 48
+    },
+    {
+      "name": "W321",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 13
+    },
+    {
+      "name": "W322",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 18
+    },
+    {
+      "name": "W323",
+      "params": {
+        "V0Set": 1127.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 23
+    },
+    {
+      "name": "W324",
+      "params": {
+        "V0Set": 1120.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 3
+    },
+    {
+      "name": "W325",
+      "params": {
+        "V0Set": 1151.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 8
+    },
+    {
+      "name": "W326",
+      "params": {
+        "V0Set": 1147.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 13
+    },
+    {
+      "name": "W327",
+      "params": {
+        "V0Set": 1155.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 18
+    },
+    {
+      "name": "W328",
+      "params": {
+        "V0Set": 1124.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 23
+    },
+    {
+      "name": "W329",
+      "params": {
+        "V0Set": 1168.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 10
+    },
+    {
+      "name": "W330",
+      "params": {
+        "V0Set": 1191.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 15
+    },
+    {
+      "name": "W331",
+      "params": {
+        "V0Set": 1149.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 20
+    },
+    {
+      "name": "W332",
+      "params": {
+        "V0Set": 1076.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 16
+    },
+    {
+      "name": "W333",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 21
+    },
+    {
+      "name": "W334",
+      "params": {
+        "V0Set": 1123.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 12,
+      "channel": 26
+    },
+    {
+      "name": "W335",
+      "params": {
+        "V0Set": 1100.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 33
+    },
+    {
+      "name": "W336",
+      "params": {
+        "V0Set": 1050.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 38
+    },
+    {
+      "name": "W337",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 43
+    },
+    {
+      "name": "W338",
+      "params": {
+        "V0Set": 1050.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 48
+    },
+    {
+      "name": "W339",
+      "params": {
+        "V0Set": 1070.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 31
+    },
+    {
+      "name": "W340",
+      "params": {
+        "V0Set": 1105.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 5
+    },
+    {
+      "name": "W341",
+      "params": {
+        "V0Set": 1207.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 25
+    },
+    {
+      "name": "W342",
+      "params": {
+        "V0Set": 1074.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 30
+    },
+    {
+      "name": "W343",
+      "params": {
+        "V0Set": 1146.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 35
+    },
+    {
+      "name": "W344",
+      "params": {
+        "V0Set": 1116.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 40
+    },
+    {
+      "name": "W345",
+      "params": {
+        "V0Set": 1177.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 45
+    },
+    {
+      "name": "W346",
+      "params": {
+        "V0Set": 1122.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 36
+    },
+    {
+      "name": "W347",
+      "params": {
+        "V0Set": 1080.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 3
+    },
+    {
+      "name": "W348",
+      "params": {
+        "V0Set": 1129.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 8
+    },
+    {
+      "name": "W349",
+      "params": {
+        "V0Set": 1117.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 13
+    },
+    {
+      "name": "W350",
+      "params": {
+        "V0Set": 1160.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 25
+    },
+    {
+      "name": "W351",
+      "params": {
+        "V0Set": 1153.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 30
+    },
+    {
+      "name": "W352",
+      "params": {
+        "V0Set": 1119.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 35
+    },
+    {
+      "name": "W353",
+      "params": {
+        "V0Set": 1108.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 28
+    },
+    {
+      "name": "W354",
+      "params": {
+        "V0Set": 1197.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 33
+    },
+    {
+      "name": "W355",
+      "params": {
+        "V0Set": 1182.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 38
+    },
+    {
+      "name": "W356",
+      "params": {
+        "V0Set": 1102.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 43
+    },
+    {
+      "name": "W357",
+      "params": {
+        "V0Set": 1132.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 48
+    },
+    {
+      "name": "W358",
+      "params": {
+        "V0Set": 1076.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 28
+    },
+    {
+      "name": "W359",
+      "params": {
+        "V0Set": 1117.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 33
+    },
+    {
+      "name": "W360",
+      "params": {
+        "V0Set": 1164.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 38
+    },
+    {
+      "name": "W361",
+      "params": {
+        "V0Set": 1203.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 43
+    },
+    {
+      "name": "W362",
+      "params": {
+        "V0Set": 1216.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 48
+    },
+    {
+      "name": "W363",
+      "params": {
+        "V0Set": 1155.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 25
+    },
+    {
+      "name": "W364",
+      "params": {
+        "V0Set": 1204.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 30
+    },
+    {
+      "name": "W365",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 35
+    },
+    {
+      "name": "W366",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 3
+    },
+    {
+      "name": "W367",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 8
+    },
+    {
+      "name": "W368",
+      "params": {
+        "V0Set": 1128.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 13
+    },
+    {
+      "name": "W369",
+      "params": {
+        "V0Set": 1157.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 10
+    },
+    {
+      "name": "W370",
+      "params": {
+        "V0Set": 1102.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 15
+    },
+    {
+      "name": "W371",
+      "params": {
+        "V0Set": 1195.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 20
+    },
+    {
+      "name": "W372",
+      "params": {
+        "V0Set": 1123.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 25
+    },
+    {
+      "name": "W373",
+      "params": {
+        "V0Set": 1112.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 30
+    },
+    {
+      "name": "W374",
+      "params": {
+        "V0Set": 1161.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 35
+    },
+    {
+      "name": "W375",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 2
+    },
+    {
+      "name": "W376",
+      "params": {
+        "V0Set": 1144.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 7
+    },
+    {
+      "name": "W377",
+      "params": {
+        "V0Set": 1107.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 12
+    },
+    {
+      "name": "W378",
+      "params": {
+        "V0Set": 1163.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 17
+    },
+    {
+      "name": "W379",
+      "params": {
+        "V0Set": 1160.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 22
+    },
+    {
+      "name": "W380",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 27
+    },
+    {
+      "name": "W381",
+      "params": {
+        "V0Set": 1140.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 18
+    },
+    {
+      "name": "W382",
+      "params": {
+        "V0Set": 1154.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 23
+    },
+    {
+      "name": "W383",
+      "params": {
+        "V0Set": 1167.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 28
+    },
+    {
+      "name": "W384",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 40
+    },
+    {
+      "name": "W385",
+      "params": {
+        "V0Set": 1133.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 45
+    },
+    {
+      "name": "W386",
+      "params": {
+        "V0Set": 1189.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 36
+    },
+    {
+      "name": "W387",
+      "params": {
+        "V0Set": 1199.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 31
+    },
+    {
+      "name": "W388",
+      "params": {
+        "V0Set": 1144.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 5
+    },
+    {
+      "name": "W389",
+      "params": {
+        "V0Set": 1187.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 10
+    },
+    {
+      "name": "W390",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 15
+    },
+    {
+      "name": "W391",
+      "params": {
+        "V0Set": 1113.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 20
+    },
+    {
+      "name": "W392",
+      "params": {
+        "V0Set": 1161.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 31
+    },
+    {
+      "name": "W393",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 5
+    },
+    {
+      "name": "W394",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 10
+    },
+    {
+      "name": "W395",
+      "params": {
+        "V0Set": 1142.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 15
+    },
+    {
+      "name": "W396",
+      "params": {
+        "V0Set": 1206.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 20
+    },
+    {
+      "name": "W397",
+      "params": {
+        "V0Set": 1025.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 40
+    },
+    {
+      "name": "W398",
+      "params": {
+        "V0Set": 1039.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 45
+    },
+    {
+      "name": "W399",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 36
+    },
+    {
+      "name": "W400",
+      "params": {
+        "V0Set": 1188.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 18
+    },
+    {
+      "name": "W401",
+      "params": {
+        "V0Set": 1074.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 23
+    },
+    {
+      "name": "W402",
+      "params": {
+        "V0Set": 1141.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 28
+    },
+    {
+      "name": "W403",
+      "params": {
+        "V0Set": 1138.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 40
+    },
+    {
+      "name": "W404",
+      "params": {
+        "V0Set": 1158.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 45
+    },
+    {
+      "name": "W405",
+      "params": {
+        "V0Set": 1146.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 36
+    },
+    {
+      "name": "W406",
+      "params": {
+        "V0Set": 1092.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 2
+    },
+    {
+      "name": "W407",
+      "params": {
+        "V0Set": 1190.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 7
+    },
+    {
+      "name": "W408",
+      "params": {
+        "V0Set": 1148.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 12
+    },
+    {
+      "name": "W409",
+      "params": {
+        "V0Set": 1114.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 32
+    },
+    {
+      "name": "W410",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 37
+    },
+    {
+      "name": "W411",
+      "params": {
+        "V0Set": 1103.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 42
+    },
+    {
+      "name": "W412",
+      "params": {
+        "V0Set": 1197.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 33
+    },
+    {
+      "name": "W413",
+      "params": {
+        "V0Set": 1115.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 38
+    },
+    {
+      "name": "W414",
+      "params": {
+        "V0Set": 1213.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 43
+    },
+    {
+      "name": "W415",
+      "params": {
+        "V0Set": 1128.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 48
+    },
+    {
+      "name": "W416",
+      "params": {
+        "V0Set": 1155.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 31
+    },
+    {
+      "name": "W417",
+      "params": {
+        "V0Set": 1220.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 5
+    },
+    {
+      "name": "W418",
+      "params": {
+        "V0Set": 1143.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 2
+    },
+    {
+      "name": "W419",
+      "params": {
+        "V0Set": 1116.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 7
+    },
+    {
+      "name": "W420",
+      "params": {
+        "V0Set": 1152.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 12
+    },
+    {
+      "name": "W421",
+      "params": {
+        "V0Set": 1132.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 25
+    },
+    {
+      "name": "W422",
+      "params": {
+        "V0Set": 1069.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 30
+    },
+    {
+      "name": "W423",
+      "params": {
+        "V0Set": 1059.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 35
+    },
+    {
+      "name": "W424",
+      "params": {
+        "V0Set": 1164.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 40
+    },
+    {
+      "name": "W425",
+      "params": {
+        "V0Set": 1127.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 45
+    },
+    {
+      "name": "W426",
+      "params": {
+        "V0Set": 1107.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 25
+    },
+    {
+      "name": "W427",
+      "params": {
+        "V0Set": 1156.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 30
+    },
+    {
+      "name": "W428",
+      "params": {
+        "V0Set": 1121.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 35
+    },
+    {
+      "name": "W429",
+      "params": {
+        "V0Set": 1152.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 40
+    },
+    {
+      "name": "W430",
+      "params": {
+        "V0Set": 1167.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 45
+    },
+    {
+      "name": "W431",
+      "params": {
+        "V0Set": 1165.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 2
+    },
+    {
+      "name": "W432",
+      "params": {
+        "V0Set": 1199.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 7
+    },
+    {
+      "name": "W433",
+      "params": {
+        "V0Set": 1168.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 12
+    },
+    {
+      "name": "W434",
+      "params": {
+        "V0Set": 1140.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 33
+    },
+    {
+      "name": "W435",
+      "params": {
+        "V0Set": 1142.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 38
+    },
+    {
+      "name": "W436",
+      "params": {
+        "V0Set": 1079.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 43
+    },
+    {
+      "name": "W437",
+      "params": {
+        "V0Set": 1067.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 48
+    },
+    {
+      "name": "W438",
+      "params": {
+        "V0Set": 1136.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 31
+    },
+    {
+      "name": "W439",
+      "params": {
+        "V0Set": 1058.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 5
+    },
+    {
+      "name": "W440",
+      "params": {
+        "V0Set": 1084.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 17
+    },
+    {
+      "name": "W441",
+      "params": {
+        "V0Set": 1134.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 22
+    },
+    {
+      "name": "W442",
+      "params": {
+        "V0Set": 1165.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 27
+    },
+    {
+      "name": "W443",
+      "params": {
+        "V0Set": 1126.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 47
+    },
+    {
+      "name": "W444",
+      "params": {
+        "V0Set": 1153.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 41
+    },
+    {
+      "name": "W445",
+      "params": {
+        "V0Set": 1098.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 4
+    },
+    {
+      "name": "W446",
+      "params": {
+        "V0Set": 1180.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 10
+    },
+    {
+      "name": "W447",
+      "params": {
+        "V0Set": 1130.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 15
+    },
+    {
+      "name": "W448",
+      "params": {
+        "V0Set": 1218.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 20
+    },
+    {
+      "name": "W449",
+      "params": {
+        "V0Set": 1145.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 25
+    },
+    {
+      "name": "W450",
+      "params": {
+        "V0Set": 1157.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 30
+    },
+    {
+      "name": "W451",
+      "params": {
+        "V0Set": 1171.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 35
+    },
+    {
+      "name": "W452",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 17
+    },
+    {
+      "name": "W453",
+      "params": {
+        "V0Set": 1162.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 22
+    },
+    {
+      "name": "W454",
+      "params": {
+        "V0Set": 1081.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 27
+    },
+    {
+      "name": "W455",
+      "params": {
+        "V0Set": 1130.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 36
+    },
+    {
+      "name": "W456",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 2
+    },
+    {
+      "name": "W457",
+      "params": {
+        "V0Set": 1142.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 7
+    },
+    {
+      "name": "W458",
+      "params": {
+        "V0Set": 1165.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 12
+    },
+    {
+      "name": "W459",
+      "params": {
+        "V0Set": 1156.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 17
+    },
+    {
+      "name": "W460",
+      "params": {
+        "V0Set": 1208.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 36
+    },
+    {
+      "name": "W461",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 2
+    },
+    {
+      "name": "W462",
+      "params": {
+        "V0Set": 1155.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 7
+    },
+    {
+      "name": "W463",
+      "params": {
+        "V0Set": 1110.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 12
+    },
+    {
+      "name": "W464",
+      "params": {
+        "V0Set": 1142.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 17
+    },
+    {
+      "name": "W465",
+      "params": {
+        "V0Set": 1132.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 17
+    },
+    {
+      "name": "W466",
+      "params": {
+        "V0Set": 1171.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 22
+    },
+    {
+      "name": "W467",
+      "params": {
+        "V0Set": 1206.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 27
+    },
+    {
+      "name": "W468",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 10
+    },
+    {
+      "name": "W469",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 15
+    },
+    {
+      "name": "W470",
+      "params": {
+        "V0Set": 1134.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 20
+    },
+    {
+      "name": "W471",
+      "params": {
+        "V0Set": 1092.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 25
+    },
+    {
+      "name": "W472",
+      "params": {
+        "V0Set": 1091.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 30
+    },
+    {
+      "name": "W473",
+      "params": {
+        "V0Set": 1175.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 35
+    },
+    {
+      "name": "W474",
+      "params": {
+        "V0Set": 1087.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 32
+    },
+    {
+      "name": "W475",
+      "params": {
+        "V0Set": 1191.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 37
+    },
+    {
+      "name": "W476",
+      "params": {
+        "V0Set": 1131.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 42
+    },
+    {
+      "name": "W477",
+      "params": {
+        "V0Set": 1150.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 9
+    },
+    {
+      "name": "W478",
+      "params": {
+        "V0Set": 1031.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 14
+    },
+    {
+      "name": "W479",
+      "params": {
+        "V0Set": 1077.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 19
+    },
+    {
+      "name": "W480",
+      "params": {
+        "V0Set": 1199.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 40
+    },
+    {
+      "name": "W481",
+      "params": {
+        "V0Set": 1100.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 45
+    },
+    {
+      "name": "W482",
+      "params": {
+        "V0Set": 1199.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 36
+    },
+    {
+      "name": "W483",
+      "params": {
+        "V0Set": 1092.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 2
+    },
+    {
+      "name": "W484",
+      "params": {
+        "V0Set": 1109.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 7
+    },
+    {
+      "name": "W485",
+      "params": {
+        "V0Set": 1112.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 12
+    },
+    {
+      "name": "W486",
+      "params": {
+        "V0Set": 1280.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 32
+    },
+    {
+      "name": "W487",
+      "params": {
+        "V0Set": 1088.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 37
+    },
+    {
+      "name": "W488",
+      "params": {
+        "V0Set": 1275.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 42
+    },
+    {
+      "name": "W489",
+      "params": {
+        "V0Set": 1251.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 22
+    },
+    {
+      "name": "W490",
+      "params": {
+        "V0Set": 1225.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 27
+    },
+    {
+      "name": "W491",
+      "params": {
+        "V0Set": 1124.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 32
+    },
+    {
+      "name": "W492",
+      "params": {
+        "V0Set": 1142.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 37
+    },
+    {
+      "name": "W493",
+      "params": {
+        "V0Set": 1056.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 42
+    },
+    {
+      "name": "W494",
+      "params": {
+        "V0Set": 1079.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 22
+    },
+    {
+      "name": "W495",
+      "params": {
+        "V0Set": 1190.800048828125
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 27
+    },
+    {
+      "name": "W496",
+      "params": {
+        "V0Set": 1289.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 32
+    },
+    {
+      "name": "W497",
+      "params": {
+        "V0Set": 1136.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 37
+    },
+    {
+      "name": "W498",
+      "params": {
+        "V0Set": 1112.800048828125
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 42
+    },
+    {
+      "name": "W499",
+      "params": {
+        "V0Set": 1159.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 32
+    },
+    {
+      "name": "W500",
+      "params": {
+        "V0Set": 1114.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 37
+    },
+    {
+      "name": "W501",
+      "params": {
+        "V0Set": 1049.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 42
+    },
+    {
+      "name": "W502",
+      "params": {
+        "V0Set": 1062.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 40
+    },
+    {
+      "name": "W503",
+      "params": {
+        "V0Set": 1260.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 45
+    },
+    {
+      "name": "W504",
+      "params": {
+        "V0Set": 940.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 36
+    },
+    {
+      "name": "W505",
+      "params": {
+        "V0Set": 1052.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 2
+    },
+    {
+      "name": "W506",
+      "params": {
+        "V0Set": 1078.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 7
+    },
+    {
+      "name": "W507",
+      "params": {
+        "V0Set": 1189.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 12
+    },
+    {
+      "name": "W508",
+      "params": {
+        "V0Set": 1070.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 47
+    },
+    {
+      "name": "W509",
+      "params": {
+        "V0Set": 1024.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 41
+    },
+    {
+      "name": "W510",
+      "params": {
+        "V0Set": 1045.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 4
+    },
+    {
+      "name": "W511",
+      "params": {
+        "V0Set": 1103.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 24
+    },
+    {
+      "name": "W512",
+      "params": {
+        "V0Set": 1213.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 29
+    },
+    {
+      "name": "W513",
+      "params": {
+        "V0Set": 1129.5999755859375
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 34
+    },
+    {
+      "name": "W514",
+      "params": {
+        "V0Set": 1174.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 17
+    },
+    {
+      "name": "W515",
+      "params": {
+        "V0Set": 1028.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 22
+    },
+    {
+      "name": "W516",
+      "params": {
+        "V0Set": 1170.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 27
+    },
+    {
+      "name": "W517",
+      "params": {
+        "V0Set": 1057.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 32
+    },
+    {
+      "name": "W518",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 37
+    },
+    {
+      "name": "W519",
+      "params": {
+        "V0Set": 1122.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 42
+    },
+    {
+      "name": "W520",
+      "params": {
+        "V0Set": 1080.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 47
+    },
+    {
+      "name": "W521",
+      "params": {
+        "V0Set": 1140.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 41
+    },
+    {
+      "name": "W522",
+      "params": {
+        "V0Set": 1097.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 4
+    },
+    {
+      "name": "W523",
+      "params": {
+        "V0Set": 1270.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 47
+    },
+    {
+      "name": "W524",
+      "params": {
+        "V0Set": 1122.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 41
+    },
+    {
+      "name": "W525",
+      "params": {
+        "V0Set": 1159.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 4
+    },
+    {
+      "name": "W526",
+      "params": {
+        "V0Set": 1052.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 9
+    },
+    {
+      "name": "W527",
+      "params": {
+        "V0Set": 1027.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 14
+    },
+    {
+      "name": "W528",
+      "params": {
+        "V0Set": 996.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 47
+    },
+    {
+      "name": "W529",
+      "params": {
+        "V0Set": 1050.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 41
+    },
+    {
+      "name": "W530",
+      "params": {
+        "V0Set": 1099.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 4
+    },
+    {
+      "name": "W531",
+      "params": {
+        "V0Set": 1199.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 9
+    },
+    {
+      "name": "W532",
+      "params": {
+        "V0Set": 1110.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 14
+    },
+    {
+      "name": "W533",
+      "params": {
+        "V0Set": 1079.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 47
+    },
+    {
+      "name": "W534",
+      "params": {
+        "V0Set": 1142.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 41
+    },
+    {
+      "name": "W535",
+      "params": {
+        "V0Set": 1244.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 4
+    },
+    {
+      "name": "W536",
+      "params": {
+        "V0Set": 1169.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 17
+    },
+    {
+      "name": "W537",
+      "params": {
+        "V0Set": 1098.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 22
+    },
+    {
+      "name": "W538",
+      "params": {
+        "V0Set": 1141.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 27
+    },
+    {
+      "name": "W539",
+      "params": {
+        "V0Set": 1126.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 32
+    },
+    {
+      "name": "W540",
+      "params": {
+        "V0Set": 1188.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 37
+    },
+    {
+      "name": "W541",
+      "params": {
+        "V0Set": 1039.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 42
+    },
+    {
+      "name": "W542",
+      "params": {
+        "V0Set": 1225.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 9
+    },
+    {
+      "name": "W543",
+      "params": {
+        "V0Set": 1060.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 14
+    },
+    {
+      "name": "W544",
+      "params": {
+        "V0Set": 995.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 19
+    },
+    {
+      "name": "W545",
+      "params": {
+        "V0Set": 1076.5999755859375
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 39
+    },
+    {
+      "name": "W546",
+      "params": {
+        "V0Set": 1036.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 44
+    },
+    {
+      "name": "W547",
+      "params": {
+        "V0Set": 1135.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 46
+    },
+    {
+      "name": "W548",
+      "params": {
+        "V0Set": 1200.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 47
+    },
+    {
+      "name": "W549",
+      "params": {
+        "V0Set": 1093.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 41
+    },
+    {
+      "name": "W550",
+      "params": {
+        "V0Set": 1166.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 4
+    },
+    {
+      "name": "W551",
+      "params": {
+        "V0Set": 1106.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 9
+    },
+    {
+      "name": "W552",
+      "params": {
+        "V0Set": 1186.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 14
+    },
+    {
+      "name": "W553",
+      "params": {
+        "V0Set": 1083.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 19
+    },
+    {
+      "name": "W554",
+      "params": {
+        "V0Set": 1119.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 9
+    },
+    {
+      "name": "W555",
+      "params": {
+        "V0Set": 1143.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 14
+    },
+    {
+      "name": "W556",
+      "params": {
+        "V0Set": 1123.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 19
+    },
+    {
+      "name": "W557",
+      "params": {
+        "V0Set": 1080.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 19
+    },
+    {
+      "name": "W558",
+      "params": {
+        "V0Set": 1144.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 24
+    },
+    {
+      "name": "W559",
+      "params": {
+        "V0Set": 1062.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 29
+    },
+    {
+      "name": "W560",
+      "params": {
+        "V0Set": 1153.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 34
+    },
+    {
+      "name": "W563",
+      "params": {
+        "V0Set": 1239.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 19
+    },
+    {
+      "name": "W564",
+      "params": {
+        "V0Set": 1110.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 24
+    },
+    {
+      "name": "W565",
+      "params": {
+        "V0Set": 1106.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 29
+    },
+    {
+      "name": "W566",
+      "params": {
+        "V0Set": 1010.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 34
+    },
+    {
+      "name": "W567",
+      "params": {
+        "V0Set": 1177.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 9
+    },
+    {
+      "name": "W568",
+      "params": {
+        "V0Set": 1080.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 14
+    },
+    {
+      "name": "W569",
+      "params": {
+        "V0Set": 1305.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 19
+    },
+    {
+      "name": "W570",
+      "params": {
+        "V0Set": 1290.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 47
+    },
+    {
+      "name": "W571",
+      "params": {
+        "V0Set": 1180.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 41
+    },
+    {
+      "name": "W572",
+      "params": {
+        "V0Set": 1071.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 4
+    },
+    {
+      "name": "W573",
+      "params": {
+        "V0Set": 1153.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 9
+    },
+    {
+      "name": "W574",
+      "params": {
+        "V0Set": 1064.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 14
+    },
+    {
+      "name": "W575",
+      "params": {
+        "V0Set": 1167.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 19
+    },
+    {
+      "name": "W576",
+      "params": {
+        "V0Set": 1103.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 24
+    },
+    {
+      "name": "W577",
+      "params": {
+        "V0Set": 1242.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 29
+    },
+    {
+      "name": "W578",
+      "params": {
+        "V0Set": 1098.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 34
+    },
+    {
+      "name": "W579",
+      "params": {
+        "V0Set": 1172.199951171875
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 1
+    },
+    {
+      "name": "W580",
+      "params": {
+        "V0Set": 1024.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 6
+    },
+    {
+      "name": "W581",
+      "params": {
+        "V0Set": 1032.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 11
+    },
+    {
+      "name": "W582",
+      "params": {
+        "V0Set": 1211.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 24
+    },
+    {
+      "name": "W583",
+      "params": {
+        "V0Set": 1128.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 29
+    },
+    {
+      "name": "W584",
+      "params": {
+        "V0Set": 1180.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 34
+    },
+    {
+      "name": "W585",
+      "params": {
+        "V0Set": 1122.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 39
+    },
+    {
+      "name": "W586",
+      "params": {
+        "V0Set": 1116.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 44
+    },
+    {
+      "name": "W587",
+      "params": {
+        "V0Set": 1182.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 46
+    },
+    {
+      "name": "W588",
+      "params": {
+        "V0Set": 1091.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 24
+    },
+    {
+      "name": "W589",
+      "params": {
+        "V0Set": 1035.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 29
+    },
+    {
+      "name": "W590",
+      "params": {
+        "V0Set": 1049.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 34
+    },
+    {
+      "name": "W591",
+      "params": {
+        "V0Set": 1075.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 39
+    },
+    {
+      "name": "W592",
+      "params": {
+        "V0Set": 1099.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 44
+    },
+    {
+      "name": "W593",
+      "params": {
+        "V0Set": 1104.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 46
+    },
+    {
+      "name": "W594",
+      "params": {
+        "V0Set": 1047.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 1
+    },
+    {
+      "name": "W597",
+      "params": {
+        "V0Set": 1054.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 39
+    },
+    {
+      "name": "W598",
+      "params": {
+        "V0Set": 1272.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 44
+    },
+    {
+      "name": "W599",
+      "params": {
+        "V0Set": 1141.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 46
+    },
+    {
+      "name": "W600",
+      "params": {
+        "V0Set": 1073.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 1
+    },
+    {
+      "name": "W601",
+      "params": {
+        "V0Set": 1019.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 24
+    },
+    {
+      "name": "W602",
+      "params": {
+        "V0Set": 1176.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 29
+    },
+    {
+      "name": "W603",
+      "params": {
+        "V0Set": 1156.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 34
+    },
+    {
+      "name": "W604",
+      "params": {
+        "V0Set": 1208.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 24
+    },
+    {
+      "name": "W605",
+      "params": {
+        "V0Set": 1238.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 29
+    },
+    {
+      "name": "W606",
+      "params": {
+        "V0Set": 1078.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 34
+    },
+    {
+      "name": "W607",
+      "params": {
+        "V0Set": 1057.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 39
+    },
+    {
+      "name": "W608",
+      "params": {
+        "V0Set": 1154.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 44
+    },
+    {
+      "name": "W609",
+      "params": {
+        "V0Set": 1133.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 46
+    },
+    {
+      "name": "W610",
+      "params": {
+        "V0Set": 1107.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 39
+    },
+    {
+      "name": "W611",
+      "params": {
+        "V0Set": 1047.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 44
+    },
+    {
+      "name": "W612",
+      "params": {
+        "V0Set": 1131.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 46
+    },
+    {
+      "name": "W613",
+      "params": {
+        "V0Set": 1152.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 16
+    },
+    {
+      "name": "W614",
+      "params": {
+        "V0Set": 1051.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 21
+    },
+    {
+      "name": "W615",
+      "params": {
+        "V0Set": 1052.5999755859375
+      },
+      "crate": "PRadHV_4",
+      "slot": 2,
+      "channel": 26
+    },
+    {
+      "name": "W616",
+      "params": {
+        "V0Set": 1087.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 1
+    },
+    {
+      "name": "W617",
+      "params": {
+        "V0Set": 1050.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 6
+    },
+    {
+      "name": "W618",
+      "params": {
+        "V0Set": 1094.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 11
+    },
+    {
+      "name": "W619",
+      "params": {
+        "V0Set": 1021.7999877929688
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 16
+    },
+    {
+      "name": "W620",
+      "params": {
+        "V0Set": 1088.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 21
+    },
+    {
+      "name": "W621",
+      "params": {
+        "V0Set": 1160.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 12,
+      "channel": 26
+    },
+    {
+      "name": "W622",
+      "params": {
+        "V0Set": 1321.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 39
+    },
+    {
+      "name": "W623",
+      "params": {
+        "V0Set": 1120.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 44
+    },
+    {
+      "name": "W624",
+      "params": {
+        "V0Set": 1042.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 46
+    },
+    {
+      "name": "W625",
+      "params": {
+        "V0Set": 1072.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 6
+    },
+    {
+      "name": "W626",
+      "params": {
+        "V0Set": 1035.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 11
+    },
+    {
+      "name": "W627",
+      "params": {
+        "V0Set": 1002.7999877929688
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 16
+    },
+    {
+      "name": "W628",
+      "params": {
+        "V0Set": 1130.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 21
+    },
+    {
+      "name": "W629",
+      "params": {
+        "V0Set": 1045.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 0,
+      "channel": 26
+    },
+    {
+      "name": "W630",
+      "params": {
+        "V0Set": 1074.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 6
+    },
+    {
+      "name": "W631",
+      "params": {
+        "V0Set": 1050.800048828125
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 11
+    },
+    {
+      "name": "W632",
+      "params": {
+        "V0Set": 1147.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 16
+    },
+    {
+      "name": "W633",
+      "params": {
+        "V0Set": 1297.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 21
+    },
+    {
+      "name": "W634",
+      "params": {
+        "V0Set": 1009.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 10,
+      "channel": 26
+    },
+    {
+      "name": "W635",
+      "params": {
+        "V0Set": 1086.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 39
+    },
+    {
+      "name": "W636",
+      "params": {
+        "V0Set": 1098.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 44
+    },
+    {
+      "name": "W637",
+      "params": {
+        "V0Set": 1034.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 46
+    },
+    {
+      "name": "W638",
+      "params": {
+        "V0Set": 1025.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 1
+    },
+    {
+      "name": "W639",
+      "params": {
+        "V0Set": 1143.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 6
+    },
+    {
+      "name": "W640",
+      "params": {
+        "V0Set": 1016.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 11
+    },
+    {
+      "name": "W641",
+      "params": {
+        "V0Set": 1086.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 16
+    },
+    {
+      "name": "W642",
+      "params": {
+        "V0Set": 1183.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 21
+    },
+    {
+      "name": "W643",
+      "params": {
+        "V0Set": 1062.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 14,
+      "channel": 26
+    },
+    {
+      "name": "W644",
+      "params": {
+        "V0Set": 1011.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 1
+    },
+    {
+      "name": "W645",
+      "params": {
+        "V0Set": 1053.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 6
+    },
+    {
+      "name": "W646",
+      "params": {
+        "V0Set": 1119.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 11
+    },
+    {
+      "name": "W647",
+      "params": {
+        "V0Set": 1205.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 16
+    },
+    {
+      "name": "W648",
+      "params": {
+        "V0Set": 1101.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 21
+    },
+    {
+      "name": "W649",
+      "params": {
+        "V0Set": 1143.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 26
+    },
+    {
+      "name": "W650",
+      "params": {
+        "V0Set": 1111.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 3
+    },
+    {
+      "name": "W651",
+      "params": {
+        "V0Set": 1075.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 8
+    },
+    {
+      "name": "W652",
+      "params": {
+        "V0Set": 1156.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 13
+    },
+    {
+      "name": "W653",
+      "params": {
+        "V0Set": 1054.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 18
+    },
+    {
+      "name": "W654",
+      "params": {
+        "V0Set": 1202.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 23
+    },
+    {
+      "name": "W655",
+      "params": {
+        "V0Set": 1096.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 28
+    },
+    {
+      "name": "W656",
+      "params": {
+        "V0Set": 1188.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 1
+    },
+    {
+      "name": "W657",
+      "params": {
+        "V0Set": 1159.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 6
+    },
+    {
+      "name": "W658",
+      "params": {
+        "V0Set": 1158.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 11
+    },
+    {
+      "name": "W659",
+      "params": {
+        "V0Set": 1155.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 3
+    },
+    {
+      "name": "W660",
+      "params": {
+        "V0Set": 1094.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 8
+    },
+    {
+      "name": "W661",
+      "params": {
+        "V0Set": 1143.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 13
+    },
+    {
+      "name": "W662",
+      "params": {
+        "V0Set": 1264.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 18
+    },
+    {
+      "name": "W663",
+      "params": {
+        "V0Set": 1058.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 23
+    },
+    {
+      "name": "W664",
+      "params": {
+        "V0Set": 1011.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 3
+    },
+    {
+      "name": "W665",
+      "params": {
+        "V0Set": 1175.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 8
+    },
+    {
+      "name": "W666",
+      "params": {
+        "V0Set": 1133.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 13
+    },
+    {
+      "name": "W667",
+      "params": {
+        "V0Set": 1162.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 18
+    },
+    {
+      "name": "W668",
+      "params": {
+        "V0Set": 1073.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 23
+    },
+    {
+      "name": "W669",
+      "params": {
+        "V0Set": 1136.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 1
+    },
+    {
+      "name": "W670",
+      "params": {
+        "V0Set": 1093.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 6
+    },
+    {
+      "name": "W671",
+      "params": {
+        "V0Set": 1090.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 11
+    },
+    {
+      "name": "W672",
+      "params": {
+        "V0Set": 1075.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 3
+    },
+    {
+      "name": "W673",
+      "params": {
+        "V0Set": 1155.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 8
+    },
+    {
+      "name": "W674",
+      "params": {
+        "V0Set": 1160.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 13
+    },
+    {
+      "name": "W675",
+      "params": {
+        "V0Set": 1046.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 18
+    },
+    {
+      "name": "W676",
+      "params": {
+        "V0Set": 1147.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 23
+    },
+    {
+      "name": "W677",
+      "params": {
+        "V0Set": 1158.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 28
+    },
+    {
+      "name": "W678",
+      "params": {
+        "V0Set": 1113.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 16
+    },
+    {
+      "name": "W679",
+      "params": {
+        "V0Set": 1070.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 21
+    },
+    {
+      "name": "W680",
+      "params": {
+        "V0Set": 1158.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 8,
+      "channel": 26
+    },
+    {
+      "name": "W681",
+      "params": {
+        "V0Set": 1253.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 3
+    },
+    {
+      "name": "W682",
+      "params": {
+        "V0Set": 1128.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 8
+    },
+    {
+      "name": "W683",
+      "params": {
+        "V0Set": 1060.4000244140625
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 13
+    },
+    {
+      "name": "W684",
+      "params": {
+        "V0Set": 1140.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 33
+    },
+    {
+      "name": "W685",
+      "params": {
+        "V0Set": 1012.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 38
+    },
+    {
+      "name": "W686",
+      "params": {
+        "V0Set": 1185.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 43
+    },
+    {
+      "name": "W687",
+      "params": {
+        "V0Set": 1130.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 48
+    },
+    {
+      "name": "W688",
+      "params": {
+        "V0Set": 1147.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 31
+    },
+    {
+      "name": "W689",
+      "params": {
+        "V0Set": 1216.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 5
+    },
+    {
+      "name": "W690",
+      "params": {
+        "V0Set": 1070.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 16
+    },
+    {
+      "name": "W691",
+      "params": {
+        "V0Set": 1065.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 21
+    },
+    {
+      "name": "W692",
+      "params": {
+        "V0Set": 1086.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 6,
+      "channel": 26
+    },
+    {
+      "name": "W693",
+      "params": {
+        "V0Set": 1215.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 28
+    },
+    {
+      "name": "W694",
+      "params": {
+        "V0Set": 1113.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 33
+    },
+    {
+      "name": "W695",
+      "params": {
+        "V0Set": 1183.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 38
+    },
+    {
+      "name": "W696",
+      "params": {
+        "V0Set": 1281.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 43
+    },
+    {
+      "name": "W697",
+      "params": {
+        "V0Set": 1226.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 48
+    },
+    {
+      "name": "W698",
+      "params": {
+        "V0Set": 1280.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 28
+    },
+    {
+      "name": "W699",
+      "params": {
+        "V0Set": 1216.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 33
+    },
+    {
+      "name": "W700",
+      "params": {
+        "V0Set": 1238.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 38
+    },
+    {
+      "name": "W701",
+      "params": {
+        "V0Set": 1082.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 43
+    },
+    {
+      "name": "W702",
+      "params": {
+        "V0Set": 1133.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 48
+    },
+    {
+      "name": "W703",
+      "params": {
+        "V0Set": 1093.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 16
+    },
+    {
+      "name": "W704",
+      "params": {
+        "V0Set": 1037.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 21
+    },
+    {
+      "name": "W705",
+      "params": {
+        "V0Set": 1156.800048828125
+      },
+      "crate": "PRadHV_2",
+      "slot": 4,
+      "channel": 26
+    },
+    {
+      "name": "W706",
+      "params": {
+        "V0Set": 1105.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 33
+    },
+    {
+      "name": "W707",
+      "params": {
+        "V0Set": 1064.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 38
+    },
+    {
+      "name": "W708",
+      "params": {
+        "V0Set": 1205.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 43
+    },
+    {
+      "name": "W709",
+      "params": {
+        "V0Set": 1220.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 48
+    },
+    {
+      "name": "W710",
+      "params": {
+        "V0Set": 1118.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 31
+    },
+    {
+      "name": "W711",
+      "params": {
+        "V0Set": 1090.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 5
+    },
+    {
+      "name": "W712",
+      "params": {
+        "V0Set": 1082.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 3
+    },
+    {
+      "name": "W713",
+      "params": {
+        "V0Set": 1132.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 8
+    },
+    {
+      "name": "W714",
+      "params": {
+        "V0Set": 1221.4000244140625
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 13
+    },
+    {
+      "name": "W715",
+      "params": {
+        "V0Set": 1008.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 18
+    },
+    {
+      "name": "W716",
+      "params": {
+        "V0Set": 1042.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 23
+    },
+    {
+      "name": "W717",
+      "params": {
+        "V0Set": 1085.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 28
+    },
+    {
+      "name": "W718",
+      "params": {
+        "V0Set": 1203.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 10
+    },
+    {
+      "name": "W719",
+      "params": {
+        "V0Set": 1157.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 15
+    },
+    {
+      "name": "W720",
+      "params": {
+        "V0Set": 1136.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 20
+    },
+    {
+      "name": "W721",
+      "params": {
+        "V0Set": 1070.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 25
+    },
+    {
+      "name": "W722",
+      "params": {
+        "V0Set": 1098.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 30
+    },
+    {
+      "name": "W723",
+      "params": {
+        "V0Set": 1095.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 35
+    },
+    {
+      "name": "W724",
+      "params": {
+        "V0Set": 1126.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 3
+    },
+    {
+      "name": "W725",
+      "params": {
+        "V0Set": 1081.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 8
+    },
+    {
+      "name": "W726",
+      "params": {
+        "V0Set": 1046.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 13
+    },
+    {
+      "name": "W727",
+      "params": {
+        "V0Set": 1294.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 31
+    },
+    {
+      "name": "W728",
+      "params": {
+        "V0Set": 1234.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 5
+    },
+    {
+      "name": "W729",
+      "params": {
+        "V0Set": 1136.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 10
+    },
+    {
+      "name": "W730",
+      "params": {
+        "V0Set": 1087.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 15
+    },
+    {
+      "name": "W731",
+      "params": {
+        "V0Set": 1125.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 20
+    },
+    {
+      "name": "W732",
+      "params": {
+        "V0Set": 1039.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 31
+    },
+    {
+      "name": "W733",
+      "params": {
+        "V0Set": 1218.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 5
+    },
+    {
+      "name": "W734",
+      "params": {
+        "V0Set": 1147.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 10
+    },
+    {
+      "name": "W735",
+      "params": {
+        "V0Set": 1172.800048828125
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 15
+    },
+    {
+      "name": "W736",
+      "params": {
+        "V0Set": 1101.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 20
+    },
+    {
+      "name": "W737",
+      "params": {
+        "V0Set": 1219.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 3
+    },
+    {
+      "name": "W738",
+      "params": {
+        "V0Set": 1071.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 8
+    },
+    {
+      "name": "W739",
+      "params": {
+        "V0Set": 1055.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 13
+    },
+    {
+      "name": "W740",
+      "params": {
+        "V0Set": 1135.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 10
+    },
+    {
+      "name": "W741",
+      "params": {
+        "V0Set": 1200.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 15
+    },
+    {
+      "name": "W742",
+      "params": {
+        "V0Set": 1069.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 20
+    },
+    {
+      "name": "W743",
+      "params": {
+        "V0Set": 1258.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 25
+    },
+    {
+      "name": "W744",
+      "params": {
+        "V0Set": 1065.4000244140625
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 30
+    },
+    {
+      "name": "W745",
+      "params": {
+        "V0Set": 1167.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 35
+    },
+    {
+      "name": "W746",
+      "params": {
+        "V0Set": 1022.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 18
+    },
+    {
+      "name": "W747",
+      "params": {
+        "V0Set": 1336.199951171875
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 23
+    },
+    {
+      "name": "W748",
+      "params": {
+        "V0Set": 1092.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 28
+    },
+    {
+      "name": "W749",
+      "params": {
+        "V0Set": 1171.199951171875
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 33
+    },
+    {
+      "name": "W750",
+      "params": {
+        "V0Set": 1104.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 38
+    },
+    {
+      "name": "W751",
+      "params": {
+        "V0Set": 1145.199951171875
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 43
+    },
+    {
+      "name": "W752",
+      "params": {
+        "V0Set": 1137.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 48
+    },
+    {
+      "name": "W753",
+      "params": {
+        "V0Set": 1101.5999755859375
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 31
+    },
+    {
+      "name": "W754",
+      "params": {
+        "V0Set": 1081.800048828125
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 5
+    },
+    {
+      "name": "W755",
+      "params": {
+        "V0Set": 1064.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 40
+    },
+    {
+      "name": "W756",
+      "params": {
+        "V0Set": 1101.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 45
+    },
+    {
+      "name": "W757",
+      "params": {
+        "V0Set": 1165.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 36
+    },
+    {
+      "name": "W758",
+      "params": {
+        "V0Set": 1084.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 18
+    },
+    {
+      "name": "W759",
+      "params": {
+        "V0Set": 1132.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 23
+    },
+    {
+      "name": "W760",
+      "params": {
+        "V0Set": 1079.5999755859375
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 28
+    },
+    {
+      "name": "W761",
+      "params": {
+        "V0Set": 1105.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 25
+    },
+    {
+      "name": "W762",
+      "params": {
+        "V0Set": 1281.199951171875
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 30
+    },
+    {
+      "name": "W763",
+      "params": {
+        "V0Set": 1194.800048828125
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 35
+    },
+    {
+      "name": "W764",
+      "params": {
+        "V0Set": 1064.4000244140625
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 40
+    },
+    {
+      "name": "W765",
+      "params": {
+        "V0Set": 1037.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 45
+    },
+    {
+      "name": "W766",
+      "params": {
+        "V0Set": 1299.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 25
+    },
+    {
+      "name": "W767",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 30
+    },
+    {
+      "name": "W768",
+      "params": {
+        "V0Set": 1038.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 35
+    },
+    {
+      "name": "W769",
+      "params": {
+        "V0Set": 1022.7999877929688
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 40
+    },
+    {
+      "name": "W770",
+      "params": {
+        "V0Set": 1105.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 45
+    },
+    {
+      "name": "W771",
+      "params": {
+        "V0Set": 1199.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 18
+    },
+    {
+      "name": "W772",
+      "params": {
+        "V0Set": 1089.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 23
+    },
+    {
+      "name": "W773",
+      "params": {
+        "V0Set": 1045.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 28
+    },
+    {
+      "name": "W774",
+      "params": {
+        "V0Set": 1183.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 40
+    },
+    {
+      "name": "W775",
+      "params": {
+        "V0Set": 1143.5999755859375
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 45
+    },
+    {
+      "name": "W776",
+      "params": {
+        "V0Set": 1116.199951171875
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 36
+    },
+    {
+      "name": "W777",
+      "params": {
+        "V0Set": 1182.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 33
+    },
+    {
+      "name": "W778",
+      "params": {
+        "V0Set": 1092.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 38
+    },
+    {
+      "name": "W779",
+      "params": {
+        "V0Set": 1211.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 43
+    },
+    {
+      "name": "W780",
+      "params": {
+        "V0Set": 1101.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 48
+    },
+    {
+      "name": "W781",
+      "params": {
+        "V0Set": 1070.5999755859375
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 31
+    },
+    {
+      "name": "W782",
+      "params": {
+        "V0Set": 1136.800048828125
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 5
+    },
+    {
+      "name": "W783",
+      "params": {
+        "V0Set": 1162.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 10
+    },
+    {
+      "name": "W784",
+      "params": {
+        "V0Set": 1171.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 15
+    },
+    {
+      "name": "W785",
+      "params": {
+        "V0Set": 1105.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 20
+    },
+    {
+      "name": "W786",
+      "params": {
+        "V0Set": 1172.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 25
+    },
+    {
+      "name": "W787",
+      "params": {
+        "V0Set": 1120.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 30
+    },
+    {
+      "name": "W788",
+      "params": {
+        "V0Set": 1130.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 35
+    },
+    {
+      "name": "W789",
+      "params": {
+        "V0Set": 1202.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 2
+    },
+    {
+      "name": "W790",
+      "params": {
+        "V0Set": 1152.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 7
+    },
+    {
+      "name": "W791",
+      "params": {
+        "V0Set": 1144.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 12
+    },
+    {
+      "name": "W792",
+      "params": {
+        "V0Set": 1192.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 33
+    },
+    {
+      "name": "W793",
+      "params": {
+        "V0Set": 1134.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 38
+    },
+    {
+      "name": "W794",
+      "params": {
+        "V0Set": 1206.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 43
+    },
+    {
+      "name": "W795",
+      "params": {
+        "V0Set": 1050.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 36
+    },
+    {
+      "name": "W796",
+      "params": {
+        "V0Set": 1165.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 2
+    },
+    {
+      "name": "W797",
+      "params": {
+        "V0Set": 1159.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 7
+    },
+    {
+      "name": "W798",
+      "params": {
+        "V0Set": 1177.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 12
+    },
+    {
+      "name": "W799",
+      "params": {
+        "V0Set": 1133.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 17
+    },
+    {
+      "name": "W800",
+      "params": {
+        "V0Set": 1055.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 36
+    },
+    {
+      "name": "W801",
+      "params": {
+        "V0Set": 1132.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 2
+    },
+    {
+      "name": "W802",
+      "params": {
+        "V0Set": 1177.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 7
+    },
+    {
+      "name": "W803",
+      "params": {
+        "V0Set": 1121.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 12
+    },
+    {
+      "name": "W804",
+      "params": {
+        "V0Set": 1174.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 17
+    },
+    {
+      "name": "W805",
+      "params": {
+        "V0Set": 1106.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 33
+    },
+    {
+      "name": "W806",
+      "params": {
+        "V0Set": 1181.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 38
+    },
+    {
+      "name": "W807",
+      "params": {
+        "V0Set": 1127.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 43
+    },
+    {
+      "name": "W808",
+      "params": {
+        "V0Set": 1153.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 2
+    },
+    {
+      "name": "W809",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 7
+    },
+    {
+      "name": "W810",
+      "params": {
+        "V0Set": 1046.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 12
+    },
+    {
+      "name": "W811",
+      "params": {
+        "V0Set": 1195.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 10
+    },
+    {
+      "name": "W812",
+      "params": {
+        "V0Set": 1135.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 15
+    },
+    {
+      "name": "W813",
+      "params": {
+        "V0Set": 1157.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 20
+    },
+    {
+      "name": "W814",
+      "params": {
+        "V0Set": 968.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 25
+    },
+    {
+      "name": "W815",
+      "params": {
+        "V0Set": 1110.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 30
+    },
+    {
+      "name": "W816",
+      "params": {
+        "V0Set": 1093.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 35
+    },
+    {
+      "name": "W817",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 40
+    },
+    {
+      "name": "W818",
+      "params": {
+        "V0Set": 1138.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 45
+    },
+    {
+      "name": "W819",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 36
+    },
+    {
+      "name": "W820",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 2
+    },
+    {
+      "name": "W821",
+      "params": {
+        "V0Set": 1198.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 7
+    },
+    {
+      "name": "W822",
+      "params": {
+        "V0Set": 1153.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 12
+    },
+    {
+      "name": "W823",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 17
+    },
+    {
+      "name": "W824",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 22
+    },
+    {
+      "name": "W825",
+      "params": {
+        "V0Set": 1210.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 27
+    },
+    {
+      "name": "W826",
+      "params": {
+        "V0Set": 1120.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 48
+    },
+    {
+      "name": "W827",
+      "params": {
+        "V0Set": 1126.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 31
+    },
+    {
+      "name": "W828",
+      "params": {
+        "V0Set": 1215.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 5
+    },
+    {
+      "name": "W829",
+      "params": {
+        "V0Set": 1094.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 22
+    },
+    {
+      "name": "W830",
+      "params": {
+        "V0Set": 1160.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 27
+    },
+    {
+      "name": "W831",
+      "params": {
+        "V0Set": 1134.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 32
+    },
+    {
+      "name": "W832",
+      "params": {
+        "V0Set": 995.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 37
+    },
+    {
+      "name": "W833",
+      "params": {
+        "V0Set": 1149.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 42
+    },
+    {
+      "name": "W834",
+      "params": {
+        "V0Set": 1088.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 22
+    },
+    {
+      "name": "W835",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 27
+    },
+    {
+      "name": "W836",
+      "params": {
+        "V0Set": 1162.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 32
+    },
+    {
+      "name": "W837",
+      "params": {
+        "V0Set": 1196.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 37
+    },
+    {
+      "name": "W838",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 42
+    },
+    {
+      "name": "W839",
+      "params": {
+        "V0Set": 1157.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 48
+    },
+    {
+      "name": "W840",
+      "params": {
+        "V0Set": 1101.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 31
+    },
+    {
+      "name": "W841",
+      "params": {
+        "V0Set": 1075.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 5
+    },
+    {
+      "name": "W842",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 17
+    },
+    {
+      "name": "W843",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 22
+    },
+    {
+      "name": "W844",
+      "params": {
+        "V0Set": 1128.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 27
+    },
+    {
+      "name": "W845",
+      "params": {
+        "V0Set": 1181.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 40
+    },
+    {
+      "name": "W846",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 45
+    },
+    {
+      "name": "W847",
+      "params": {
+        "V0Set": 1153.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 36
+    },
+    {
+      "name": "W848",
+      "params": {
+        "V0Set": 1139.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 2
+    },
+    {
+      "name": "W849",
+      "params": {
+        "V0Set": 1142.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 7
+    },
+    {
+      "name": "W850",
+      "params": {
+        "V0Set": 1073.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 12
+    },
+    {
+      "name": "W851",
+      "params": {
+        "V0Set": 1134.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 17
+    },
+    {
+      "name": "W852",
+      "params": {
+        "V0Set": 1159.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 22
+    },
+    {
+      "name": "W853",
+      "params": {
+        "V0Set": 1170.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 27
+    },
+    {
+      "name": "W854",
+      "params": {
+        "V0Set": 1194.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 32
+    },
+    {
+      "name": "W855",
+      "params": {
+        "V0Set": 1070.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 37
+    },
+    {
+      "name": "W856",
+      "params": {
+        "V0Set": 1165.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 42
+    },
+    {
+      "name": "W857",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 32
+    },
+    {
+      "name": "W858",
+      "params": {
+        "V0Set": 1218.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 37
+    },
+    {
+      "name": "W859",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 42
+    },
+    {
+      "name": "W860",
+      "params": {
+        "V0Set": 1197.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 10
+    },
+    {
+      "name": "W861",
+      "params": {
+        "V0Set": 1154.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 15
+    },
+    {
+      "name": "W862",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 20
+    },
+    {
+      "name": "W863",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 47
+    },
+    {
+      "name": "W864",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 41
+    },
+    {
+      "name": "W865",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 4
+    },
+    {
+      "name": "W866",
+      "params": {
+        "V0Set": 1153.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 9
+    },
+    {
+      "name": "W867",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 14
+    },
+    {
+      "name": "W868",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 47
+    },
+    {
+      "name": "W869",
+      "params": {
+        "V0Set": 1057.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 41
+    },
+    {
+      "name": "W870",
+      "params": {
+        "V0Set": 1155.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 4
+    },
+    {
+      "name": "W871",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 9
+    },
+    {
+      "name": "W872",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 14
+    },
+    {
+      "name": "W873",
+      "params": {
+        "V0Set": 1164.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 10
+    },
+    {
+      "name": "W874",
+      "params": {
+        "V0Set": 1185.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 15
+    },
+    {
+      "name": "W875",
+      "params": {
+        "V0Set": 1220.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 20
+    },
+    {
+      "name": "W876",
+      "params": {
+        "V0Set": 1187.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 32
+    },
+    {
+      "name": "W877",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 37
+    },
+    {
+      "name": "W878",
+      "params": {
+        "V0Set": 1146.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 42
+    },
+    {
+      "name": "W879",
+      "params": {
+        "V0Set": 1203.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 17
+    },
+    {
+      "name": "W880",
+      "params": {
+        "V0Set": 1182.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 22
+    },
+    {
+      "name": "W881",
+      "params": {
+        "V0Set": 1139.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 27
+    },
+    {
+      "name": "W882",
+      "params": {
+        "V0Set": 1132.2
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 32
+    },
+    {
+      "name": "W883",
+      "params": {
+        "V0Set": 1105.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 37
+    },
+    {
+      "name": "W884",
+      "params": {
+        "V0Set": 1163.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 42
+    },
+    {
+      "name": "W885",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 47
+    },
+    {
+      "name": "W886",
+      "params": {
+        "V0Set": 1103.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 41
+    },
+    {
+      "name": "W887",
+      "params": {
+        "V0Set": 1130.8
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 4
+    },
+    {
+      "name": "W888",
+      "params": {
+        "V0Set": 1164.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 9
+    },
+    {
+      "name": "W889",
+      "params": {
+        "V0Set": 1123.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 14
+    },
+    {
+      "name": "W890",
+      "params": {
+        "V0Set": 1167.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 19
+    },
+    {
+      "name": "W891",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 47
+    },
+    {
+      "name": "W892",
+      "params": {
+        "V0Set": 1139.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 41
+    },
+    {
+      "name": "W893",
+      "params": {
+        "V0Set": 1159.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 4
+    },
+    {
+      "name": "W894",
+      "params": {
+        "V0Set": 1217.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 25
+    },
+    {
+      "name": "W895",
+      "params": {
+        "V0Set": 1160.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 30
+    },
+    {
+      "name": "W896",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 35
+    },
+    {
+      "name": "W897",
+      "params": {
+        "V0Set": 1186.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 19
+    },
+    {
+      "name": "W898",
+      "params": {
+        "V0Set": 1159.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 24
+    },
+    {
+      "name": "W899",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 29
+    },
+    {
+      "name": "W900",
+      "params": {
+        "V0Set": 1173.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 34
+    },
+    {
+      "name": "W901",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 39
+    },
+    {
+      "name": "W902",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 19
+    },
+    {
+      "name": "W903",
+      "params": {
+        "V0Set": 1164.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 24
+    },
+    {
+      "name": "W904",
+      "params": {
+        "V0Set": 1193.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 29
+    },
+    {
+      "name": "W905",
+      "params": {
+        "V0Set": 1177.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 34
+    },
+    {
+      "name": "W906",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 39
+    },
+    {
+      "name": "W907",
+      "params": {
+        "V0Set": 1120.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 25
+    },
+    {
+      "name": "W908",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 30
+    },
+    {
+      "name": "W909",
+      "params": {
+        "V0Set": 1197.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 35
+    },
+    {
+      "name": "W910",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 47
+    },
+    {
+      "name": "W911",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 41
+    },
+    {
+      "name": "W912",
+      "params": {
+        "V0Set": 1123.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 4
+    },
+    {
+      "name": "W913",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 47
+    },
+    {
+      "name": "W914",
+      "params": {
+        "V0Set": 1172.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 41
+    },
+    {
+      "name": "W915",
+      "params": {
+        "V0Set": 1120.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 4
+    },
+    {
+      "name": "W916",
+      "params": {
+        "V0Set": 1063.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 9
+    },
+    {
+      "name": "W917",
+      "params": {
+        "V0Set": 1182.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 14
+    },
+    {
+      "name": "W918",
+      "params": {
+        "V0Set": 1181.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 19
+    },
+    {
+      "name": "W919",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 24
+    },
+    {
+      "name": "W920",
+      "params": {
+        "V0Set": 1031.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 29
+    },
+    {
+      "name": "W921",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 34
+    },
+    {
+      "name": "W922",
+      "params": {
+        "V0Set": 1144.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 39
+    },
+    {
+      "name": "W923",
+      "params": {
+        "V0Set": 1103.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 44
+    },
+    {
+      "name": "W924",
+      "params": {
+        "V0Set": 1162.6
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 46
+    },
+    {
+      "name": "W925",
+      "params": {
+        "V0Set": 1185.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 9
+    },
+    {
+      "name": "W926",
+      "params": {
+        "V0Set": 1111.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 14
+    },
+    {
+      "name": "W927",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 19
+    },
+    {
+      "name": "W928",
+      "params": {
+        "V0Set": 1085.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 40
+    },
+    {
+      "name": "W929",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 45
+    },
+    {
+      "name": "W930",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 36
+    },
+    {
+      "name": "W931",
+      "params": {
+        "V0Set": 1088.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 44
+    },
+    {
+      "name": "W932",
+      "params": {
+        "V0Set": 1113.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 46
+    },
+    {
+      "name": "W933",
+      "params": {
+        "V0Set": 1219.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 1
+    },
+    {
+      "name": "W934",
+      "params": {
+        "V0Set": 1140.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 6
+    },
+    {
+      "name": "W935",
+      "params": {
+        "V0Set": 1148.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 11
+    },
+    {
+      "name": "W936",
+      "params": {
+        "V0Set": 1157.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 44
+    },
+    {
+      "name": "W937",
+      "params": {
+        "V0Set": 1136.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 46
+    },
+    {
+      "name": "W938",
+      "params": {
+        "V0Set": 1176.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 1
+    },
+    {
+      "name": "W939",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 6
+    },
+    {
+      "name": "W940",
+      "params": {
+        "V0Set": 1123.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 11
+    },
+    {
+      "name": "W941",
+      "params": {
+        "V0Set": 1151.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 40
+    },
+    {
+      "name": "W942",
+      "params": {
+        "V0Set": 1110.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 45
+    },
+    {
+      "name": "W943",
+      "params": {
+        "V0Set": 1112.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 36
+    },
+    {
+      "name": "W944",
+      "params": {
+        "V0Set": 1095.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 9
+    },
+    {
+      "name": "W945",
+      "params": {
+        "V0Set": 1132.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 14
+    },
+    {
+      "name": "W946",
+      "params": {
+        "V0Set": 1158.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 19
+    },
+    {
+      "name": "W947",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 24
+    },
+    {
+      "name": "W948",
+      "params": {
+        "V0Set": 1078.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 29
+    },
+    {
+      "name": "W949",
+      "params": {
+        "V0Set": 1178.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 34
+    },
+    {
+      "name": "W950",
+      "params": {
+        "V0Set": 1143.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 39
+    },
+    {
+      "name": "W951",
+      "params": {
+        "V0Set": 1116.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 44
+    },
+    {
+      "name": "W952",
+      "params": {
+        "V0Set": 1076.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 46
+    },
+    {
+      "name": "W953",
+      "params": {
+        "V0Set": 1170.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 1
+    },
+    {
+      "name": "W954",
+      "params": {
+        "V0Set": 1159.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 6
+    },
+    {
+      "name": "W955",
+      "params": {
+        "V0Set": 1213.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 11
+    },
+    {
+      "name": "W956",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 24
+    },
+    {
+      "name": "W957",
+      "params": {
+        "V0Set": 1121.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 29
+    },
+    {
+      "name": "W958",
+      "params": {
+        "V0Set": 1163.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 34
+    },
+    {
+      "name": "W959",
+      "params": {
+        "V0Set": 1147.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 39
+    },
+    {
+      "name": "W960",
+      "params": {
+        "V0Set": 1130.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 44
+    },
+    {
+      "name": "W961",
+      "params": {
+        "V0Set": 1166.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 46
+    },
+    {
+      "name": "W962",
+      "params": {
+        "V0Set": 1154.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 2
+    },
+    {
+      "name": "W963",
+      "params": {
+        "V0Set": 1118.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 7
+    },
+    {
+      "name": "W964",
+      "params": {
+        "V0Set": 1093.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 12
+    },
+    {
+      "name": "W965",
+      "params": {
+        "V0Set": 1217.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 17
+    },
+    {
+      "name": "W966",
+      "params": {
+        "V0Set": 1126.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 22
+    },
+    {
+      "name": "W967",
+      "params": {
+        "V0Set": 1067.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 27
+    },
+    {
+      "name": "W968",
+      "params": {
+        "V0Set": 1084.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 16
+    },
+    {
+      "name": "W969",
+      "params": {
+        "V0Set": 1184.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 21
+    },
+    {
+      "name": "W970",
+      "params": {
+        "V0Set": 1080.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 16
+    },
+    {
+      "name": "W971",
+      "params": {
+        "V0Set": 1066.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 21
+    },
+    {
+      "name": "W972",
+      "params": {
+        "V0Set": 1095.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 2
+    },
+    {
+      "name": "W973",
+      "params": {
+        "V0Set": 1161.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 7
+    },
+    {
+      "name": "W974",
+      "params": {
+        "V0Set": 1110.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 12
+    },
+    {
+      "name": "W975",
+      "params": {
+        "V0Set": 1094.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 17
+    },
+    {
+      "name": "W976",
+      "params": {
+        "V0Set": 1098.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 22
+    },
+    {
+      "name": "W977",
+      "params": {
+        "V0Set": 1109.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 27
+    },
+    {
+      "name": "W978",
+      "params": {
+        "V0Set": 1096.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 24
+    },
+    {
+      "name": "W979",
+      "params": {
+        "V0Set": 1073.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 29
+    },
+    {
+      "name": "W980",
+      "params": {
+        "V0Set": 1134.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 34
+    },
+    {
+      "name": "W981",
+      "params": {
+        "V0Set": 1211.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 39
+    },
+    {
+      "name": "W982",
+      "params": {
+        "V0Set": 1129.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 44
+    },
+    {
+      "name": "W983",
+      "params": {
+        "V0Set": 1132.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 46
+    },
+    {
+      "name": "W984",
+      "params": {
+        "V0Set": 1156.4
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 1
+    },
+    {
+      "name": "W985",
+      "params": {
+        "V0Set": 1134.6
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 6
+    },
+    {
+      "name": "W986",
+      "params": {
+        "V0Set": 1178.8
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 11
+    },
+    {
+      "name": "W987",
+      "params": {
+        "V0Set": 1178.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 16
+    },
+    {
+      "name": "W988",
+      "params": {
+        "V0Set": 1111.4
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 21
+    },
+    {
+      "name": "W989",
+      "params": {
+        "V0Set": 1125.2
+      },
+      "crate": "PRadHV_4",
+      "slot": 4,
+      "channel": 26
+    },
+    {
+      "name": "W990",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 1
+    },
+    {
+      "name": "W991",
+      "params": {
+        "V0Set": 1115.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 6
+    },
+    {
+      "name": "W992",
+      "params": {
+        "V0Set": 1156.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 11
+    },
+    {
+      "name": "W993",
+      "params": {
+        "V0Set": 1171.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 16
+    },
+    {
+      "name": "W994",
+      "params": {
+        "V0Set": 1178.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 21
+    },
+    {
+      "name": "W995",
+      "params": {
+        "V0Set": 1182.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 14,
+      "channel": 26
+    },
+    {
+      "name": "W996",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 32
+    },
+    {
+      "name": "W997",
+      "params": {
+        "V0Set": 1145.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 37
+    },
+    {
+      "name": "W998",
+      "params": {
+        "V0Set": 1130.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 42
+    },
+    {
+      "name": "W999",
+      "params": {
+        "V0Set": 1222.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 47
+    },
+    {
+      "name": "W1000",
+      "params": {
+        "V0Set": 1197.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 41
+    },
+    {
+      "name": "W1001",
+      "params": {
+        "V0Set": 1177.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 9
+    },
+    {
+      "name": "W1002",
+      "params": {
+        "V0Set": 1126.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 2,
+      "channel": 26
+    },
+    {
+      "name": "W1003",
+      "params": {
+        "V0Set": 1158.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 3
+    },
+    {
+      "name": "W1004",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 12,
+      "channel": 26
+    },
+    {
+      "name": "W1005",
+      "params": {
+        "V0Set": 1118.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 3
+    },
+    {
+      "name": "W1006",
+      "params": {
+        "V0Set": 1103.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 32
+    },
+    {
+      "name": "W1007",
+      "params": {
+        "V0Set": 1117.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 37
+    },
+    {
+      "name": "W1008",
+      "params": {
+        "V0Set": 1130.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 42
+    },
+    {
+      "name": "W1009",
+      "params": {
+        "V0Set": 1121.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 47
+    },
+    {
+      "name": "W1010",
+      "params": {
+        "V0Set": 1143.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 41
+    },
+    {
+      "name": "W1011",
+      "params": {
+        "V0Set": 1167.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 4
+    },
+    {
+      "name": "W1012",
+      "params": {
+        "V0Set": 1144.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 1
+    },
+    {
+      "name": "W1013",
+      "params": {
+        "V0Set": 1117.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 6
+    },
+    {
+      "name": "W1014",
+      "params": {
+        "V0Set": 1170.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 11
+    },
+    {
+      "name": "W1015",
+      "params": {
+        "V0Set": 1126.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 16
+    },
+    {
+      "name": "W1016",
+      "params": {
+        "V0Set": 1170.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 21
+    },
+    {
+      "name": "W1017",
+      "params": {
+        "V0Set": 1107.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 0,
+      "channel": 26
+    },
+    {
+      "name": "W1018",
+      "params": {
+        "V0Set": 1132.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 16
+    },
+    {
+      "name": "W1019",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 21
+    },
+    {
+      "name": "W1020",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 10,
+      "channel": 26
+    },
+    {
+      "name": "W1021",
+      "params": {
+        "V0Set": 1188.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 3
+    },
+    {
+      "name": "W1022",
+      "params": {
+        "V0Set": 1183.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 8
+    },
+    {
+      "name": "W1023",
+      "params": {
+        "V0Set": 1121.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 1
+    },
+    {
+      "name": "W1024",
+      "params": {
+        "V0Set": 1100.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 3
+    },
+    {
+      "name": "W1025",
+      "params": {
+        "V0Set": 1129.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 8
+    },
+    {
+      "name": "W1026",
+      "params": {
+        "V0Set": 1140.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 13
+    },
+    {
+      "name": "W1027",
+      "params": {
+        "V0Set": 1150.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 18
+    },
+    {
+      "name": "W1028",
+      "params": {
+        "V0Set": 1167.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 23
+    },
+    {
+      "name": "W1029",
+      "params": {
+        "V0Set": 1124.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 17
+    },
+    {
+      "name": "W1030",
+      "params": {
+        "V0Set": 1157.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 4
+    },
+    {
+      "name": "W1031",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 14
+    },
+    {
+      "name": "W1032",
+      "params": {
+        "V0Set": 1123.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 19
+    },
+    {
+      "name": "W1033",
+      "params": {
+        "V0Set": 1119.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 24
+    },
+    {
+      "name": "W1034",
+      "params": {
+        "V0Set": 1160.4
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 29
+    },
+    {
+      "name": "W1035",
+      "params": {
+        "V0Set": 1162.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 34
+    },
+    {
+      "name": "W1036",
+      "params": {
+        "V0Set": 1118.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 8
+    },
+    {
+      "name": "W1037",
+      "params": {
+        "V0Set": 1170.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 13
+    },
+    {
+      "name": "W1038",
+      "params": {
+        "V0Set": 1109.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 8
+    },
+    {
+      "name": "W1039",
+      "params": {
+        "V0Set": 1070.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 13
+    },
+    {
+      "name": "W1040",
+      "params": {
+        "V0Set": 1133.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 9
+    },
+    {
+      "name": "W1041",
+      "params": {
+        "V0Set": 1180.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 14
+    },
+    {
+      "name": "W1042",
+      "params": {
+        "V0Set": 1136.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 19
+    },
+    {
+      "name": "W1043",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 24
+    },
+    {
+      "name": "W1044",
+      "params": {
+        "V0Set": 1101.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 29
+    },
+    {
+      "name": "W1045",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 34
+    },
+    {
+      "name": "W1046",
+      "params": {
+        "V0Set": 1115.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 3
+    },
+    {
+      "name": "W1047",
+      "params": {
+        "V0Set": 1169.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 8
+    },
+    {
+      "name": "W1048",
+      "params": {
+        "V0Set": 1128.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 13
+    },
+    {
+      "name": "W1049",
+      "params": {
+        "V0Set": 1136.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 18
+    },
+    {
+      "name": "W1050",
+      "params": {
+        "V0Set": 1183.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 23
+    },
+    {
+      "name": "W1051",
+      "params": {
+        "V0Set": 1158.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 17
+    },
+    {
+      "name": "W1052",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 3
+    },
+    {
+      "name": "W1053",
+      "params": {
+        "V0Set": 1120.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 8
+    },
+    {
+      "name": "W1054",
+      "params": {
+        "V0Set": 1139.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 13
+    },
+    {
+      "name": "W1055",
+      "params": {
+        "V0Set": 1102.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 18
+    },
+    {
+      "name": "W1056",
+      "params": {
+        "V0Set": 1162.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 23
+    },
+    {
+      "name": "W1057",
+      "params": {
+        "V0Set": 1054.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 28
+    },
+    {
+      "name": "W1058",
+      "params": {
+        "V0Set": 1169.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 22
+    },
+    {
+      "name": "W1059",
+      "params": {
+        "V0Set": 1188.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 4
+    },
+    {
+      "name": "W1060",
+      "params": {
+        "V0Set": 1184.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 9
+    },
+    {
+      "name": "W1061",
+      "params": {
+        "V0Set": 1178.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 14
+    },
+    {
+      "name": "W1062",
+      "params": {
+        "V0Set": 1158.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 19
+    },
+    {
+      "name": "W1063",
+      "params": {
+        "V0Set": 1115.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 5
+    },
+    {
+      "name": "W1064",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 39
+    },
+    {
+      "name": "W1065",
+      "params": {
+        "V0Set": 1126.8
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 44
+    },
+    {
+      "name": "W1066",
+      "params": {
+        "V0Set": 1080.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 46
+    },
+    {
+      "name": "W1067",
+      "params": {
+        "V0Set": 1076.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 1
+    },
+    {
+      "name": "W1068",
+      "params": {
+        "V0Set": 1104.6
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 6
+    },
+    {
+      "name": "W1069",
+      "params": {
+        "V0Set": 1040.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 18
+    },
+    {
+      "name": "W1070",
+      "params": {
+        "V0Set": 1127.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 23
+    },
+    {
+      "name": "W1071",
+      "params": {
+        "V0Set": 1139.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 28
+    },
+    {
+      "name": "W1072",
+      "params": {
+        "V0Set": 1165.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 18
+    },
+    {
+      "name": "W1073",
+      "params": {
+        "V0Set": 1116.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 23
+    },
+    {
+      "name": "W1074",
+      "params": {
+        "V0Set": 1088.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 28
+    },
+    {
+      "name": "W1075",
+      "params": {
+        "V0Set": 1091.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 39
+    },
+    {
+      "name": "W1076",
+      "params": {
+        "V0Set": 1097.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 44
+    },
+    {
+      "name": "W1077",
+      "params": {
+        "V0Set": 1136.8
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 46
+    },
+    {
+      "name": "W1078",
+      "params": {
+        "V0Set": 1122.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 1
+    },
+    {
+      "name": "W1079",
+      "params": {
+        "V0Set": 1125.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 6
+    },
+    {
+      "name": "W1080",
+      "params": {
+        "V0Set": 1095.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 22
+    },
+    {
+      "name": "W1081",
+      "params": {
+        "V0Set": 1103.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 4
+    },
+    {
+      "name": "W1082",
+      "params": {
+        "V0Set": 1081.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 9
+    },
+    {
+      "name": "W1083",
+      "params": {
+        "V0Set": 1159.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 14
+    },
+    {
+      "name": "W1084",
+      "params": {
+        "V0Set": 1163.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 19
+    },
+    {
+      "name": "W1085",
+      "params": {
+        "V0Set": 1115.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 5
+    },
+    {
+      "name": "W1086",
+      "params": {
+        "V0Set": 1135.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 18
+    },
+    {
+      "name": "W1087",
+      "params": {
+        "V0Set": 1144.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 23
+    },
+    {
+      "name": "W1088",
+      "params": {
+        "V0Set": 1181.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 28
+    },
+    {
+      "name": "W1089",
+      "params": {
+        "V0Set": 1121.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 4
+    },
+    {
+      "name": "W1090",
+      "params": {
+        "V0Set": 1163.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 9
+    },
+    {
+      "name": "W1091",
+      "params": {
+        "V0Set": 1091.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 6
+    },
+    {
+      "name": "W1092",
+      "params": {
+        "V0Set": 1141.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 10
+    },
+    {
+      "name": "W1093",
+      "params": {
+        "V0Set": 1135.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 15
+    },
+    {
+      "name": "W1094",
+      "params": {
+        "V0Set": 1101.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 20
+    },
+    {
+      "name": "W1095",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 24
+    },
+    {
+      "name": "W1096",
+      "params": {
+        "V0Set": 1167.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 1
+    },
+    {
+      "name": "W1097",
+      "params": {
+        "V0Set": 1115.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 6
+    },
+    {
+      "name": "W1098",
+      "params": {
+        "V0Set": 1154.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 11
+    },
+    {
+      "name": "W1099",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 16
+    },
+    {
+      "name": "W1100",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 21
+    },
+    {
+      "name": "W1101",
+      "params": {
+        "V0Set": 1141.2
+      },
+      "crate": "PRadHV_3",
+      "slot": 8,
+      "channel": 26
+    },
+    {
+      "name": "W1102",
+      "params": {
+        "V0Set": 1156.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 27
+    },
+    {
+      "name": "W1103",
+      "params": {
+        "V0Set": 1139.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 4
+    },
+    {
+      "name": "W1104",
+      "params": {
+        "V0Set": 1133.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 9
+    },
+    {
+      "name": "W1105",
+      "params": {
+        "V0Set": 1140.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 14
+    },
+    {
+      "name": "W1106",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 4
+    },
+    {
+      "name": "W1107",
+      "params": {
+        "V0Set": 1159.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 9
+    },
+    {
+      "name": "W1108",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 14
+    },
+    {
+      "name": "W1109",
+      "params": {
+        "V0Set": 1181.6
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 11
+    },
+    {
+      "name": "W1110",
+      "params": {
+        "V0Set": 1143.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 16
+    },
+    {
+      "name": "W1111",
+      "params": {
+        "V0Set": 1155.4
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 21
+    },
+    {
+      "name": "W1112",
+      "params": {
+        "V0Set": 1173.2
+      },
+      "crate": "PRadHV_2",
+      "slot": 6,
+      "channel": 26
+    },
+    {
+      "name": "W1113",
+      "params": {
+        "V0Set": 1188.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 27
+    },
+    {
+      "name": "W1114",
+      "params": {
+        "V0Set": 1091.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 10
+    },
+    {
+      "name": "W1115",
+      "params": {
+        "V0Set": 1212.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 15
+    },
+    {
+      "name": "W1116",
+      "params": {
+        "V0Set": 1155.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 20
+    },
+    {
+      "name": "W1117",
+      "params": {
+        "V0Set": 1162.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 24
+    },
+    {
+      "name": "W1118",
+      "params": {
+        "V0Set": 1164.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 1
+    },
+    {
+      "name": "W1119",
+      "params": {
+        "V0Set": 1195.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 6
+    },
+    {
+      "name": "W1120",
+      "params": {
+        "V0Set": 1190.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 4
+    },
+    {
+      "name": "W1121",
+      "params": {
+        "V0Set": 1171.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 9
+    },
+    {
+      "name": "W1122",
+      "params": {
+        "V0Set": 1145.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 14
+    },
+    {
+      "name": "W1123",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 19
+    },
+    {
+      "name": "W1124",
+      "params": {
+        "V0Set": 1081.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 24
+    },
+    {
+      "name": "W1125",
+      "params": {
+        "V0Set": 1120.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 5
+    },
+    {
+      "name": "W1126",
+      "params": {
+        "V0Set": 1215.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 11
+    },
+    {
+      "name": "W1127",
+      "params": {
+        "V0Set": 1218.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 16
+    },
+    {
+      "name": "W1128",
+      "params": {
+        "V0Set": 1116.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 21
+    },
+    {
+      "name": "W1129",
+      "params": {
+        "V0Set": 1122.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 2
+    },
+    {
+      "name": "W1130",
+      "params": {
+        "V0Set": 1139.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 7
+    },
+    {
+      "name": "W1131",
+      "params": {
+        "V0Set": 1186.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 12
+    },
+    {
+      "name": "W1132",
+      "params": {
+        "V0Set": 1143.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 32
+    },
+    {
+      "name": "W1133",
+      "params": {
+        "V0Set": 1181.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 37
+    },
+    {
+      "name": "W1134",
+      "params": {
+        "V0Set": 1098.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 42
+    },
+    {
+      "name": "W1135",
+      "params": {
+        "V0Set": 1162.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 47
+    },
+    {
+      "name": "W1136",
+      "params": {
+        "V0Set": 1270.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 41
+    },
+    {
+      "name": "W1137",
+      "params": {
+        "V0Set": 1143.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 19
+    },
+    {
+      "name": "W1138",
+      "params": {
+        "V0Set": 1183.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 24
+    },
+    {
+      "name": "W1139",
+      "params": {
+        "V0Set": 1211.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 5
+    },
+    {
+      "name": "W1140",
+      "params": {
+        "V0Set": 1170.6
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 19
+    },
+    {
+      "name": "W1141",
+      "params": {
+        "V0Set": 1098.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 24
+    },
+    {
+      "name": "W1142",
+      "params": {
+        "V0Set": 1168.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 5
+    },
+    {
+      "name": "W1143",
+      "params": {
+        "V0Set": 1132.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 32
+    },
+    {
+      "name": "W1144",
+      "params": {
+        "V0Set": 1161.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 37
+    },
+    {
+      "name": "W1145",
+      "params": {
+        "V0Set": 1142.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 42
+    },
+    {
+      "name": "W1146",
+      "params": {
+        "V0Set": 1136.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 47
+    },
+    {
+      "name": "W1147",
+      "params": {
+        "V0Set": 1087.8
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 41
+    },
+    {
+      "name": "W1148",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 11
+    },
+    {
+      "name": "W1149",
+      "params": {
+        "V0Set": 1117.2
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 16
+    },
+    {
+      "name": "W1150",
+      "params": {
+        "V0Set": 1255.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 21
+    },
+    {
+      "name": "W1151",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 2
+    },
+    {
+      "name": "W1152",
+      "params": {
+        "V0Set": 1265.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 7
+    },
+    {
+      "name": "W1153",
+      "params": {
+        "V0Set": 1136.4
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 12
+    },
+    {
+      "name": "W1154",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 19
+    },
+    {
+      "name": "W1155",
+      "params": {
+        "V0Set": 1245.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 24
+    },
+    {
+      "name": "W1156",
+      "params": {
+        "V0Set": 1230.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 5
+    },
+    {
+      "name": "G157",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 25
+    },
+    {
+      "name": "G158",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 30
+    },
+    {
+      "name": "G159",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 0,
+      "channel": 35
+    },
+    {
+      "name": "G160",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 25
+    },
+    {
+      "name": "G161",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 30
+    },
+    {
+      "name": "G162",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_3",
+      "slot": 4,
+      "channel": 35
+    },
+    {
+      "name": "G163",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 25
+    },
+    {
+      "name": "G164",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 30
+    },
+    {
+      "name": "G165",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 14,
+      "channel": 35
+    },
+    {
+      "name": "G166",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 25
+    },
+    {
+      "name": "G167",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 30
+    },
+    {
+      "name": "G168",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 8,
+      "channel": 35
+    },
+    {
+      "name": "G169",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 25
+    },
+    {
+      "name": "G170",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 30
+    },
+    {
+      "name": "G171",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_2",
+      "slot": 2,
+      "channel": 35
+    },
+    {
+      "name": "G172",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 25
+    },
+    {
+      "name": "G173",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 30
+    },
+    {
+      "name": "G174",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 6,
+      "channel": 35
+    },
+    {
+      "name": "G216",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 6,
+      "channel": 26
+    },
+    {
+      "name": "G246",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 28
+    },
+    {
+      "name": "G276",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 5
+    },
+    {
+      "name": "G306",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 35
+    },
+    {
+      "name": "G336",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 12
+    },
+    {
+      "name": "G366",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 42
+    },
+    {
+      "name": "G396",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 19
+    },
+    {
+      "name": "G426",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 41
+    },
+    {
+      "name": "G456",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 8,
+      "channel": 26
+    },
+    {
+      "name": "G486",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 28
+    },
+    {
+      "name": "G516",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 5
+    },
+    {
+      "name": "G546",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 35
+    },
+    {
+      "name": "G576",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 12
+    },
+    {
+      "name": "G606",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 42
+    },
+    {
+      "name": "G636",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 19
+    },
+    {
+      "name": "G666",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 41
+    },
+    {
+      "name": "G696",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_4",
+      "slot": 10,
+      "channel": 26
+    },
+    {
+      "name": "G726",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 40
+    },
+    {
+      "name": "G175",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 0,
+      "channel": 47
+    },
+    {
+      "name": "G205",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 0,
+      "channel": 24
+    },
+    {
+      "name": "G235",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 0,
+      "channel": 1
+    },
+    {
+      "name": "G265",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 3
+    },
+    {
+      "name": "G295",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 33
+    },
+    {
+      "name": "G325",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 10
+    },
+    {
+      "name": "G355",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 40
+    },
+    {
+      "name": "G385",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 17
+    },
+    {
+      "name": "G415",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 47
+    },
+    {
+      "name": "G445",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 24
+    },
+    {
+      "name": "G475",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 2,
+      "channel": 1
+    },
+    {
+      "name": "G505",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 3
+    },
+    {
+      "name": "G535",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 33
+    },
+    {
+      "name": "G565",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 10
+    },
+    {
+      "name": "G595",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 40
+    },
+    {
+      "name": "G625",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 17
+    },
+    {
+      "name": "G655",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 47
+    },
+    {
+      "name": "G685",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 24
+    },
+    {
+      "name": "G715",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_1",
+      "slot": 4,
+      "channel": 1
+    },
+    {
+      "name": "G727",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 10
+    },
+    {
+      "name": "G728",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 15
+    },
+    {
+      "name": "G729",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 10,
+      "channel": 20
+    },
+    {
+      "name": "G730",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 46
+    },
+    {
+      "name": "G731",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 28
+    },
+    {
+      "name": "G732",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 6,
+      "channel": 33
+    },
+    {
+      "name": "G733",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 10
+    },
+    {
+      "name": "G734",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 15
+    },
+    {
+      "name": "G735",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 8,
+      "channel": 20
+    },
+    {
+      "name": "G736",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 10
+    },
+    {
+      "name": "G737",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 15
+    },
+    {
+      "name": "G738",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 2,
+      "channel": 20
+    },
+    {
+      "name": "G739",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 46
+    },
+    {
+      "name": "G740",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 28
+    },
+    {
+      "name": "G741",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 4,
+      "channel": 33
+    },
+    {
+      "name": "G742",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 10
+    },
+    {
+      "name": "G743",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 15
+    },
+    {
+      "name": "G744",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 20
+    },
+    {
+      "name": "G745",
+      "params": {
+        "V0Set": 1700.0
+      },
+      "crate": "PRadHV_5",
+      "slot": 0,
+      "channel": 33
+    }
+  ]
+}

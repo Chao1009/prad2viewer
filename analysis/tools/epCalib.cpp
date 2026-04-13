@@ -3,7 +3,8 @@
 // get the ratio of expected/measured peak position, and write to a database file. 
 //=============================================================================
 //
-// Usage: epCalib <input.root> [-o output_calib_file] [-D daq_config.json] [-n max_events]
+// Usage: epCalib <input_raw.root|dir> [-o output_calib_file] [-r output_root_file] 
+//                                      [-D daq_config.json] [-n max_events]
 //
 // Reads rawdata(adc level).root (peak mode), runs HyCal clustering, fills per-module energy histograms
 //=============================================================================
@@ -20,6 +21,8 @@
 #include <TTree.h>
 #include <TLatex.h>
 #include <TCanvas.h>
+#include <TChain.h>
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -30,33 +33,34 @@
 #define DATABASE_DIR "."
 #endif
 
+namespace fs = std::filesystem;
+
 using EventVars       = prad2::RawEventData;
 void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
 {
-    tree->Branch("event_num", &ev.event_num, "event_num/i");
-    tree->Branch("trigger",   &ev.trigger,   "trigger/i");
-    tree->Branch("timestamp", &ev.timestamp, "timestamp/L");
-    tree->Branch("hycal.nch",       &ev.nch,       "nch/I");
-    tree->Branch("hycal.crate",     ev.crate,      "crate[nch]/b");
-    tree->Branch("hycal.slot",      ev.slot,       "slot[nch]/b");
-    tree->Branch("hycal.channel",   ev.channel,    "channel[nch]/b");
-    tree->Branch("hycal.module_id", ev.module_id,  "module_id[nch]/s");
-    tree->Branch("hycal.nsamples",  ev.nsamples,   "nsamples[nch]/b");
-    tree->Branch("hycal.samples",   ev.samples,    Form("samples[nch][%d]/s", fdec::MAX_SAMPLES));
-    tree->Branch("hycal.ped_mean",  ev.ped_mean,   "ped_mean[nch]/F");
-    tree->Branch("hycal.ped_rms",   ev.ped_rms,    "ped_rms[nch]/F");
-    tree->Branch("hycal.integral",  ev.integral,   "integral[nch]/F");
+    tree->SetBranchAddress("event_num", &ev.event_num);
+    tree->SetBranchAddress("trigger_bits", &ev.trigger_bits);
+    tree->SetBranchAddress("timestamp", &ev.timestamp);
+    tree->SetBranchAddress("hycal.nch", &ev.nch);
+    tree->SetBranchAddress("hycal.module_id", ev.module_id);
+    tree->SetBranchAddress("hycal.nsamples", ev.nsamples);
+    tree->SetBranchAddress("hycal.samples", ev.samples);
+    tree->SetBranchAddress("hycal.ped_mean", ev.ped_mean);
+    tree->SetBranchAddress("hycal.ped_rms", ev.ped_rms);
+    tree->SetBranchAddress("hycal.integral", ev.integral);
     if (write_peaks) {
-        tree->Branch("hycal.npeaks",       &ev.npeaks,       "npeaks[nch]/b");
-        tree->Branch("hycal.peak_height",  ev.peak_height,  Form("peak_height[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_time",    ev.peak_time,    Form("peak_time[nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("hycal.peak_integral",ev.peak_integral, Form("peak_integral[nch][%d]/F", fdec::MAX_PEAKS));
+        tree->SetBranchAddress("hycal.npeaks", &ev.npeaks);
+        tree->SetBranchAddress("hycal.peak_height", ev.peak_height);
+        tree->SetBranchAddress("hycal.peak_time", ev.peak_time);
+        tree->SetBranchAddress("hycal.peak_integral", ev.peak_integral);
     }
 }
 
+static std::vector<std::string> collectRootFiles(const std::string &path);
+
 int main(int argc, char *argv[])
 {
-    std::string input, output_calib_file, config_file, daq_config_file;
+    std::string output_calib_file, output_root_file, config_file, daq_config_file;
     std::string db_dir = DATABASE_DIR;
     if (const char *env = std::getenv("PRAD2_DATABASE_DIR"))  db_dir = env;
     int max_events = -1;
@@ -66,18 +70,24 @@ int main(int argc, char *argv[])
     float hycal_z = 6225.f; // distance from target to HyCal front face in mm, used for kinematics
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:D:n:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:r:D:n:")) != -1) {
         switch (opt) {
             case 'o': output_calib_file = optarg; break;
+            case 'r': output_root_file = optarg; break;
             case 'D': daq_config_file = optarg; break;
             case 'n': max_events = std::atoi(optarg); break;
         }
     }
-    if (optind < argc) input = argv[optind];
 
-    if (input.empty()) {
-        std::cerr << "Usage: epCalib <iput.root> [-o output_calib_file] "
-                  << " [-D daq_config.json] [-n max_events]\n";
+    // collect input files (can be files, directories, or mixed)
+    std::vector<std::string> root_files;
+    for (int i = optind; i < argc; i++) {
+        auto f = collectRootFiles(argv[i]);
+        root_files.insert(root_files.end(), f.begin(), f.end());
+    }
+    if (root_files.empty()) {
+        std::cerr << "No input files specified.\n";
+        std::cerr << "Usage: quick_check <input_raw.root|dir> [more files...] [-o out_calib.txt] [-r out_root.root] [-n max_events]\n";
         return 1;
     }
 
@@ -85,22 +95,25 @@ int main(int argc, char *argv[])
         output_calib_file = db_dir + "/fast_ep_calibration/calib.txt";
     }
 
-    TFile *infile = TFile::Open(input.c_str(), "READ");
-    if (!infile || !infile->IsOpen()) {
-        std::cerr << "Cannot open " << input << "\n";
-        return 1;
+    // --- setup TChain and branches ---
+    TChain *chain = new TChain("events");
+    for (const auto &f : root_files) {
+        chain->Add(f.c_str());
+        std::cerr << "Added file: " << f << "\n";
     }
-    TTree *tree = (TTree *)infile->Get("events");
+    TTree *tree = chain;
     if (!tree) {
-        std::cerr << "Cannot find TTree 'events' in " << input << "\n";
+        std::cerr << "Cannot find TTree 'events' in input files\n";
         return 1;
     }
 
-    TFile outfile("ep_calib.root", "RECREATE");
-    if (!outfile.IsOpen()) {
-        std::cerr << "Cannot create ep_calib.root\n";
-        return 1;
+    // --- output file ---
+    TString outName = output_root_file;
+    if (outName.IsNull()) {
+        outName = root_files[0];
+        outName.ReplaceAll("_recon.root", "_epCalibResult.root");
     }
+    TFile outfile(outName, "RECREATE");
 
     auto ev = std::make_unique<EventVars>();
     SetReadBranches(tree, *ev, true);
@@ -129,7 +142,7 @@ int main(int argc, char *argv[])
         //reconstruct clusters, fill histograms
         clusterer.Clear();
         for(int j = 0; j < ev->nch; j++){
-            const auto *mod = hycal.module_by_daq(ev->crate[j], ev->slot[j], ev->channel[j]);
+            const auto *mod = hycal.module_by_id(ev->module_id[j]);
             if (!mod || !mod->is_hycal()) continue;
             if (ev->npeaks[j] <= 0) continue;
             float adc = ev->peak_integral[j][0];
@@ -192,7 +205,23 @@ int main(int argc, char *argv[])
     outfile.cd();
     ratio_module_all->Write();
     outfile.Close();
-    infile->Close();
 
     return 0;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+static std::vector<std::string> collectRootFiles(const std::string &path)
+{
+    std::vector<std::string> files;
+    if (fs::is_directory(path)) {
+        for (auto &entry : fs::directory_iterator(path)) {
+            if (entry.is_regular_file() &&
+                entry.path().filename().string().find("_raw.root") != std::string::npos)
+                files.push_back(entry.path().string());
+        }
+        std::sort(files.begin(), files.end());
+    } else {
+        files.push_back(path);
+    }
+    return files;
 }

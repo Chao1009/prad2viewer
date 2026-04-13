@@ -50,7 +50,7 @@ static std::vector<std::string> getFilesInDir(const std::string &dir_path)
 
 static std::string makeOutputPath(const std::string &evio_path)
 {
-    std::string out = evio_path;
+    std::string out = std::filesystem::path(evio_path).filename().string();
     auto pos = out.find(".evio");
     if (pos != std::string::npos)
         out = out.substr(0, pos) + out.substr(pos + 5);

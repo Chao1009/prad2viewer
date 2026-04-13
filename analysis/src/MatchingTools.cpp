@@ -198,8 +198,8 @@ std::vector<MatchHit> MatchingTools::Match(
             if (PreMatch(hit, g) && used4.find(g) == used4.end())
                 cand4.push_back(g);
 
-        // skip if no candidates in any plane
-        if (cand1.empty() && cand2.empty() && cand3.empty() && cand4.empty())
+        // skip if no candidates in any plane in one of the pairs (upstream or downstream)
+        if ((cand1.empty() && cand2.empty()) || (cand3.empty() && cand4.empty()))
             continue;
 
         result.emplace_back(hit, cand1, cand2, cand3, cand4);

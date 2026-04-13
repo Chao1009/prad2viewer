@@ -27,7 +27,9 @@ add_analysis_tool(cosmic_test tools/cosmic_test.cpp)
 add_analysis_tool(quick_check tools/quick_check.cpp)
 add_analysis_tool(matching tools/matching.cpp)
 add_analysis_tool(det_calib tools/det_calib.cpp)
+add_analysis_tool(cosmic_lg tools/cosmic_lg.cpp)
+add_analysis_tool(sim2replay tools/sim2replay.cpp)
 
 install(TARGETS replay_rawdata replay_rawdata_m replay_recon replay_recon_m epCalib
-                cosmic_test quick_check matching det_calib
+                cosmic_test quick_check matching det_calib cosmic_lg sim2replay
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

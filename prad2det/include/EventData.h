@@ -35,26 +35,53 @@ static constexpr int kMaxGemHits   = 400;
 struct RawEventData {
     int      event_num    = 0;
     uint8_t  trigger_type = 0;   // main trigger (from event tag: tag - 0x80)
-    uint32_t trigger      = 0;   // FP trigger bits (multi-bit, from TI master d[5])
-    int64_t  timestamp    = 0;
+    uint32_t trigger_bits      = 0;   // FP trigger bits (multi-bit, from TI master d[5])
+    long long  timestamp    = 0;
 
     // HyCal per-channel data
     int          nch = 0;
-    uint8_t crate[kMaxChannels]   = {};
-    uint8_t slot[kMaxChannels]    = {};
-    uint8_t channel[kMaxChannels] = {};
     uint16_t     module_id[kMaxChannels] = {};
-    uint8_t nsamples[kMaxChannels] = {};
+    int nsamples[kMaxChannels] = {};
     uint16_t     samples[kMaxChannels][fdec::MAX_SAMPLES] = {};
     float   ped_mean[kMaxChannels] = {};
     float   ped_rms[kMaxChannels]  = {};
     float   integral[kMaxChannels] = {};
 
+    //Veto per-channel data
+    int          veto_nch = 0;
+    uint8_t veto_id[4]   = {}; // 1,2,3,4 for veto1-4
+    int veto_nsamples[4] = {};
+    uint16_t     veto_samples[4][fdec::MAX_SAMPLES] = {};
+    float   veto_ped_mean[4] = {};
+    float   veto_ped_rms[4]  = {};
+    float   veto_integral[4] = {};
+
+    //LMS reference PMT data
+    int lms_nch = 0;
+    uint8_t lms_id[4] = {}; // 1,2,3 for lms1-3, 0 for Pin
+    int lms_nsamples[4] = {};
+    uint16_t lms_samples[4][fdec::MAX_SAMPLES] = {};
+    float   lms_ped_mean[4] = {};
+    float   lms_ped_rms[4]  = {};
+    float   lms_integral[4] = {};
+
     // Optional peak data
-    uint8_t npeaks[kMaxChannels] = {};
+    int npeaks[kMaxChannels] = {};
     float   peak_height[kMaxChannels][fdec::MAX_PEAKS]   = {};
     float   peak_time[kMaxChannels][fdec::MAX_PEAKS]     = {};
     float   peak_integral[kMaxChannels][fdec::MAX_PEAKS] = {};
+
+    //optional veto peak data
+    int veto_npeaks[4] = {};
+    float   veto_peak_height[4][fdec::MAX_PEAKS]   = {};
+    float   veto_peak_time[4][fdec::MAX_PEAKS]     = {};
+    float   veto_peak_integral[4][fdec::MAX_PEAKS] = {};
+
+    //optional LMS peak data
+    int lms_npeaks[4] = {};
+    float   lms_peak_height[4][fdec::MAX_PEAKS]   = {};
+    float   lms_peak_time[4][fdec::MAX_PEAKS]     = {};
+    float   lms_peak_integral[4][fdec::MAX_PEAKS] = {};
 
     // GEM per-strip data
     int        gem_nch = 0;
@@ -63,10 +90,6 @@ struct RawEventData {
     uint8_t apv[kMaxGemStrips]        = {};
     uint8_t strip[kMaxGemStrips]      = {};
     int16_t ssp_samples[kMaxGemStrips][ssp::SSP_TIME_SAMPLES] = {};
-
-    // ssp trigger bank tag
-    int n_ssp_triggers = 0;
-    uint32_t ssp_trigger_tags[256][ssp::SSP_TIME_SAMPLES] = {};
 
     // Raw 0xE10C SSP trigger bank words (one variable-length entry per event)
     std::vector<uint32_t> ssp_raw;
@@ -78,7 +101,7 @@ struct ReconEventData {
     int      event_num    = 0;
     uint8_t  trigger_type = 0;   // main trigger (from event tag: tag - 0x80)
     uint32_t trigger_bits = 0;   // FP trigger bits (multi-bit, from TI master d[5])
-    int64_t  timestamp    = 0;
+    long long  timestamp    = 0;
 
     // HyCal clusters
     float total_energy = 0.f;
@@ -116,9 +139,19 @@ struct ReconEventData {
     float matchG_z[kMaxClusters][2] = {};
     uint8_t matchG_det_id[kMaxClusters][2] = {};
 
-    // ssp trigger bank tag
-    int n_ssp_triggers = 0;
-    uint32_t ssp_trigger_tags[256][ssp::SSP_TIME_SAMPLES] = {};
+    //veto information
+    int      veto_nch = 0;
+    uint8_t veto_id[4]   = {}; // 0,1,2,3 for veto1-4
+    int veto_npeaks[4] = {};
+    float veto_peak_time[4][fdec::MAX_PEAKS]     = {};
+    float veto_peak_integral[4][fdec::MAX_PEAKS] = {};
+
+    //LMS reference PMT information
+    int      lms_nch = 0;
+    uint8_t lms_id[4]   = {}; // 0,1,2,3 for lms1-4
+    int lms_npeaks[4] = {};
+    float lms_peak_time[4][fdec::MAX_PEAKS]     = {};
+    float lms_peak_integral[4][fdec::MAX_PEAKS] = {};
 
     // Raw 0xE10C SSP trigger bank words (one variable-length entry per event)
     std::vector<uint32_t> ssp_raw;

@@ -46,11 +46,11 @@ static std::vector<std::string> getFilesInDir(const std::string &dir_path)
 
 static std::string makeOutputPath(const std::string &evio_path)
 {
-    std::string out = evio_path;
+    std::string out = std::filesystem::path(evio_path).filename().string();
     auto pos = out.find(".evio");
     if (pos != std::string::npos)
         out = out.substr(0, pos) + out.substr(pos + 5);
-    out += ".root";
+    out += "_raw.root";
     return out;
 }
 
@@ -116,6 +116,8 @@ int main(int argc, char *argv[])
         // each thread gets its own Replay instance (own EvChannel, own buffers)
         analysis::Replay replay;
         if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
+        replay.LoadDaqMap(db_dir + "/daq_map.json");
+        std::cerr << "Using DAQ map: " << db_dir + "/daq_map.json" << "\n";
 
         while (true) {
             int idx = next_file.fetch_add(1);

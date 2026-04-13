@@ -2,7 +2,7 @@
 // replay_rawdata — convert EVIO file to ROOT tree
 //
 // Usage: replay_rawdata <input.evio> [-o output.root] [-n max_events] [-p]
-//   -o  output ROOT file (default: input with .root extension)
+//   -o  output ROOT file (default: input with _raw.root extension)
 //   -n  max events to process (default: all)
 //   -p  include peak analysis branches
 //=============================================================================
@@ -48,11 +48,13 @@ int main(int argc, char *argv[])
         auto pos = output.find(".evio");
         if (pos != std::string::npos) output = 
             output.substr(0, pos) + output.substr(pos + 5);
-        output += ".root";
+        output += "_raw.root";
     }
 
     analysis::Replay replay;
     if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
+    replay.LoadDaqMap(db_dir + "/daq_map.json");
+    std::cerr << "Using DAQ map: " << db_dir + "/daq_map.json" << "\n";
 
     if (!replay.Process(input, output, max_events, peaks, daq_config))
         return 1;

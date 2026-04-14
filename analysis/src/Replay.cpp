@@ -586,7 +586,7 @@ if(!prad1){
                                 lms_nch++;
                             }
                              else{
-                                std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
+                                //std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
                             }
                             continue;
                         }
@@ -611,6 +611,9 @@ if(!prad1){
                     }
                 }
             }
+            ev->veto_nch = veto_nch;
+            ev->lms_nch = lms_nch;
+            
             clusterer.FormClusters();
             std::vector<fdec::ClusterHit> hits;
             clusterer.ReconstructHits(hits);

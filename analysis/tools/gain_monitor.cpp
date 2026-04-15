@@ -60,9 +60,10 @@ struct ChInfo {
     int  idx       = -1;   // 0..N-1 for HyCal modules, -1 otherwise
     bool is_lms    = false;
     int  lms_id    = -1;   // 0/1/2 for LMS1/2/3
+    int  hist_idx  = -1;   // precomputed index into LMSHist / AlphaHist
 };
 
-static std::map<int, ChInfo> gCh;   // key = crate*10000 + slot*100 + ch
+static std::unordered_map<int, ChInfo> gCh;   // key = crate*10000 + slot*100 + ch
 static int gNMod = 0;               // number of HyCal modules
 std::vector<TH1F*> ObjectContainer;   // container for saving root histogram/graph
 
@@ -141,6 +142,12 @@ int main(int argc, char *argv[])
         indexToName[i] = name;
         nameToIndex[name] = i;
     }
+
+    // Pre-compute hist_idx in each ChInfo to avoid a second map lookup in the hot loop
+    for (auto &[addr, ci] : gCh) {
+        auto it = nameToIndex.find(ci.name);
+        if (it != nameToIndex.end()) ci.hist_idx = it->second;
+    }
     
     //initialize root histograms
     std::vector<TH1F*> LMSHist;
@@ -168,7 +175,12 @@ int main(int argc, char *argv[])
     
     double alphaRef[N_LMS_REF] = {};
     bool   alphaValid = false;
-    
+
+    // Hoist outside all loops: avoids repeated heap allocation/deallocation per event.
+    // unordered_map gives O(1) average inserts vs O(log n) for std::map.
+    std::unordered_map<int, float> integrals;
+    integrals.reserve(2048);
+
     for (size_t fi = 0; fi < InputFiles.size(); fi++) {
         printf("[%zu/%zu] %s\n", fi + 1, InputFiles.size(), InputFiles[fi].c_str());
 
@@ -190,10 +202,10 @@ int main(int argc, char *argv[])
                 bool isAlpha = (evt.info.trigger_bits & TBIT_ALPHA);
 
                 if (!(isLMS || isAlpha)) continue;
-                
+
                 // -- compute waveform integrals for all channels ----
                 // store as:  packed_addr -> integral
-                std::map<int, float> integrals;
+                integrals.clear();
 
                 for (int r = 0; r < fdec::MAX_ROCS; r++) {
                     auto &roc = evt.rocs[r];
@@ -236,19 +248,20 @@ int main(int argc, char *argv[])
                     }
                 }
 
+                const size_t nIntegrals = integrals.size();
                 for (auto &[addr, integ] : integrals) {
                     auto it = gCh.find(addr);
                     if (it == gCh.end()) continue;
-                    auto itt = nameToIndex.find(it->second.name);
-                    if (itt == nameToIndex.end()) continue;
-                    
-                    if (it->second.is_lms && isAlpha && integrals.size() < 500){
-                        assert(itt->second <= N_LMS_REF);
-                        AlphaHist[itt->second]->Fill(integ);
+                    const auto &ci = it->second;
+                    if (ci.hist_idx < 0) continue;
+
+                    if (ci.is_lms && isAlpha && nIntegrals < 500){
+                        assert(ci.hist_idx <= N_LMS_REF);
+                        AlphaHist[ci.hist_idx]->Fill(integ);
                     }
-                    if (isLMS && integrals.size() > 500){
-                        assert(itt->second <= N_LMS_REF + N_HYCAL_MOD);
-                        LMSHist[itt->second]->Fill(integ);
+                    if (isLMS && nIntegrals > 500){
+                        assert(ci.hist_idx <= N_LMS_REF + N_HYCAL_MOD);
+                        LMSHist[ci.hist_idx]->Fill(integ);
                     }
                 }
             }

@@ -101,6 +101,10 @@ int main(int argc, char *argv[])
     auto ev = std::make_unique<EventVars>();
     SetReadBranches(tree, *ev, true);
 
+    // --- setup output ROOT file
+    if(output_root_file.empty()) output_root_file = "gama_calib_info.root";
+    TFile *outfile = TFile::Open(output_root_file.c_str(), "RECREATE");
+
     //setup for reconstruction
     fdec::HyCalSystem hycal;
     evc::DaqConfig daq_cfg;
@@ -117,8 +121,66 @@ int main(int argc, char *argv[])
     analysis::PhysicsTools physics(hycal);
     fdec::ClusterConfig cl_cfg;
 
+    TH1F *ratio_module_all = new TH1F("ratio_all", "Ratio of Expected/Measured Peak Position for All Modules;Ratio;Modules", 100, 0, 3);
+
+
     //loop over events
-    
+    int N_events = tree->GetEntries();
+    N_events = (max_events > 0 && max_events < N_events) ? max_events : N_events;
+    fdec::HyCalCluster clusterer(hycal);
+    clusterer.SetConfig(cl_cfg);
+    for (int i = 0; i < N_events; i++) {
+        tree->GetEntry(i);
+
+        // TODO: use config-driven trigger filter (config.json "physics" section
+        // accept_trigger_bits/reject_trigger_bits) instead of hardcoded bit check.
+        // Currently drops all non-SSP_RawSum events, including LMS.
+        static constexpr uint32_t TBIT_sum = (1u << 8);
+        static constexpr uint32_t TBIT_lms = (1u << 24);
+        if (!(ev->trigger_bits & TBIT_sum)) continue;
+        if (ev->trigger_bits & TBIT_lms) continue;
+
+        // --- HyCal clustering ---
+        clusterer.Clear();
+        for(int j = 0; j < ev->nch; j++){
+            const auto *mod = hycal.module_by_id(ev->module_id[j]);
+            if (!mod || !mod->is_hycal()) continue;
+            if (ev->npeaks[j] <= 0) continue;
+            float adc = ev->peak_integral[j][0];
+            float energy = (mod->cal_factor > 0.) ?
+                static_cast<float>(mod->energize(adc)) : adc * 0.2f;
+            clusterer.AddHit(mod->index, energy);
+        }
+        clusterer.FormClusters();
+        std::vector<fdec::ClusterHit> hits;
+        clusterer.ReconstructHits(hits);
+
+        //TO DO: event selection
+        bool tagger_t1 = true;
+        if(hits.size() == 1 && tagger_t1) {
+            physics.FillModuleEnergy(hits[0].center_id, hits[0].energy);
+        }
+    }
+    //calculate calibration constants for each module, output calibration file to database
+    for (int m = 0; m < hycal.module_count(); m++) {
+        auto [peak, resolution] = physics.FitPeakResolution(m);
+        if (peak > 0 && resolution > 0) {
+            std::string name = hycal.module(m).name;
+            if(name[0] != 'W') continue; // only calibrate PbWO4
+            float expected_peak = physics.ExpectedPeakPosition(name);
+            if (expected_peak > 0) {
+                float ratio = expected_peak / peak;
+                float calib_const = ratio * hycal.module(m).cal_factor;
+                hycal.SetCalibConstant(hycal.module(m).id, calib_const);
+                ratio_module_all->Fill(ratio);
+                std::cerr << "Module " << name << ": peak = " << peak << ", expected = " << expected_peak << ", ratio = " << ratio << ", new calib const = " << calib_const << "\n";
+            }
+        }
+    }
+
+    //write the new calibration constants to database file
+    hycal.PrintCalibConstants(out_calib_file);
+    outfile->Close();
 }
 
 

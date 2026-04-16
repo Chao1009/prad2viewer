@@ -161,7 +161,7 @@ int main (int argc, char *argv[])
     ep_lumi = std::stod(argv[optind + 2]);
     ee_lumi = std::stod(argv[optind + 3]);
 
-    // collect input files (can be files, directories, or mixed)
+    // collect input files (can be files, directories)
     std::vector<std::string> ep_files, ee_files;
     auto f = collectRootFiles(ep_file_dir);
     ep_files.insert(ep_files.end(), f.begin(), f.end());

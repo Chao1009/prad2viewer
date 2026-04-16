@@ -13,10 +13,10 @@
 #include "PhysicsTools.h"
 #include "HyCalSystem.h"
 #include "HyCalCluster.h"
-#include "DaqConfig.h"
 #include "WaveAnalyzer.h"
 #include "EventData.h"
 #include "InstallPaths.h"
+#include "load_daq_config.h"
 
 #include <TFile.h>
 #include <TTree.h>
@@ -61,11 +61,13 @@ static std::vector<std::string> collectRootFiles(const std::string &path);
 
 int main(int argc, char *argv[])
 {
-    std::string output_calib_file, output_root_file, config_file, daq_config_file;
     std::string db_dir = prad2::resolve_data_dir(
         "PRAD2_DATABASE_DIR",
         {"../share/prad2evviewer/database"},
         DATABASE_DIR);
+    std::string output_calib_file, output_root_file, daq_config_file;
+    std::string db_dir = DATABASE_DIR;
+    if (const char *env = std::getenv("PRAD2_DATABASE_DIR"))  db_dir = env;
     int max_events = -1;
 
     //hardcoded beam energy for yield histograms, can be made configurable if needed
@@ -124,7 +126,8 @@ int main(int argc, char *argv[])
     //setup for reconstruction
     fdec::HyCalSystem hycal;
     evc::DaqConfig daq_cfg;
-    if (!daq_config_file.empty()) evc::load_daq_config(daq_config_file, daq_cfg);
+    if (!daq_config_file.empty()) daq_config_file = db_dir + "/daq_config.json"; // default DAQ config for PRad2
+    evc::load_daq_config(daq_config_file, daq_cfg);
     hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/daq_map.json");
 
     std::string calib_file = db_dir + "/prad1/prad_calibration.json";

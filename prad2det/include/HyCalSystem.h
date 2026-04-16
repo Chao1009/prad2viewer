@@ -197,7 +197,11 @@ public:
 
     // --- calibration accessors ----------------------------------------------
     double GetCalibConstant(int primex_id) const;
+    double GetCalibBaseEnergy(int primex_id) const;
+    double GetCalibNonLinearity(int primex_id) const;
     void   SetCalibConstant(int primex_id, double factor);
+    void   SetCalibBaseEnergy(int primex_id, double energy);
+    void   SetCalibNonLinearity(int primex_id, double nl);
     void   PrintCalibConstants(const std::string &output_file) const;
 
     // --- sector info --------------------------------------------------------

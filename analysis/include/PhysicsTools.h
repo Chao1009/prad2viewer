@@ -8,6 +8,7 @@
 //=============================================================================
 
 #include "HyCalSystem.h"
+#include <TF1.h>
 #include <TH1F.h>
 #include <TH2F.h>
 #include <array>
@@ -84,6 +85,9 @@ public:
     static float EnergyLoss(float theta_deg, float E);
 
     static float GetShowerDepth(int primex_id, const float &E);
+
+    //calibration helpers
+    TF1 nonLinearity_func_;
 
     //physics analysis helpers
     //data structure for storing reconstructed Moller events used for analysis

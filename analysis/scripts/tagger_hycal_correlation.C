@@ -1,17 +1,30 @@
 //============================================================================
-// tagger_hycal_correlation.C — tagger TDC → HyCal coincidence study
+// tagger_hycal_correlation.C — tagger TDC → HyCal coincidence study (10 pairs)
 //
-// Event-wise loop:
-//   1. Read each physics event.  If T10R doesn't fire, skip.
-//   2. For each Eₓ ∈ {E49..E53} that also fires, fill ΔT = tdc(T10R) − tdc(Eₓ).
-//   3. If the event also has W1156 FADC samples and the pair's ΔT sits
-//      within ±Nσ of its hard-coded peak μ, fill W1156_height_Eₓ and
-//      W1156_integral_Eₓ.  Each pair is tested independently per event,
-//      so one event can feed multiple pairs.
+// Two-phase analysis over one read of the evio file.
 //
-// The μ / σ values below were obtained from an earlier fit pass — edit them
-// here if a later run needs different timing windows.  Set NSIGMA_CUT to
-// tune the cut width.
+//   Phase 1 (cache + ΔT fits)
+//     A single pass collects per-event tuples (T10R TDC, per-pair E‑side
+//     TDCs, W1156 height/integral) into memory, and fills one ΔT histogram
+//     per pair.  A Gaussian is fit to each peak to extract (μ_k, σ_k).
+//
+//   Phase 2 (event-wise cut)
+//     For each cached event, ΔT_k = tdc(T10R) − tdc(E_k) is tested against
+//     the cut ``|ΔT_k − μ_k| < Nσ · σ_k`` for every pair independently.
+//     If ANY pair passes AND the event has W1156 FADC samples, the event
+//     is "good" and contributes ONCE to two global histograms:
+//         W1156_height      W1156 peak height
+//         W1156_integral    W1156 peak integral
+//
+//   The summary canvas shows all 10 ΔT spectra with their fitted μ/±Nσ
+//   bounds, the two W1156 histograms, and a terminal table breaks down
+//   how many events each pair selected.
+//
+// Pair layout (update if the DAQ cabling changes):
+//
+//   T10R           slot 18, channel  0
+//   E49 … E53      slot 18, channels 11…15
+//   E54 … E58      slot 19, channels  0…4
 //
 // Compile with ACLiC after loading rootlogon:
 //
@@ -20,11 +33,6 @@
 //     .x ../analysis/scripts/tagger_hycal_correlation.C+( \
 //         "/data/stage6/prad_023686/prad_023686.evio.00000", \
 //         "tagger_w1156_corr.root", 500000)
-//
-// Or one-liner:
-//
-//     root -l -b -q analysis/scripts/rootlogon.C \
-//         'analysis/scripts/tagger_hycal_correlation.C+("path.evio","out.root",0)'
 //============================================================================
 
 #include "EvChannel.h"
@@ -36,6 +44,7 @@
 #include "TdcData.h"
 
 #include <TCanvas.h>
+#include <TF1.h>
 #include <TFile.h>
 #include <TH1D.h>
 #include <TH1F.h>
@@ -58,49 +67,47 @@
 using namespace evc;
 
 //-----------------------------------------------------------------------------
-// Configuration — adjust if the DAQ layout or fit results change
+// Configuration — adjust if the DAQ layout changes
 //-----------------------------------------------------------------------------
 namespace {
 
-// Tagger crate: one V1190 per ROC, TDC data under bank 0xE107.
-constexpr int TAGGER_SLOT = 18;
-constexpr int T10R_CH     = 0;
+// Reference channel (T10R).
+constexpr int T10R_SLOT = 18;
+constexpr int T10R_CH   = 0;
 
-// Coincidence pairs.  mu / sigma are the Gaussian fit results from the
-// previous analysis pass (LSB units).  Update if the run changes.
+// 10 coincidence pairs: T10R vs Eₓ.  slot + channel identify the E-side hit.
 struct PairCfg {
     const char *name;
-    int         channel;   // V1190 channel in TAGGER_SLOT
-    double      mu;        // coincidence peak centre [LSB]
-    double      sigma;     // peak width              [LSB]
+    int         slot;
+    int         channel;
 };
 constexpr PairCfg PAIRS[] = {
-    { "E49", 11,  2692.24,  31.12 },
-    { "E50", 12,  2935.62, 223.35 },
-    { "E51", 13,  2852.43,  40.14 },
-    { "E52", 14,  2841.13,  71.80 },
-    { "E53", 15,  2786.88,  82.53 },
+    { "E49", 18, 11 }, { "E50", 18, 12 }, { "E51", 18, 13 },
+    { "E52", 18, 14 }, { "E53", 18, 15 },
+    { "E54", 19,  0 }, { "E55", 19,  1 }, { "E56", 19,  2 },
+    { "E57", 19,  3 }, { "E58", 19,  4 },
 };
 constexpr int N_PAIRS = sizeof(PAIRS) / sizeof(PAIRS[0]);
 
-// Timing cut: |dt - mu| < NSIGMA_CUT * sigma.
+// Timing cut: |ΔT − μ| < NSIGMA_CUT · σ.
 constexpr double NSIGMA_CUT = 3.0;
 
-// HyCal module W1156 DAQ address (from database/daq_map.json:
-// {"W1156", "crate":6, "slot":7, "channel":3}; crate 6 → ROC 0x8C).
+// HyCal W1156 DAQ address (database/daq_map.json:
+// {"W1156", crate 6, slot 7, channel 3}; crate 6 → ROC 0x8C).
 constexpr uint32_t W1156_ROC  = 0x8C;
 constexpr int      W1156_SLOT = 7;
 constexpr int      W1156_CH   = 3;
 
-// Simple FADC peak finder — pedestal and integration window.
+// Simple FADC peak finder parameters.
 constexpr int PED_WINDOW    = 10;
 constexpr int INT_HALFWIDTH = 8;
 
-// ΔT histogram axis.  Centred on each pair's μ with ±DT_HALF span and
-// DT_BINS bins.  (±500 LSB ≈ ±12.5 ns — plenty for the observed σ's
-// including the wide E50 peak.)
-constexpr int    DT_BINS = 400;
-constexpr double DT_HALF = 500.0;
+// ΔT histogram axis (wide enough to include typical cable-delay offsets).
+constexpr int    DT_BINS  = 800;
+constexpr double DT_RANGE = 4000.0;     // ±100 ns (LSB ≈ 25 ps)
+
+// Fit window half-width around the peak bin.
+constexpr double DT_FIT_HALF = 40.0;
 
 // W1156 output histograms.
 constexpr int    H_BINS = 200;
@@ -126,8 +133,9 @@ static int first_tdc(const tdc::TdcEventData &t, int slot, int ch)
     return best;
 }
 
-// Simple FADC peak finder. Returns false if the channel has no samples.
-static bool hycal_peak(const fdec::ChannelData &c, float &height, float &integral)
+// Pedestal-and-max peak finder: returns false if no samples.
+static bool hycal_peak(const fdec::ChannelData &c,
+                       float &height, float &integral)
 {
     if (c.nsamples <= PED_WINDOW) return false;
     double ped = 0.0;
@@ -150,7 +158,7 @@ static bool hycal_peak(const fdec::ChannelData &c, float &height, float &integra
     return true;
 }
 
-// Pull W1156 peak (height, integral). Returns false if absent.
+// Extract W1156 peak (height, integral). Returns false if absent.
 static bool w1156_peak(const fdec::EventData &evt,
                        float &height, float &integral)
 {
@@ -162,6 +170,15 @@ static bool w1156_peak(const fdec::EventData &evt,
     if (c.nsamples <= 0) return false;
     return hycal_peak(c, height, integral);
 }
+
+// Per-event record cached during Phase 1.
+struct Row {
+    int32_t t10r;                 // always ≥ 0 — events without T10R are skipped
+    int32_t te[N_PAIRS];          // -1 if that pair's E-side did not fire
+    bool    has_w1156;
+    float   height;
+    float   integral;
+};
 
 } // anonymous namespace
 
@@ -180,7 +197,6 @@ int tagger_hycal_correlation(const char *evio_path,
         const char *db = std::getenv("PRAD2_DATABASE_DIR");
         cfg_path = std::string(db ? db : "database") + "/daq_config.json";
     }
-
     DaqConfig cfg;
     if (!load_daq_config(cfg_path, cfg)) {
         std::cerr << "ERROR: cannot load " << cfg_path << "\n";
@@ -194,57 +210,35 @@ int tagger_hycal_correlation(const char *evio_path,
         std::cerr << "ERROR: cannot open " << evio_path << "\n";
         return 1;
     }
+    std::cout << "reading " << evio_path << std::endl;
 
-    //---- pre-create output histograms (one set per pair) --------------------
+    //---- single pass over the evio file: cache rows + fill ΔT histograms ----
     TFile out(out_path, "RECREATE");
+    gStyle->SetOptFit(1);
     gStyle->SetOptStat(1110);
 
     std::vector<TH1D*> h_dt(N_PAIRS, nullptr);
-    std::vector<TH1F*> h_h (N_PAIRS, nullptr);
-    std::vector<TH1F*> h_i (N_PAIRS, nullptr);
-
     for (int k = 0; k < N_PAIRS; ++k) {
         const auto &p = PAIRS[k];
-        const double half = NSIGMA_CUT * p.sigma;
-
         h_dt[k] = new TH1D(
             TString::Format("dt_T10R_%s", p.name),
-            TString::Format("#DeltaT = T10R - %s   "
-                            "[cut: |#DeltaT - %.1f| < %.1f#sigma (%.1f)];"
-                            "tdc(T10R) - tdc(%s) [LSB];events",
-                            p.name, p.mu, NSIGMA_CUT, half, p.name),
-            DT_BINS, p.mu - DT_HALF, p.mu + DT_HALF);
-
-        h_h[k] = new TH1F(
-            TString::Format("W1156_height_%s", p.name),
-            TString::Format("W1156 peak height, selected by T10R-%s "
-                            "|#DeltaT - %.1f| < %.1f LSB;"
-                            "height [ADC];events", p.name, p.mu, half),
-            H_BINS, H_MIN, H_MAX);
-        h_i[k] = new TH1F(
-            TString::Format("W1156_integral_%s", p.name),
-            TString::Format("W1156 peak integral, selected by T10R-%s "
-                            "|#DeltaT - %.1f| < %.1f LSB;"
-                            "integral [ADC#upoint sample];events", p.name, p.mu, half),
-            I_BINS, I_MIN, I_MAX);
+            TString::Format("#DeltaT = T10R - %s;"
+                            "tdc(T10R) - tdc(%s) [LSB];events", p.name, p.name),
+            DT_BINS, -DT_RANGE, DT_RANGE);
     }
 
-    //---- single event-wise pass --------------------------------------------
     auto event_ptr = std::make_unique<fdec::EventData>();
     auto tdc_ptr   = std::make_unique<tdc::TdcEventData>();
-    auto &event   = *event_ptr;
-    auto &tdc_evt = *tdc_ptr;
+    auto &event    = *event_ptr;
+    auto &tdc_evt  = *tdc_ptr;
+
+    std::vector<Row> rows;
+    rows.reserve(1u << 20);
 
     Long64_t n_physics = 0;
-    std::vector<Long64_t> n_dt (N_PAIRS, 0);
-    std::vector<Long64_t> n_sel(N_PAIRS, 0);
-    Long64_t n_w1156_events = 0;
+    Long64_t n_w1156_total = 0;
 
-    std::cout << "reading " << evio_path << std::endl;
-
-    // --- progress reporter -------------------------------------------------
-    // One-line overwrite via '\r' every ~300 ms so the terminal doesn't
-    // scroll.  Shows count, rate, and ETA when max_events is set.
+    // One-line overwriting progress report.
     using clock = std::chrono::steady_clock;
     auto t_start = clock::now();
     auto t_last  = t_start;
@@ -262,15 +256,14 @@ int tagger_hycal_correlation(const char *evio_path,
                       << "  (" << std::fixed << std::setprecision(1) << pct << "%)"
                       << std::defaultfloat
                       << "  " << std::setprecision(3) << rate / 1e3 << "k/s"
-                      << "  ETA " << std::setprecision(0) << std::fixed
-                      << (int)eta << "s"
-                      << std::defaultfloat;
+                      << "  ETA " << std::fixed << std::setprecision(0)
+                      << (int)eta << "s" << std::defaultfloat;
         } else {
             std::cout << "  " << std::setprecision(3) << rate / 1e3 << "k/s";
         }
-        std::cout << "  W1156: " << std::setw(8) << n_w1156_events
-                  << "     "           // clear any leftover from longer lines
-                  << std::flush;
+        std::cout << "  rows: " << std::setw(8) << rows.size()
+                  << "  W1156: " << std::setw(8) << n_w1156_total
+                  << "     " << std::flush;
         if (final_line) std::cout << "\n";
     };
 
@@ -281,98 +274,190 @@ int tagger_hycal_correlation(const char *evio_path,
         for (int i = 0; i < nsub; ++i) {
             ch.DecodeEvent(i, event, nullptr, nullptr, &tdc_evt);
 
-            int t0 = first_tdc(tdc_evt, TAGGER_SLOT, T10R_CH);
-            if (t0 < 0) continue;
+            int t0 = first_tdc(tdc_evt, T10R_SLOT, T10R_CH);
+            if (t0 < 0) { ++n_physics; goto tick; }
 
-            // W1156 is optional per event; if absent, we still fill the
-            // ΔT plots but skip the W1156-selected histograms.
-            float w_h = 0.f, w_i = 0.f;
-            bool have_w = w1156_peak(event, w_h, w_i);
-            if (have_w) ++n_w1156_events;
+            // Collect this event's row.
+            {
+                Row r{};
+                r.t10r = t0;
+                for (int k = 0; k < N_PAIRS; ++k)
+                    r.te[k] = first_tdc(tdc_evt, PAIRS[k].slot, PAIRS[k].channel);
 
-            // Test every pair independently against its own cut.
-            for (int k = 0; k < N_PAIRS; ++k) {
-                int te = first_tdc(tdc_evt, TAGGER_SLOT, PAIRS[k].channel);
-                if (te < 0) continue;
-                const double dt = (double)t0 - (double)te;
-                h_dt[k]->Fill(dt);
-                ++n_dt[k];
+                r.has_w1156 = w1156_peak(event, r.height, r.integral);
+                if (r.has_w1156) ++n_w1156_total;
 
-                if (!have_w) continue;
-                const double half = NSIGMA_CUT * PAIRS[k].sigma;
-                if (std::fabs(dt - PAIRS[k].mu) >= half) continue;
-                h_h[k]->Fill(w_h);
-                h_i[k]->Fill(w_i);
-                ++n_sel[k];
+                // Fill ΔT histograms right away to avoid a second memory loop.
+                for (int k = 0; k < N_PAIRS; ++k)
+                    if (r.te[k] >= 0)
+                        h_dt[k]->Fill((double)r.t10r - (double)r.te[k]);
+
+                rows.push_back(r);
             }
 
             ++n_physics;
-
+        tick:
             auto now = clock::now();
             if (now - t_last >= progress_interval) {
-                t_last = now;
-                report_progress(false);
+                t_last = now; report_progress(false);
             }
-
             if (max_events > 0 && n_physics >= max_events) goto done;
         }
     }
 done:
-    report_progress(true);                    // final line + newline
+    report_progress(true);
     ch.Close();
     double elapsed = std::chrono::duration<double>(
         clock::now() - t_start).count();
-    std::cout << "done: " << n_physics << " physics events in "
-              << std::fixed << std::setprecision(1) << elapsed << " s"
-              << " (" << (int)(n_physics / std::max(elapsed, 1e-6)) << " ev/s,"
-              << " W1156 present in " << n_w1156_events << ")\n"
-              << std::defaultfloat;
+    std::cout << "scan done: " << n_physics << " physics events in "
+              << std::fixed << std::setprecision(1) << elapsed << " s, "
+              << rows.size() << " with T10R, "
+              << n_w1156_total << " with W1156\n" << std::defaultfloat;
 
-    //---- write ΔT + W1156 histograms, build the summary canvas --------------
-    TCanvas *canvas = new TCanvas("summary", "tagger-W1156 correlations",
-                                  1500, 900);
-    canvas->Divide(N_PAIRS, 3);
+    if (rows.empty()) {
+        std::cerr << "no T10R-gated events found — nothing to plot\n";
+        out.Close();
+        return 1;
+    }
 
+    //---- Phase 1b: fit each ΔT histogram to extract (μ, σ) ------------------
+    struct Fit {
+        double mu = 0, sigma = 0;
+        double coarse_peak = 0;
+        int    dt_min = 0, dt_max = 0;
+        Long64_t n_dt = 0;
+        bool   ok = false;
+    };
+    std::vector<Fit> fits(N_PAIRS);
+
+    std::cout << "\n=== Phase 1: ΔT fits ===\n"
+              << "   pair   coarse_peak     mu[LSB]   sigma[LSB]     "
+                 "n_dt_filled\n";
     for (int k = 0; k < N_PAIRS; ++k) {
         const auto &p = PAIRS[k];
+        Fit &f = fits[k];
+        f.n_dt = (Long64_t)h_dt[k]->GetEntries();
+        if (f.n_dt == 0) {
+            std::cout << "  T10R-" << p.name << "   (no coincidences)\n";
+            continue;
+        }
+
+        double peak_x = h_dt[k]->GetXaxis()->GetBinCenter(
+                            h_dt[k]->GetMaximumBin());
+        double bw     = h_dt[k]->GetXaxis()->GetBinWidth(1);
+        f.coarse_peak = peak_x;
+
+        TF1 *gfit = new TF1(TString::Format("gfit_%s", p.name), "gaus",
+                            peak_x - DT_FIT_HALF, peak_x + DT_FIT_HALF);
+        gfit->SetParameter(1, peak_x);
+        gfit->SetParameter(2, 5.0);
+        int status = (int)h_dt[k]->Fit(gfit, "RQ", "",
+                                       peak_x - DT_FIT_HALF,
+                                       peak_x + DT_FIT_HALF);
+        if (status == 0) {
+            f.mu    = gfit->GetParameter(1);
+            f.sigma = std::max(std::fabs(gfit->GetParameter(2)), bw);
+            f.ok    = true;
+        } else {
+            f.mu = peak_x;
+            f.sigma = 10.0 * bw;
+            f.ok = false;
+            std::cerr << "  T10R-" << p.name
+                      << ": gaussian fit did not converge,"
+                      << " falling back to bin peak=" << f.mu
+                      << " / σ=" << f.sigma << "\n";
+        }
+
         h_dt[k]->Write();
-        h_h [k]->Write();
-        h_i [k]->Write();
 
-        // Draw cut lines at μ ± Nσ on the ΔT plot of the summary canvas.
-        canvas->cd(k + 1);
-        h_dt[k]->Draw();
-        const double half = NSIGMA_CUT * p.sigma;
-        auto *l_lo = new TLine(p.mu - half, 0, p.mu - half, h_dt[k]->GetMaximum());
-        auto *l_hi = new TLine(p.mu + half, 0, p.mu + half, h_dt[k]->GetMaximum());
-        l_lo->SetLineColor(kRed); l_lo->SetLineStyle(2); l_lo->Draw("same");
-        l_hi->SetLineColor(kRed); l_hi->SetLineStyle(2); l_hi->Draw("same");
-
-        canvas->cd(k + 1 + N_PAIRS);      h_h[k]->Draw();
-        canvas->cd(k + 1 + 2 * N_PAIRS);  h_i[k]->Draw();
+        std::cout << "  T10R-" << p.name
+                  << "   " << std::setw(10) << f.coarse_peak
+                  << "   " << std::setw(9) << f.mu
+                  << "   " << std::setw(9) << f.sigma
+                  << "   " << std::setw(11) << f.n_dt << "\n";
     }
+
+    //---- Phase 2: event-wise cut, fill the two global W1156 histograms ------
+    TH1F *h_w_height = new TH1F(
+        "W1156_height",
+        "W1156 peak height (event passes any T10R-Eₓ cut);"
+        "height [ADC];events",
+        H_BINS, H_MIN, H_MAX);
+    TH1F *h_w_integ  = new TH1F(
+        "W1156_integral",
+        "W1156 peak integral (event passes any T10R-Eₓ cut);"
+        "integral [ADC#upoint sample];events",
+        I_BINS, I_MIN, I_MAX);
+
+    Long64_t n_good = 0;                   // events filling the W1156 histograms
+    std::vector<Long64_t> n_pass(N_PAIRS, 0);
+
+    for (const auto &r : rows) {
+        bool any_pass = false;
+        for (int k = 0; k < N_PAIRS; ++k) {
+            if (r.te[k] < 0) continue;
+            if (!fits[k].ok) continue;      // skip pairs where the fit failed
+            double dt   = (double)r.t10r - (double)r.te[k];
+            double half = NSIGMA_CUT * fits[k].sigma;
+            if (std::fabs(dt - fits[k].mu) < half) {
+                ++n_pass[k];
+                any_pass = true;
+                // don't break — we want the per-pair counters
+            }
+        }
+        if (any_pass && r.has_w1156) {
+            h_w_height->Fill(r.height);
+            h_w_integ ->Fill(r.integral);
+            ++n_good;
+        }
+    }
+    h_w_height->Write();
+    h_w_integ ->Write();
+
+    //---- Summary canvas -----------------------------------------------------
+    // 4 rows × 10 cols isn't great; use 5 columns × 3 rows for the 10 ΔT's
+    // (top two rows), and put the two W1156 histos on the bottom row.
+    // Layout: rows 1-2 = ΔT (5 panels each), row 3 = W1156 height + integral.
+    TCanvas *canvas = new TCanvas("summary", "tagger-W1156 correlations",
+                                  1700, 1000);
+    canvas->Divide(5, 3);
+
+    for (int k = 0; k < N_PAIRS; ++k) {
+        canvas->cd(k + 1);              // pads 1..10
+        h_dt[k]->Draw();
+        if (fits[k].ok) {
+            double half = NSIGMA_CUT * fits[k].sigma;
+            double y = h_dt[k]->GetMaximum() * 1.05;
+            auto *l_lo = new TLine(fits[k].mu - half, 0, fits[k].mu - half, y);
+            auto *l_hi = new TLine(fits[k].mu + half, 0, fits[k].mu + half, y);
+            l_lo->SetLineColor(kRed); l_lo->SetLineStyle(2); l_lo->Draw("same");
+            l_hi->SetLineColor(kRed); l_hi->SetLineStyle(2); l_hi->Draw("same");
+        }
+    }
+    canvas->cd(11 + 1); h_w_height->Draw();   // pad 12
+    canvas->cd(11 + 2); h_w_integ ->Draw();   // pad 13
     canvas->Write();
     out.Close();
 
-    //---- terminal summary --------------------------------------------------
-    std::cout << "\n=== Summary (hard-coded "
-              << NSIGMA_CUT << "-sigma cuts) ===\n";
-    std::cout << "   pair   mu[LSB]  sigma[LSB]   cut-half[LSB]   "
-                 "n_dt_filled   n_w1156_selected   keep\n";
+    //---- Terminal summary ---------------------------------------------------
+    std::cout << "\n=== Phase 2: event-wise cut ===\n"
+              << "  n_good = events with W1156 that pass AT LEAST ONE pair's "
+              << NSIGMA_CUT << "-σ cut\n\n"
+              << "   pair       mu[LSB]   sigma[LSB]   cut-half[LSB]   "
+                 "n_pass   pass%\n";
     for (int k = 0; k < N_PAIRS; ++k) {
-        const auto &p = PAIRS[k];
-        double half = NSIGMA_CUT * p.sigma;
-        double frac = n_dt[k] ? 100.0 * (double)n_sel[k] / n_dt[k] : 0.0;
-        std::cout << "  T10R-" << p.name
-                  << "  " << std::setw(8) << p.mu
-                  << "   " << std::setw(8) << p.sigma
-                  << "   " << std::setw(10) << half
-                  << "   " << std::setw(10) << n_dt[k]
-                  << "   " << std::setw(15) << n_sel[k]
+        const auto &f = fits[k];
+        double half = NSIGMA_CUT * f.sigma;
+        double frac = f.n_dt ? 100.0 * (double)n_pass[k] / f.n_dt : 0.0;
+        std::cout << "  T10R-" << PAIRS[k].name
+                  << "   " << std::setw(9) << f.mu
+                  << "   " << std::setw(9) << f.sigma
+                  << "   " << std::setw(9) << half
+                  << "   " << std::setw(8) << n_pass[k]
                   << "   " << std::setw(5) << frac << "%\n";
     }
-    std::cout << "\nhistograms written to " << out_path << "\n"
-              << "cut lines are overlaid on each ΔT panel of the summary "
-                 "canvas.\n";
+    std::cout << "\n  good events (ANY pair cut + W1156): " << n_good
+              << " / " << n_w1156_total << " W1156-present events\n"
+              << "\nhistograms written to " << out_path << "\n";
     return 0;
 }

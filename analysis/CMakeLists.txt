@@ -35,8 +35,9 @@ add_analysis_tool(gain_monitor tools/gain_monitor.cpp)
 add_analysis_tool(gain_fitter tools/gain_fitter.cpp)
 add_analysis_tool(sim2replay tools/sim2replay.cpp)
 add_analysis_tool(cosmic_lg tools/cosmic_lg.cpp)
+add_analysis_tool(gain_replay tools/gain_replay.cpp)
 
 install(TARGETS replay_rawdata replay_rawdata_m replay_recon replay_recon_m epCalib
-                cosmic_test quick_check matching det_calib gain_monitor gain_fitter
-                sim2replay cosmic_lg
+                cosmic_test quick_check matching det_calib cosmic_lg sim2replay gain_replay
+                gain_monitor gain_fitter
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

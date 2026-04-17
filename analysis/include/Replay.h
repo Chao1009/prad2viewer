@@ -35,6 +35,9 @@ public:
     // Load DAQ map (module name lookup by crate/slot/channel).
     void LoadDaqMap(const std::string &json_path);
 
+    std::string moduleName(int roc, int slot, int ch) const;
+    int moduleID(int roc, int slot, int ch) const;
+
     // Convert an EVIO file to a ROOT file with a TTree.
     // max_events <= 0 means process all. peaks=true adds peak branches.
     bool Process(const std::string &input_evio, const std::string &output_root,
@@ -52,8 +55,6 @@ private:
     void setupReconBranches(TTree *tree, EventVars_Recon &ev);
     void clearReconEvent(EventVars_Recon &ev);
 
-    std::string moduleName(int roc, int slot, int ch) const;
-    int moduleID(int roc, int slot, int ch) const;
     float computeIntegral(const fdec::ChannelData &cd, float pedestal) const;
 
     using DaqMap = std::unordered_map<std::string, std::string>;  // "roc_slot_ch" -> name

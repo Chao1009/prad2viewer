@@ -121,6 +121,41 @@ public:
     TH1F *GetMollerYHist() const { return moller_y_.get(); };
     TH1F *GetMollerZHist() const { return moller_z_.get(); };
 
+    //fill and get gain monitoring replay histograms
+    void Fill_lmsCH_lmsHeight(int lms_id, float height)
+        { if (lms_id >= 0 && lms_id < 4 && h_lmsCH_lmsHeight_[lms_id]) h_lmsCH_lmsHeight_[lms_id]->Fill(height); }
+    void Fill_lmsCH_lmsIntegral(int lms_id, float integral)
+        { if (lms_id >= 0 && lms_id < 4 && h_lmsCH_lmsIntegral_[lms_id]) h_lmsCH_lmsIntegral_[lms_id]->Fill(integral); }
+    void Fill_lmsCH_alphaHeight(int lms_id, float height)
+        { if (lms_id >= 0 && lms_id < 4 && h_lmsCH_alphaHeight_[lms_id]) h_lmsCH_alphaHeight_[lms_id]->Fill(height); }
+    void Fill_lmsCH_alphaIntegral(int lms_id, float integral)
+        { if (lms_id >= 0 && lms_id < 4 && h_lmsCH_alphaIntegral_[lms_id]) h_lmsCH_alphaIntegral_[lms_id]->Fill(integral); }
+    void Fill_modCH_lmsHeight(int module_id, float height)
+        { int module_index = hycal_.id_to_index(module_id); 
+          if (module_index >= 0 && module_index < (int)h_modCH_lmsHeight_.size()) h_modCH_lmsHeight_[module_index]->Fill(height); }
+    void Fill_modCH_lmsIntegral(int module_id, float integral)
+        { int module_index = hycal_.id_to_index(module_id);
+          if (module_index >= 0 && module_index < (int)h_modCH_lmsIntegral_.size()) h_modCH_lmsIntegral_[module_index]->Fill(integral); }
+
+    TH1F *Get_lmsCH_lmsHeightHist(int lms_id) const 
+        { return (lms_id >= 0 && lms_id < 4) ? h_lmsCH_lmsHeight_[lms_id].get() : nullptr; };
+    TH1F *Get_lmsCH_lmsIntegralHist(int lms_id) const 
+        { return (lms_id >= 0 && lms_id < 4) ? h_lmsCH_lmsIntegral_[lms_id].get() : nullptr; };
+    TH1F *Get_lmsCH_alphaHeightHist(int lms_id) const 
+        { return (lms_id >= 0 && lms_id < 4) ? h_lmsCH_alphaHeight_[lms_id].get() : nullptr; };
+    TH1F *Get_lmsCH_alphaIntegralHist(int lms_id) const 
+        { return (lms_id >= 0 && lms_id < 4) ? h_lmsCH_alphaIntegral_[lms_id].get() : nullptr; };
+    TH1F *Get_modCH_lmsHeightHist(int module_id) const
+        { 
+            int module_index = hycal_.id_to_index(module_id);
+            return (module_index >= 0 && module_index < (int)h_modCH_lmsHeight_.size()) ? h_modCH_lmsHeight_[module_index].get() : nullptr; 
+        };
+    TH1F *Get_modCH_lmsIntegralHist(int module_id) const
+        { 
+            int module_index = hycal_.id_to_index(module_id);
+            return (module_index >= 0 && module_index < (int)h_modCH_lmsIntegral_.size()) ? h_modCH_lmsIntegral_[module_index].get() : nullptr; 
+        };
+
 private:
     fdec::HyCalSystem &hycal_;
     std::vector<std::unique_ptr<TH1F>> module_hists_;  // one per module

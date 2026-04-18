@@ -343,13 +343,13 @@ static int doEpics(EvChannel &ch, int max_events)
         // print tree structure
         ch.PrintTree(std::cout);
 
-        // Dump every non-string leaf bank inside this SYNC event.  The 0xE112
-        // HEAD bank is 5 words in this run — the CODA control-event header
-        // layout is [type|0x01|nwords, unix_time, A, B, ...], so d[1] is the
-        // absolute unix time and d[2..] usually hold run/type or live-time
-        // counters.  Print raw words + a best-effort decode so the exact
-        // format is easy to confirm from the data.
-        std::cout << "\n  Non-string data banks (raw + decoded):\n";
+        // Dump every non-string leaf bank inside this SYNC event.  Layout is
+        // DAQ-specific (the PRad-II 0xE112 "HEAD" bank has 5 words with an
+        // inner header in d[0..1], an absolute unix time around d[3], and
+        // live-time counters in the remaining words) — rather than commit to
+        // a guess, print each word as decimal + hex and flag any slot whose
+        // value falls in the 2001-2100 unix-time range.
+        std::cout << "\n  Non-string data banks (raw + per-word decode):\n";
         for (auto &n : ch.GetNodes()) {
             if (n.type == DATA_CHARSTAR8 || n.type == DATA_CHAR8) continue;
             if (IsContainer(n.type)) continue;
@@ -369,32 +369,25 @@ static int doEpics(EvChannel &ch, int max_events)
             if (n.data_words > nshow) std::cout << " ...";
             std::cout << "\n";
 
-            // CODA-style decode: word 0 is the [event_type|0x01|nwords] header,
-            // word 1 is a 32-bit unix time, words 2+ are the payload counters.
-            if (n.data_words >= 2) {
-                uint32_t hd = d[0];
-                uint32_t ev_type = (hd >> 24) & 0xFF;
-                uint32_t sub_id  = (hd >> 16) & 0xFF;
-                uint32_t nw      =  hd        & 0xFFFF;
-                std::cout << "      d[0]=0x" << std::hex << std::setw(8)
-                          << std::setfill('0') << hd << std::setfill(' ')
-                          << std::dec
-                          << "  (event_type=0x" << std::hex << ev_type
-                          << ", sub_id=0x" << sub_id << ", nwords=" << std::dec
-                          << nw << ")\n";
+            // Plausible unix-time window: 2001-01-01 .. 2100-01-01.
+            constexpr uint32_t UNIX_MIN = 978307200u;    // 2001-01-01 UTC
+            constexpr uint32_t UNIX_MAX = 4102444800u;   // 2100-01-01 UTC
 
-                time_t t = static_cast<time_t>(d[1]);
-                char tbuf[64] = "";
-                std::tm *gm = std::gmtime(&t);
-                if (gm) std::strftime(tbuf, sizeof(tbuf), "%Y-%m-%d %H:%M:%S", gm);
-                std::cout << "      d[1]=" << d[1] << " (unix time, "
-                          << tbuf << " UTC)\n";
-
-                for (size_t i = 2; i < n.data_words; ++i)
-                    std::cout << "      d[" << i << "]=" << d[i]
-                              << " (0x" << std::hex << std::setw(8)
-                              << std::setfill('0') << d[i] << std::setfill(' ')
-                              << std::dec << ")\n";
+            for (size_t i = 0; i < n.data_words; ++i) {
+                std::cout << "      d[" << i << "]="
+                          << std::setw(12) << d[i]
+                          << "  (0x" << std::hex << std::setw(8)
+                          << std::setfill('0') << d[i]
+                          << std::setfill(' ') << std::dec << ")";
+                if (d[i] >= UNIX_MIN && d[i] <= UNIX_MAX) {
+                    time_t t = static_cast<time_t>(d[i]);
+                    char tbuf[64] = "";
+                    std::tm *gm = std::gmtime(&t);
+                    if (gm) std::strftime(tbuf, sizeof(tbuf),
+                                          "%Y-%m-%d %H:%M:%S UTC", gm);
+                    std::cout << "  [unix time? " << tbuf << "]";
+                }
+                std::cout << "\n";
             }
         }
 

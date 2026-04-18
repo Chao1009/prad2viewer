@@ -143,23 +143,28 @@ while ch.read() == dec.Status.success:
     if not ch.scan() or ch.get_event_type() != dec.EventType.Physics:
         continue
     for i in range(ch.get_n_events()):
-        # Fast path — TI/trigger only (no FADC waveform decode):
-        info = ch.decode_event_info(i)
-        if info is None: continue
+        ch.select_event(i)                              # picks sub-event + clears cache
+
+        # Cheapest accessor — TI/trigger metadata only (no detector decode):
+        info = ch.info()
         # …do something with info.event_number / .trigger_bits / .timestamp …
 
-        # Full decode when you actually need waveforms / TDC hits:
-        evt = ch.decode_event(i, with_tdc=True)
-        if not evt["ok"]: continue
-        for roc_idx in range(evt["event"].nrocs):
-            roc = evt["event"].roc(roc_idx)
+        # Decode detector products on demand — each is cached for repeat calls
+        # on the same sub-event, so asking for fadc() then gem() costs nothing
+        # extra if you only need one of them:
+        fadc_evt = ch.fadc()                            # FADC250/ADC1881M waveforms
+        tdc_evt  = ch.tdc()                             # V1190 tagger hits
+        # gem_evt = ch.gem();  vtp_evt = ch.vtp()       # when needed
+
+        for roc_idx in range(fadc_evt.nrocs):
+            roc = fadc_evt.roc(roc_idx)
             for s in roc.present_slots():
                 slot = roc.slot(s)
                 for c in slot.present_channels():
                     samples = slot.channel(c).samples   # numpy uint16 array
                     …
-        for j in range(evt["tdc"].n_hits):
-            h = evt["tdc"].hit(j)                       # TdcHit
+        for j in range(tdc_evt.n_hits):
+            h = tdc_evt.hit(j)                          # TdcHit
             …
 ```
 

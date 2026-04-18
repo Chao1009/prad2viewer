@@ -383,9 +383,9 @@ void EvChannel::decodeRunInfo(const EvNode &node, fdec::EventInfo &info) const
 
 // =============================================================================
 // Per-product dispatchers — shared by the lazy cache accessors and the legacy
-// DecodeEvent/DecodeEventInfo/DecodeEventTdc wrappers.  Each walks tag_index
-// for the tags belonging to its product, then invokes the registered decoder
-// (looked up by module name from DaqConfig::data_banks).
+// DecodeEvent compat wrapper.  Each walks tag_index for the tags belonging to
+// its product, then invokes the registered decoder (looked up by module name
+// from DaqConfig::data_banks).
 //
 // CODA2 single-event structure (see docs/rols/banktags.md):
 //
@@ -610,9 +610,10 @@ void EvChannel::decodeVtpInto(vtp::VtpEventData &vtp_evt) const
 }
 
 // =============================================================================
-// Legacy compat wrappers — write directly into caller-owned structs, bypassing
-// the lazy cache.  Semantics identical to the pre-refactor versions so every
-// existing consumer compiles and behaves unchanged.
+// Legacy compat wrapper — writes directly into caller-owned structs, bypassing
+// the lazy cache.  Semantics identical to the pre-refactor DecodeEvent so
+// existing consumers compile and behave unchanged.  New code should prefer
+// SelectEvent() + Info()/Fadc()/Gem()/Tdc()/Vtp().
 // =============================================================================
 
 bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
@@ -640,28 +641,6 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     // detector data was decoded (FADC waveforms or GEM strips).  evt.info
     // is always populated regardless.
     return evt.nrocs > 0 || ssp_decoded;
-}
-
-bool EvChannel::DecodeEventInfo(int i, fdec::EventInfo &info) const
-{
-    info = fdec::EventInfo{};
-    info.clear();
-    if (i < 0 || i >= nevents) return false;
-    if (nodes.empty()) return false;
-    SelectEvent(i);
-    decodeInfoInto(info);
-    return true;
-}
-
-bool EvChannel::DecodeEventTdc(int i,
-                               fdec::EventInfo &info,
-                               tdc::TdcEventData &tdc_evt) const
-{
-    tdc_evt.clear();
-    if (!DecodeEventInfo(i, info)) return false;
-    if (config.tdc_bank_tag == 0) return true;    // no TDC configured — info only
-    decodeTdcInto(tdc_evt);
-    return true;
 }
 
 // === Control event time extraction ==========================================

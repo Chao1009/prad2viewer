@@ -210,10 +210,9 @@ def load_hits_from_evio(
 ) -> np.ndarray:
     """Event-wise loop that extracts only the TDC bank from an evio file.
 
-    Drives the per-event decode from Python, calling
-    ``EvChannel.decode_event_tdc`` once per physics sub-event.  No FADC /
-    SSP / VTP decoding is performed — typically 5-10× faster than the
-    full-event path.
+    Drives the per-event decode from Python via
+    ``EvChannel.select_event()`` + ``info()``/``tdc()``.  No FADC / SSP /
+    VTP decoding happens — typically 5-10× faster than the full-event path.
 
     ``progress(events_seen, hits_seen)`` is invoked every
     ``progress_every`` physics events.  If it returns False, the loop
@@ -253,9 +252,9 @@ def load_hits_from_evio(
             continue
 
         for i in range(ch.get_n_events()):
-            ok, info, tdc_evt = ch.decode_event_tdc(i)
-            if not ok:
-                continue
+            ch.select_event(i)
+            info    = ch.info()
+            tdc_evt = ch.tdc()
             n = tdc_evt.n_hits
             if n > 0:
                 hits = tdc_evt.hits_numpy   # structured array, length n

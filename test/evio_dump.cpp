@@ -756,12 +756,11 @@ static int doTrigDebug(EvChannel &ch, bool verbose)
 }
 
 // --- mode: triggers ---------------------------------------------------------
-// Uses EvChannel::DecodeEventInfo() so we skip Fadc250 / SSP / VTP decoding
-// — we only need the TI/trigger-bank metadata.  On a 1.9M-event run this is
-// typically 5-10× faster than DecodeEvent().
+// Uses the lazy Info() accessor so we skip Fadc250/SSP/VTP/TDC decoding — we
+// only need the TI/trigger-bank metadata.  Typically 5-10× faster than a full
+// DecodeEvent() on a 1.9M-event run.
 static int doTriggers(EvChannel &ch, bool verbose)
 {
-    fdec::EventInfo info;
     int record = 0, decoded = 0;
     std::map<uint32_t, int> trig_counts;
 
@@ -780,7 +779,8 @@ static int doTriggers(EvChannel &ch, bool verbose)
         if (ch.GetNEvents() == 0) continue;
 
         for (int i = 0; i < ch.GetNEvents(); ++i) {
-            if (!ch.DecodeEventInfo(i, info)) continue;
+            ch.SelectEvent(i);
+            const auto &info = ch.Info();
             decoded++;
             trig_counts[info.trigger_bits]++;
 

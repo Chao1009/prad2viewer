@@ -37,6 +37,12 @@ private:
     evc::EvChannel reader_;
     std::string reader_path_;
     int reader_buf_ = 0;
+    // Index of the event currently decoded in reader_'s lazy cache, or -1 if
+    // the cache is invalid.  When decodeEvent() is called with the same index
+    // a second time (common for viewer_server's decodeEvent + computeClusters
+    // pair on the same click), we skip Scan+decode and copy straight out of
+    // reader_.Fadc()/Gem().
+    int last_decoded_index_ = -1;
     std::mutex reader_mtx_;
 
     std::string seekTo(int buf_num);

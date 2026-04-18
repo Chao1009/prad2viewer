@@ -94,6 +94,7 @@ void EvioDataSource::invalidateReader()
     reader_.Close();
     reader_path_.clear();
     reader_buf_ = 0;
+    last_decoded_index_ = -1;
 }
 
 std::string EvioDataSource::decodeEvent(int index, fdec::EventData &evt,
@@ -102,13 +103,23 @@ std::string EvioDataSource::decodeEvent(int index, fdec::EventData &evt,
     if (index < 0 || index >= (int)index_.size())
         return "event out of range";
 
-    auto &ei = index_[index];
     std::lock_guard<std::mutex> lk(reader_mtx_);
-    std::string err = seekTo(ei.buffer_num);
-    if (!err.empty()) return err;
-    if (!reader_.Scan()) return "scan error";
-    if (ssp) ssp->clear();
-    if (!reader_.DecodeEvent(ei.sub_event, evt, ssp)) return "decode error";
+
+    // Cache-hit path: same event as last decode → reader_'s lazy cache is
+    // already valid, skip Scan + decode and just copy out.  This is the
+    // viewer_server's common pattern of decodeEvent(N) immediately followed
+    // by computeClusters(N).
+    if (index != last_decoded_index_) {
+        auto &ei = index_[index];
+        std::string err = seekTo(ei.buffer_num);
+        if (!err.empty()) { last_decoded_index_ = -1; return err; }
+        if (!reader_.Scan()) { last_decoded_index_ = -1; return "scan error"; }
+        reader_.SelectEvent(ei.sub_event);
+        last_decoded_index_ = index;
+    }
+
+    evt = reader_.Fadc();                      // lazy-decodes on first access,
+    if (ssp) *ssp = reader_.Gem();             // returns cached ref thereafter
     return "";
 }
 

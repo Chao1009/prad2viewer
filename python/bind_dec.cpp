@@ -474,31 +474,65 @@ void bind_channel(py::module_ &m)
             "Scan the currently-held record. Call after a successful Read().")
         .def("get_event_type", &evc::EvChannel::GetEventType)
         .def("get_n_events",   &evc::EvChannel::GetNEvents)
-        .def("decode_event_info",
-            [](const evc::EvChannel &self, int i) -> py::object {
-                fdec::EventInfo info;
-                if (!self.DecodeEventInfo(i, info)) return py::none();
-                return py::cast(info);
-            },
-            py::arg("i") = 0,
-            "Fast-path: return EventInfo without decoding detector data, or None.")
-        .def("decode_event_tdc",
-            [](const evc::EvChannel &self, int i) {
-                fdec::EventInfo info;
-                auto tdc_evt = std::make_shared<tdc::TdcEventData>();
-                bool ok;
+        // ---- Lazy per-product accessors (new API) -------------------------
+        // select_event() picks the sub-event; info/fadc/gem/tdc/vtp each
+        // decode on first call and return the cached result on repeat calls.
+        .def("select_event", &evc::EvChannel::SelectEvent, py::arg("i") = 0,
+            "Select the sub-event index for subsequent info/fadc/gem/tdc/vtp "
+            "calls.  Clears the product cache if the index changed.  Must be "
+            "called after scan(); for PRad-II single-event data use i=0.")
+        .def("info",
+            [](const evc::EvChannel &self) {
+                fdec::EventInfo out;
                 {
                     py::gil_scoped_release rel;
-                    ok = self.DecodeEventTdc(i, info, *tdc_evt);
+                    out = self.Info();
                 }
-                return py::make_tuple(ok, info, tdc_evt);
+                return out;
             },
-            py::arg("i") = 0,
-            "Fast-path: decode ONLY the 0xE107 TDC bank plus event metadata.\n"
-            "Returns (ok: bool, info: EventInfo, tdc: TdcEventData).  "
-            "5–10× faster than decode_event() when only tagger timing is "
-            "needed.  Use this inside a per-event Python loop for TDC-only "
-            "analyses.")
+            "Decode (or return cached) event info for the currently-selected "
+            "sub-event.  Cheapest accessor — skips FADC/SSP/VTP/TDC work.")
+        .def("fadc",
+            [](const evc::EvChannel &self) {
+                auto evt = std::make_shared<fdec::EventData>();
+                {
+                    py::gil_scoped_release rel;
+                    *evt = self.Fadc();
+                }
+                return evt;
+            },
+            "Decode (or return cached) FADC250/ADC1881M waveforms as "
+            "EventData (contains event info + per-ROC/slot/channel samples).")
+        .def("gem",
+            [](const evc::EvChannel &self) {
+                auto evt = std::make_shared<ssp::SspEventData>();
+                {
+                    py::gil_scoped_release rel;
+                    *evt = self.Gem();
+                }
+                return evt;
+            },
+            "Decode (or return cached) SSP/MPD GEM strip data as SspEventData.")
+        .def("tdc",
+            [](const evc::EvChannel &self) {
+                auto evt = std::make_shared<tdc::TdcEventData>();
+                {
+                    py::gil_scoped_release rel;
+                    *evt = self.Tdc();
+                }
+                return evt;
+            },
+            "Decode (or return cached) V1190 TDC tagger hits as TdcEventData.")
+        .def("vtp",
+            [](const evc::EvChannel &self) {
+                auto evt = std::make_shared<vtp::VtpEventData>();
+                {
+                    py::gil_scoped_release rel;
+                    *evt = self.Vtp();
+                }
+                return evt;
+            },
+            "Decode (or return cached) VTP ECAL peaks/clusters as VtpEventData.")
         .def("decode_event",
             [](const evc::EvChannel &self, int i,
                bool with_ssp, bool with_vtp, bool with_tdc) -> py::dict {

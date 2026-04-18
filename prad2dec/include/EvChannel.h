@@ -17,8 +17,11 @@
 //       }
 //   }
 //
-// Legacy API (DecodeEvent/DecodeEventInfo/DecodeEventTdc) is preserved as a
-// thin wrapper — existing callers compile and behave unchanged.
+// Legacy DecodeEvent is preserved as a thin compat wrapper so existing
+// callers compile and behave unchanged.  The earlier DecodeEventInfo /
+// DecodeEventTdc fast paths were removed in favour of SelectEvent() + the
+// corresponding Info()/Tdc() accessors, which decode only what's requested
+// and cache the result for repeat calls on the same event.
 //=============================================================================
 
 #include "EvStruct.h"
@@ -107,16 +110,13 @@ public:
 
     // --- legacy API (compat, writes directly to caller-owned structs) -------
     //
-    // These preserve the old semantics: populate the caller's structs without
-    // touching the lazy cache.  Existing consumers keep working; migrate to
-    // Info()/Fadc()/Gem()/Tdc()/Vtp() at your own pace.
+    // Preserves the original semantics: populate the caller's structs without
+    // touching the lazy cache.  Kept so existing consumers compile unchanged;
+    // new code should use SelectEvent() + Info()/Fadc()/Gem()/Tdc()/Vtp().
     bool DecodeEvent(int i, fdec::EventData &evt,
                      ssp::SspEventData *ssp_evt = nullptr,
                      vtp::VtpEventData *vtp_evt = nullptr,
                      tdc::TdcEventData *tdc_evt = nullptr) const;
-    bool DecodeEventInfo(int i, fdec::EventInfo &info) const;
-    bool DecodeEventTdc(int i, fdec::EventInfo &info,
-                        tdc::TdcEventData &tdc_evt) const;
 
     // --- Control event extraction (Prestart/Go/End) -------------------------
 

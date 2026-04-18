@@ -8,8 +8,9 @@
 // point that adds a submodule to the top-level module.
 //
 // No "do everything" helpers at module root — analyses should drive the
-// per-event loop themselves via ``dec.EvChannel.decode_event_tdc`` (etc.)
-// and accumulate into numpy / Python on their own terms.
+// per-event loop themselves via ``dec.EvChannel.select_event()`` plus
+// ``info()``/``fadc()``/``gem()``/``tdc()``/``vtp()`` and accumulate into
+// numpy / Python on their own terms.
 
 #include <pybind11/pybind11.h>
 

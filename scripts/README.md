@@ -63,7 +63,7 @@ Visualize GEM clustering from `gem_dump -m evdump` JSON output.
 python scripts/gem_cluster_view.py <event.json> [gem_map.json] [--det N] [-o file.png]
 ```
 
-## tdc_viewer.py
+## tagger_viewer.py
 
 PyQt6 viewer for V1190 TDC hits from the tagger crate (ROC `0x008E`, bank
 `0xE107`). Shows a per-slot bar chart of hits/channel, a single-channel
@@ -82,36 +82,38 @@ Two data sources:
 cmake -DBUILD_PYTHON=ON -S . -B build && cmake --build build
 # optional — the viewer auto-adds build/python/ to sys.path
 export PYTHONPATH="$PWD/build/python:$PYTHONPATH"
-python scripts/tdc_viewer.py /data/stage6/prad_023667/prad_023667.evio.00000 \
+python scripts/tagger_viewer.py /data/stage6/prad_023667/prad_023667.evio.00000 \
        -n 200000          # limit number of physics events (optional)
        --roc 0x8E         # restrict to the tagger ROC (optional)
 ```
 
 **Online — live ET stream** from a running `prad2_server`. The server
-only decodes TDC when at least one client is subscribed, so regular
-monitoring is unaffected:
+only decodes tagger TDC hits when at least one client is subscribed, so
+regular monitoring is unaffected:
 
 ```bash
 # DAQ machine (one-time)
 ./build/bin/prad2_server --online --port 5051
 
 # Viewer (anywhere with PyQt6 + QtWebSockets installed)
-python scripts/tdc_viewer.py --live ws://clondaq6:5051
+python scripts/tagger_viewer.py --live ws://clondaq6:5051
 ```
 
 On startup with `--live`, a fast subscribe/ack round-trip is done
 *before* the main window opens — if the server is unreachable or the
-protocol doesn't match, `tdc_viewer` exits with a clear error rather
+protocol doesn't match, `tagger_viewer` exits with a clear error rather
 than showing an empty window. Pass `--no-smoke-test` to skip it.
 
 The File menu also has *Connect to prad2_server…* (Ctrl+L) and
 *Disconnect*. Pause / Clear buttons sit next to the Bins spinner.
 Memory is capped at 10 M hits (rolling — oldest half is dropped).
 
-Binary frame format (useful for anyone writing a different client):
+Wire protocol — WebSocket JSON messages `tagger_subscribe` /
+`tagger_subscribed` / `tagger_unsubscribe`.  Binary frame format
+(useful for anyone writing a different client):
 
 ```
-magic        "TDC1"   (4 bytes)
+magic        "TGR1"   (4 bytes)
 flags        u32      (bit 0 = some frames have been dropped)
 n_hits       u32
 first_seq    u32
@@ -126,7 +128,7 @@ records      n_hits × 16-byte packed BinHit
 ## Using prad2py directly (Phase 1 bindings)
 
 `prad2py` exposes the decoder through a `dec` submodule — useful for custom
-offline analysis that goes beyond what the tdc_viewer does. Build it with
+offline analysis that goes beyond what the tagger_viewer does. Build it with
 `-DBUILD_PYTHON=ON` once, then:
 
 ```python

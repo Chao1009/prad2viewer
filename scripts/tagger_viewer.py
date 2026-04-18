@@ -26,10 +26,10 @@ Usage
 -----
 
     # Offline (evio file via prad2py)
-    python scripts/tdc_viewer.py /data/.../prad_023667.evio.00000
+    python scripts/tagger_viewer.py /data/.../prad_023667.evio.00000
 
     # Live (online ET via prad2_server)
-    python scripts/tdc_viewer.py --live ws://clondaq6:5051
+    python scripts/tagger_viewer.py --live ws://clondaq6:5051
 
 Only PyQt6 and numpy are required.  Plots are drawn with QPainter, so
 matplotlib / pyqtgraph are NOT needed.
@@ -112,11 +112,11 @@ RECORD_DTYPE = np.dtype(
 
 
 # ---------------------------------------------------------------------------
-# Live stream frame parser (prad2_server TDC broadcast)
+# Live stream frame parser (prad2_server tagger broadcast)
 # ---------------------------------------------------------------------------
 
 # Header is little-endian:
-#   char magic[4] ("TDC1")
+#   char magic[4] ("TGR1")
 #   u32 flags, u32 n_hits, u32 first_seq, u32 last_seq, u32 dropped
 STREAM_HEADER_DTYPE = np.dtype(
     [
@@ -128,12 +128,12 @@ STREAM_HEADER_DTYPE = np.dtype(
         ("dropped",   "<u4"),
     ]
 )
-assert STREAM_HEADER_DTYPE.itemsize == 24, "TDC stream header must be 24 bytes"
-STREAM_MAGIC = b"TDC1"
+assert STREAM_HEADER_DTYPE.itemsize == 24, "tagger stream header must be 24 bytes"
+STREAM_MAGIC = b"TGR1"
 
 
 def parse_stream_frame(buf) -> Tuple[dict, np.ndarray]:
-    """Parse one server-broadcast TDC frame. Returns (header_dict, raw_hits)
+    """Parse one server-broadcast tagger frame. Returns (header_dict, raw_hits)
     where raw_hits has RAW_DTYPE (packed 16-byte records) ready to be
     translated into RECORD_DTYPE via raw_to_record()."""
     mv = memoryview(buf).tobytes() if not isinstance(buf, (bytes, bytearray)) else bytes(buf)
@@ -805,7 +805,7 @@ class LiveStream(QObject):
         if self._ws.state() != self._ws.state().UnconnectedState:
             try:
                 self._ws.sendTextMessage(
-                    _json.dumps({"type": "tdc_unsubscribe"})
+                    _json.dumps({"type": "tagger_unsubscribe"})
                 )
             except Exception:
                 pass
@@ -821,7 +821,7 @@ class LiveStream(QObject):
 
     def _on_open(self):
         self.stateChanged.emit("connected, subscribing…")
-        self._ws.sendTextMessage(_json.dumps({"type": "tdc_subscribe"}))
+        self._ws.sendTextMessage(_json.dumps({"type": "tagger_subscribe"}))
 
     def _on_close(self):
         self._stats_timer.stop()
@@ -833,7 +833,7 @@ class LiveStream(QObject):
         except Exception:
             return
         t = d.get("type")
-        if t == "tdc_subscribed":
+        if t == "tagger_subscribed":
             n = d.get("subscribers", "?")
             self.stateChanged.emit(f"subscribed ({n} client(s))")
 
@@ -1818,7 +1818,7 @@ def _parse_roc(value: str) -> int:
 
 def _cli_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="tdc_viewer.py",
+        prog="tagger_viewer.py",
         description="Interactive viewer for V1190 TDC hits (bank 0xE107).",
     )
     p.add_argument(
@@ -1859,7 +1859,7 @@ def _cli_parser() -> argparse.ArgumentParser:
 
 
 def smoke_test_live(url: str, timeout_ms: int = 5000) -> Optional[str]:
-    """Open a WebSocket, send tdc_subscribe, wait for the tdc_subscribed
+    """Open a WebSocket, send tagger_subscribe, wait for the tagger_subscribed
     acknowledgement.  Returns None on success, a human-readable error string
     otherwise.  Uses a local QEventLoop so it's safe to call after
     QApplication() is constructed but before the main window is shown.
@@ -1870,7 +1870,7 @@ def smoke_test_live(url: str, timeout_ms: int = 5000) -> Optional[str]:
 
     loop = QEventLoop()
     ws = QWebSocket()
-    state = {"error": "timeout (no tdc_subscribed ack)"}
+    state = {"error": "timeout (no tagger_subscribed ack)"}
 
     def finish(err: Optional[str]):
         state["error"] = err
@@ -1879,7 +1879,7 @@ def smoke_test_live(url: str, timeout_ms: int = 5000) -> Optional[str]:
 
     def on_connected():
         try:
-            ws.sendTextMessage(_json.dumps({"type": "tdc_subscribe"}))
+            ws.sendTextMessage(_json.dumps({"type": "tagger_subscribe"}))
         except Exception as exc:
             finish(f"send failed: {exc}")
 
@@ -1888,7 +1888,7 @@ def smoke_test_live(url: str, timeout_ms: int = 5000) -> Optional[str]:
             d = _json.loads(msg)
         except Exception:
             return
-        if d.get("type") == "tdc_subscribed":
+        if d.get("type") == "tagger_subscribed":
             finish(None)
 
     def on_error(_err):
@@ -1908,7 +1908,7 @@ def smoke_test_live(url: str, timeout_ms: int = 5000) -> Optional[str]:
     # Clean up: unsubscribe and close so the server doesn't see a dangling
     # subscriber hanging around until we reconnect for real.
     try:
-        ws.sendTextMessage(_json.dumps({"type": "tdc_unsubscribe"}))
+        ws.sendTextMessage(_json.dumps({"type": "tagger_unsubscribe"}))
     except Exception:
         pass
     ws.close()
@@ -1927,7 +1927,7 @@ def main(argv):
     if args.live and not args.no_smoke_test:
         err = smoke_test_live(args.live)
         if err:
-            sys.stderr.write(f"tdc_viewer: cannot connect to {args.live}: {err}\n")
+            sys.stderr.write(f"tagger_viewer: cannot connect to {args.live}: {err}\n")
             show_error_dialog(
                 None,
                 title="Live stream unreachable",

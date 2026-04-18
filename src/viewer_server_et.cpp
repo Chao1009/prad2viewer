@@ -12,36 +12,36 @@ using json = nlohmann::json;
 #ifdef WITH_ET
 
 // =========================================================================
-// TDC live-stream frame format
+// Tagger live-stream frame format
 //
 // Header (little-endian, 24 bytes, matches the dtype expected by
-// scripts/tdc_viewer.py):
+// scripts/tagger_viewer.py):
 //
-//   char     magic[4];       // "TDC1"
+//   char     magic[4];       // "TGR1"
 //   uint32_t flags;           // bit 0 set when dropped_count > 0
 //   uint32_t n_hits;          // number of 16-byte BinHit records that follow
 //   uint32_t first_seq;       // event seq of the first hit in the frame
 //   uint32_t last_seq;        // event seq of the last hit
 //   uint32_t dropped;         // total dropped frames (since server start)
 //
-// Hits use a 16-byte packed layout (same as scripts/tdc_viewer.py RAW_DTYPE):
+// Hits use a 16-byte packed layout (same as scripts/tagger_viewer.py RAW_DTYPE):
 //
 //   uint32_t event_num;
 //   uint32_t trigger_bits;
 //   uint16_t roc_tag;
 //   uint8_t  slot;
 //   uint8_t  channel_edge;    // bit 7 = edge, bits 6:0 = channel
-//   uint32_t tdc;
+//   uint32_t tdc;             // raw V1190 TDC value (hardware-level name)
 // =========================================================================
 namespace {
 
-constexpr size_t TDC_HIT_SIZE     = 16;
-constexpr size_t TDC_HDR_SIZE     = 24;
-constexpr uint32_t TDC_BATCH_MAX  = 256;      // flush at this many hits
-constexpr auto     TDC_BATCH_MS   = std::chrono::milliseconds(10);
+constexpr size_t TAGGER_HIT_SIZE    = 16;
+constexpr size_t TAGGER_HDR_SIZE    = 24;
+constexpr uint32_t TAGGER_BATCH_MAX = 256;    // flush at this many hits
+constexpr auto     TAGGER_BATCH_MS  = std::chrono::milliseconds(10);
 
 #pragma pack(push, 1)
-struct TdcBinHit {
+struct TaggerBinHit {
     uint32_t event_num;
     uint32_t trigger_bits;
     uint16_t roc_tag;
@@ -50,7 +50,7 @@ struct TdcBinHit {
     uint32_t tdc;
 };
 #pragma pack(pop)
-static_assert(sizeof(TdcBinHit) == TDC_HIT_SIZE, "TdcBinHit layout");
+static_assert(sizeof(TaggerBinHit) == TAGGER_HIT_SIZE, "TaggerBinHit layout");
 
 } // namespace
 
@@ -75,35 +75,35 @@ void ViewerServer::etReaderThread()
     fdec::WaveResult wres;
     uint64_t last_ti_ts = 0;
 
-    // TDC batch state (local to the thread — only this thread writes it).
-    // Pre-allocate enough for TDC_BATCH_MAX hits + header.
-    std::vector<uint8_t> tdc_batch;
-    tdc_batch.reserve(TDC_HDR_SIZE + TDC_BATCH_MAX * TDC_HIT_SIZE);
-    uint32_t tdc_batch_hits = 0;
-    uint32_t tdc_batch_first_seq = 0;
-    uint32_t tdc_batch_last_seq = 0;
-    auto tdc_batch_last_flush = std::chrono::steady_clock::now();
+    // Tagger batch state (local to the thread — only this thread writes it).
+    // Pre-allocate enough for TAGGER_BATCH_MAX hits + header.
+    std::vector<uint8_t> tagger_batch;
+    tagger_batch.reserve(TAGGER_HDR_SIZE + TAGGER_BATCH_MAX * TAGGER_HIT_SIZE);
+    uint32_t tagger_batch_hits = 0;
+    uint32_t tagger_batch_first_seq = 0;
+    uint32_t tagger_batch_last_seq = 0;
+    auto tagger_batch_last_flush = std::chrono::steady_clock::now();
 
-    auto tdc_flush = [&]() {
-        if (tdc_batch_hits == 0) { tdc_batch_last_flush = std::chrono::steady_clock::now(); return; }
+    auto tagger_flush = [&]() {
+        if (tagger_batch_hits == 0) { tagger_batch_last_flush = std::chrono::steady_clock::now(); return; }
         // Fill header in place.
-        uint8_t *p = tdc_batch.data();
-        std::memcpy(p + 0,  "TDC1", 4);
-        uint32_t drops = static_cast<uint32_t>(tdc_dropped_frames_.load());
+        uint8_t *p = tagger_batch.data();
+        std::memcpy(p + 0,  "TGR1", 4);
+        uint32_t drops = static_cast<uint32_t>(tagger_dropped_frames_.load());
         uint32_t flags = (drops > 0) ? 1u : 0u;
-        std::memcpy(p + 4,  &flags,               4);
-        std::memcpy(p + 8,  &tdc_batch_hits,      4);
-        std::memcpy(p + 12, &tdc_batch_first_seq, 4);
-        std::memcpy(p + 16, &tdc_batch_last_seq,  4);
-        std::memcpy(p + 20, &drops,               4);
-        tdcBroadcastBinary(tdc_batch.data(),
-                           TDC_HDR_SIZE + tdc_batch_hits * TDC_HIT_SIZE);
+        std::memcpy(p + 4,  &flags,                  4);
+        std::memcpy(p + 8,  &tagger_batch_hits,      4);
+        std::memcpy(p + 12, &tagger_batch_first_seq, 4);
+        std::memcpy(p + 16, &tagger_batch_last_seq,  4);
+        std::memcpy(p + 20, &drops,                  4);
+        taggerBroadcastBinary(tagger_batch.data(),
+                              TAGGER_HDR_SIZE + tagger_batch_hits * TAGGER_HIT_SIZE);
         // Reset batch (keep allocation).
-        tdc_batch.resize(TDC_HDR_SIZE);
-        tdc_batch_hits = 0;
-        tdc_batch_first_seq = 0;
-        tdc_batch_last_seq = 0;
-        tdc_batch_last_flush = std::chrono::steady_clock::now();
+        tagger_batch.resize(TAGGER_HDR_SIZE);
+        tagger_batch_hits = 0;
+        tagger_batch_first_seq = 0;
+        tagger_batch_last_seq = 0;
+        tagger_batch_last_flush = std::chrono::steady_clock::now();
     };
 
     while (running_) {
@@ -203,11 +203,11 @@ void ViewerServer::etReaderThread()
 
                 for (int i = 0; i < ch.GetNEvents(); ++i) {
                     ssp_evt.clear();
-                    const bool want_tdc =
-                        tdc_subs_count_.load(std::memory_order_relaxed) > 0;
-                    tdc::TdcEventData *tdc_arg = want_tdc ? &tdc_evt : nullptr;
-                    if (tdc_arg) tdc_arg->clear();
-                    if (!ch.DecodeEvent(i, event, &ssp_evt, nullptr, tdc_arg)) continue;
+                    const bool want_tagger =
+                        tagger_subs_count_.load(std::memory_order_relaxed) > 0;
+                    tdc::TdcEventData *tagger_arg = want_tagger ? &tdc_evt : nullptr;
+                    if (tagger_arg) tagger_arg->clear();
+                    if (!ch.DecodeEvent(i, event, &ssp_evt, nullptr, tagger_arg)) continue;
                     last_ti_ts = event.info.timestamp;
 
                     app_online_.processGemEvent(ssp_evt);
@@ -215,18 +215,18 @@ void ViewerServer::etReaderThread()
 
                     int seq = app_online_.events_processed.load();
 
-                    // --- live TDC stream: batch + broadcast ------------------
-                    if (want_tdc && tdc_evt.n_hits > 0) {
-                        if (tdc_batch_hits == 0) {
+                    // --- live tagger stream: batch + broadcast ---------------
+                    if (want_tagger && tdc_evt.n_hits > 0) {
+                        if (tagger_batch_hits == 0) {
                             // Grow to header size on first hit of the batch.
-                            tdc_batch.resize(TDC_HDR_SIZE);
-                            tdc_batch_first_seq = static_cast<uint32_t>(seq);
+                            tagger_batch.resize(TAGGER_HDR_SIZE);
+                            tagger_batch_first_seq = static_cast<uint32_t>(seq);
                         }
                         const uint32_t evnum = static_cast<uint32_t>(event.info.event_number);
                         const uint32_t tbits = event.info.trigger_bits;
                         for (int h = 0; h < tdc_evt.n_hits; ++h) {
                             const auto &src = tdc_evt.hits[h];
-                            TdcBinHit bh;
+                            TaggerBinHit bh;
                             bh.event_num    = evnum;
                             bh.trigger_bits = tbits;
                             bh.roc_tag      = static_cast<uint16_t>(src.roc_tag);
@@ -235,19 +235,19 @@ void ViewerServer::etReaderThread()
                                 static_cast<uint8_t>(((src.edge & 0x1) << 7) |
                                                       (src.channel & 0x7F));
                             bh.tdc          = src.value;
-                            size_t off = tdc_batch.size();
-                            tdc_batch.resize(off + TDC_HIT_SIZE);
-                            std::memcpy(tdc_batch.data() + off, &bh, TDC_HIT_SIZE);
-                            ++tdc_batch_hits;
-                            if (tdc_batch_hits >= TDC_BATCH_MAX) { tdc_flush(); break; }
+                            size_t off = tagger_batch.size();
+                            tagger_batch.resize(off + TAGGER_HIT_SIZE);
+                            std::memcpy(tagger_batch.data() + off, &bh, TAGGER_HIT_SIZE);
+                            ++tagger_batch_hits;
+                            if (tagger_batch_hits >= TAGGER_BATCH_MAX) { tagger_flush(); break; }
                         }
-                        tdc_batch_last_seq = static_cast<uint32_t>(seq);
+                        tagger_batch_last_seq = static_cast<uint32_t>(seq);
                     }
                     // Time-based flush (covers sparse streams).
-                    if (tdc_batch_hits > 0 &&
-                        std::chrono::steady_clock::now() - tdc_batch_last_flush >= TDC_BATCH_MS)
+                    if (tagger_batch_hits > 0 &&
+                        std::chrono::steady_clock::now() - tagger_batch_last_flush >= TAGGER_BATCH_MS)
                     {
-                        tdc_flush();
+                        tagger_flush();
                     }
 
                     if (app_online_.lms_trigger.accept != 0 &&
@@ -291,8 +291,8 @@ void ViewerServer::etReaderThread()
                 }
             }
 
-            // Drain any partial TDC batch before losing the connection context.
-            tdc_flush();
+            // Drain any partial tagger batch before losing the connection context.
+            tagger_flush();
 
             et_connected_ = false;
             ch.Close();

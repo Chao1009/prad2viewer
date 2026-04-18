@@ -95,8 +95,9 @@ def main():
     parser = argparse.ArgumentParser(
         description="Visualize GEM clustering from gem_dump -m evdump JSON. "
                     "Accepts a single file, directory, or glob pattern.")
-    parser.add_argument("event_json",
-                        help="Event JSON file, directory, or glob pattern")
+    parser.add_argument("event_json", nargs="+",
+                        help="Event JSON file(s), directory, or glob pattern. "
+                             "Accepts multiple files (shell-expanded globs).")
     parser.add_argument("-G", "--gem-map", default=None,
                         help="GEM map JSON (default: auto-search common paths)")
     parser.add_argument("--det", type=int, default=-1,
@@ -123,13 +124,18 @@ def main():
     if not gem_map_path:
         print("Error: cannot find gem_map.json (pass -G <path>)"); sys.exit(1)
 
-    path = args.event_json
-    if os.path.isdir(path):
-        files = sorted(globmod.glob(os.path.join(path, "gem_event*.json")))
-    elif "*" in path or "?" in path:
-        files = sorted(globmod.glob(path))
-    else:
-        files = [path]
+    # Accept three input styles, in any mix:
+    #   - one or more explicit JSON files (shell-expanded globs land here)
+    #   - a directory → pick up gem_event*.json inside
+    #   - a quoted glob pattern → expand ourselves
+    files = []
+    for arg in args.event_json:
+        if os.path.isdir(arg):
+            files += sorted(globmod.glob(os.path.join(arg, "gem_event*.json")))
+        elif "*" in arg or "?" in arg:
+            files += sorted(globmod.glob(arg))
+        else:
+            files.append(arg)
     files = [f for f in files if f.lower().endswith(".json")]
     if not files:
         print("Error: no JSON files found"); sys.exit(1)

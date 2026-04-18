@@ -325,20 +325,21 @@ const std::vector<GEMHit>& GemSystem::GetHits(int det) const
 //
 // Two paths, picked per-APV from the data itself:
 //
-//   data.has_online_cm == true  → production online-ZS run.  The MPD firmware
-//     has already applied pedestal subtraction, common-mode correction, and
-//     zero-suppression; the only strips in the bank are the surviving ones.
-//     We just copy those values and mark every present strip as a hit.  No
-//     offline pedestal file is needed.
+//   data.nstrips < APV_STRIP_SIZE → firmware zero-suppressed.  Only the
+//     surviving strips are in the bank; values are pedestal + CM subtracted
+//     by firmware.  Every present strip is a hit; skip offline processing.
 //
-//   data.has_online_cm == false → full-readout run (pedestal calibration).
-//     Run the full offline pipeline: pedestal subtract → sorting common-mode
-//     → per-strip ZS with pedestal.noise × zerosup_thres_.
+//   data.nstrips == APV_STRIP_SIZE → full readout.  Every channel is in the
+//     bank (calibration / debug mode, possibly with firmware emitting CM
+//     debug headers but without actually applying ZS).  Run the full
+//     offline pipeline: pedestal subtract → sorting common-mode → per-strip
+//     ZS with pedestal.noise × zerosup_thres_.
 //
-// The per-APV `has_online_cm` flag is set by SspDecoder.cpp whenever the
-// MPD emits its type-0xD debug-header words, which only happens when the
-// firmware is running online CM — and online CM is paired with online ZS
-// in the current MPD configuration.
+// NOTE: we do NOT use `data.has_online_cm` as the discriminator.  The MPD
+// firmware can emit type-0xD debug-header words (which set has_online_cm)
+// while still sending all 128 strips raw — i.e. CM computation was done
+// but ZS was not applied.  `nstrips` is the only signal that actually
+// tells us whether the data coming in is zero-suppressed.
 //=============================================================================
 
 // Flat-buffer index: raw[ts * APV_STRIP_SIZE + ch].
@@ -349,7 +350,7 @@ void GemSystem::processApv(int apv_idx, const ssp::ApvData &data)
     auto &cfg = apvs_[apv_idx];
     auto &work = apv_work_[apv_idx];
 
-    if (data.has_online_cm) {
+    if (data.nstrips < APV_STRIP_SIZE) {
         // Online-ZS path: every strip present in the bank is a surviving hit.
         // Values are already pedestal + CM subtracted by firmware.
         for (int ch = 0; ch < APV_STRIP_SIZE; ++ch) {

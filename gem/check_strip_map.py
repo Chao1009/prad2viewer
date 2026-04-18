@@ -12,6 +12,7 @@ Usage:
     python check_strip_map.py [path/to/gem_map.json]
 """
 
+import argparse
 import json
 import sys
 import os
@@ -116,16 +117,24 @@ def check_apv(plane_type, plane_index, orient, pin_rotate=0, shared_pos=-1,
 
 
 def main():
-    # find gem_map.json
-    if len(sys.argv) > 1:
-        gem_map_path = sys.argv[1]
-    else:
-        for candidate in ["database/gem_map.json", "../database/gem_map.json", "gem_map.json"]:
+    parser = argparse.ArgumentParser(
+        description="Cross-check GEM strip mapping vs PRadAnalyzer + "
+                    "mpd_gem_view_ssp reference implementations.")
+    parser.add_argument("-G", "--gem-map", default=None,
+                        help="GEM map JSON path (default: auto-search).")
+    args = parser.parse_args()
+
+    gem_map_path = args.gem_map
+    if not gem_map_path:
+        for candidate in ["database/gem_map.json",
+                          "../database/gem_map.json",
+                          "../../database/gem_map.json",
+                          "gem_map.json"]:
             if os.path.exists(candidate):
                 gem_map_path = candidate
                 break
         else:
-            print("Usage: python check_strip_map.py [path/to/gem_map.json]")
+            print("Error: cannot find gem_map.json (pass -G <path>)")
             sys.exit(1)
 
     with open(gem_map_path, encoding="utf-8") as f:

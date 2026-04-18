@@ -728,16 +728,17 @@ static void usage(const char *prog)
         << "  -m summary    Per-event statistics table\n"
         << "  -m ped        Compute per-strip pedestals → output file\n"
         << "  -m evdump     Dump event(s) with 2D hits to JSON (-n K for first K)\n\n"
-        << "Options:\n"
-        << "  -D <file>     DAQ configuration (auto-searches daq_config.json if omitted)\n"
-        << "  -G <file>     GEM map file (default: gem_map.json)\n"
-        << "  -P <file>     GEM pedestal file (input, for hits/clusters)\n"
-        << "  -o <file>     Output file (ped mode, default: gem_ped.json)\n"
-        << "  -n <N>        Max physics events (default: 10, 0=all for ped)\n"
-        << "  -t <bit>      Trigger bit filter (-1=all, default)\n"
-        << "  -e <N>        Dump only physics event N (1-based)\n"
-        << "  -z <sigma>    Override zero-suppression threshold (default: from gem_map)\n"
-        << "  -f <filter>   Event filter for evdump: field=val[+field=val]:min_dets\n"
+        << "Options (short / long):\n"
+        << "  -D, --daq-config <file>    DAQ config (auto-searches daq_config.json if omitted)\n"
+        << "  -G, --gem-map <file>       GEM map file (default: gem_map.json)\n"
+        << "  -P, --gem-ped <file>       GEM pedestal file (required for full-readout data)\n"
+        << "  -o, --output <file>        Output file (ped mode, default: gem_ped.json)\n"
+        << "  -n, --num-events <N>       Max physics events (default: 10, 0=all for ped)\n"
+        << "  -t, --trigger-bit <bit>    Trigger bit filter (-1=all, default)\n"
+        << "  -e, --event <N>            Dump only physics event N (1-based)\n"
+        << "  -z, --zero-sup <sigma>     Override zero-suppression threshold (default: from gem_map)\n"
+        << "  -R, --raw                  Include raw APV data in evdump output\n"
+        << "  -f, --filter <expr>        Event filter for evdump: field=val[+field=val]:min_dets\n"
         << "                APV fields: pos, plane (X/Y), match (+Y/-Y), orient, det\n"
         << "                Detector field: clusters=N (>=N clusters per det)\n"
         << "                Use + to AND conditions. Examples:\n"
@@ -763,8 +764,28 @@ int main(int argc, char *argv[])
     float zerosup_override = -1.f;  // <0 = use gem_map default
     bool include_raw = false;
 
+    // Long-option aliases — identical semantics to the short flags, kept
+    // in sync with the Python GEM tools (gem_event_viewer, gem_cluster_view,
+    // gem_layout, check_strip_map) so users can pass either style.
+    static struct option long_opts[] = {
+        {"daq-config",    required_argument, nullptr, 'D'},
+        {"gem-map",       required_argument, nullptr, 'G'},
+        {"gem-ped",       required_argument, nullptr, 'P'},
+        {"output",        required_argument, nullptr, 'o'},
+        {"mode",          required_argument, nullptr, 'm'},
+        {"num-events",    required_argument, nullptr, 'n'},
+        {"trigger-bit",   required_argument, nullptr, 't'},
+        {"event",         required_argument, nullptr, 'e'},
+        {"filter",        required_argument, nullptr, 'f'},
+        {"raw",           no_argument,       nullptr, 'R'},
+        {"zero-sup",      required_argument, nullptr, 'z'},
+        {"help",          no_argument,       nullptr, 'h'},
+        {nullptr, 0, nullptr, 0},
+    };
+
     int opt;
-    while ((opt = getopt(argc, argv, "D:G:P:o:m:n:t:e:z:f:Rh")) != -1) {
+    while ((opt = getopt_long(argc, argv, "D:G:P:o:m:n:t:e:z:f:Rh",
+                              long_opts, nullptr)) != -1) {
         switch (opt) {
         case 'D': daq_config_file = optarg; break;
         case 'G': gem_map_file = optarg; break;
@@ -777,6 +798,7 @@ int main(int argc, char *argv[])
         case 'f': filter_expr = optarg; break;
         case 'R': include_raw = true; break;
         case 'z': zerosup_override = std::atof(optarg); break;
+        case 'h': usage(argv[0]); return 0;
         default:  usage(argv[0]); return 1;
         }
     }
@@ -954,13 +976,20 @@ int main(int argc, char *argv[])
             // Loudly warn if we're processing full-readout data without
             // pedestals — downstream modes (hits/clusters/summary/evdump)
             // will produce zero hits and the user deserves to know why.
+            //
+            // Full readout iff any APV in the event sent all 128 strips
+            // (i.e. firmware did not apply zero suppression).  `nstrips`
+            // is the authoritative signal; `has_online_cm` is NOT — the
+            // MPD can emit CM debug headers while still sending every
+            // strip, which would mislead that check.
             if (ped_warning_applies && !ped_warning_emitted && ssp_evt.nmpds > 0) {
                 bool full_readout = false;
                 for (int m = 0; m < ssp_evt.nmpds && !full_readout; ++m) {
                     auto &mpd = ssp_evt.mpds[m];
                     if (!mpd.present) continue;
                     for (int a = 0; a < ssp::MAX_APVS_PER_MPD; ++a) {
-                        if (mpd.apvs[a].present && !mpd.apvs[a].has_online_cm) {
+                        auto &apv = mpd.apvs[a];
+                        if (apv.present && apv.nstrips == ssp::APV_STRIP_SIZE) {
                             full_readout = true; break;
                         }
                     }
@@ -973,12 +1002,11 @@ int main(int argc, char *argv[])
                         << "    no hits.  Downstream output will appear empty.  Fix:\n"
                         << "      gem_dump -m ped <run.evio> -o gem_ped.json\n"
                         << "      gem_dump -m " << mode << " <file.evio> -P gem_ped.json ...\n\n";
-                    ped_warning_emitted = true;
                 }
-                // Mark as emitted either way — we only check until we've
-                // either warned or confirmed the data is online-ZS.  Once
-                // we've seen has_online_cm=true on any event, don't warn.
-                if (!full_readout) ped_warning_emitted = true;
+                // Latch either way: we only run this check on the first
+                // physics event.  Subsequent events are assumed consistent
+                // with the first.
+                ped_warning_emitted = true;
             }
 
             // trigger filter

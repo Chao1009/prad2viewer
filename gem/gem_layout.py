@@ -15,6 +15,7 @@ Usage:
 Defaults to database/gem_map.json if no argument given.
 """
 
+import argparse
 import json
 import sys
 import os
@@ -237,19 +238,26 @@ def plot_detector(ax, det, det_id, hole, show_every=8):
 
 
 def main():
-    if len(sys.argv) > 1:
-        gem_map_path = sys.argv[1]
-    else:
+    parser = argparse.ArgumentParser(
+        description="Visualize GEM strip layout from gem_map.json.")
+    parser.add_argument("-G", "--gem-map", default=None,
+                        help="GEM map JSON path (default: auto-search "
+                             "common locations).")
+    args = parser.parse_args()
+
+    gem_map_path = args.gem_map
+    if not gem_map_path:
         for candidate in [
             "database/gem_map.json",
             "../database/gem_map.json",
+            "../../database/gem_map.json",
             "gem_map.json",
         ]:
             if os.path.exists(candidate):
                 gem_map_path = candidate
                 break
         else:
-            print("Usage: python gem_layout.py [path/to/gem_map.json]")
+            print("Error: cannot find gem_map.json (pass -G <path>)")
             sys.exit(1)
 
     print(f"Loading: {gem_map_path}")

@@ -938,7 +938,11 @@ class GemEventViewer(QMainWindow):
         if have_ped:
             self._ped_badge.hide()
             return
-        # Scan APVs for any in full-readout mode (has_online_cm == False).
+        # Scan APVs for any in full-readout mode.  The authoritative signal
+        # is nstrips == 128 (firmware sent every channel); has_online_cm
+        # alone is unreliable — the MPD can emit CM debug headers while
+        # still sending all 128 strips raw.
+        APV_STRIP_SIZE = 128
         full_readout = False
         for m in range(ssp.nmpds):
             mpd = ssp.mpd(m)
@@ -946,7 +950,7 @@ class GemEventViewer(QMainWindow):
                 continue
             for a in range(16):  # ssp::MAX_APVS_PER_MPD
                 apv = mpd.apv(a)
-                if apv.present and not apv.has_online_cm:
+                if apv.present and apv.nstrips == APV_STRIP_SIZE:
                     full_readout = True
                     break
             if full_readout:
@@ -1088,12 +1092,13 @@ def main():
         description="Interactive PyQt6 GEM event viewer — step through an "
                     "EVIO file with live threshold tuning.")
     parser.add_argument("evio", nargs="?", help="EVIO file to open on start.")
-    parser.add_argument("--daq-config", default=None,
+    parser.add_argument("-D", "--daq-config", default=None,
                         help="Override daq_config.json path.")
-    parser.add_argument("--gem-map", default=None,
+    parser.add_argument("-G", "--gem-map", default=None,
                         help="Override gem_map.json path.")
-    parser.add_argument("--gem-ped", default=None,
-                        help="Override gem_ped.json path (optional).")
+    parser.add_argument("-P", "--gem-ped", default=None,
+                        help="Pedestal file (required for full-readout data; "
+                             "ignored for online-ZS production data).")
     args = parser.parse_args()
 
     app = QApplication(sys.argv)

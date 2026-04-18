@@ -97,8 +97,8 @@ def main():
                     "Accepts a single file, directory, or glob pattern.")
     parser.add_argument("event_json",
                         help="Event JSON file, directory, or glob pattern")
-    parser.add_argument("gem_map", nargs="?",
-                        help="GEM map JSON (default: auto-search)")
+    parser.add_argument("-G", "--gem-map", default=None,
+                        help="GEM map JSON (default: auto-search common paths)")
     parser.add_argument("--det", type=int, default=-1,
                         help="Show only detector N (default: all)")
     parser.add_argument("-o", "--output", default=None,
@@ -112,7 +112,7 @@ def main():
             if os.path.exists(c):
                 gem_map_path = c; break
     if not gem_map_path:
-        print("Error: cannot find gem_map.json"); sys.exit(1)
+        print("Error: cannot find gem_map.json (pass -G <path>)"); sys.exit(1)
 
     path = args.event_json
     if os.path.isdir(path):

@@ -38,14 +38,17 @@ All GEM-specific code lives here:
   event bank (`0x82`).
 
 ### Data modes
-| Mode | `has_online_cm` | Typical use | Offline pipeline |
+| Mode | `ApvData.nstrips` | Typical use | Offline pipeline |
 |---|---|---|---|
-| **Full readout** | `false` | Pedestal calibration runs | `processApv` runs full offline chain (pedestal subtract → sorting common-mode → `noise × zero_sup_threshold` ZS) |
-| **Online ZS** | `true` | Production runs | `processApv` short-circuits: every strip present in the bank is a surviving hit (firmware already did pedestal + CM + ZS); no ped file needed |
+| **Full readout** | `== 128` (all channels sent) | Pedestal calibration runs, debug modes with CM passthrough | `processApv` runs full offline chain (pedestal subtract → sorting common-mode → `noise × zero_sup_threshold` ZS) |
+| **Online ZS** | `< 128` (firmware dropped some) | Production runs | `processApv` short-circuits: every strip present in the bank is a surviving hit (firmware already did pedestal + CM + ZS); no ped file needed |
 
-The switch is **auto-detected per APV** from `ApvData.has_online_cm`,
-which the SSP decoder sets when the MPD emits its type-`0xD` debug-header
-words (the firmware's CM values). See `prad2det/src/GemSystem.cpp`.
+Auto-detected per APV. We use the **`nstrips` count**, not
+`has_online_cm` — the MPD can emit its type-`0xD` CM debug headers
+(which set `has_online_cm = true`) while still sending all 128 strips
+raw. `nstrips < APV_STRIP_SIZE` is the only signal that reliably says
+"firmware dropped some channels, so it also pedestal-subtracted."
+See `prad2det/src/GemSystem.cpp`.
 
 ### Strip mapping (6-step pipeline)
 Shared between online reconstruction (`gem::MapStrip` in

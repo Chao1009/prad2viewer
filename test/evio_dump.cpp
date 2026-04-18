@@ -122,34 +122,26 @@ static int doTree(EvChannel &ch, int num)
 }
 
 // --- mode: tags (tree-structured bank-tag hierarchy) ------------------------
-// Shows parent → daughter → granddaughter counts and ratios, derived from
-// scanning the bank tree across every record in the file.
+// Builds a trie of (root → parent → ... → child) paths across every record
+// in the file and prints it depth-first. Because each subtree is keyed by its
+// full path from root (not just by parent tag), the same data bank under
+// different ROC parents shows independent counts.
 //
-// Line format per edge:
+// Line format per node:
 //     <indent><tag>  <TYPE>   <count>/<parent_count> (<ratio>)  <desc>  [<size>]
 //
 // ratio = child count / parent count
 //   1.000 : exactly one child per parent occurrence
-//  ~1.086 : most events have one, some have multiple (e.g. composite per trigger)
-//   0.000 : rare optional bank (e.g. config string in a few events)
+//  ~1.086 : most events have one, some have multiple
+//   0.000 : rare optional bank
 
-static const uint32_t ROOT_PARENT = 0xFFFFFFFE;
-
-struct EdgeKey {
-    uint32_t parent_tag;
-    int      parent_depth;
-    uint32_t child_tag;
-    bool operator<(const EdgeKey &o) const {
-        return std::tie(parent_tag, parent_depth, child_tag)
-             < std::tie(o.parent_tag, o.parent_depth, o.child_tag);
-    }
-};
-
-struct EdgeInfo {
+struct TrieNode {
+    uint32_t tag  = 0;
+    uint32_t type = 0;
     int      count = 0;
-    uint32_t child_type = 0;
     size_t   min_words = SIZE_MAX;
     size_t   max_words = 0;
+    std::map<uint32_t, TrieNode> children;
 };
 
 // Informative names for bank tags known by JLab ROLs but not held in
@@ -181,22 +173,24 @@ static std::string tag_description(uint32_t tag, int depth, const DaqConfig &cfg
     if (depth == 0) {
         std::string lbl = tag_label(tag);
         if (!lbl.empty()) return lbl;
-        if (cfg.is_physics(tag)) {
-            if (tag >= cfg.physics_base) {
-                char buf[48];
-                snprintf(buf, sizeof(buf), "PHYSICS(trg=0x%02X)", tag - cfg.physics_base);
-                return buf;
-            }
-            return "PHYSICS";
+        // Recognize any tag in [physics_base, physics_base+0x7F] as a physics
+        // trigger even if not enumerated in physics_tags — e.g. 0x80 = trigger 0.
+        if (cfg.is_physics(tag) ||
+            (tag >= cfg.physics_base && tag <= cfg.physics_base + 0x7F))
+        {
+            char buf[48];
+            snprintf(buf, sizeof(buf), "PHYSICS(trg=0x%02X)", tag - cfg.physics_base);
+            return buf;
         }
         if (cfg.is_monitoring(tag)) return "MONITORING";
         if (cfg.is_epics(tag))      return "EPICS";
         if (cfg.is_control(tag))    return "CONTROL";
     }
 
-    // depth 1: ROC crate (or TI master)
+    // depth 1: ROC crate or depth-1 data bank (e.g. 0xC000 trigger bank)
     if (depth == 1) {
-        if (tag == cfg.ti_master_tag) return "ti_master";
+        if (tag == cfg.trigger_bank_tag) return "CODA trigger bank";
+        if (tag == cfg.ti_master_tag)    return "ti_master";
         for (auto &re : cfg.roc_tags) {
             if (re.tag == tag) {
                 std::string s = re.name;
@@ -230,68 +224,67 @@ static std::string tag_description(uint32_t tag, int depth, const DaqConfig &cfg
     return "";
 }
 
-static void printTagTree(const std::map<EdgeKey, EdgeInfo> &edges,
-                         uint32_t parent_tag, int parent_depth,
-                         int parent_count, int indent_level,
-                         const DaqConfig &cfg)
+static void printTrie(const TrieNode &node, int indent_level, int parent_count,
+                      int depth, const DaqConfig &cfg)
 {
-    std::vector<std::pair<EdgeKey, EdgeInfo>> my_children;
-    for (auto &[k, e] : edges) {
-        if (k.parent_tag == parent_tag && k.parent_depth == parent_depth)
-            my_children.emplace_back(k, e);
-    }
-    std::sort(my_children.begin(), my_children.end(),
-        [](const auto &a, const auto &b) { return a.first.child_tag < b.first.child_tag; });
+    // Sort children by tag (std::map already sorts, but sort a vector view for
+    // flexibility if we later want to sort by count).
+    std::vector<const TrieNode*> ordered;
+    ordered.reserve(node.children.size());
+    for (auto &kv : node.children) ordered.push_back(&kv.second);
 
     std::string indent(indent_level * 2, ' ');
-    for (auto &[k, e] : my_children) {
-        std::cout << indent << hex(k.child_tag)
-                  << "  " << std::setw(9) << std::left << TypeName(e.child_type)
+    for (auto *c : ordered) {
+        std::cout << indent << hex(c->tag)
+                  << "  " << std::setw(9) << std::left << TypeName(c->type)
                   << std::right;
 
         char cbuf[96];
-        double ratio = parent_count > 0 ? static_cast<double>(e.count) / parent_count : 0.0;
-        snprintf(cbuf, sizeof(cbuf), "  %9d/%-9d (%.3f)", e.count, parent_count, ratio);
+        double ratio = parent_count > 0 ? static_cast<double>(c->count) / parent_count : 0.0;
+        snprintf(cbuf, sizeof(cbuf), "  %9d/%-9d (%.3f)", c->count, parent_count, ratio);
         std::cout << cbuf;
 
-        std::string desc = tag_description(k.child_tag, parent_depth + 1, cfg);
+        std::string desc = tag_description(c->tag, depth, cfg);
         if (!desc.empty()) std::cout << "  " << desc;
 
         std::cout << "  [";
-        if (e.min_words == e.max_words) std::cout << e.min_words << "w";
-        else std::cout << e.min_words << "-" << e.max_words << "w";
+        if (c->min_words == c->max_words) std::cout << c->min_words << "w";
+        else std::cout << c->min_words << "-" << c->max_words << "w";
         std::cout << "]\n";
 
-        printTagTree(edges, k.child_tag, parent_depth + 1, e.count, indent_level + 1, cfg);
+        printTrie(*c, indent_level + 1, c->count, depth + 1, cfg);
     }
 }
 
 static int doTags(EvChannel &ch)
 {
-    std::map<EdgeKey, EdgeInfo> edges;
+    TrieNode root;
     int nrecords = 0;
+    std::vector<TrieNode*> trie_pos;   // reused across events
 
     while (ch.Read() == status::success) {
         if (!ch.Scan()) continue;
         nrecords++;
 
         const auto &nodes = ch.GetNodes();
-        for (auto &n : nodes) {
-            EdgeKey k;
-            if (n.parent < 0) {
-                k.parent_tag   = ROOT_PARENT;
-                k.parent_depth = -1;
-            } else {
-                k.parent_tag   = nodes[n.parent].tag;
-                k.parent_depth = nodes[n.parent].depth;
-            }
-            k.child_tag = n.tag;
+        trie_pos.assign(nodes.size(), nullptr);
 
-            auto &e = edges[k];
-            e.count++;
-            e.child_type = n.type;
-            e.min_words  = std::min(e.min_words, n.data_words);
-            e.max_words  = std::max(e.max_words, n.data_words);
+        // Each node in the scanned bank tree contributes +1 to exactly one
+        // trie position, determined by its full path from root. Because
+        // nodes[] is DFS-ordered, every node's parent has already been
+        // visited and its trie position cached in trie_pos[].
+        for (size_t ni = 0; ni < nodes.size(); ++ni) {
+            const auto &n = nodes[ni];
+            TrieNode *parent_trie = (n.parent >= 0) ? trie_pos[n.parent] : &root;
+
+            auto &child = parent_trie->children[n.tag];
+            child.tag  = n.tag;
+            child.type = n.type;
+            child.count++;
+            child.min_words = std::min(child.min_words, n.data_words);
+            child.max_words = std::max(child.max_words, n.data_words);
+
+            trie_pos[ni] = &child;
         }
     }
 
@@ -300,7 +293,7 @@ static int doTags(EvChannel &ch)
     std::cout << "        ratio = child count / parent count"
                  " (1.000 = exactly-one-per-parent)\n\n";
 
-    printTagTree(edges, ROOT_PARENT, -1, nrecords, 0, ch.GetConfig());
+    printTrie(root, 0, nrecords, 0, ch.GetConfig());
     return 0;
 }
 

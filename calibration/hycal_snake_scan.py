@@ -1112,6 +1112,10 @@ class SnakeScanWindow(QMainWindow):
         self._count_spin.setEnabled(not running and has_path)
         self._profile_combo.setEnabled(not running)
         self._lg_spin.setEnabled(not running and self._active_profile == self.AUTOGEN)
+        # dwell/thresholds are only applied at scan start, so lock them while running
+        self._dwell_spin.setEnabled(not running)
+        self._thresh_spin.setEnabled(not running)
+        self._beam_thresh_spin.setEnabled(not running)
         self._btn_move.setEnabled(not running and has_path)
         self._btn_reset.setEnabled(not running)
 

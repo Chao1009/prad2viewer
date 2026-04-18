@@ -18,6 +18,8 @@
 #include <map>
 #include <set>
 #include <vector>
+#include <algorithm>
+#include <tuple>
 #include <getopt.h>
 #include <bitset>
 #include <cstdlib>
@@ -119,76 +121,186 @@ static int doTree(EvChannel &ch, int num)
     return 0;
 }
 
-// --- mode: tags (deep scan of all bank tags) --------------------------------
-struct TagInfo {
-    uint32_t type;
-    int      count;
-    int      min_depth, max_depth;
-    size_t   min_words, max_words;
-    std::set<uint32_t> parent_tags;
+// --- mode: tags (tree-structured bank-tag hierarchy) ------------------------
+// Shows parent → daughter → granddaughter counts and ratios, derived from
+// scanning the bank tree across every record in the file.
+//
+// Line format per edge:
+//     <indent><tag>  <TYPE>   <count>/<parent_count> (<ratio>)  <desc>  [<size>]
+//
+// ratio = child count / parent count
+//   1.000 : exactly one child per parent occurrence
+//  ~1.086 : most events have one, some have multiple (e.g. composite per trigger)
+//   0.000 : rare optional bank (e.g. config string in a few events)
+
+static const uint32_t ROOT_PARENT = 0xFFFFFFFE;
+
+struct EdgeKey {
+    uint32_t parent_tag;
+    int      parent_depth;
+    uint32_t child_tag;
+    bool operator<(const EdgeKey &o) const {
+        return std::tie(parent_tag, parent_depth, child_tag)
+             < std::tie(o.parent_tag, o.parent_depth, o.child_tag);
+    }
 };
+
+struct EdgeInfo {
+    int      count = 0;
+    uint32_t child_type = 0;
+    size_t   min_words = SIZE_MAX;
+    size_t   max_words = 0;
+};
+
+// Informative names for bank tags known by JLab ROLs but not held in
+// DaqConfig. Kept in sync with known_bank_tags[] in EvChannel.cpp.
+static const char *known_bank_name(uint32_t tag)
+{
+    switch (tag) {
+    case 0xE122: return "VTP Hardware Data";
+    case 0xE10B: return "V1190/V1290 Hardware Data";
+    case 0xE141: return "FAV3 Hardware Data";
+    case 0xE104: return "VSCM Hardware Data";
+    case 0xE105: return "DCRB Hardware Data";
+    case 0xE115: return "DSC2 Scalers";
+    case 0xE112: return "HEAD bank (raw)";
+    case 0xE123: return "SSP-RICH";
+    case 0xE125: return "SIS3801 Scalers";
+    case 0xE131: return "VFTDC";
+    case 0xE133: return "Helicity Decoder";
+    case 0xE140: return "MPD raw (reserved)";
+    case 0xE114: return "EPICS string data";
+    default:     return nullptr;
+    }
+}
+
+// Depth-aware description of a bank tag (event / ROC / data-bank / composite-inner).
+static std::string tag_description(uint32_t tag, int depth, const DaqConfig &cfg)
+{
+    // depth 0: event bank (trigger/class identifier)
+    if (depth == 0) {
+        std::string lbl = tag_label(tag);
+        if (!lbl.empty()) return lbl;
+        if (cfg.is_physics(tag)) {
+            if (tag >= cfg.physics_base) {
+                char buf[48];
+                snprintf(buf, sizeof(buf), "PHYSICS(trg=0x%02X)", tag - cfg.physics_base);
+                return buf;
+            }
+            return "PHYSICS";
+        }
+        if (cfg.is_monitoring(tag)) return "MONITORING";
+        if (cfg.is_epics(tag))      return "EPICS";
+        if (cfg.is_control(tag))    return "CONTROL";
+    }
+
+    // depth 1: ROC crate (or TI master)
+    if (depth == 1) {
+        if (tag == cfg.ti_master_tag) return "ti_master";
+        for (auto &re : cfg.roc_tags) {
+            if (re.tag == tag) {
+                std::string s = re.name;
+                if (!re.type.empty()) s += " [" + re.type + "]";
+                return s;
+            }
+        }
+    }
+
+    // depth 2: data banks inside ROCs
+    if (depth == 2) {
+        if (tag == cfg.ti_bank_tag)        return "TI Hardware Data";
+        if (tag == cfg.trigger_bank_tag)   return "CODA trigger bank";
+        if (tag == cfg.fadc_composite_tag) return "FADC250 composite";
+        if (tag == cfg.fadc_raw_tag)       return "FADC250 raw";
+        if (tag == cfg.adc1881m_bank_tag)  return "ADC1881M raw";
+        if (cfg.is_ssp_bank(tag))          return "SSP/MPD data";
+        if (tag == cfg.run_info_tag)       return "Run info";
+        if (tag == cfg.daq_config_tag)     return "DAQ config string";
+        if (tag == cfg.tdc_bank_tag)       return "V1190 TDC data";
+        if (tag == cfg.epics_bank_tag)     return "EPICS data";
+        if (auto *k = known_bank_name(tag)) return k;
+    }
+
+    // depth 3: composite internals
+    if (depth == 3) {
+        if (tag == 0x000D) return "composite metadata";
+        if (tag == 0x0000) return "composite data words";
+    }
+
+    return "";
+}
+
+static void printTagTree(const std::map<EdgeKey, EdgeInfo> &edges,
+                         uint32_t parent_tag, int parent_depth,
+                         int parent_count, int indent_level,
+                         const DaqConfig &cfg)
+{
+    std::vector<std::pair<EdgeKey, EdgeInfo>> my_children;
+    for (auto &[k, e] : edges) {
+        if (k.parent_tag == parent_tag && k.parent_depth == parent_depth)
+            my_children.emplace_back(k, e);
+    }
+    std::sort(my_children.begin(), my_children.end(),
+        [](const auto &a, const auto &b) { return a.first.child_tag < b.first.child_tag; });
+
+    std::string indent(indent_level * 2, ' ');
+    for (auto &[k, e] : my_children) {
+        std::cout << indent << hex(k.child_tag)
+                  << "  " << std::setw(9) << std::left << TypeName(e.child_type)
+                  << std::right;
+
+        char cbuf[96];
+        double ratio = parent_count > 0 ? static_cast<double>(e.count) / parent_count : 0.0;
+        snprintf(cbuf, sizeof(cbuf), "  %9d/%-9d (%.3f)", e.count, parent_count, ratio);
+        std::cout << cbuf;
+
+        std::string desc = tag_description(k.child_tag, parent_depth + 1, cfg);
+        if (!desc.empty()) std::cout << "  " << desc;
+
+        std::cout << "  [";
+        if (e.min_words == e.max_words) std::cout << e.min_words << "w";
+        else std::cout << e.min_words << "-" << e.max_words << "w";
+        std::cout << "]\n";
+
+        printTagTree(edges, k.child_tag, parent_depth + 1, e.count, indent_level + 1, cfg);
+    }
+}
 
 static int doTags(EvChannel &ch)
 {
-    std::map<uint32_t, TagInfo> all_tags;
+    std::map<EdgeKey, EdgeInfo> edges;
     int nrecords = 0;
 
     while (ch.Read() == status::success) {
         if (!ch.Scan()) continue;
         nrecords++;
 
-        for (auto &n : ch.GetNodes()) {
-            auto it = all_tags.find(n.tag);
-            if (it == all_tags.end()) {
-                TagInfo ti;
-                ti.type = n.type;
-                ti.count = 1;
-                ti.min_depth = ti.max_depth = n.depth;
-                ti.min_words = ti.max_words = n.data_words;
-                if (n.parent >= 0)
-                    ti.parent_tags.insert(ch.GetNodes()[n.parent].tag);
-                all_tags[n.tag] = ti;
+        const auto &nodes = ch.GetNodes();
+        for (auto &n : nodes) {
+            EdgeKey k;
+            if (n.parent < 0) {
+                k.parent_tag   = ROOT_PARENT;
+                k.parent_depth = -1;
             } else {
-                it->second.count++;
-                it->second.min_depth = std::min(it->second.min_depth, n.depth);
-                it->second.max_depth = std::max(it->second.max_depth, n.depth);
-                it->second.min_words = std::min(it->second.min_words, n.data_words);
-                it->second.max_words = std::max(it->second.max_words, n.data_words);
-                if (n.parent >= 0)
-                    it->second.parent_tags.insert(ch.GetNodes()[n.parent].tag);
+                k.parent_tag   = nodes[n.parent].tag;
+                k.parent_depth = nodes[n.parent].depth;
             }
+            k.child_tag = n.tag;
+
+            auto &e = edges[k];
+            e.count++;
+            e.child_type = n.type;
+            e.min_words  = std::min(e.min_words, n.data_words);
+            e.max_words  = std::max(e.max_words, n.data_words);
         }
     }
 
-    std::cout << "=== All Bank Tags (across " << nrecords << " records) ===\n\n";
-    std::cout << std::setw(12) << "Tag"
-              << std::setw(10) << "Type"
-              << std::setw(8) << "Count"
-              << std::setw(8) << "Depth"
-              << std::setw(16) << "Data words"
-              << "  Parents\n";
-    std::cout << std::string(80, '-') << "\n";
+    std::cout << "=== Bank Tag Hierarchy (across " << nrecords << " records) ===\n\n";
+    std::cout << "Legend: <tag>  <TYPE>  <count>/<parent_count> (ratio)  <description>  [<size>]\n";
+    std::cout << "        ratio = child count / parent count"
+                 " (1.000 = exactly-one-per-parent)\n\n";
 
-    for (auto &[tag, ti] : all_tags) {
-        std::cout << std::setw(12) << hex(tag)
-                  << std::setw(10) << TypeName(ti.type)
-                  << std::setw(8) << ti.count;
-
-        if (ti.min_depth == ti.max_depth)
-            std::cout << std::setw(8) << ti.min_depth;
-        else
-            std::cout << std::setw(3) << ti.min_depth << "-" << std::setw(3) << ti.max_depth << " ";
-
-        if (ti.min_words == ti.max_words)
-            std::cout << std::setw(16) << ti.min_words;
-        else
-            std::cout << std::setw(7) << ti.min_words << "-" << std::setw(7) << ti.max_words << "  ";
-
-        std::cout << "  ";
-        for (auto pt : ti.parent_tags)
-            std::cout << hex(pt) << " ";
-        std::cout << "\n";
-    }
+    printTagTree(edges, ROOT_PARENT, -1, nrecords, 0, ch.GetConfig());
     return 0;
 }
 

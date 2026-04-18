@@ -4,21 +4,26 @@
 // Two-phase analysis over one read of the evio file.
 //
 //   Phase 1 (cache + ΔT fits)
-//     A single pass collects per-event tuples (T10R TDC, per-pair E‑side
-//     TDCs, W1156 height/integral) into memory, and fills one ΔT histogram
-//     per pair.  A Gaussian is fit to each peak to extract (μ_k, σ_k).
+//     A single pass collects per-event tuples (T10R TDC, per-pair E-side
+//     TDCs, per-event PbWO4 W-sum height + integral) into memory, and
+//     fills one ΔT histogram per pair.  A Gaussian is fit to each peak to
+//     extract (μ_k, σ_k).
 //
 //   Phase 2 (event-wise cut)
 //     For each cached event, ΔT_k = tdc(T10R) − tdc(E_k) is tested against
 //     the cut ``|ΔT_k − μ_k| < Nσ · σ_k`` for every pair independently.
-//     If ANY pair passes AND the event has W1156 FADC samples, the event
-//     is "good" and contributes ONCE to two global histograms:
-//         W1156_height      W1156 peak height
-//         W1156_integral    W1156 peak integral
+//     If ANY pair passes AND the event has at least one W-type FADC
+//     channel above threshold, the event is "good" and contributes ONCE
+//     to two global histograms:
+//         W_sum_height     sum of peak heights over all W modules
+//         W_sum_integral   sum of peak integrals over all W modules
+//     The "W" subset is the PbWO4 crystal modules; the DAQ map at
+//     ``database/daq_map.json`` identifies them by name (entries starting
+//     with 'W').  PbGlass ("G"), LMS references, veto, etc. are excluded.
 //
 //   The summary canvas shows all 10 ΔT spectra with their fitted μ/±Nσ
-//   bounds, the two W1156 histograms, and a terminal table breaks down
-//   how many events each pair selected.
+//   bounds plus the two W-sum histograms, and a terminal table breaks
+//   down how many events each pair selected.
 //
 // Pair layout (update if the DAQ cabling changes):
 //
@@ -32,7 +37,7 @@
 //     root -l ../analysis/scripts/rootlogon.C
 //     .x ../analysis/scripts/tagger_hycal_correlation.C+( \
 //         "/data/stage6/prad_023686/prad_023686.evio.00000", \
-//         "tagger_w1156_corr.root", 500000)
+//         "tagger_wsum_corr.root", 500000)
 //============================================================================
 
 #include "EvChannel.h"
@@ -42,6 +47,8 @@
 #include "SspData.h"
 #include "VtpData.h"
 #include "TdcData.h"
+
+#include <nlohmann/json.hpp>
 
 #include <TCanvas.h>
 #include <TF1.h>
@@ -58,6 +65,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -92,15 +100,19 @@ constexpr int N_PAIRS = sizeof(PAIRS) / sizeof(PAIRS[0]);
 // Timing cut: |ΔT − μ| < NSIGMA_CUT · σ.
 constexpr double NSIGMA_CUT = 3.0;
 
-// HyCal W1156 DAQ address (database/daq_map.json:
-// {"W1156", crate 6, slot 7, channel 3}; crate 6 → ROC 0x8C).
-constexpr uint32_t W1156_ROC  = 0x8C;
-constexpr int      W1156_SLOT = 7;
-constexpr int      W1156_CH   = 3;
+// HyCal FADC crates: 0x80, 0x82, 0x84, 0x86, 0x88, 0x8A, 0x8C.
+// Indexed 0..N_HYCAL_CRATES-1 via (tag - 0x80) / 2 in the inner loops.
+constexpr int      N_HYCAL_CRATES   = 7;
+constexpr uint32_t HYCAL_ROC_FIRST  = 0x80;
+constexpr uint32_t HYCAL_ROC_LAST   = 0x8C;
 
 // Simple FADC peak finder parameters.
 constexpr int PED_WINDOW    = 10;
 constexpr int INT_HALFWIDTH = 8;
+
+// Minimum peak height (ADC above pedestal) to include a W channel in the
+// event sum.  Filters most noise-only channels without biasing real signals.
+constexpr float W_MIN_HEIGHT = 20.0f;
 
 // ΔT histogram axis (wide enough to include typical cable-delay offsets).
 constexpr int    DT_BINS  = 800;
@@ -109,13 +121,14 @@ constexpr double DT_RANGE = 4000.0;     // ±100 ns (LSB ≈ 25 ps)
 // Fit window half-width around the peak bin.
 constexpr double DT_FIT_HALF = 40.0;
 
-// W1156 output histograms.
-constexpr int    H_BINS = 200;
+// Output histograms — total PbWO4 (W-type) sum per event.  Ranges are
+// rough; adjust after seeing the first run's distribution.
+constexpr int    H_BINS = 300;
 constexpr double H_MIN  = 0.0;
-constexpr double H_MAX  = 4000.0;
-constexpr int    I_BINS = 200;
+constexpr double H_MAX  = 30000.0;        // sum of peak heights (ADC)
+constexpr int    I_BINS = 300;
 constexpr double I_MIN  = 0.0;
-constexpr double I_MAX  = 40000.0;
+constexpr double I_MAX  = 300000.0;       // sum of peak integrals (ADC·sample)
 
 //-----------------------------------------------------------------------------
 // Helpers
@@ -158,26 +171,79 @@ static bool hycal_peak(const fdec::ChannelData &c,
     return true;
 }
 
-// Extract W1156 peak (height, integral). Returns false if absent.
-static bool w1156_peak(const fdec::EventData &evt,
-                       float &height, float &integral)
+// W-channel lookup table indexed by [crate_idx][slot][channel].  Populated
+// from database/daq_map.json at startup: every entry whose "name" starts
+// with 'W' (PbWO4 modules) sets a flag here.  Non-W channels (PbGlass "G",
+// LMS references, veto, etc.) are left false.
+struct WMap {
+    bool     flag[N_HYCAL_CRATES][fdec::MAX_SLOTS][fdec::MAX_CHANNELS] = {};
+    int      n_entries = 0;
+
+    bool load(const std::string &path) {
+        std::ifstream f(path);
+        if (!f.is_open()) return false;
+        nlohmann::json j;
+        try { j = nlohmann::json::parse(f); }
+        catch (...) { return false; }
+        for (auto &e : j) {
+            std::string name = e.value("name", "");
+            if (name.empty() || name[0] != 'W') continue;
+            int crate = e.value("crate",   -1);
+            int slot  = e.value("slot",    -1);
+            int ch    = e.value("channel", -1);
+            if (crate < 0 || crate >= N_HYCAL_CRATES) continue;
+            if (slot  < 0 || slot  >= fdec::MAX_SLOTS) continue;
+            if (ch    < 0 || ch    >= fdec::MAX_CHANNELS) continue;
+            flag[crate][slot][ch] = true;
+            ++n_entries;
+        }
+        return n_entries > 0;
+    }
+};
+
+// Sum peak height and integral across every fired W-type channel in this
+// event.  Returns true if at least one W channel gave a peak above the
+// W_MIN_HEIGHT threshold.
+static bool sum_w_peaks(const fdec::EventData &evt, const WMap &wm,
+                        float &sum_h, float &sum_i, int &n_w_fired)
 {
-    const fdec::RocData *roc = evt.findRoc(W1156_ROC);
-    if (!roc) return false;
-    const fdec::SlotData &s = roc->slots[W1156_SLOT];
-    if (!s.present) return false;
-    const fdec::ChannelData &c = s.channels[W1156_CH];
-    if (c.nsamples <= 0) return false;
-    return hycal_peak(c, height, integral);
+    sum_h = 0.f; sum_i = 0.f; n_w_fired = 0;
+    for (int r = 0; r < evt.nrocs; ++r) {
+        const auto &roc = evt.rocs[evt.roc_index[r]];
+        if (!roc.present) continue;
+        const uint32_t tag = roc.tag;
+        if (tag < HYCAL_ROC_FIRST || tag > HYCAL_ROC_LAST || (tag & 1))
+            continue;                              // HyCal FADC crates are even
+        const int crate_idx = int((tag - HYCAL_ROC_FIRST) / 2);
+        if (crate_idx >= N_HYCAL_CRATES) continue;
+
+        for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
+            const auto &slot = roc.slots[s];
+            if (!slot.present) continue;
+            const uint64_t mask = slot.channel_mask;
+            if (!mask) continue;
+            for (int c = 0; c < fdec::MAX_CHANNELS; ++c) {
+                if (!(mask & (1ULL << c))) continue;
+                if (!wm.flag[crate_idx][s][c]) continue;
+                float h = 0.f, i = 0.f;
+                if (!hycal_peak(slot.channels[c], h, i)) continue;
+                if (h < W_MIN_HEIGHT) continue;
+                sum_h += h;
+                sum_i += i;
+                ++n_w_fired;
+            }
+        }
+    }
+    return n_w_fired > 0;
 }
 
 // Per-event record cached during Phase 1.
 struct Row {
     int32_t t10r;                 // always ≥ 0 — events without T10R are skipped
     int32_t te[N_PAIRS];          // -1 if that pair's E-side did not fire
-    bool    has_w1156;
-    float   height;
-    float   integral;
+    bool    has_w;                // at least one W channel fired above threshold
+    float   sum_h;                // sum of W peak heights   (ADC)
+    float   sum_i;                // sum of W peak integrals (ADC·sample)
 };
 
 } // anonymous namespace
@@ -187,7 +253,7 @@ struct Row {
 //=============================================================================
 
 int tagger_hycal_correlation(const char *evio_path,
-                             const char *out_path   = "tagger_w1156_corr.root",
+                             const char *out_path   = "tagger_wsum_corr.root",
                              Long64_t    max_events = 0,
                              const char *daq_config = nullptr)
 {
@@ -202,6 +268,30 @@ int tagger_hycal_correlation(const char *evio_path,
         std::cerr << "ERROR: cannot load " << cfg_path << "\n";
         return 1;
     }
+
+    //---- load the W-channel lookup from daq_map.json ------------------------
+    std::string daq_map_path;
+    {
+        const char *db = std::getenv("PRAD2_DATABASE_DIR");
+        std::string dir = db ? db : "database";
+        // honour the daq_map_file override in daq_config.json if present
+        std::ifstream dcf(cfg_path);
+        if (dcf.is_open()) {
+            auto dcj = nlohmann::json::parse(dcf, nullptr, false, true);
+            if (!dcj.is_discarded() && dcj.contains("daq_map_file"))
+                daq_map_path = dir + "/"
+                               + dcj["daq_map_file"].get<std::string>();
+        }
+        if (daq_map_path.empty()) daq_map_path = dir + "/daq_map.json";
+    }
+    WMap wmap;
+    if (!wmap.load(daq_map_path)) {
+        std::cerr << "ERROR: cannot load W-channel map from "
+                  << daq_map_path << "\n";
+        return 1;
+    }
+    std::cout << "loaded " << wmap.n_entries
+              << " W-type HyCal channels from " << daq_map_path << "\n";
 
     //---- open evio ----------------------------------------------------------
     EvChannel ch;
@@ -235,8 +325,8 @@ int tagger_hycal_correlation(const char *evio_path,
     std::vector<Row> rows;
     rows.reserve(1u << 20);
 
-    Long64_t n_physics = 0;
-    Long64_t n_w1156_total = 0;
+    Long64_t n_physics   = 0;
+    Long64_t n_w_events  = 0;   // events with any W channel above threshold
 
     // One-line overwriting progress report.
     using clock = std::chrono::steady_clock;
@@ -247,6 +337,14 @@ int tagger_hycal_correlation(const char *evio_path,
         auto now = clock::now();
         double elapsed = std::chrono::duration<double>(now - t_start).count();
         double rate    = elapsed > 0 ? (double)n_physics / elapsed : 0.0;
+
+        // Save and restore the stream state so the formatted-number
+        // manipulators used inside this lambda don't leak into later
+        // output (otherwise setprecision(0) carries over and the Phase 1
+        // / Phase 2 tables print as "3e+03" instead of "2692.24").
+        std::ios saved(nullptr);
+        saved.copyfmt(std::cout);
+
         std::cout << "\r  " << std::setw(10) << n_physics << " events";
         if (max_events > 0) {
             double pct = 100.0 * (double)n_physics / (double)max_events;
@@ -254,15 +352,16 @@ int tagger_hycal_correlation(const char *evio_path,
                 ? ((double)max_events - (double)n_physics) / rate : 0.0;
             std::cout << " / " << max_events
                       << "  (" << std::fixed << std::setprecision(1) << pct << "%)"
-                      << std::defaultfloat
                       << "  " << std::setprecision(3) << rate / 1e3 << "k/s"
-                      << "  ETA " << std::fixed << std::setprecision(0)
-                      << (int)eta << "s" << std::defaultfloat;
+                      << "  ETA " << std::setprecision(0) << (int)eta << "s";
         } else {
-            std::cout << "  " << std::setprecision(3) << rate / 1e3 << "k/s";
+            std::cout << "  " << std::fixed << std::setprecision(3)
+                      << rate / 1e3 << "k/s";
         }
-        std::cout << "  rows: " << std::setw(8) << rows.size()
-                  << "  W1156: " << std::setw(8) << n_w1156_total
+
+        std::cout.copyfmt(saved);            // back to default for ints below
+        std::cout << "  rows: "   << std::setw(8) << rows.size()
+                  << "  W-sum:" << std::setw(8) << n_w_events
                   << "     " << std::flush;
         if (final_line) std::cout << "\n";
     };
@@ -284,8 +383,9 @@ int tagger_hycal_correlation(const char *evio_path,
                 for (int k = 0; k < N_PAIRS; ++k)
                     r.te[k] = first_tdc(tdc_evt, PAIRS[k].slot, PAIRS[k].channel);
 
-                r.has_w1156 = w1156_peak(event, r.height, r.integral);
-                if (r.has_w1156) ++n_w1156_total;
+                int n_w = 0;
+                r.has_w = sum_w_peaks(event, wmap, r.sum_h, r.sum_i, n_w);
+                if (r.has_w) ++n_w_events;
 
                 // Fill ΔT histograms right away to avoid a second memory loop.
                 for (int k = 0; k < N_PAIRS; ++k)
@@ -312,7 +412,8 @@ done:
     std::cout << "scan done: " << n_physics << " physics events in "
               << std::fixed << std::setprecision(1) << elapsed << " s, "
               << rows.size() << " with T10R, "
-              << n_w1156_total << " with W1156\n" << std::defaultfloat;
+              << n_w_events << " with any W-channel hit above "
+              << W_MIN_HEIGHT << " ADC\n" << std::defaultfloat;
 
     if (rows.empty()) {
         std::cerr << "no T10R-gated events found — nothing to plot\n";
@@ -331,6 +432,7 @@ done:
     std::vector<Fit> fits(N_PAIRS);
 
     std::cout << "\n=== Phase 1: ΔT fits ===\n"
+              << std::fixed << std::setprecision(2)
               << "   pair   coarse_peak     mu[LSB]   sigma[LSB]     "
                  "n_dt_filled\n";
     for (int k = 0; k < N_PAIRS; ++k) {
@@ -377,19 +479,19 @@ done:
                   << "   " << std::setw(11) << f.n_dt << "\n";
     }
 
-    //---- Phase 2: event-wise cut, fill the two global W1156 histograms ------
+    //---- Phase 2: event-wise cut, fill the two global W-sum histograms ------
     TH1F *h_w_height = new TH1F(
-        "W1156_height",
-        "W1156 peak height (event passes any T10R-Eₓ cut);"
-        "height [ADC];events",
+        "W_sum_height",
+        "Sum of PbWO4 (W) peak heights, event passes any T10R-Eₓ cut;"
+        "#sum_{W} peak height [ADC];events",
         H_BINS, H_MIN, H_MAX);
     TH1F *h_w_integ  = new TH1F(
-        "W1156_integral",
-        "W1156 peak integral (event passes any T10R-Eₓ cut);"
-        "integral [ADC#upoint sample];events",
+        "W_sum_integral",
+        "Sum of PbWO4 (W) peak integrals, event passes any T10R-Eₓ cut;"
+        "#sum_{W} peak integral [ADC#upoint sample];events",
         I_BINS, I_MIN, I_MAX);
 
-    Long64_t n_good = 0;                   // events filling the W1156 histograms
+    Long64_t n_good = 0;                   // events filling the W-sum histograms
     std::vector<Long64_t> n_pass(N_PAIRS, 0);
 
     for (const auto &r : rows) {
@@ -405,9 +507,9 @@ done:
                 // don't break — we want the per-pair counters
             }
         }
-        if (any_pass && r.has_w1156) {
-            h_w_height->Fill(r.height);
-            h_w_integ ->Fill(r.integral);
+        if (any_pass && r.has_w) {
+            h_w_height->Fill(r.sum_h);
+            h_w_integ ->Fill(r.sum_i);
             ++n_good;
         }
     }
@@ -415,10 +517,10 @@ done:
     h_w_integ ->Write();
 
     //---- Summary canvas -----------------------------------------------------
-    // 4 rows × 10 cols isn't great; use 5 columns × 3 rows for the 10 ΔT's
-    // (top two rows), and put the two W1156 histos on the bottom row.
-    // Layout: rows 1-2 = ΔT (5 panels each), row 3 = W1156 height + integral.
-    TCanvas *canvas = new TCanvas("summary", "tagger-W1156 correlations",
+    // 5 columns × 3 rows: rows 1-2 = ΔT (5 panels each, all 10 pairs),
+    // row 3 = W-sum height + W-sum integral (two panels, rest empty).
+    TCanvas *canvas = new TCanvas("summary",
+                                  "tagger TDC x HyCal W-sum correlations",
                                   1700, 1000);
     canvas->Divide(5, 3);
 
@@ -441,8 +543,9 @@ done:
 
     //---- Terminal summary ---------------------------------------------------
     std::cout << "\n=== Phase 2: event-wise cut ===\n"
-              << "  n_good = events with W1156 that pass AT LEAST ONE pair's "
-              << NSIGMA_CUT << "-σ cut\n\n"
+              << "  n_good = events with any W channel fired that pass "
+              << "AT LEAST ONE pair's " << NSIGMA_CUT << "-σ cut\n\n"
+              << std::fixed << std::setprecision(2)
               << "   pair       mu[LSB]   sigma[LSB]   cut-half[LSB]   "
                  "n_pass   pass%\n";
     for (int k = 0; k < N_PAIRS; ++k) {
@@ -456,8 +559,10 @@ done:
                   << "   " << std::setw(8) << n_pass[k]
                   << "   " << std::setw(5) << frac << "%\n";
     }
-    std::cout << "\n  good events (ANY pair cut + W1156): " << n_good
-              << " / " << n_w1156_total << " W1156-present events\n"
+    std::cout << std::defaultfloat << std::setprecision(6);
+    std::cout << "\n  good events (ANY pair cut + W-sum present): " << n_good
+              << " / " << n_w_events << " events with a W hit above "
+              << W_MIN_HEIGHT << " ADC\n"
               << "\nhistograms written to " << out_path << "\n";
     return 0;
 }

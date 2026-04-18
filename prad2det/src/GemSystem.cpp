@@ -521,46 +521,69 @@ void GemSystem::collectHits(int apv_idx)
 //   6. Plane-wide strip number with configurable offset
 //=============================================================================
 
+// Public, stateless — declared in GemSystem.h.  buildStripMap() delegates
+// here so on-line reconstruction and off-line analyses share one impl.
+int MapStrip(int ch, int plane_index, int orient,
+             int pin_rotate, int shared_pos, bool hybrid_board,
+             int apv_channels, int readout_center)
+{
+    const int N = apv_channels;
+    const int readout_off = readout_center + pin_rotate;
+    const int eff_pos = (shared_pos >= 0) ? shared_pos : plane_index;
+    const int plane_shift = (eff_pos - plane_index) * N - pin_rotate;
+
+    // Step 1: APV25 internal channel mapping (chip wiring, universal).
+    int strip = 32 * (ch % 4) + 8 * (ch / 4) - 31 * (ch / 16);
+
+    // Step 2: hybrid board pin conversion (MPD electronics).
+    if (hybrid_board)
+        strip = strip + 1 + strip % 4 - 5 * ((strip / 4) % 2);
+
+    // Step 3: readout strip mapping (odd/even fan-out around center).
+    // readout_off <= 0 → skip (steps 1+2 already give the final strip).
+    if (readout_off > 0) {
+        if (strip & 1)
+            strip = readout_off - (strip + 1) / 2;
+        else
+            strip = readout_off + strip / 2;
+    }
+
+    // Step 4: channel mask.
+    strip &= (N - 1);
+
+    // Step 5: orient flip.
+    if (orient == 1)
+        strip = (N - 1) - strip;
+
+    // Step 6: plane-wide strip number.
+    strip += plane_shift + plane_index * N;
+
+    return strip;
+}
+
+std::vector<int> MapApvStrips(int plane_index, int orient,
+                              int pin_rotate, int shared_pos,
+                              bool hybrid_board,
+                              int apv_channels, int readout_center)
+{
+    std::vector<int> out(apv_channels);
+    for (int ch = 0; ch < apv_channels; ++ch) {
+        out[ch] = MapStrip(ch, plane_index, orient,
+                           pin_rotate, shared_pos, hybrid_board,
+                           apv_channels, readout_center);
+    }
+    return out;
+}
+
 void GemSystem::buildStripMap(int apv_idx)
 {
-    auto &cfg = apvs_[apv_idx];
+    auto &cfg  = apvs_[apv_idx];
     auto &work = apv_work_[apv_idx];
-
     const int N = apv_channels_;
-    const int center = readout_center_;
-
-    // derive from physical parameters
-    int readout_off = center + cfg.pin_rotate;
-    int eff_pos = (cfg.shared_pos >= 0) ? cfg.shared_pos : cfg.plane_index;
-    int plane_shift = (eff_pos - cfg.plane_index) * N - cfg.pin_rotate;
 
     for (int ch = 0; ch < N; ++ch) {
-        // Step 1: APV25 internal channel mapping (chip wiring, universal)
-        int strip = 32 * (ch % 4) + 8 * (ch / 4) - 31 * (ch / 16);
-
-        // Step 2: hybrid board pin conversion (MPD electronics)
-        if (cfg.hybrid_board)
-            strip = strip + 1 + strip % 4 - 5 * ((strip / 4) % 2);
-
-        // Step 3: readout strip mapping (odd/even fan-out around center)
-        // readout_off > 0: apply mapping; 0: skip (steps 1+2 give final strip)
-        if (readout_off > 0) {
-            if (strip & 1)
-                strip = readout_off - (strip + 1) / 2;
-            else
-                strip = readout_off + strip / 2;
-        }
-
-        // Step 4: channel mask
-        strip &= (N - 1);
-
-        // Step 5: orient flip
-        if (cfg.orient == 1)
-            strip = (N - 1) - strip;
-
-        // Step 6: plane-wide strip number
-        strip += plane_shift + cfg.plane_index * N;
-
-        work.strip_map[ch] = strip;
+        work.strip_map[ch] = MapStrip(ch, cfg.plane_index, cfg.orient,
+                                      cfg.pin_rotate, cfg.shared_pos,
+                                      cfg.hybrid_board, N, readout_center_);
     }
 }

@@ -112,6 +112,40 @@ struct DetectorConfig {
     PlaneConfig planes[2];          // [0]=X, [1]=Y
 };
 
+// --- strip-mapping pipeline (pure, stateless) -------------------------------
+//
+// Maps one APV25 channel index to the plane-wide strip number using the
+// 6-step pipeline shared with the original PRadAnalyzer / mpd_gem_view_ssp
+// code.  Parameters mirror ApvConfig so off-line analyses (including the
+// Python bindings) can reproduce the layout without instantiating a
+// GemSystem.  GemSystem::buildStripMap() delegates to this function —
+// single source of truth.
+//
+//   ch             0..apv_channels-1
+//   plane_index    APV position on the plane (0..n_apvs-1)
+//   orient         strip-reversal flag (0 or 1)
+//   pin_rotate     rotated connector pins (e.g. 16 for pos-11 near beam hole)
+//   shared_pos     effective plane position (-1 = use plane_index)
+//   hybrid_board   true → apply the MPD hybrid-board pin conversion (step 2)
+//   apv_channels   N = channels per APV chip (default 128)
+//   readout_center default 32; combined with pin_rotate to form the readout
+//                  offset; readout_off<=0 skips step 3
+int MapStrip(int ch, int plane_index, int orient,
+             int  pin_rotate    = 0,
+             int  shared_pos    = -1,
+             bool hybrid_board  = true,
+             int  apv_channels  = 128,
+             int  readout_center = 32);
+
+// Convenience: compute plane-wide strip numbers for every channel of an APV.
+// Equivalent to calling MapStrip(ch, ...) for ch in [0, apv_channels).
+std::vector<int> MapApvStrips(int plane_index, int orient,
+                              int  pin_rotate    = 0,
+                              int  shared_pos    = -1,
+                              bool hybrid_board  = true,
+                              int  apv_channels  = 128,
+                              int  readout_center = 32);
+
 // --- GemSystem class --------------------------------------------------------
 
 class GemCluster;   // forward declaration

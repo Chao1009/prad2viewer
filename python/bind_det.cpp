@@ -56,6 +56,32 @@ namespace py = pybind11;
 // -------------------------------------------------------------------------
 static void bind_gem(py::module_ &m)
 {
+    // --- stateless strip-mapping (shared with GemSystem::buildStripMap) -----
+    // Exposed at module level so Python layout / diagnostic scripts
+    // (scripts/gem_strip_map.py, scripts/gem_layout.py) hit the same C++
+    // implementation the reconstruction uses — no more drifting duplicates.
+
+    m.def("map_strip", &gem::MapStrip,
+          py::arg("ch"), py::arg("plane_index"), py::arg("orient"),
+          py::arg("pin_rotate")     = 0,
+          py::arg("shared_pos")     = -1,
+          py::arg("hybrid_board")   = true,
+          py::arg("apv_channels")   = 128,
+          py::arg("readout_center") = 32,
+          "Map one APV25 channel index to the plane-wide strip number.  "
+          "Pure function — same 6-step pipeline used by "
+          "GemSystem::buildStripMap.");
+
+    m.def("map_apv_strips", &gem::MapApvStrips,
+          py::arg("plane_index"), py::arg("orient"),
+          py::arg("pin_rotate")     = 0,
+          py::arg("shared_pos")     = -1,
+          py::arg("hybrid_board")   = true,
+          py::arg("apv_channels")   = 128,
+          py::arg("readout_center") = 32,
+          "Compute plane-wide strip numbers for every channel of one APV.  "
+          "Returns a Python list of length `apv_channels`.");
+
     // --- configuration leaves ------------------------------------------------
 
     py::class_<gem::ApvPedestal>(m, "ApvPedestal",

@@ -143,10 +143,18 @@ void EvioDataSource::iterateAll(EventCallback ev_cb, ReconCallback /*recon_cb*/,
     while (ch.Read() == status::success) {
         if (!ch.Scan()) continue;
 
-        // control events (sync/prestart/go/end)
+        // control events (sync/prestart/go/end) — absolute unix time lands in
+        // ch.Sync() along with run number / type / counter; Sync()'s snapshot
+        // persists across events, so gate on event type so physics events
+        // don't re-fire the callback.
         if (ctrl_cb) {
-            uint32_t ct = ch.GetControlTime();
-            if (ct != 0) ctrl_cb(ct, last_ti_ts);
+            auto et = ch.GetEventType();
+            if (et == EventType::Prestart || et == EventType::Go ||
+                et == EventType::End      || et == EventType::Sync)
+            {
+                const auto &s = ch.Sync();
+                if (s.unix_time != 0) ctrl_cb(s.unix_time, last_ti_ts);
+            }
         }
 
         // EPICS events

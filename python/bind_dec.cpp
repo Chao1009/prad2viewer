@@ -9,6 +9,7 @@
 //   prad2py.dec.ApvAddress / ApvData / MpdData / SspEventData (ssp)
 //   prad2py.dec.EcPeak / EcCluster / VtpBlock / VtpEventData  (vtp)
 //   prad2py.dec.TdcHit / TdcEventData                         (tdc)
+//   prad2py.dec.SyncInfo                                      (sync)
 //   prad2py.dec.EvChannel            (evio reader)
 //   prad2py.dec.load_daq_config(path) -> DaqConfig
 //
@@ -27,6 +28,7 @@
 #include "SspData.h"
 #include "VtpData.h"
 #include "TdcData.h"
+#include "SyncData.h"
 
 #include <cstdlib>
 #include <memory>
@@ -132,6 +134,26 @@ void bind_fadc(py::module_ &m)
                 "<EventInfo evt=%d trig=%d tag=0x%x bits=0x%x ts=%llu>",
                 i.event_number, i.trigger_number, i.event_tag, i.trigger_bits,
                 (unsigned long long)i.timestamp);
+            return std::string(buf);
+        });
+
+    py::class_<sync::SyncInfo>(m, "SyncInfo",
+        "Absolute-time / run-state snapshot populated from SYNC/EPICS 0xE112 "
+        "HEAD banks and from PRESTART/GO/END control-event payloads.  Persists "
+        "across events in EvChannel — see EvChannel.sync().")
+        .def_readwrite("run_number",   &sync::SyncInfo::run_number)
+        .def_readwrite("sync_counter", &sync::SyncInfo::sync_counter)
+        .def_readwrite("unix_time",    &sync::SyncInfo::unix_time)
+        .def_readwrite("event_tag",    &sync::SyncInfo::event_tag)
+        .def_readwrite("run_type",     &sync::SyncInfo::run_type)
+        .def("valid", &sync::SyncInfo::valid,
+             "True if unix_time has been populated (any SYNC/control event seen).")
+        .def("__repr__", [](const sync::SyncInfo &s) {
+            char buf[160];
+            std::snprintf(buf, sizeof(buf),
+                "<SyncInfo run=%u counter=%u unix=%u tag=0x%x type=%u>",
+                s.run_number, s.sync_counter, s.unix_time, s.event_tag,
+                (unsigned)s.run_type);
             return std::string(buf);
         });
 
@@ -564,8 +586,20 @@ void bind_channel(py::module_ &m)
             py::arg("with_tdc") = false,
             "Full decode. Returns {'ok': bool, 'event': EventData, "
             "'ssp': SspEventData|None, 'vtp': ..., 'tdc': ...}.")
-        .def("get_control_time", &evc::EvChannel::GetControlTime,
-            "Unix timestamp from the current Prestart/Go/End event (0 if N/A).")
+        .def("sync",
+            [](const evc::EvChannel &self) {
+                sync::SyncInfo out;
+                {
+                    py::gil_scoped_release rel;
+                    out = self.Sync();
+                }
+                return out;
+            },
+            "Absolute-time / run-state snapshot.  Persists across events — "
+            "refreshed only when the channel lands on a SYNC/EPICS or "
+            "control event (PRESTART/GO/END), otherwise returns the prior "
+            "snapshot.  Diff `sync_counter` against your last-seen value to "
+            "detect new SYNC ticks; for control events use `event_tag`.")
         .def("extract_epics_text", &evc::EvChannel::ExtractEpicsText,
             "Raw EPICS payload for the current event (empty if not EPICS).");
 }

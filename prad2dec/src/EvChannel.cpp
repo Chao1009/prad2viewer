@@ -111,6 +111,11 @@ bool EvChannel::Scan()
     // explicit SelectEvent() call in single-event mode (the common case).
     cached_event_idx = 0;
 
+    // Fresh event → allow Sync() to attempt one decode if this event carries
+    // SYNC / control data; the snapshot itself is only updated on a hit, so
+    // physics events keep the prior absolute-time reference visible.
+    sync_decoded_this_event_ = false;
+
     return true;
 }
 
@@ -290,6 +295,18 @@ const vtp::VtpEventData &EvChannel::Vtp() const
         vtp_ready = true;
     }
     return *cache_vtp;
+}
+
+const sync::SyncInfo &EvChannel::Sync() const
+{
+    // Sync snapshot persists across events; only re-attempt decode once per
+    // Scan().  On a SYNC/EPICS or control event the snapshot refreshes;
+    // otherwise last_sync_info_ keeps the prior values.
+    if (!sync_decoded_this_event_) {
+        decodeSyncInto(last_sync_info_);
+        sync_decoded_this_event_ = true;
+    }
+    return last_sync_info_;
 }
 
 const uint8_t *EvChannel::GetCompositePayload(const EvNode &n, size_t &nbytes) const
@@ -609,6 +626,70 @@ void EvChannel::decodeVtpInto(vtp::VtpEventData &vtp_evt) const
     }
 }
 
+// Reads the 0xE112 HEAD bank (SYNC/EPICS events) or, failing that, the first
+// UINT32 child of a control event (PRESTART/GO/END).  `out` is updated in
+// place only when a source bank is found — physics events leave the prior
+// snapshot intact, which is how Sync() provides persistent run-level state.
+bool EvChannel::decodeSyncInto(sync::SyncInfo &out) const
+{
+    if (nodes.empty()) return false;
+
+    auto read_word = [](const uint32_t *d, size_t nw, int off) -> uint32_t {
+        return (off >= 0 && static_cast<size_t>(off) < nw) ? d[off] : 0;
+    };
+
+    // SYNC / EPICS path: 0xE112 HEAD bank somewhere in the tree.  Updates the
+    // fields the HEAD bank actually carries; leaves run_type alone so a
+    // prior PRESTART's run_type stays visible across intervening SYNCs.
+    {
+        auto it = tag_index.find(config.sync_head_tag);
+        if (it != tag_index.end()) {
+            for (int ni : it->second) {
+                const auto &n = nodes[ni];
+                if (n.type != DATA_UINT32 || n.data_words == 0) continue;
+                const uint32_t *d = GetData(n);
+                size_t nw = n.data_words;
+                out.run_number   = read_word(d, nw, config.sync_head_run_number_word);
+                out.sync_counter = read_word(d, nw, config.sync_head_counter_word);
+                out.unix_time    = read_word(d, nw, config.sync_head_unix_time_word);
+                out.event_tag    = read_word(d, nw, config.sync_head_event_tag_word);
+                // Fall back to the wrapping event bank's tag if the declared
+                // event_tag word is blank, so callers can always distinguish
+                // PRESTART vs EPICS vs SYNC by event_tag alone.
+                if (out.event_tag == 0)
+                    out.event_tag = BankHeader(&buffer[0]).tag;
+                return true;
+            }
+        }
+    }
+
+    // Control-event path: PRESTART/GO/END carry a 3-word UINT32 payload as
+    // the first leaf child of the top-level event bank (same tag as the
+    // event in CODA2 convention).  sync_counter is left untouched — it only
+    // makes sense for 0xE112 HEAD banks, and preserving the last SYNC's
+    // value lets callers still detect "new SYNC arrived" after a control
+    // event by diffing counters across events.
+    if (evtype == EventType::Prestart || evtype == EventType::Go ||
+        evtype == EventType::End)
+    {
+        const auto &evn = nodes[0];
+        for (size_t ci = 0; ci < evn.child_count; ++ci) {
+            const auto &child = nodes[evn.child_first + ci];
+            if (child.type != DATA_UINT32 || child.data_words == 0) continue;
+            const uint32_t *d = GetData(child);
+            size_t nw = child.data_words;
+            out.unix_time  = read_word(d, nw, config.sync_control_unix_time_word);
+            out.run_number = read_word(d, nw, config.sync_control_run_number_word);
+            out.run_type   = static_cast<uint8_t>(
+                read_word(d, nw, config.sync_control_run_type_word));
+            out.event_tag  = evn.tag;          // 0x11 / 0x12 / 0x14
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // =============================================================================
 // Legacy compat wrapper — writes directly into caller-owned structs, bypassing
 // the lazy cache.  Semantics identical to the pre-refactor DecodeEvent so
@@ -641,28 +722,6 @@ bool EvChannel::DecodeEvent(int i, fdec::EventData &evt,
     // detector data was decoded (FADC waveforms or GEM strips).  evt.info
     // is always populated regardless.
     return evt.nrocs > 0 || ssp_decoded;
-}
-
-// === Control event time extraction ==========================================
-
-uint32_t EvChannel::GetControlTime() const
-{
-    // All CODA control events (Prestart, Go, Sync, End) share the same layout
-    if (evtype != EventType::Sync && evtype != EventType::Prestart &&
-        evtype != EventType::Go && evtype != EventType::End)
-        return 0;
-
-    // Control event layout (after 2-word bank header):
-    //   word[0]: [Event Type | 0x01 | 0]  (data word header)
-    //   word[1]: unix timestamp
-    //   word[2]: A (run number / event counts)
-    //   word[3]: B (run type / event counts)
-    BankHeader evh(&buffer[0]);
-    size_t data_off = BankHeader::size();
-    size_t data_words = evh.data_words();
-    if (data_words >= 2)
-        return buffer[data_off + 1];  // second data word is time
-    return 0;
 }
 
 // === EPICS text extraction ==================================================

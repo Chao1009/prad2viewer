@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
         // print control events (sync/prestart/go/end)
         if (evtype == EventType::Sync || evtype == EventType::Prestart ||
             evtype == EventType::Go || evtype == EventType::End) {
-            uint32_t ct = ch.GetControlTime();
+            uint32_t ct = ch.Sync().unix_time;
             if (ct != 0) last_sync_unix = ct;
             std::cout << std::setw(8)  << "--"
                       << std::setw(12) << "--"

@@ -77,6 +77,22 @@
 
     "ti_master_tag": "0x27",
 
+    "sync_format": {
+        "_comment": "Absolute-time / run-state banks used by EvChannel::Sync(). The HEAD bank (0xE112, 5 words) is carried inside SYNC/EPICS events; control events (PRESTART 0x0011, GO 0x0012, END 0x0014) carry a 3-word UINT32 payload with a different word layout. See prad2dec/include/SyncData.h for the decoded struct.",
+        "head_bank": {
+            "tag":              "0xE112",
+            "run_number_word":  1,
+            "counter_word":     2,
+            "unix_time_word":   3,
+            "event_tag_word":   4
+        },
+        "control_event": {
+            "unix_time_word":   0,
+            "run_number_word":  1,
+            "run_type_word":    2
+        }
+    },
+
     "bank_structure": {
         "_comment": "Three-level physics event hierarchy: event_bank (depth 0) → ROC_crate (depth 1) → data_bank (depth 2). Composite bank 0xE101 adds a 4th internal level (0x000D metadata + 0x0000 data words) consumed directly by its decoder. Each data bank maps to a decoder 'module' and a 'product'; EvChannel::Get<product>() lazily dispatches the registered module on first access and caches the result per event.",
 
@@ -98,7 +114,7 @@
             "0xE122": { "module": "vtp_ecal",          "product": "vtp",        "type": "UINT32"    },
 
             "0xE114": { "module": "epics_data",        "product": "epics",      "type": "STRING"    },
-            "0xE112": { "module": "epics_header",      "product": "epics",      "type": "UINT32"    }
+            "0xE112": { "module": "sync_head",         "product": "sync",       "type": "UINT32"    }
         }
     }
 }

@@ -136,6 +136,25 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
     if (j.contains("ti_master_tag"))
         cfg.ti_master_tag = parse_hex(j["ti_master_tag"]);
 
+    // sync / control-event absolute-time banks
+    if (j.contains("sync_format")) {
+        auto &sf = j["sync_format"];
+        if (sf.contains("head_bank")) {
+            auto &hb = sf["head_bank"];
+            if (hb.contains("tag"))             cfg.sync_head_tag             = parse_hex(hb["tag"]);
+            if (hb.contains("run_number_word")) cfg.sync_head_run_number_word = hb["run_number_word"].get<int>();
+            if (hb.contains("counter_word"))    cfg.sync_head_counter_word    = hb["counter_word"].get<int>();
+            if (hb.contains("unix_time_word"))  cfg.sync_head_unix_time_word  = hb["unix_time_word"].get<int>();
+            if (hb.contains("event_tag_word"))  cfg.sync_head_event_tag_word  = hb["event_tag_word"].get<int>();
+        }
+        if (sf.contains("control_event")) {
+            auto &ce = sf["control_event"];
+            if (ce.contains("unix_time_word"))  cfg.sync_control_unix_time_word  = ce["unix_time_word"].get<int>();
+            if (ce.contains("run_number_word")) cfg.sync_control_run_number_word = ce["run_number_word"].get<int>();
+            if (ce.contains("run_type_word"))   cfg.sync_control_run_type_word   = ce["run_type_word"].get<int>();
+        }
+    }
+
     // bank structure: tag → { module, product, type }
     // This is the new authoritative source used by EvChannel's lazy accessors
     // to dispatch decoders by data product.  Absent entries fall back to the

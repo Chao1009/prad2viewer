@@ -363,11 +363,11 @@ int main(int argc, char *argv[])
             auto evtype = ch.GetEventType();
 
             if (evtype == EventType::Prestart || evtype == EventType::Go) {
-                uint32_t ct = ch.GetControlTime();
+                uint32_t ct = ch.Sync().unix_time;
                 if (ct != 0 && unix_start == 0) unix_start = ct;
             }
             if (evtype == EventType::End) {
-                uint32_t ct = ch.GetControlTime();
+                uint32_t ct = ch.Sync().unix_time;
                 if (ct != 0) unix_end = ct;
             }
 

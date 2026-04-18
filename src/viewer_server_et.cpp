@@ -181,8 +181,14 @@ void ViewerServer::etReaderThread()
                     continue;
 
                 if (app_online_.sync_unix == 0) {
-                    uint32_t ct = ch.GetControlTime();
-                    if (ct != 0) app_online_.recordSyncTime(ct, last_ti_ts);
+                    auto et = ch.GetEventType();
+                    if (et == EventType::Prestart || et == EventType::Go ||
+                        et == EventType::End      || et == EventType::Sync)
+                    {
+                        const auto &s = ch.Sync();
+                        if (s.unix_time != 0)
+                            app_online_.recordSyncTime(s.unix_time, last_ti_ts);
+                    }
                 }
 
                 if (ch.GetEventType() == EventType::Epics) {

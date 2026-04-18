@@ -29,6 +29,7 @@
 #include "SspData.h"
 #include "VtpData.h"
 #include "TdcData.h"
+#include "SyncData.h"
 #include "DaqConfig.h"
 #include <string>
 #include <vector>
@@ -108,6 +109,17 @@ public:
     const tdc::TdcEventData  &Tdc()  const;  // V1190 timing hits
     const vtp::VtpEventData  &Vtp()  const;  // VTP ECAL peaks/clusters
 
+    // Absolute-time / run-state snapshot.  Unlike the other accessors this
+    // one's result PERSISTS across events — it's only refreshed when Scan()
+    // parses a SYNC/EPICS event (0xE112 HEAD bank) or a control event
+    // (PRESTART/GO/END with a 3-word payload).  Intervening physics events
+    // see the most-recent snapshot, giving them an absolute anchor for
+    // their 48-bit TI timestamp delta.  To detect "a new SYNC arrived",
+    // compare `Sync().sync_counter` to your last-seen value — it's a
+    // monotonic counter for 0xE112 banks and stays 0 for control events
+    // (distinguish those via `event_tag`).
+    const sync::SyncInfo &Sync() const;
+
     // --- legacy API (compat, writes directly to caller-owned structs) -------
     //
     // Preserves the original semantics: populate the caller's structs without
@@ -117,13 +129,6 @@ public:
                      ssp::SspEventData *ssp_evt = nullptr,
                      vtp::VtpEventData *vtp_evt = nullptr,
                      tdc::TdcEventData *tdc_evt = nullptr) const;
-
-    // --- Control event extraction (Prestart/Go/End) -------------------------
-
-    // Extract unix timestamp from PRESTART or GO event.
-    // CODA2 format: data words [time, run_number, run_type]
-    // Returns 0 if not a control event or no time found.
-    uint32_t GetControlTime() const;
 
     // --- EPICS extraction (call when GetEventType() == Epics) ---------------
 
@@ -170,6 +175,14 @@ protected:
     mutable std::unique_ptr<tdc::TdcEventData> cache_tdc;
     mutable std::unique_ptr<vtp::VtpEventData> cache_vtp;
 
+    // Persistent across Scan() — refreshed only when a SYNC/EPICS or control
+    // event is scanned, otherwise carries the most recent snapshot.  The
+    // `sync_decoded_this_event_` flag guards against re-decoding 0xE112 /
+    // control payload more than once per event when Sync() is called
+    // repeatedly, without clobbering the snapshot on physics events.
+    mutable sync::SyncInfo last_sync_info_;
+    mutable bool           sync_decoded_this_event_ = false;
+
     // --- per-bank decoders (shared by legacy and lazy paths) ----------------
     void decodeTriggerInfo(const EvNode &node, fdec::EventInfo &info) const;
     void decodeTIBank(const EvNode &node, fdec::EventInfo &info, bool is_master) const;
@@ -183,6 +196,11 @@ protected:
     int  decodeGemInto (ssp::SspEventData &ssp) const;
     void decodeTdcInto (tdc::TdcEventData &tdc) const;
     void decodeVtpInto (vtp::VtpEventData &vtp) const;
+    // Reads 0xE112 HEAD (SYNC/EPICS events) or the first-child UINT32 bank of
+    // a control event (PRESTART/GO/END) and merges into `out`, leaving prior
+    // fields untouched when the current event contributes nothing.  Returns
+    // true if `out` was updated.
+    bool decodeSyncInto(sync::SyncInfo &out) const;
 
     // Invalidate all product cache flags.
     void clearCache() const;

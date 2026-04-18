@@ -130,6 +130,19 @@ struct DaqConfig
     // TI master crate tag (contains run info bank)
     uint32_t ti_master_tag;
 
+    // --- SYNC / control-event absolute-time decoding ------------------------
+    // Populated from daq_config.json "sync_format" (see SyncData.h for the
+    // decoded struct + bank layout).  Defaults are the PRad-II values so
+    // configs without a sync_format section still work.
+    uint32_t sync_head_tag                  = 0xE112;  // 0xE112 HEAD bank
+    int      sync_head_run_number_word      = 1;
+    int      sync_head_counter_word         = 2;
+    int      sync_head_unix_time_word       = 3;
+    int      sync_head_event_tag_word       = 4;
+    int      sync_control_unix_time_word    = 0;
+    int      sync_control_run_number_word   = 1;
+    int      sync_control_run_type_word     = 2;
+
     // --- bank structure: data-bank → decoder module / data product ----------
     // Populated from the "bank_structure.data_banks" JSON section.  EvChannel
     // uses this to dispatch lazy data-product accessors (Fadc/Gem/Tdc/Vtp/...):
@@ -153,6 +166,7 @@ struct DaqConfig
     static constexpr const char *product_tdc        = "tdc";
     static constexpr const char *product_gem        = "gem";
     static constexpr const char *product_vtp        = "vtp";
+    static constexpr const char *product_sync       = "sync";
     static constexpr const char *product_epics      = "epics";
     static constexpr const char *product_daq_config = "daq_config";
 

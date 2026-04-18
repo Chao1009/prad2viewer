@@ -92,4 +92,5 @@ add_analysis_tool(my_tool tools/my_tool.cpp)
 Shared sources (`Replay.cpp`, `PhysicsTools.cpp`, `MatchingTools.cpp`) and dependencies linked automatically.
 
 ## Contributors
-Yuan Li — Shandong University
+Yuan Li, Weizhi Xiong — Shandong University
+Chao Peng - Argonne National Laboratory

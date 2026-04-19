@@ -24,6 +24,7 @@
 #include <TString.h>
 #include <TSystem.h>
 #include <TChain.h>
+#include <TCanvas.h>
 
 #include <iostream>
 #include <string>
@@ -245,6 +246,13 @@ int main(int argc, char *argv[])
     if (physics.GetMollerXHist()) physics.GetMollerXHist()->Write();
     if (physics.GetMollerYHist()) physics.GetMollerYHist()->Write();
     if (physics.GetMollerZHist()) physics.GetMollerZHist()->Write();
+
+    physics.FillNeventsModuleMap();
+    TH2F *h_map = physics.GetNeventsModuleMapHist();
+    TCanvas *c_map = new TCanvas("c_map", "Number of Events per Module", 1200, 1200);
+    h_map->Draw("COLZ");
+    c_map->Write();
+    h_map->Write();
 
     outfile.mkdir("module_energy"); outfile.cd("module_energy");
     for (int i = 0; i < hycal.module_count(); i++) {

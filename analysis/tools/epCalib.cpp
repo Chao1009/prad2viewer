@@ -303,10 +303,7 @@ int main(int argc, char *argv[])
     physics.FillNeventsModuleMap();
     TH2F *h_map = physics.GetNeventsModuleMapHist();
     TCanvas *c_map = new TCanvas("c_map", "Number of Events per Module", 1200, 1200);
-    c_map->cd();
-    h_map->GetYaxis()->SetRangeUser(34.5, 0.5);
     h_map->Draw("COLZ");
-    c_map->Update();
     c_map->Write();
     h_map->Write();
 

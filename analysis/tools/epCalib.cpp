@@ -3,11 +3,11 @@
 // get the ratio of expected/measured peak position, and write to a database file. 
 //=============================================================================
 //
-// Usage: epCalib <input_raw.root|dir> [-i iteration] [-o output_calib_file]
+// Usage: epCalib <input_raw.root|dir> [-i iteration] [-o output_root_file]
 //                                     [-E Ebeam] [-D daq_config.json] [-n max_events]
 //   - input_raw.root|dir: input ROOT file or directory containing ROOT files with raw data (peak mode) to be analyzed. The tool will look for TTree named "events"
 //   - iteration: iteration number for calibration, used for bookkeeping and output file naming (default: 0)
-//   - output_calib_file: output JSON file to write calibration constants (default: <db_dir>/calibration/<run_number>/ep_calib.json)
+//   - output_root_file: output ROOT file to write calibration constants (default: <db_dir>/calibration/<run_number>/ep_calib.root)
 //   - Ebeam: beam energy in MeV, used for calculating expected elastic peak position (default: 2100 MeV)
 //   - daq_config.json: DAQ config file for mapping ROC tags to crate indices, needed for decoding raw data (default: none, but recommended to provide)
 //   - max_events: maximum number of events to process (default: -1 for all events)
@@ -43,7 +43,7 @@
 namespace fs = std::filesystem;
 
 using EventVars       = prad2::RawEventData;
-void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
+void SetReadBranches(TTree *tree, EventVars &ev)
 {
     tree->SetBranchAddress("event_num", &ev.event_num);
     tree->SetBranchAddress("trigger_bits", &ev.trigger_bits);
@@ -55,12 +55,10 @@ void SetReadBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->SetBranchAddress("hycal.ped_mean", ev.ped_mean);
     tree->SetBranchAddress("hycal.ped_rms", ev.ped_rms);
     tree->SetBranchAddress("hycal.integral", ev.integral);
-    if (write_peaks) {
-        tree->SetBranchAddress("hycal.npeaks", &ev.npeaks);
-        tree->SetBranchAddress("hycal.peak_height", ev.peak_height);
-        tree->SetBranchAddress("hycal.peak_time", ev.peak_time);
-        tree->SetBranchAddress("hycal.peak_integral", ev.peak_integral);
-    }
+    tree->SetBranchAddress("hycal.npeaks", &ev.npeaks);
+    tree->SetBranchAddress("hycal.peak_height", ev.peak_height);
+    tree->SetBranchAddress("hycal.peak_time", ev.peak_time);
+    tree->SetBranchAddress("hycal.peak_integral", ev.peak_integral);
 }
 
 static std::vector<std::string> collectRootFiles(const std::string &path);
@@ -100,7 +98,7 @@ int main(int argc, char *argv[])
     }
     if (root_files.empty()) {
         std::cerr << "No input files specified.\n";
-        std::cerr << "Usage: quick_check <input_raw.root|dir> [more files...] -i iteration -o output_calib_file -E Ebeam -D daq_config.json -n max_events]\n";
+        std::cerr << "Usage: epCalib <input_raw.root|dir> [more files...] -i iteration -o output_root_file -E Ebeam -D daq_config.json -n max_events]\n";
         return 1;
     }
 
@@ -123,7 +121,11 @@ int main(int argc, char *argv[])
     if( iteration == 1 )
         input_calib_file = db_dir + "/calibration/adc_to_mev_factors_cosmic.json";
     else if( iteration > 1 )
-        input_calib_file = db_dir + Form("/calib_iter%d.json",   iteration-1);
+        input_calib_file = run_out_dir + Form("/calib_iter%d.json",   iteration-1);
+    else{
+        std::cerr << "Invalid iteration number: " << iteration << ". Must be >= 1.\n";
+        return 1;
+    }
     output_calib_file = run_out_dir + Form("/calib_iter%d.json", iteration);
     
 
@@ -147,7 +149,7 @@ int main(int argc, char *argv[])
     TFile outfile(outName, "RECREATE");
 
     auto ev = std::make_unique<EventVars>();
-    SetReadBranches(tree, *ev, true);
+    SetReadBranches(tree, *ev);
 
     //setup for reconstruction
     fdec::HyCalSystem hycal;
@@ -188,6 +190,9 @@ int main(int argc, char *argv[])
     clusterer.SetConfig(cl_cfg);
     for(int i = 0; i < nentries; i++){
         tree->GetEntry(i);
+        if (i % 1000 == 0) 
+            std::cout << "Processing event " << i+1 << "/" << nentries << "\r" << std::flush;
+
         static constexpr uint32_t TBIT_sum = (1u << 8);
         static constexpr uint32_t TBIT_lms  = (1u << 24);
         if (!(ev->trigger_bits & TBIT_sum)) continue;
@@ -213,8 +218,12 @@ int main(int argc, char *argv[])
             physics.FillModuleEnergy(hits[0].center_id, hits[0].energy);
             hit_pos->Fill(hits[0].x, hits[0].y);
             h_E_1cl->Fill(hits[0].energy);
+            float theta = atan(sqrt(pow(hits[0].x, 2) + pow(hits[0].y, 2)) / hycal_z) * 180.f / 3.14159265f;
+            physics.FillEnergyVsTheta(theta, hits[0].energy);
         }
     }
+    std::cerr << "\nFinished processing " << nentries << " events.\n";
+    std::cerr << "Fitting peaks and calculating calibration constants...\n";
 
     //after loop, fit peaks, get calibration constants, write to database  
     std::string dat_out_path = run_out_dir + Form("/fitting_parameters_iter%d.dat", iteration);
@@ -225,9 +234,7 @@ int main(int argc, char *argv[])
     }  
     int nmod = hycal.module_count();
     std::vector<float> ratio_values(nmod, 0.f);
-    TLatex t;
-    t.SetTextSize(0.01);
-    t.SetTextColor(kBlack);
+
     TCanvas *c = new TCanvas("c", "Calibration", 1200, 1200);
     c->cd();
     dat_out << std::left;
@@ -251,7 +258,6 @@ int main(int argc, char *argv[])
             hycal.SetCalibConstant(hycal.module(m).id, new_factor);
 
             module_ratio->Fill(hycal.module(m).x, hycal.module(m).y, abs(1.f-1.f/ratio));
-            t.DrawLatex(hycal.module(m).x, hycal.module(m).y, name.c_str());
 
             h_mearured_peak->Fill(peak);
             h_recon_sigma->Fill(sigma);
@@ -263,9 +269,21 @@ int main(int argc, char *argv[])
         }
     }
     std::cerr << "Calibrated " << n_calibrated << " modules. Results written to " << dat_out_path << "\n";
+
     module_ratio->SetStats(0);
     module_ratio->Draw("COLZ");
     module_ratio->Write();
+
+    TLatex t;
+    t.SetTextSize(0.0122);
+    t.SetTextColor(kBlack);
+    for(int m = 0; m < nmod; m++) {
+        std::string name = hycal.module(m).name;
+        if(name[0] != 'W') continue;
+        t.DrawLatex(hycal.module(m).x-6., hycal.module(m).y-2., hycal.module(m).name.c_str());
+    }
+    
+    c->Update();
     c->Write();
 
     TCanvas *c_hit = new TCanvas("c_hit", "Hit Position", 1200, 1200);
@@ -275,11 +293,22 @@ int main(int argc, char *argv[])
     outfile.cd();
     c_hit->Write();
 
+    physics.GetEnergyVsThetaHist()->Write();
     h_E_1cl->Write();
     h_mearured_peak->Write();
     h_recon_sigma->Write();
     h_recon_chi2->Write();
     ratio_module_all->Write();
+
+    physics.FillNeventsModuleMap();
+    TH2F *h_map = physics.GetNeventsModuleMapHist();
+    TCanvas *c_map = new TCanvas("c_map", "Number of Events per Module", 1200, 1200);
+    c_map->cd();
+    h_map->GetYaxis()->SetRangeUser(34.5, 0.5);
+    h_map->Draw("COLZ");
+    c_map->Update();
+    c_map->Write();
+    h_map->Write();
 
     outfile.mkdir("module_energy");
     outfile.cd("module_energy");

@@ -58,6 +58,26 @@ public:
     void FillEnergyVsTheta(float theta_deg, float energy);
     TH2F *GetEnergyVsThetaHist() const { return h2_energy_theta_.get(); }
 
+    // --- Number of events per module map --------------------------------------
+    void FillNeventsModuleMap(int module_id) {
+        const auto *mod = hycal_.module_by_id(module_id);
+        if (!mod || !mod->is_pwo4()) return;
+        h2_Nevents_moduleMap_->Fill(mod->column + 1, -mod->row - 1);
+    }
+    // must be called after all events are processed
+    // and also need to call FillModuleEnergy for every event first
+    void FillNeventsModuleMap() {
+        for (int module_id = 1; module_id <= 1156; module_id++) {
+            const auto *mod = hycal_.module_by_id(module_id + 1000);
+            if (!mod || !mod->is_pwo4()) continue;
+            TH1F *h = GetModuleEnergyHist(module_id + 1000);
+            if (!h) continue;
+            int count = h->GetEntries();
+            h2_Nevents_moduleMap_->SetBinContent(mod->column + 1, 34 - mod->row, count);
+        }
+    }
+    TH2F *GetNeventsModuleMapHist() const { return h2_Nevents_moduleMap_.get(); }
+
     // physics event yield histograms (caller owns the returned histogram)
     std::unique_ptr<TH1F> GetEpYieldHist(TH2F *energy_theta, float Ebeam);
     std::unique_ptr<TH1F> GetEeYieldHist(TH2F *energy_theta, float Ebeam);
@@ -165,6 +185,7 @@ private:
     std::vector<std::unique_ptr<TH1F>> module_hists_;  // one per module
     std::unique_ptr<TH2F> h2_energy_module_;
     std::unique_ptr<TH2F> h2_energy_theta_;
+    std::unique_ptr<TH2F> h2_Nevents_moduleMap_;
     std::unique_ptr<TH2F> h2_moller_pos_;
     std::unique_ptr<TH1F> moller_phi_diff_;
     std::unique_ptr<TH1F> moller_x_;

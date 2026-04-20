@@ -25,12 +25,6 @@ static constexpr float DEG2RAD = 3.14159265f / 180.f;
 PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
     : hycal_(hycal)
 {
-    // Prevent all histograms from being auto-registered in ROOT's global
-    // directory. This is essential when multiple PhysicsTools instances are
-    // created (e.g. one per thread): without this, same-named histograms would
-    // collide in gDirectory and trigger "Replacing existing TH1" warnings.
-    TH1::AddDirectory(false);
-
     int nmod = hycal_.module_count();
     module_hists_.resize(nmod);
     for (int i = 0; i < nmod; ++i) {
@@ -38,44 +32,57 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         std::string name = "h_" + mod.name;
         std::string title = mod.name + " cluster energy;Energy (MeV);Counts";
         module_hists_[i] = std::make_unique<TH1F>(name.c_str(), title.c_str(), 500, 0, 5000);
+        module_hists_[i]->SetDirectory(nullptr);
     }
     h2_energy_module_ = std::make_unique<TH2F>(
         "h2_energy_module", "Energy vs Module;Module Index;Energy (MeV)",
         nmod, 0, nmod, 2000, 0, 4000);
+    h2_energy_module_->SetDirectory(nullptr);
     h2_energy_theta_ = std::make_unique<TH2F>(
         "h2_energy_theta", "Energy vs Theta;Theta (deg);Energy (MeV)",
         80, 0, 8, 2000, 0, 4000);
+    h2_energy_theta_->SetDirectory(nullptr);
     h2_Nevents_moduleMap_ = std::make_unique<TH2F>(
         "h2_Nevents_moduleMap", "Number of Events per Module;Column;Row",
         34, 0.5, 34.5, 34, -34.5, -0.5);
+    h2_Nevents_moduleMap_->SetDirectory(nullptr);
 
     h2_moller_pos_ = std::make_unique<TH2F>(
         "h2_moller_pos", "Moller 2-arm Hit Position;X (mm);Y (mm)",
         200, -500, 500, 200, -500, 500);
+    h2_moller_pos_->SetDirectory(nullptr);
 
     moller_phi_diff_ = std::make_unique<TH1F>(
         "h_moller_phi_diff", "Moller Phi Difference;Phi_{e1} - Phi_{e2} (deg);Counts",
         40, -20, 20);
+    moller_phi_diff_->SetDirectory(nullptr);
     moller_x_ = std::make_unique<TH1F>(
         "h_moller_x", "Moller Center X Position (HyCal);X (mm);Counts",
         100, -10, 10);
+    moller_x_->SetDirectory(nullptr);
     moller_y_ = std::make_unique<TH1F>(
         "h_moller_y", "Moller Center Y Position (HyCal);Y (mm);Counts",
         100, -10, 10);
+    moller_y_->SetDirectory(nullptr);
     moller_z_ = std::make_unique<TH1F>(
         "h_moller_z", "Moller Z Position (HyCal);Z (mm);Counts",
         1000, 5000, 8000);
+    moller_z_->SetDirectory(nullptr);
 
     // histograms for gain monitoring replay
     for (int ch = 0; ch < 4; ++ch) {
         h_lmsCH_lmsHeight_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_lmsHeight", ch), Form("LMS%d Peak Height;Height (ADC);Counts", ch), 1000, 0, 4000);
+        h_lmsCH_lmsHeight_[ch]->SetDirectory(nullptr);
         h_lmsCH_lmsIntegral_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_lmsIntegral", ch), Form("LMS%d Peak Integral;Integral (ADC*ns);Counts", ch), 1000, 0, 40000);
+        h_lmsCH_lmsIntegral_[ch]->SetDirectory(nullptr);
         h_lmsCH_alphaHeight_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_alphaHeight", ch), Form("LMS%d Alpha Peak Height;Height (ADC);Counts", ch), 1000, 0, 4000);
+        h_lmsCH_alphaHeight_[ch]->SetDirectory(nullptr);
         h_lmsCH_alphaIntegral_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_alphaIntegral", ch), Form("LMS%d Alpha Peak Integral;Integral (ADC*ns);Counts", ch), 1000, 0, 400000);
+        h_lmsCH_alphaIntegral_[ch]->SetDirectory(nullptr);
     }
     h_modCH_lmsHeight_.resize(nmod);
     h_modCH_lmsIntegral_.resize(nmod);
@@ -84,14 +91,12 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         std::string name_height = "h_mod" + mod.name + "_lmsHeight";
         std::string title_height = mod.name + " LMS Peak Height;Height (ADC);Counts";
         h_modCH_lmsHeight_[i] = std::make_unique<TH1F>(name_height.c_str(), title_height.c_str(), 1000, 0, 4000);
+        h_modCH_lmsHeight_[i]->SetDirectory(nullptr);
         std::string name_integral = "h_mod" + mod.name + "_lmsIntegral";
         std::string title_integral = mod.name + " LMS Peak Integral;Integral (ADC*ns);Counts";
         h_modCH_lmsIntegral_[i] = std::make_unique<TH1F>(name_integral.c_str(), title_integral.c_str(), 1000, 0, 40000);
+        h_modCH_lmsIntegral_[i]->SetDirectory(nullptr);
     }
-
-    // Restore default behaviour so histograms created elsewhere (e.g. after
-    // opening a TFile) are registered as ROOT normally expects.
-    TH1::AddDirectory(true);
 
     nonLinearity_func_ = TF1("nonLinearity_func_",
         [](double *x, double *p) {

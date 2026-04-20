@@ -260,7 +260,7 @@ if(BUILD_PYTHON)
         "hycal_gain_monitor:scripts/hycal_gain_monitor.py"
         "hycal_map_builder:scripts/hycal_map_builder.py"
         "trigger_mask_editor:scripts/trigger_mask_editor.py"
-        "waveform_histograms:scripts/waveform_histograms.py"
+        "waveform_hist_viewer:scripts/waveform_hist_viewer.py"
     )
     foreach(_entry ${_PRAD2_PY_WRAPPERS})
         string(REPLACE ":" ";" _parts "${_entry}")

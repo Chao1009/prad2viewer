@@ -25,6 +25,12 @@ static constexpr float DEG2RAD = 3.14159265f / 180.f;
 PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
     : hycal_(hycal)
 {
+    // Prevent all histograms from being auto-registered in ROOT's global
+    // directory. This is essential when multiple PhysicsTools instances are
+    // created (e.g. one per thread): without this, same-named histograms would
+    // collide in gDirectory and trigger "Replacing existing TH1" warnings.
+    TH1::AddDirectory(false);
+
     int nmod = hycal_.module_count();
     module_hists_.resize(nmod);
     for (int i = 0; i < nmod; ++i) {
@@ -82,6 +88,10 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         std::string title_integral = mod.name + " LMS Peak Integral;Integral (ADC*ns);Counts";
         h_modCH_lmsIntegral_[i] = std::make_unique<TH1F>(name_integral.c_str(), title_integral.c_str(), 1000, 0, 40000);
     }
+
+    // Restore default behaviour so histograms created elsewhere (e.g. after
+    // opening a TFile) are registered as ROOT normally expects.
+    TH1::AddDirectory(true);
 
     nonLinearity_func_ = TF1("nonLinearity_func_",
         [](double *x, double *p) {

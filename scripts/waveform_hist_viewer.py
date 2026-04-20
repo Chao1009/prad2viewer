@@ -598,6 +598,16 @@ class Hist1DWidget(QWidget):
         self._log_y: bool = False
         self._hover_idx: int = -1
 
+        # Per-widget log-Y toggle — floats in the top-right corner.
+        self._logy_cb = QCheckBox("log Y", self)
+        self._logy_cb.setFont(QFont("Monospace", 9))
+        self._logy_cb.setStyleSheet(
+            "QCheckBox{color:#8b949e;background:transparent;}"
+            "QCheckBox:hover{color:#c9d1d9;}")
+        self._logy_cb.toggled.connect(self.set_log_y)
+        self._logy_cb.adjustSize()
+        self._logy_cb.raise_()
+
     def set_data(self, bins, bmin: float, bstep: float,
                  under: int = 0, over: int = 0,
                  title: str = "", xlabel: str = "",
@@ -631,6 +641,12 @@ class Hist1DWidget(QWidget):
         return QRectF(self.PAD_L, self.PAD_T,
                       max(1.0, w - self.PAD_L - self.PAD_R),
                       max(1.0, h - self.PAD_T - self.PAD_B))
+
+    def resizeEvent(self, ev):
+        cb = self._logy_cb
+        cb.adjustSize()
+        cb.move(self.width() - cb.width() - 6, 4)
+        super().resizeEvent(ev)
 
     def paintEvent(self, _ev):
         p = QPainter(self)
@@ -711,11 +727,16 @@ class Hist1DWidget(QWidget):
             info += f"  under={self._under:,}"
         if self._over:
             info += f"  over={self._over:,}"
-        if self._log_y:
-            info += "  [log Y]"
         p.setFont(QFont("Monospace", 9))
         p.setPen(QColor("#8b949e"))
-        p.drawText(int(r.right() - 260), int(r.top() - 8), info)
+        # Right-align so the text hugs the plot's right edge without
+        # ever reaching the log-Y checkbox in the widget corner.
+        info_rect = QRectF(r.left(), r.top() - 20,
+                           max(1.0, self.width() - self._logy_cb.width() - 20 - r.left()),
+                           14)
+        p.drawText(info_rect,
+                   Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                   info)
 
     def mouseMoveEvent(self, ev):
         r = self._plot_rect()
@@ -820,18 +841,10 @@ class WaveformHistViewerWindow(QMainWindow):
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(6)
 
-        top = QHBoxLayout()
         self._file_lbl = QLabel("(no file loaded)")
         self._file_lbl.setFont(QFont("Monospace", 10))
         self._file_lbl.setStyleSheet("color:#8b949e;")
-        top.addWidget(self._file_lbl, stretch=1)
-
-        self._logy = QCheckBox("Log Y")
-        self._logy.setFont(QFont("Monospace", 10))
-        self._logy.setStyleSheet("QCheckBox{color:#c9d1d9;}")
-        self._logy.toggled.connect(self._on_log_toggled)
-        top.addWidget(self._logy)
-        root.addLayout(top)
+        root.addWidget(self._file_lbl)
 
         picker_row = QHBoxLayout()
         lbl = QLabel("Module:")
@@ -956,9 +969,13 @@ class WaveformHistViewerWindow(QMainWindow):
         dlg = QProgressDialog(f"Decoding {path.name} …", "Cancel", 0, pmax, self)
         dlg.setWindowTitle("Loading")
         dlg.setWindowModality(Qt.WindowModality.WindowModal)
-        dlg.setMinimumDuration(300)
+        # Show immediately instead of the default 4-second delay — waveform
+        # analysis is slow and the first progress signal can be >10 s away.
+        dlg.setMinimumDuration(0)
         dlg.setAutoClose(True)
         dlg.setValue(0)
+        dlg.show()
+        QApplication.processEvents()
         self.centralWidget().setEnabled(False)
         self.menuBar().setEnabled(False)
 
@@ -1185,11 +1202,6 @@ class WaveformHistViewerWindow(QMainWindow):
         self._h_height.clear("Peak Height")
         self._h_integral.clear("Peak Integral")
         self._h_position.clear("Peak Time")
-
-    def _on_log_toggled(self, on: bool):
-        self._h_height.set_log_y(on)
-        self._h_integral.set_log_y(on)
-        self._h_position.set_log_y(on)
 
     # -- close --
 

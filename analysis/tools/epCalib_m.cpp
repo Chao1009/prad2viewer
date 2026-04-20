@@ -78,12 +78,12 @@ static void SetReadBranches(TTree *tree, EventVars &ev)
 
 // ── Per-thread accumulated results ──────────────────────────────────────────
 struct ThreadResult {
-    // HyCalSystem must outlive PhysicsTools (PhysicsTools holds a reference)
-    fdec::HyCalSystem                   hycal;
-    std::unique_ptr<analysis::PhysicsTools> physics;
-    std::unique_ptr<TH2F>               hit_pos;
-    std::unique_ptr<TH1F>               h_E_1cl;
-    long long                           events_processed = 0;
+    fdec::HyCalSystem                        hycal;
+    std::vector<std::unique_ptr<TH1F>>       module_hists;   // indexed by module index
+    std::unique_ptr<TH2F>                    h2_energy_theta;
+    std::unique_ptr<TH2F>                    hit_pos;
+    std::unique_ptr<TH1F>                    h_E_1cl;
+    long long                                events_processed = 0;
 };
 
 // ── File collection helper ───────────────────────────────────────────────────
@@ -220,9 +220,24 @@ int main(int argc, char *argv[])
                       << input_calib_file << " (" << nmatched << " modules)\n";
         }
 
-        res->physics = std::make_unique<analysis::PhysicsTools>(res->hycal);
+        // Build per-module energy histograms (one per module, indexed by module index)
+        int nmod_t = res->hycal.module_count();
+        res->module_hists.resize(nmod_t);
+        for (int i = 0; i < nmod_t; ++i) {
+            const auto &mod = res->hycal.module(i);
+            res->module_hists[i] = std::make_unique<TH1F>(
+                Form("h_%s_%d", mod.name.c_str(), tid),
+                Form("%s cluster energy;Energy (MeV);Counts", mod.name.c_str()),
+                500, 0, 5000);
+            res->module_hists[i]->SetDirectory(nullptr);
+        }
+        res->h2_energy_theta = std::make_unique<TH2F>(
+            Form("h2_energy_theta_%d", tid),
+            "Energy vs Theta;Theta (deg);Energy (MeV)",
+            80, 0, 8, 2000, 0, 4000);
+        res->h2_energy_theta->SetDirectory(nullptr);
 
-        // Thread-local histograms: detach from ROOT directory to avoid conflicts
+        // Thread-local global histograms
         res->hit_pos = std::make_unique<TH2F>(
             Form("hit_pos_%d", tid),
             "One Cluster Event Hit positions;hycal X (mm);hycal Y (mm)",
@@ -284,13 +299,15 @@ int main(int argc, char *argv[])
             clusterer.ReconstructHits(hits);
 
             if (hits.size() == 1) {
-                res->physics->FillModuleEnergy(hits[0].center_id, hits[0].energy);
+                int midx = res->hycal.id_to_index(hits[0].center_id);
+                if (midx >= 0 && midx < (int)res->module_hists.size())
+                    res->module_hists[midx]->Fill(hits[0].energy);
                 res->hit_pos->Fill(hits[0].x, hits[0].y);
                 res->h_E_1cl->Fill(hits[0].energy);
                 float theta = std::atan(std::sqrt(hits[0].x * hits[0].x +
                                                   hits[0].y * hits[0].y) / hycal_z)
                               * 180.f / 3.14159265f;
-                res->physics->FillEnergyVsTheta(theta, hits[0].energy);
+                res->h2_energy_theta->Fill(theta, hits[0].energy);
             }
         }
 
@@ -322,7 +339,7 @@ int main(int argc, char *argv[])
 
     analysis::PhysicsTools physics(hycal);
 
-    // Aggregate: merge per-module energy histograms and E-vs-theta
+    // Aggregate: merge per-module energy histograms from each thread
     int nmod = hycal.module_count();
     for (int m = 0; m < nmod; ++m) {
         int mod_id = hycal.module(m).id;
@@ -330,8 +347,8 @@ int main(int argc, char *argv[])
         if (!main_h) continue;
         for (int tid = 0; tid < num_threads; ++tid) {
             if (!results[tid]) continue;
-            TH1F *th = results[tid]->physics->GetModuleEnergyHist(mod_id);
-            if (th) main_h->Add(th);
+            if (m < (int)results[tid]->module_hists.size() && results[tid]->module_hists[m])
+                main_h->Add(results[tid]->module_hists[m].get());
         }
     }
 
@@ -339,8 +356,8 @@ int main(int argc, char *argv[])
     TH2F *main_etheta = physics.GetEnergyVsThetaHist();
     for (int tid = 0; tid < num_threads; ++tid) {
         if (!results[tid]) continue;
-        TH2F *th = results[tid]->physics->GetEnergyVsThetaHist();
-        if (main_etheta && th) main_etheta->Add(th);
+        if (main_etheta && results[tid]->h2_energy_theta)
+            main_etheta->Add(results[tid]->h2_energy_theta.get());
     }
 
     // Merge global histograms

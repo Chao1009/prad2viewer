@@ -460,7 +460,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
         daq_map_file = db_dir + "/prad1/prad_daq_map.json";
     hycal.Init(db_dir + "/hycal_modules.json", daq_map_file);
     if(prad1 == true) evc::load_pedestals(db_dir + "/prad1/adc1881m_pedestals.json", daq_cfg_);
-    std::string calib_file = db_dir + "/prad1/prad_calibration.json";
+    std::string calib_file = db_dir + "/calibration/adc_to_mev_factors_cosmic.json";
     int nmatched = hycal.LoadCalibration(calib_file);
     if (nmatched >= 0)
         std::cerr << "Calibration: " << calib_file << " (" << nmatched << " modules)\n";
@@ -549,7 +549,12 @@ if(!prad1){
             // accept_trigger_bits/reject_trigger_bits) instead of hardcoded bit check.
             // Currently drops all non-SSP_RawSum events, including LMS.
             static constexpr uint32_t TBIT_sum = (1u << 8);
-            if (!(ev->trigger_bits & TBIT_sum)) continue;
+            static constexpr uint32_t TBIT_lms = (1u << 24);
+            static constexpr uint32_t TBIT_alpha = (1u << 25);
+            bool is_sum = (ev->trigger_bits & TBIT_sum) != 0;
+            bool is_lms = (ev->trigger_bits & TBIT_lms) != 0;
+            bool is_alpha = (ev->trigger_bits & TBIT_alpha) != 0;
+            if (!is_sum && !is_lms && !is_alpha) continue;
 
             // decode FADC250 and reconstruct HyCal data
             int veto_nch = 0;
@@ -566,33 +571,35 @@ if(!prad1){
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0) continue;
-
-                        std::string mod_name = moduleName(crate, s, c);
-                        if(mod_name[0] != 'W' && mod_name[0] != 'G'){
-                            if(mod_name[0] == 'V'){
-                                ev->veto_id[veto_nch] = mod_name[1] - '0';
-                                ana.Analyze(cd.samples, cd.nsamples, wres);
-                                ev->veto_npeaks[veto_nch] = wres.npeaks;
-                                for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
-                                    ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
+                        if(is_lms || is_alpha) {
+                            std::string mod_name = moduleName(crate, s, c);
+                            if(mod_name[0] != 'W' && mod_name[0] != 'G'){
+                                if(mod_name[0] == 'V'){
+                                    ev->veto_id[veto_nch] = mod_name[1] - '0';
+                                    ana.Analyze(cd.samples, cd.nsamples, wres);
+                                    ev->veto_npeaks[veto_nch] = wres.npeaks;
+                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                        ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
+                                    }
+                                    veto_nch++;
                                 }
-                                veto_nch++;
-                            }
-                            else if(mod_name[0] == 'L'){
-                                if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
-                                else ev->lms_id[lms_nch] = mod_name[3] - '0';
-                                ana.Analyze(cd.samples, cd.nsamples, wres);
-                                ev->lms_npeaks[lms_nch] = wres.npeaks;
-                                for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
-                                    ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                else if(mod_name[0] == 'L'){
+                                    if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
+                                    else ev->lms_id[lms_nch] = mod_name[3] - '0';
+                                    ana.Analyze(cd.samples, cd.nsamples, wres);
+                                    ev->lms_npeaks[lms_nch] = wres.npeaks;
+                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                        ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                    }
+                                    lms_nch++;
                                 }
-                                lms_nch++;
+                                else{
+                                    //std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
+                                }
+                                continue;
                             }
-                             else{
-                                //std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
-                            }
-                            continue;
                         }
+                        if( !(is_sum && !is_lms) ) continue; 
 
                         const auto *mod = hycal.module_by_daq(crate, s, c);
                         if (!mod || !mod->is_hycal()) continue;
@@ -602,12 +609,23 @@ if(!prad1){
                         else{
                             ana.Analyze(cd.samples, cd.nsamples, wres);
                             if (wres.npeaks <= 0) continue;
-                            adc = wres.peaks[0].integral;
+                            int bestIdx = -1;
+                            float bestHeight = -1.f;
+                            for(int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p){
+                                if(wres.peaks[p].time > 100. && wres.peaks[p].time < 200.) {
+                                    if(wres.peaks[p].height > bestHeight) {
+                                        bestHeight = wres.peaks[p].height;
+                                        bestIdx = p;
+                                    }
+                                }
+                            }
+                            if (bestIdx < 0) continue;
+                            adc = wres.peaks[bestIdx].integral;
                         }
                         // TODO: use real calibration constants from database.
                         // Currently using a flat 0.1 MeV/ADC for all modules as placeholder.
                         // PbWO4 and lead-glass have different gains — load from hycal_calibration.json.
-                        hycal.SetCalibConstant(mod->id, 0.1);
+                        //hycal.SetCalibConstant(mod->id, 0.1);
                         float energy = static_cast<float>(mod->energize(adc));
                         clusterer.AddHit(mod->index, energy);
                         ev->total_energy += energy;

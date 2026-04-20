@@ -31,7 +31,7 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         auto &mod = hycal_.module(i);
         std::string name = "h_" + mod.name;
         std::string title = mod.name + " cluster energy;Energy (MeV);Counts";
-        module_hists_[i] = std::make_unique<TH1F>(name.c_str(), title.c_str(), 500, 0, 5000);
+        module_hists_[i] = std::make_unique<TH1F>(name.c_str(), title.c_str(), 250, 0, 5000);
     }
     h2_energy_module_ = std::make_unique<TH2F>(
         "h2_energy_module", "Energy vs Module;Module Index;Energy (MeV)",

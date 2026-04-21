@@ -49,11 +49,11 @@ from PyQt6.QtWidgets import (
     QFileDialog, QMessageBox,
 )
 from PyQt6.QtCore import Qt, QRectF
-from PyQt6.QtGui import QColor, QFont, QPalette, QPen
+from PyQt6.QtGui import QColor, QFont, QPen
 
 from hycal_geoview import (
     Module, load_modules, HyCalMapWidget, cmap_qcolor,
-    PALETTES, PALETTE_NAMES,
+    PALETTES, PALETTE_NAMES, apply_dark_palette,
 )
 
 
@@ -249,7 +249,7 @@ class MapBuilderWidget(HyCalMapWidget):
         return mid
 
     def _paint_empty(self, p, w, h):
-        p.setPen(QColor("#555"))
+        p.setPen(self.EMPTY_TEXT)
         p.setFont(QFont("Consolas", 12))
         p.drawText(QRectF(0, 0, w, h),
                    Qt.AlignmentFlag.AlignCenter, "No modules loaded")
@@ -264,7 +264,10 @@ class MapBuilderWidget(HyCalMapWidget):
             log_hi = math.log10(max(vmax, vmin * 10, 1e-8))
 
         glass_alpha = self._pbglass_alpha
-        frame_col_base = QColor(160, 165, 175)
+        # PbGlass frame colour — pick a shade that's visible against both the
+        # dark and light backgrounds.
+        frame_col_base = (QColor(60, 65, 75) if self._light_theme
+                          else QColor(160, 165, 175))
         pbglass_names = self._pbglass_names
 
         for name, rect in self._rects.items():
@@ -324,7 +327,7 @@ class MapBuilderWindow(QMainWindow):
     def _build_ui(self):
         self.setWindowTitle("HyCal Map Builder")
         self.resize(900, 960)
-        self._apply_dark_palette()
+        apply_dark_palette(self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -388,6 +391,9 @@ class MapBuilderWindow(QMainWindow):
 
         self._log_btn = self._make_btn("Log: OFF", "#8b949e", self._toggle_log)
         ctrl.addWidget(self._log_btn)
+
+        self._theme_btn = self._make_btn("☾ Night", "#c9d1d9", self._toggle_theme)
+        ctrl.addWidget(self._theme_btn)
 
         ctrl.addSpacing(12)
         ctrl.addWidget(self._styled_label("PbGlass \u03B1:"))
@@ -459,20 +465,6 @@ class MapBuilderWindow(QMainWindow):
             "border:1px solid #30363d;border-radius:3px;padding:2px 6px;}")
         e.returnPressed.connect(self._apply_range)
         return e
-
-    def _apply_dark_palette(self):
-        pal = self.palette()
-        for role, colour in [
-            (QPalette.ColorRole.Window,     "#0d1117"),
-            (QPalette.ColorRole.WindowText, "#c9d1d9"),
-            (QPalette.ColorRole.Base,       "#161b22"),
-            (QPalette.ColorRole.Text,       "#c9d1d9"),
-            (QPalette.ColorRole.Button,     "#21262d"),
-            (QPalette.ColorRole.ButtonText, "#c9d1d9"),
-            (QPalette.ColorRole.Highlight,  "#58a6ff"),
-        ]:
-            pal.setColor(role, QColor(colour))
-        self.setPalette(pal)
 
     # -- actions --
 
@@ -618,6 +610,11 @@ class MapBuilderWindow(QMainWindow):
             self._log_btn.setText("Log: OFF")
             self._log_btn.setStyleSheet(
                 self._log_btn.styleSheet().replace("#58a6ff", "#8b949e"))
+
+    def _toggle_theme(self):
+        on = not self._map.is_light_theme()
+        self._map.set_light_theme(on)
+        self._theme_btn.setText("☀ Day" if on else "☾ Night")
 
     def _on_hover(self, name: str):
         parts = [name]

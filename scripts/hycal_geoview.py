@@ -28,8 +28,43 @@ from typing import Dict, List, Optional, Tuple
 from PyQt6.QtWidgets import QWidget, QPushButton, QSizePolicy, QToolTip
 from PyQt6.QtCore import Qt, QRectF, QPointF, QSize, pyqtSignal
 from PyQt6.QtGui import (
-    QPainter, QColor, QPen, QBrush, QFont, QLinearGradient,
+    QPainter, QColor, QPen, QBrush, QFont, QLinearGradient, QPalette,
 )
+
+
+# ===========================================================================
+#  Shared dark theme
+# ===========================================================================
+
+class THEME:
+    """Central dark-theme colour palette shared by every ``scripts/`` GUI."""
+    BG       = "#0d1117"   # window background
+    PANEL    = "#161b22"   # secondary surfaces (text edits, tables)
+    BUTTON   = "#21262d"   # raised controls
+    BORDER   = "#30363d"
+    TEXT     = "#c9d1d9"
+    TEXT_DIM = "#8b949e"
+    ACCENT   = "#58a6ff"
+
+
+def apply_dark_palette(widget) -> None:
+    """Install the shared dark colour palette on ``widget``.
+
+    Sets QPalette roles used by top-level windows throughout the
+    ``scripts/`` GUIs. Idempotent.
+    """
+    pal = widget.palette()
+    for role, colour in (
+        (QPalette.ColorRole.Window,     THEME.BG),
+        (QPalette.ColorRole.WindowText, THEME.TEXT),
+        (QPalette.ColorRole.Base,       THEME.PANEL),
+        (QPalette.ColorRole.Text,       THEME.TEXT),
+        (QPalette.ColorRole.Button,     THEME.BUTTON),
+        (QPalette.ColorRole.ButtonText, THEME.TEXT),
+        (QPalette.ColorRole.Highlight,  THEME.ACCENT),
+    ):
+        pal.setColor(role, QColor(colour))
+    widget.setPalette(pal)
 
 
 # ===========================================================================
@@ -155,9 +190,32 @@ class HyCalMapWidget(QWidget):
 
     _CLICK_THRESHOLD = 4
 
-    BG_COLOR = QColor("#0a0e14")
-    NO_DATA_COLOR = QColor("#1a1a2e")
-    HOVER_COLOR = QColor("#58a6ff")
+    # Default (dark) theme.  set_light_theme(True) switches the instance to
+    # the light palette; subclasses can override any of these before/after
+    # super().__init__() to customise a single entry.
+    BG_COLOR       = QColor("#0a0e14")
+    NO_DATA_COLOR  = QColor("#1a1a2e")
+    HOVER_COLOR    = QColor("#58a6ff")
+    CB_BORDER      = QColor("#58a6ff")
+    CB_TEXT        = QColor("#8b949e")
+    EMPTY_TEXT     = QColor("#555555")
+
+    _THEME_DARK = {
+        "BG_COLOR":      QColor("#0a0e14"),
+        "NO_DATA_COLOR": QColor("#1a1a2e"),
+        "HOVER_COLOR":   QColor("#58a6ff"),
+        "CB_BORDER":     QColor("#58a6ff"),
+        "CB_TEXT":       QColor("#8b949e"),
+        "EMPTY_TEXT":    QColor("#555555"),
+    }
+    _THEME_LIGHT = {
+        "BG_COLOR":      QColor("#f6f8fa"),
+        "NO_DATA_COLOR": QColor("#d0d7de"),
+        "HOVER_COLOR":   QColor("#0969da"),
+        "CB_BORDER":     QColor("#0969da"),
+        "CB_TEXT":       QColor("#57606a"),
+        "EMPTY_TEXT":    QColor("#8b949e"),
+    }
 
     def __init__(self, parent=None, *,
                  shrink: float = 0.92,
@@ -194,6 +252,7 @@ class HyCalMapWidget(QWidget):
         self._geo_bounds: Tuple[float, float, float, float] = (0.0, 1.0, 0.0, 1.0)
         self._cb_rect: Optional[QRectF] = None
         self._layout_dirty = True
+        self._light_theme = False
 
         # zoom / pan state (only used when enable_zoom_pan is True)
         self._zoom = 1.0
@@ -264,6 +323,22 @@ class HyCalMapWidget(QWidget):
 
     def is_log_scale(self) -> bool:
         return self._log_scale
+
+    def set_light_theme(self, on: bool):
+        """Switch between dark (default) and light background schemes."""
+        self._light_theme = bool(on)
+        theme = self._THEME_LIGHT if on else self._THEME_DARK
+        for k, v in theme.items():
+            setattr(self, k, v)
+        self._on_theme_changed()
+        self.update()
+
+    def is_light_theme(self) -> bool:
+        return self._light_theme
+
+    def _on_theme_changed(self):
+        """Subclass hook — called after theme colors are swapped."""
+        pass
 
     def auto_range(self) -> Tuple[float, float]:
         """Set vmin/vmax from current values (min..max, or min..min+1 if flat)."""
@@ -441,11 +516,11 @@ class HyCalMapWidget(QWidget):
         for t, (r, g, b) in stops:
             grad.setColorAt(t, QColor(r, g, b))
         p.fillRect(self._cb_rect, QBrush(grad))
-        p.setPen(QPen(QColor("#58a6ff"), 1.0))
+        p.setPen(QPen(self.CB_BORDER, 1.0))
         p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawRect(self._cb_rect)
 
-        p.setPen(QColor("#8b949e"))
+        p.setPen(self.CB_TEXT)
         p.setFont(QFont("Consolas", 9))
         p.drawText(QRectF(cb_x, cb_y + cb_h + 2, 120, 14),
                    Qt.AlignmentFlag.AlignLeft, self._fmt_value(self._vmin))

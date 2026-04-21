@@ -27,10 +27,11 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QLineEdit,
 )
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QPalette
+from PyQt6.QtGui import QColor, QFont
 
 from hycal_geoview import (
     Module, load_modules, HyCalMapWidget, PALETTES, PALETTE_NAMES,
+    apply_dark_palette,
 )
 
 
@@ -132,7 +133,7 @@ class ScalerMapWindow(QMainWindow):
                             ("  [SIMULATION]" if self._simulation
                              else "  [REALTIME]"))
         self.resize(800, 860)
-        self._apply_dark_palette()
+        apply_dark_palette(self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -231,20 +232,6 @@ class ScalerMapWindow(QMainWindow):
             "border:1px solid #30363d;border-radius:3px;padding:2px 6px;}")
         e.returnPressed.connect(self._apply_range)
         return e
-
-    def _apply_dark_palette(self):
-        pal = self.palette()
-        for role, colour in [
-            (QPalette.ColorRole.Window,     "#0d1117"),
-            (QPalette.ColorRole.WindowText, "#c9d1d9"),
-            (QPalette.ColorRole.Base,       "#161b22"),
-            (QPalette.ColorRole.Text,       "#c9d1d9"),
-            (QPalette.ColorRole.Button,     "#21262d"),
-            (QPalette.ColorRole.ButtonText, "#c9d1d9"),
-            (QPalette.ColorRole.Highlight,  "#58a6ff"),
-        ]:
-            pal.setColor(role, QColor(colour))
-        self.setPalette(pal)
 
     # -- actions --
 

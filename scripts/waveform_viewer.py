@@ -34,12 +34,18 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QComboBox, QCheckBox, QCompleter, QFileDialog, QMessageBox,
     QProgressDialog, QSizePolicy, QStatusBar, QToolTip, QPushButton, QSpinBox,
+    QSplitter,
 )
 from PyQt6.QtCore import (
     Qt, QObject, QRectF, QSize, QThread, pyqtSignal, QTimer,
 )
 from PyQt6.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QFont, QPalette,
+    QAction, QPainter, QColor, QPen, QBrush, QFont,
+)
+
+from hycal_geoview import (
+    Module as GeoModule, load_modules as load_geo_modules,
+    HyCalMapWidget, apply_dark_palette,
 )
 
 
@@ -927,6 +933,58 @@ class WaveformPlotWidget(QWidget):
 
 
 # ===========================================================================
+#  WaveformGeoView — small HyCal overview for module selection
+# ===========================================================================
+
+class WaveformGeoView(HyCalMapWidget):
+    """Compact HyCal geo view used as a module picker.
+
+    Modules already observed in at least one viewed event are drawn in the
+    active colour; unseen modules are drawn in a dim grey.  Clicking an
+    active module emits moduleClicked with its name.
+    """
+
+    AVAIL_COLOR   = QColor("#1f6feb")
+    UNAVAIL_COLOR = QColor("#2a2f36")
+    SELECT_COLOR  = QColor("#ffffff")
+
+    def __init__(self, parent=None):
+        super().__init__(parent, show_colorbar=False, include_lms=True,
+                         margin_top=4, margin_bottom=4,
+                         min_size=(220, 220), shrink=0.90)
+        self._available: set = set()
+        self._selected_name: Optional[str] = None
+
+    def set_available(self, names):
+        self._available = set(names)
+        self.update()
+
+    def set_selected_module(self, name: Optional[str]):
+        if name != self._selected_name:
+            self._selected_name = name
+            self.update()
+
+    def _paint_modules(self, p):
+        avail = self._available
+        a_col = self.AVAIL_COLOR
+        u_col = self.UNAVAIL_COLOR
+        for name, rect in self._rects.items():
+            p.fillRect(rect, a_col if name in avail else u_col)
+
+    def _paint_overlays(self, p, w, h):
+        if self._selected_name and self._selected_name in self._rects:
+            p.setPen(QPen(self.SELECT_COLOR, 2.0))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(self._rects[self._selected_name])
+        super()._paint_overlays(p, w, h)   # hover border
+
+    def _tooltip_text(self, name: str) -> str:
+        if name in self._available:
+            return f"{name}  (click to select)"
+        return f"{name}  (not seen yet)"
+
+
+# ===========================================================================
 #  Main window
 # ===========================================================================
 
@@ -945,7 +1003,8 @@ class WaveformViewerWindow(QMainWindow):
                  roc_to_crate: Dict,
                  accept_mask: int,
                  reject_mask: int,
-                 daq_config_path: str):
+                 daq_config_path: str,
+                 hycal_modules: Optional[List] = None):
         super().__init__()
         self._hist_config   = hist_config
         self._daq_map       = daq_map
@@ -953,6 +1012,7 @@ class WaveformViewerWindow(QMainWindow):
         self._accept_mask   = accept_mask
         self._reject_mask   = reject_mask
         self._daq_cfg_path  = daq_config_path
+        self._hycal_modules = hycal_modules or []
 
         # Bin configs — merge user config with defaults, add n-peaks hist
         self._h_cfg = hist_config.get("height_hist",
@@ -988,25 +1048,9 @@ class WaveformViewerWindow(QMainWindow):
         self._batch_worker: Optional[BatchWorker] = None
         self._batch_thread: Optional[QThread] = None
 
-        self._apply_dark_palette()
+        apply_dark_palette(self)
         self._build_ui()
         self._make_menu()
-
-    # -- theme --
-
-    def _apply_dark_palette(self):
-        pal = self.palette()
-        for role, colour in [
-            (QPalette.ColorRole.Window,     "#0d1117"),
-            (QPalette.ColorRole.WindowText, "#c9d1d9"),
-            (QPalette.ColorRole.Base,       "#161b22"),
-            (QPalette.ColorRole.Text,       "#c9d1d9"),
-            (QPalette.ColorRole.Button,     "#21262d"),
-            (QPalette.ColorRole.ButtonText, "#c9d1d9"),
-            (QPalette.ColorRole.Highlight,  "#58a6ff"),
-        ]:
-            pal.setColor(role, QColor(colour))
-        self.setPalette(pal)
 
     # -- UI --
 
@@ -1058,7 +1102,21 @@ class WaveformViewerWindow(QMainWindow):
         self._info.setStyleSheet("color:#8b949e;")
         root.addWidget(self._info)
 
-        # 2x2 histogram grid
+        # -- main split: geo picker on the left, plots on the right --
+        split = QSplitter(Qt.Orientation.Horizontal)
+
+        # Left: small HyCal geo view for module selection
+        self._geo = WaveformGeoView()
+        if self._hycal_modules:
+            self._geo.set_modules(self._hycal_modules)
+        self._geo.moduleClicked.connect(self._on_geo_clicked)
+        split.addWidget(self._geo)
+
+        # Right: hist grid + waveform stacked vertically
+        right = QWidget()
+        right_lay = QVBoxLayout(right)
+        right_lay.setContentsMargins(0, 0, 0, 0)
+        right_lay.setSpacing(6)
         grid = QGridLayout()
         grid.setSpacing(6)
         self._h_height   = Hist1DWidget()
@@ -1069,11 +1127,15 @@ class WaveformViewerWindow(QMainWindow):
         grid.addWidget(self._h_integral, 0, 1)
         grid.addWidget(self._h_position, 1, 0)
         grid.addWidget(self._h_npeaks,   1, 1)
-        root.addLayout(grid, stretch=2)
-
-        # raw waveform row
+        right_lay.addLayout(grid, stretch=2)
         self._wave = WaveformPlotWidget()
-        root.addWidget(self._wave, stretch=1)
+        right_lay.addWidget(self._wave, stretch=1)
+        split.addWidget(right)
+
+        split.setStretchFactor(0, 0)
+        split.setStretchFactor(1, 1)
+        split.setSizes([280, 900])
+        root.addWidget(split, stretch=1)
 
         # navigation + batch controls
         nav = QHBoxLayout()
@@ -1360,6 +1422,8 @@ class WaveformViewerWindow(QMainWindow):
                         added = True
         if added:
             self._refresh_combo()
+            self._geo.set_available({c.module for c in self._channels.values()
+                                     if c.module})
 
     def _refresh_combo(self):
         """Re-populate combo from discovered channels, preserving selection."""
@@ -1392,12 +1456,27 @@ class WaveformViewerWindow(QMainWindow):
             return
         if 0 <= idx < len(self._combo_keys):
             self._selected_key = self._combo_keys[idx]
+            hits = self._channels.get(self._selected_key)
+            self._geo.set_selected_module(hits.module if hits else None)
             # Re-render: hists from cache, waveform from current event
             self._display_hists_for_selected()
             if self._current_idx >= 0 and self._ch is not None:
                 # Re-pull the waveform for the new module from current event
                 fadc_evt = self._ch.fadc()
                 self._display_waveform(fadc_evt)
+
+    def _on_geo_clicked(self, name: str):
+        """Geo-view click: switch combo to the (first) channel for this module."""
+        if not name:
+            return
+        for i, key in enumerate(getattr(self, "_combo_keys", [])):
+            hits = self._channels.get(key)
+            if hits and hits.module == name:
+                self._combo.setCurrentIndex(i)   # triggers _on_combo_changed
+                return
+        # Module exists in geometry but hasn't been seen yet — ignore the click
+        self.statusBar().showMessage(
+            f"{name}: no events seen yet for this module", 2000)
 
     # -- accumulate + display --
 
@@ -1694,6 +1773,9 @@ def main():
     ap.add_argument("--daq-map", type=Path,
                     default=_REPO_DIR / "database" / "daq_map.json",
                     help="daq_map.json (module-name lookup).")
+    ap.add_argument("--hycal-modules", type=Path,
+                    default=_REPO_DIR / "database" / "hycal_modules.json",
+                    help="hycal_modules.json (module geometry for the geo selector).")
     ap.add_argument("--trigger-bits", type=Path,
                     default=_REPO_DIR / "database" / "trigger_bits.json",
                     help="trigger_bits.json (for --accept/--reject-trigger).")
@@ -1706,10 +1788,12 @@ def main():
                          "Default: uses config.json setting.")
     args = ap.parse_args()
 
-    hist_cfg     = load_hist_config(args.config)      if args.config.is_file()     else {}
-    roc_to_crate = load_roc_tag_map(args.daq_config)  if args.daq_config.is_file() else {}
-    daq_map      = load_daq_map(args.daq_map)         if args.daq_map.is_file()    else {}
-    bit_map      = load_trigger_bit_map(args.trigger_bits)
+    hist_cfg      = load_hist_config(args.config)      if args.config.is_file()      else {}
+    roc_to_crate  = load_roc_tag_map(args.daq_config)  if args.daq_config.is_file()  else {}
+    daq_map       = load_daq_map(args.daq_map)         if args.daq_map.is_file()     else {}
+    bit_map       = load_trigger_bit_map(args.trigger_bits)
+    hycal_modules = (load_geo_modules(args.hycal_modules)
+                     if args.hycal_modules.is_file() else [])
 
     accept_names = args.accept_trigger or hist_cfg.get("accept_trigger_bits", []) or []
     reject_names = (args.reject_trigger if args.reject_trigger is not None
@@ -1725,6 +1809,7 @@ def main():
         accept_mask     = accept_mask,
         reject_mask     = reject_mask,
         daq_config_path = str(args.daq_config) if args.daq_config.is_file() else "",
+        hycal_modules   = hycal_modules,
     )
     win.show()
     if args.path is not None:

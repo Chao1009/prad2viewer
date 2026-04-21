@@ -46,6 +46,7 @@ from PyQt6.QtGui import (
 
 from hycal_geoview import (
     Module, load_modules, HyCalMapWidget, PALETTES, PALETTE_NAMES,
+    apply_dark_palette,
 )
 
 
@@ -2109,7 +2110,7 @@ class GainMonitorWindow(QMainWindow):
     def _build_ui(self):
         self.setWindowTitle("HyCal Gain Monitor")
         self.resize(1600, 1000)
-        self._apply_dark_palette()
+        apply_dark_palette(self)
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -2459,20 +2460,6 @@ class GainMonitorWindow(QMainWindow):
         lbl.setFont(QFont("Consolas", 10))
         lbl.setStyleSheet("color:#c9d1d9;")
         return lbl
-
-    def _apply_dark_palette(self):
-        pal = self.palette()
-        for role, colour in [
-            (QPalette.ColorRole.Window, "#0d1117"),
-            (QPalette.ColorRole.WindowText, "#c9d1d9"),
-            (QPalette.ColorRole.Base, "#161b22"),
-            (QPalette.ColorRole.Text, "#c9d1d9"),
-            (QPalette.ColorRole.Button, "#21262d"),
-            (QPalette.ColorRole.ButtonText, "#c9d1d9"),
-            (QPalette.ColorRole.Highlight, "#58a6ff"),
-        ]:
-            pal.setColor(role, QColor(colour))
-        self.setPalette(pal)
 
     # ---- keyboard navigation ----
 

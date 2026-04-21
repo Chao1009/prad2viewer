@@ -1056,13 +1056,13 @@ class WaveformViewerWindow(QMainWindow):
 
     def _build_ui(self):
         self.setWindowTitle("Waveform Viewer")
-        self.resize(1200, 960)
+        self.resize(1500, 1000)
 
         central = QWidget()
         self.setCentralWidget(central)
         root = QVBoxLayout(central)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(6)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(3)
 
         self._file_lbl = QLabel("(no file loaded)")
         self._file_lbl.setFont(QFont("Monospace", 10))
@@ -1102,39 +1102,45 @@ class WaveformViewerWindow(QMainWindow):
         self._info.setStyleSheet("color:#8b949e;")
         root.addWidget(self._info)
 
-        # -- main split: geo picker on the left, plots on the right --
+        # -- main split: geo+waveform on the left, 2x2 hists on the right --
         split = QSplitter(Qt.Orientation.Horizontal)
 
-        # Left: small HyCal geo view for module selection
+        # Left: geo view (square, top) + waveform plot (bottom)
+        left = QWidget()
+        left_lay = QVBoxLayout(left)
+        left_lay.setContentsMargins(0, 0, 0, 0)
+        left_lay.setSpacing(4)
         self._geo = WaveformGeoView()
         if self._hycal_modules:
             self._geo.set_modules(self._hycal_modules)
         self._geo.moduleClicked.connect(self._on_geo_clicked)
-        split.addWidget(self._geo)
+        self._geo.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                QSizePolicy.Policy.Expanding)
+        # Geo view is square, so give it more vertical space; the waveform
+        # plot is wide-and-short and fills whatever's left below.
+        left_lay.addWidget(self._geo, stretch=3)
+        self._wave = WaveformPlotWidget()
+        left_lay.addWidget(self._wave, stretch=1)
+        split.addWidget(left)
 
-        # Right: hist grid + waveform stacked vertically
+        # Right: four histograms stacked vertically (each wide, long in x).
         right = QWidget()
         right_lay = QVBoxLayout(right)
         right_lay.setContentsMargins(0, 0, 0, 0)
-        right_lay.setSpacing(6)
-        grid = QGridLayout()
-        grid.setSpacing(6)
+        right_lay.setSpacing(4)
         self._h_height   = Hist1DWidget()
         self._h_integral = Hist1DWidget()
         self._h_position = Hist1DWidget()
         self._h_npeaks   = Hist1DWidget()
-        grid.addWidget(self._h_height,   0, 0)
-        grid.addWidget(self._h_integral, 0, 1)
-        grid.addWidget(self._h_position, 1, 0)
-        grid.addWidget(self._h_npeaks,   1, 1)
-        right_lay.addLayout(grid, stretch=2)
-        self._wave = WaveformPlotWidget()
-        right_lay.addWidget(self._wave, stretch=1)
+        for hist in (self._h_height, self._h_integral,
+                     self._h_position, self._h_npeaks):
+            right_lay.addWidget(hist, stretch=1)
         split.addWidget(right)
 
-        split.setStretchFactor(0, 0)
-        split.setStretchFactor(1, 1)
-        split.setSizes([280, 900])
+        # Left panel takes ~40% (enough for a square geo view); right ~60%
+        split.setStretchFactor(0, 2)
+        split.setStretchFactor(1, 3)
+        split.setSizes([620, 880])
         root.addWidget(split, stretch=1)
 
         # navigation + batch controls

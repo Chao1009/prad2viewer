@@ -13,9 +13,10 @@ function geoLms(){
 
     const lmsVal=md=>{
         if(!md) return null;
-        if(metric==='mean') return md.mean;
+        if(metric==='mean')     return md.mean;
+        if(metric==='rms')      return md.rms;
         if(metric==='rms_frac') return md.mean>0?md.rms/md.mean:0;
-        return md.warn?1:0;
+        return md.warn?1:0;   // 'warn'
     };
 
     let autoMax=0;
@@ -24,8 +25,9 @@ function geoLms(){
     const lmsr=getGeoRange('lms',metric);
     const vmin=lmsr[0]!==null?lmsr[0]:0;
     const vmax=lmsr[1]!==null?lmsr[1]:autoMax;
-    document.getElementById('lms-range-min-show').textContent=vmin.toFixed(metric==='rms_frac'?3:0);
-    document.getElementById('lms-range-max-show').textContent=vmax.toFixed(metric==='rms_frac'?3:0);
+    const dp=metric==='rms_frac'?3:metric==='rms'?2:0;
+    document.getElementById('lms-range-min-show').textContent=vmin.toFixed(dp);
+    document.getElementById('lms-range-max-show').textContent=vmax.toFixed(dp);
 
     renderGeo(
         i => {

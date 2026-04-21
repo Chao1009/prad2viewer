@@ -186,7 +186,8 @@ function clearEpicsFrontend(){
 // =========================================================================
 
 function initEpics(data){
-    // config
+    // config — idempotent: fetchConfigAndApply() is called on file open,
+    // filter save, ET reconnect etc., so de-dup before appending.
     if(data&&data.epics){
         if(data.epics.warn_threshold!==undefined) epicsWarnThresh=data.epics.warn_threshold;
         if(data.epics.alert_threshold!==undefined) epicsAlertThresh=data.epics.alert_threshold;
@@ -195,6 +196,7 @@ function initEpics(data){
         for(let s=0;s<Math.min(EPICS_NUM_SLOTS,cfgSlots.length);s++){
             const names=cfgSlots[s]||[];
             for(const n of names){
+                if(epicsSlots[s].includes(n)) continue;
                 if(epicsSlots[s].length<EPICS_MAX_PER_SLOT)
                     epicsSlots[s].push(n);
             }

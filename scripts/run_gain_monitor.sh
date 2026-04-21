@@ -9,8 +9,8 @@ NCPU=$2
 SUBFILE_MIN=$3
 SUBFILE_MAX=$4
 
-INPUTDIR="/data/stage6"
-OUTPUTDIR="/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output"
+INPUTDIR="${INPUTDIR:-/data/evio/data}"
+OUTPUTDIR="${OUTPUTDIR:-/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output}"
 
 RUNDIR="${INPUTDIR}/prad_${RUN}"
 

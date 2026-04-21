@@ -18,18 +18,28 @@ import glob
 import math
 import os
 import re
+import shutil
+import subprocess
 import sys
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+try:
+    import uproot
+    _UPROOT_OK = True
+except ImportError:
+    _UPROOT_OK = False
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QComboBox, QLineEdit, QDoubleSpinBox, QSpinBox,
     QFileDialog, QSplitter, QSizePolicy, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView, QToolTip,
+    QTableWidgetItem, QHeaderView, QAbstractItemView, QToolTip, QMenu,
+    QDialog, QFormLayout, QTextEdit, QDialogButtonBox, QMessageBox,
 )
-from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, QSize, QTimer
+from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, QSize, QTimer, QProcess
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont, QLinearGradient, QPalette,
 )
@@ -794,6 +804,18 @@ class HyCalGainMapWidget(QWidget):
         return QSize(680, 680)
 
 
+def _chart_y_range(values: List[float], errors: List[float]) -> Tuple[float, float]:
+    """Return y-axis (lo, hi): mean±20%, expanded if any data point falls outside."""
+    mean = sum(values) / len(values)
+    y_lo = mean * 0.8
+    y_hi = mean * 1.2
+    for j, v in enumerate(values):
+        err = errors[j] if j < len(errors) else 0.0
+        y_lo = min(y_lo, v - err)
+        y_hi = max(y_hi, v + err)
+    return y_lo, y_hi
+
+
 # ===========================================================================
 #  LMS Line Chart Widget
 # ===========================================================================
@@ -815,10 +837,15 @@ class LMSLineChartWidget(QWidget):
         self._hover_idx: int = -1
         self._highlighted: bool = False
         self._current_run_number: int = -1
+        self._y_range: Optional[Tuple[float, float]] = None
         self.setMinimumHeight(100)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,
                            QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
+
+    def set_y_range(self, lo: float, hi: float):
+        self._y_range = (lo, hi)
+        self.update()
 
     def set_highlighted(self, on: bool):
         if on != self._highlighted:
@@ -954,17 +981,24 @@ class LMSLineChartWidget(QWidget):
             x_min -= 1
             x_max += 1
 
-        y_vals = []
-        for i, r in enumerate(ratios):
-            y_vals.append(r)
-            if i < len(errors):
-                y_vals.append(r + errors[i])
-                y_vals.append(r - errors[i])
-        y_lo = min(y_vals)
-        y_hi = max(y_vals)
-        margin = (y_hi - y_lo) * 0.1 if y_hi > y_lo else 0.05
-        y_lo -= margin
-        y_hi += margin
+        if self._y_range is not None:
+            y_lo, y_hi = self._y_range
+        else:
+            y_vals = []
+            for i, r in enumerate(ratios):
+                y_vals.append(r)
+                if i < len(errors):
+                    y_vals.append(r + errors[i])
+                    y_vals.append(r - errors[i])
+            y_lo = min(y_vals)
+            y_hi = max(y_vals)
+            margin = (y_hi - y_lo) * 0.1 if y_hi > y_lo else 0.05
+            y_lo -= margin
+            y_hi += margin
+
+        if y_hi == y_lo:
+            y_lo -= 0.05
+            y_hi += 0.05
 
         def to_sx(v):
             return px + (v - x_min) / (x_max - x_min) * pw
@@ -1075,6 +1109,235 @@ class LMSLineChartWidget(QWidget):
                 p.drawText(QRectF(tx, ty + j * fm.height(), tw, fm.height()),
                            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                            ln)
+
+        p.end()
+
+
+# ===========================================================================
+#  ROOT histogram display widget
+# ===========================================================================
+
+_HIST_CACHE_MAX = 20
+
+
+class RootHistWidget(QWidget):
+    """Displays a TH1 histogram read from a fitted LMS ROOT file.
+
+    Left-drag to zoom into an x range; right-click → Unzoom resets to 0–2000.
+    """
+
+    PAD_L, PAD_R, PAD_T, PAD_B = 55, 16, 24, 40
+
+    _X_DEFAULT_LO = 0.0
+    _X_DEFAULT_HI = 1000.0
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._values: List[float] = []
+        self._edges: List[float] = []
+        self._title: str = ""
+        self._gauss: Optional[Tuple[float, float, float, float, float]] = None  # amp,mean,sigma,xmin,xmax
+        self._x_lo = self._X_DEFAULT_LO
+        self._x_hi = self._X_DEFAULT_HI
+        self._drag_start: Optional[float] = None  # data-x where drag began
+        self._drag_cur:   Optional[float] = None  # data-x of current cursor
+        self.setMinimumHeight(80)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMouseTracking(True)
+
+    # ------------------------------------------------------------------
+    def set_histogram(self, values, edges, title: str = "",
+                      gauss: Optional[Tuple[float, float, float, float, float]] = None):
+        self._values = list(values)
+        self._edges = list(edges)
+        self._title = title
+        self._gauss = gauss
+        self._x_lo = self._X_DEFAULT_LO
+        self._x_hi = self._X_DEFAULT_HI
+        self._drag_start = self._drag_cur = None
+        self.update()
+
+    def clear(self):
+        self._values = []
+        self._edges = []
+        self._title = ""
+        self._gauss = None
+        self._x_lo = self._X_DEFAULT_LO
+        self._x_hi = self._X_DEFAULT_HI
+        self._drag_start = self._drag_cur = None
+        self.update()
+
+    # ------------------------------------------------------------------
+    def _plot_rect(self):
+        w, h = self.width(), self.height()
+        return self.PAD_L, self.PAD_T, w - self.PAD_L - self.PAD_R, h - self.PAD_T - self.PAD_B
+
+    def _sx_to_data(self, sx: float) -> float:
+        px, _py, pw, _ph = self._plot_rect()
+        if pw <= 0 or self._x_hi == self._x_lo:
+            return self._x_lo
+        return self._x_lo + (sx - px) / pw * (self._x_hi - self._x_lo)
+
+    # ------------------------------------------------------------------
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            px, py, pw, ph = self._plot_rect()
+            mx, my = event.position().x(), event.position().y()
+            if px <= mx <= px + pw and py <= my <= py + ph + self.PAD_B:
+                self._drag_start = self._sx_to_data(mx)
+                self._drag_cur   = self._drag_start
+                self.update()
+
+    def mouseMoveEvent(self, event):
+        if self._drag_start is not None:
+            self._drag_cur = self._sx_to_data(event.position().x())
+            self.update()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._drag_start is not None:
+            d_end = self._sx_to_data(event.position().x())
+            d_start = self._drag_start
+            self._drag_start = self._drag_cur = None
+            span = self._x_hi - self._x_lo
+            if abs(d_end - d_start) > span * 0.01:
+                self._x_lo = min(d_start, d_end)
+                self._x_hi = max(d_start, d_end)
+            self.update()
+
+    def contextMenuEvent(self, event):
+        menu = QMenu(self)
+        menu.setStyleSheet(
+            "QMenu{background:#161b22;color:#c9d1d9;border:1px solid #30363d;}"
+            "QMenu::item:selected{background:#1f6feb;}")
+        menu.addAction("Unzoom").triggered.connect(self._unzoom)
+        menu.exec(event.globalPos())
+
+    def _unzoom(self):
+        if self._edges:
+            self._x_lo = self._edges[0]
+            self._x_hi = self._edges[-1]
+        else:
+            self._x_lo = self._X_DEFAULT_LO
+            self._x_hi = self._X_DEFAULT_HI
+        self.update()
+
+    # ------------------------------------------------------------------
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        w, h = self.width(), self.height()
+        p.fillRect(0, 0, w, h, QColor("#0a0e14"))
+
+        if self._title:
+            p.setPen(QColor("#58a6ff"))
+            p.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
+            p.drawText(QRectF(self.PAD_L, 2, w - self.PAD_L - self.PAD_R, 20),
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                       self._title)
+
+        if not self._values or not self._edges or len(self._edges) < 2:
+            p.setPen(QColor("#555555"))
+            p.setFont(QFont("Consolas", 10))
+            p.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, "No histogram")
+            p.end()
+            return
+
+        px, py, pw, ph = self._plot_rect()
+        if pw < 20 or ph < 20:
+            p.end()
+            return
+
+        x_lo = self._x_lo
+        x_hi = self._x_hi if self._x_hi > self._x_lo else self._x_lo + 1
+
+        # y scale from visible bins only
+        vis_max = max(
+            (v for i, v in enumerate(self._values)
+             if i + 1 < len(self._edges)
+             and self._edges[i + 1] > x_lo
+             and self._edges[i] < x_hi),
+            default=0.0)
+        y_hi = vis_max * 1.1 if vis_max > 0 else 1.0
+
+        def to_sx(v):
+            return px + (v - x_lo) / (x_hi - x_lo) * pw
+
+        def to_sy(v):
+            return py + ph * (1.0 - v / y_hi)
+
+        # dotted grid
+        p.setPen(QPen(QColor("#21262d"), 1, Qt.PenStyle.DotLine))
+        n_yticks = 5
+        for i in range(n_yticks + 1):
+            sy = py + ph * i / n_yticks
+            p.drawLine(QPointF(px, sy), QPointF(px + pw, sy))
+
+        # bars
+        p.setPen(Qt.PenStyle.NoPen)
+        for i, v in enumerate(self._values):
+            if i + 1 >= len(self._edges):
+                break
+            b_lo, b_hi = self._edges[i], self._edges[i + 1]
+            if b_hi <= x_lo or b_lo >= x_hi:
+                continue
+            sx1 = max(to_sx(b_lo), px)
+            sx2 = min(to_sx(b_hi), px + pw)
+            bar_top = to_sy(v)
+            bar_h = (py + ph) - bar_top
+            if bar_h > 0 and sx2 > sx1:
+                p.fillRect(QRectF(sx1, bar_top, sx2 - sx1 - 1, bar_h), QColor("#f97316"))
+
+        # Gaussian fit curve
+        if self._gauss is not None:
+            amp, mean, sigma, g_xmin, g_xmax = self._gauss
+            if sigma > 0:
+                draw_lo = max(g_xmin, x_lo)
+                draw_hi = min(g_xmax, x_hi)
+                if draw_hi > draw_lo:
+                    n_pts = max(int((draw_hi - draw_lo) / (x_hi - x_lo) * pw), 2)
+                    pts = []
+                    for k in range(n_pts + 1):
+                        gx = draw_lo + k / n_pts * (draw_hi - draw_lo)
+                        gy = amp * math.exp(-0.5 * ((gx - mean) / sigma) ** 2)
+                        sx = to_sx(gx)
+                        sy = to_sy(gy)
+                        pts.append(QPointF(sx, sy))
+                    p.setPen(QPen(QColor("#00bcd4"), 2))
+                    for k in range(len(pts) - 1):
+                        p.drawLine(pts[k], pts[k + 1])
+
+        # drag selection overlay
+        if self._drag_start is not None and self._drag_cur is not None:
+            d_lo = min(self._drag_start, self._drag_cur)
+            d_hi = max(self._drag_start, self._drag_cur)
+            sx1 = max(to_sx(d_lo), px)
+            sx2 = min(to_sx(d_hi), px + pw)
+            if sx2 > sx1:
+                p.fillRect(QRectF(sx1, py, sx2 - sx1, ph), QColor(255, 255, 100, 50))
+                p.setPen(QPen(QColor(255, 255, 100, 180), 1))
+                p.drawRect(QRectF(sx1, py, sx2 - sx1, ph))
+
+        # axes
+        p.setPen(QPen(QColor("#30363d"), 1))
+        p.drawLine(QPointF(px, py), QPointF(px, py + ph))
+        p.drawLine(QPointF(px, py + ph), QPointF(px + pw, py + ph))
+
+        # y labels
+        p.setPen(QColor("#8b949e"))
+        p.setFont(QFont("Consolas", 8))
+        for i in range(n_yticks + 1):
+            val = y_hi * (n_yticks - i) / n_yticks
+            sy = py + ph * i / n_yticks
+            p.drawText(QRectF(0, sy - 8, self.PAD_L - 4, 16),
+                       Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                       f"{val:.0f}")
+
+        # x labels
+        x_ticks = LMSLineChartWidget._nice_ticks(x_lo, x_hi, max(pw // 60, 2))
+        for xt in x_ticks:
+            sx = to_sx(xt)
+            p.drawText(QRectF(sx - 25, py + ph + 2, 50, 16),
+                       Qt.AlignmentFlag.AlignCenter, f"{xt:.0f}")
 
         p.end()
 
@@ -1340,6 +1603,758 @@ class IrregularTableWidget(QWidget):
 
 
 # ===========================================================================
+#  Analyze Data dialog
+# ===========================================================================
+
+_SCRIPT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "run_gain_monitor.sh")
+
+
+class AnalyzeDialog(QDialog):
+    """Popup that runs run_gain_monitor.sh and streams its output."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Analyze Data")
+        self.resize(700, 500)
+        self.setStyleSheet(
+            "QDialog{background:#0d1117;color:#c9d1d9;}"
+            "QLabel{color:#c9d1d9;font-family:Consolas;font-size:10pt;}"
+            "QLineEdit{background:#161b22;color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:3px;padding:2px 6px;"
+            "font-family:Consolas;font-size:10pt;}"
+            "QTextEdit{background:#0a0e14;color:#c9d1d9;"
+            "border:1px solid #30363d;font-family:Consolas;font-size:9pt;}"
+            "QPushButton{background:#21262d;color:#c9d1d9;"
+            "border:1px solid #30363d;padding:4px 12px;"
+            "font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#30363d;}"
+            "QPushButton:disabled{color:#555;}")
+
+        self._process = QProcess(self)
+        self._process.readyReadStandardOutput.connect(self._on_stdout)
+        self._process.readyReadStandardError.connect(self._on_stderr)
+        self._process.finished.connect(self._on_finished)
+
+        root = QVBoxLayout(self)
+        root.setSpacing(8)
+
+        # inputs
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._run_edit = QLineEdit()
+        self._run_edit.setPlaceholderText("e.g. 023735")
+        self._cpu_edit = QLineEdit("25")
+
+        def _dir_row(placeholder, browse_slot):
+            row = QHBoxLayout()
+            edit = QLineEdit()
+            edit.setPlaceholderText(placeholder)
+            btn = QPushButton("Browse…")
+            btn.setFixedWidth(80)
+            btn.clicked.connect(browse_slot)
+            row.addWidget(edit)
+            row.addWidget(btn)
+            return row, edit
+
+        in_row, self._indir_edit = _dir_row("/data/evio/data", self._browse_indir)
+        out_row, self._outdir_edit = _dir_row(
+            "/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output",
+            self._browse_outdir)
+
+        form.addRow("Run number:", self._run_edit)
+        form.addRow("Number of CPUs:", self._cpu_edit)
+        form.addRow("Input directory:", in_row)
+        form.addRow("Output directory:", out_row)
+        root.addLayout(form)
+
+        # buttons
+        btn_row = QHBoxLayout()
+        self._run_btn = QPushButton("Run")
+        self._run_btn.setStyleSheet(
+            "QPushButton{background:#1f6feb;color:white;border:1px solid #388bfd;"
+            "padding:4px 16px;font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#388bfd;}"
+            "QPushButton:disabled{background:#21262d;color:#555;border-color:#30363d;}")
+        self._run_btn.clicked.connect(self._on_run)
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.clicked.connect(self._on_stop)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        btn_row.addWidget(self._run_btn)
+        btn_row.addWidget(self._stop_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        root.addLayout(btn_row)
+
+        # output console
+        self._console = QTextEdit()
+        self._console.setReadOnly(True)
+        self._console.document().setMaximumBlockCount(5000)
+        root.addWidget(self._console, stretch=1)
+
+    def _browse_indir(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Input Directory")
+        if d:
+            self._indir_edit.setText(d)
+
+    def _browse_outdir(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Output Directory")
+        if d:
+            self._outdir_edit.setText(d)
+
+    def _on_run(self):
+        run_num = self._run_edit.text().strip()
+        n_cpu = self._cpu_edit.text().strip()
+        if not run_num:
+            self._append("<span style='color:#f85149'>Please enter a run number.</span>")
+            return
+        if not n_cpu.isdigit() or int(n_cpu) < 1:
+            self._append("<span style='color:#f85149'>Number of CPUs must be a positive integer.</span>")
+            return
+        if not os.path.exists(_SCRIPT_PATH):
+            self._append(f"<span style='color:#f85149'>Script not found: {_SCRIPT_PATH}</span>")
+            return
+
+        # build environment with optional directory overrides
+        env = self._process.processEnvironment()
+        from PyQt6.QtCore import QProcessEnvironment
+        env = QProcessEnvironment.systemEnvironment()
+        indir = self._indir_edit.text().strip()
+        outdir = self._outdir_edit.text().strip()
+        if indir:
+            env.insert("INPUTDIR", indir)
+        if outdir:
+            env.insert("OUTPUTDIR", outdir)
+        self._process.setProcessEnvironment(env)
+        self._process.setWorkingDirectory(os.path.dirname(_SCRIPT_PATH))
+
+        self._console.clear()
+        extra = ""
+        if indir:
+            extra += f" INPUTDIR={indir}"
+        if outdir:
+            extra += f" OUTPUTDIR={outdir}"
+        self._append(f"<span style='color:#8b949e'>${extra} {_SCRIPT_PATH} {run_num} {n_cpu}</span><br>")
+        self._run_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self._process.start("bash", [_SCRIPT_PATH, run_num, n_cpu])
+
+    def _on_stop(self):
+        self._process.kill()
+
+    def _on_stdout(self):
+        data = self._process.readAllStandardOutput().data().decode(errors="replace")
+        self._append(data.replace("\n", "<br>"))
+
+    def _on_stderr(self):
+        data = self._process.readAllStandardError().data().decode(errors="replace")
+        self._append(f"<span style='color:#f85149'>{data.replace(chr(10), '<br>')}</span>")
+
+    def _on_finished(self, exit_code, exit_status):
+        self._run_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        color = "#3fb950" if exit_code == 0 else "#f85149"
+        self._append(f"<span style='color:{color}'>[Process finished with exit code {exit_code}]</span>")
+
+    def _append(self, html: str):
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+        self._console.insertHtml(html)
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+
+    def closeEvent(self, event):
+        if self._process.state() != QProcess.ProcessState.NotRunning:
+            self._process.kill()
+            self._process.waitForFinished(2000)
+        super().closeEvent(event)
+
+
+# ===========================================================================
+#  Get Data dialog
+# ===========================================================================
+
+_LOCAL_DATA_BASE  = "/data/evio/data"
+_REMOTE_HOST      = "clondaq6"
+_REMOTE_DATA_BASE = "/data/stage6"
+
+
+def _fmt_bytes(b: int) -> str:
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if b < 1024:
+            return f"{b:.1f} {unit}"
+        b //= 1024
+    return f"{b:.1f} PB"
+
+
+def _check_disk_space(remote_host: str, remote_run_dir: str,
+                      local_base: str, f_start: int, f_end: int):
+    """Return (needed_bytes, free_bytes) for evio files [f_start, f_end].
+
+    SSHes to remote_host and sums the sizes of files whose .evio.NNN suffix
+    falls within [f_start, f_end].  Checks free space on the filesystem that
+    contains local_base (or its nearest existing ancestor).
+    Raises RuntimeError if the SSH call fails.
+    """
+    result = subprocess.run(
+        ["ssh", "-o", "ConnectTimeout=10",
+         remote_host, f"ls -l {remote_run_dir}/ 2>/dev/null"],
+        capture_output=True, text=True, timeout=30,
+    )
+    # exit 255 means SSH itself failed to connect; other non-zero codes (e.g. 2
+    # when the remote directory doesn't exist yet) are fine — we just get no output
+    # and needed stays 0, so the space check passes trivially.
+    if result.returncode == 255:
+        raise RuntimeError(result.stderr.strip() or "SSH connection failed")
+
+    needed = 0
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) < 9:
+            continue
+        m = re.search(r'\.evio\.(\d+)$', parts[-1])
+        if not m:
+            continue
+        n = int(m.group(1))
+        if f_start <= n <= f_end:
+            try:
+                needed += int(parts[4])
+            except (ValueError, IndexError):
+                pass
+
+    # walk up to the nearest existing directory so disk_usage doesn't fail
+    check_path = local_base
+    while check_path and not os.path.exists(check_path):
+        check_path = os.path.dirname(check_path)
+    free = shutil.disk_usage(check_path or "/").free
+    return needed, free
+
+
+class GetDataDialog(QDialog):
+    """Popup that scps evio files from the DAQ machine for a given run."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Get Data")
+        self.resize(700, 520)
+        self.setStyleSheet(
+            "QDialog{background:#0d1117;color:#c9d1d9;}"
+            "QLabel{color:#c9d1d9;font-family:Consolas;font-size:10pt;}"
+            "QLineEdit{background:#161b22;color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:3px;padding:2px 6px;"
+            "font-family:Consolas;font-size:10pt;}"
+            "QTextEdit{background:#0a0e14;color:#c9d1d9;"
+            "border:1px solid #30363d;font-family:Consolas;font-size:9pt;}"
+            "QPushButton{background:#21262d;color:#c9d1d9;"
+            "border:1px solid #30363d;padding:4px 12px;"
+            "font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#30363d;}"
+            "QPushButton:disabled{color:#555;}")
+
+        self._process = QProcess(self)
+        self._process.readyReadStandardOutput.connect(self._on_stdout)
+        self._process.readyReadStandardError.connect(self._on_stderr)
+        self._process.finished.connect(self._on_finished)
+
+        root = QVBoxLayout(self)
+        root.setSpacing(8)
+
+        # ---- input fields ----
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._run_edit = QLineEdit()
+        self._run_edit.setPlaceholderText("e.g. 023739")
+        form.addRow("Run number:", self._run_edit)
+
+        file_range_row = QHBoxLayout()
+        self._start_edit = QLineEdit("0")
+        self._start_edit.setFixedWidth(80)
+        self._end_edit = QLineEdit("99")
+        self._end_edit.setFixedWidth(80)
+        file_range_row.addWidget(self._start_edit)
+        file_range_row.addWidget(QLabel(" to "))
+        file_range_row.addWidget(self._end_edit)
+        file_range_row.addStretch()
+        form.addRow("File number range:", file_range_row)
+
+        def _dir_row(default, slot):
+            row = QHBoxLayout()
+            edit = QLineEdit(default)
+            btn = QPushButton("Browse…")
+            btn.setFixedWidth(80)
+            btn.clicked.connect(slot)
+            row.addWidget(edit)
+            row.addWidget(btn)
+            return row, edit
+
+        in_row,  self._localbase_edit  = _dir_row(_LOCAL_DATA_BASE,  self._browse_local)
+        form.addRow("Local data directory:", in_row)
+
+        host_edit_row = QHBoxLayout()
+        self._host_edit = QLineEdit(_REMOTE_HOST)
+        self._rembase_edit = QLineEdit(_REMOTE_DATA_BASE)
+        host_edit_row.addWidget(self._host_edit)
+        host_edit_row.addWidget(QLabel("  base:"))
+        host_edit_row.addWidget(self._rembase_edit)
+        form.addRow("Remote host:", host_edit_row)
+
+        root.addLayout(form)
+
+        # ---- buttons ----
+        btn_row = QHBoxLayout()
+        self._run_btn = QPushButton("Get Data")
+        self._run_btn.setStyleSheet(
+            "QPushButton{background:#1f6feb;color:white;border:1px solid #388bfd;"
+            "padding:4px 16px;font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#388bfd;}"
+            "QPushButton:disabled{background:#21262d;color:#555;border-color:#30363d;}")
+        self._run_btn.clicked.connect(self._on_get)
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.clicked.connect(self._on_stop)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        btn_row.addWidget(self._run_btn)
+        btn_row.addWidget(self._stop_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        root.addLayout(btn_row)
+
+        # ---- terminal output ----
+        self._console = QTextEdit()
+        self._console.setReadOnly(True)
+        self._console.document().setMaximumBlockCount(5000)
+        root.addWidget(self._console, stretch=1)
+
+    # ------------------------------------------------------------------
+    def _browse_local(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Local Data Directory")
+        if d:
+            self._localbase_edit.setText(d)
+
+    def _on_get(self):
+        run_num = self._run_edit.text().strip()
+        if not run_num:
+            self._append("<span style='color:#f85149'>Please enter a run number.</span>")
+            return
+
+        start_text = self._start_edit.text().strip() or "0"
+        end_text   = self._end_edit.text().strip()   or "9999"
+        if not start_text.isdigit() or not end_text.isdigit():
+            self._append("<span style='color:#f85149'>File number range must be integers.</span>")
+            return
+        f_start = int(start_text)
+        f_end   = int(end_text)
+        if f_end < f_start:
+            self._append("<span style='color:#f85149'>End file number must be ≥ start.</span>")
+            return
+
+        local_base  = self._localbase_edit.text().strip() or _LOCAL_DATA_BASE
+        remote_host = self._host_edit.text().strip() or _REMOTE_HOST
+        remote_base = self._rembase_edit.text().strip() or _REMOTE_DATA_BASE
+
+        local_run_dir  = f"{local_base}/prad_{run_num}"
+        remote_run_dir = f"{remote_base}/prad_{run_num}"
+
+        # -- pre-check: find files in range that already exist locally --
+        existing = []
+        if os.path.isdir(local_run_dir):
+            import glob as _glob
+            for path in sorted(_glob.glob(
+                    f"{local_run_dir}/prad_{run_num}.evio.*")):
+                m = re.search(r'\.evio\.(\d+)$', os.path.basename(path))
+                if m:
+                    n = int(m.group(1))
+                    if f_start <= n <= f_end:
+                        existing.append(os.path.basename(path))
+
+        if existing:
+            box = QMessageBox(self)
+            box.setWindowTitle("Files Already Present")
+            box.setText(
+                f"{len(existing)} file(s) in the requested range already exist "
+                f"in {local_run_dir}.\nThey will be skipped; only missing files "
+                f"will be copied.")
+            box.setDetailedText("\n".join(existing))
+            box.setStandardButtons(
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(QMessageBox.StandardButton.Ok)
+            if box.exec() == QMessageBox.StandardButton.Cancel:
+                return
+
+        # -- disk space check --
+        try:
+            needed, free = _check_disk_space(
+                remote_host, remote_run_dir, local_base, f_start, f_end)
+        except Exception as exc:
+            box = QMessageBox(self)
+            box.setWindowTitle("Disk Space Check Failed")
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setText(f"Could not check remote file sizes:\n{exc}\n\nProceed anyway?")
+            box.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            box.setDefaultButton(QMessageBox.StandardButton.No)
+            if box.exec() != QMessageBox.StandardButton.Yes:
+                return
+        else:
+            if needed > free:
+                box = QMessageBox(self)
+                box.setWindowTitle("Insufficient Disk Space")
+                box.setIcon(QMessageBox.Icon.Critical)
+                box.setText(
+                    "Not enough disk space to copy the requested files.\n\n"
+                    f"  Required : {_fmt_bytes(needed)}\n"
+                    f"  Available: {_fmt_bytes(free)}\n\n"
+                    "Free up space and try again.")
+                box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                box.exec()
+                return
+
+        # bash: list remote files in range, skip those already local, scp the rest
+        bash_cmd = (
+            f"mkdir -p {local_run_dir}\n"
+            f"echo 'Local directory: {local_run_dir}'\n"
+            f"echo 'Listing remote files...'\n"
+            f"ALL_FILES=$(ssh {remote_host} 'ls {remote_run_dir}/' 2>/dev/null | sort)\n"
+            f"COPIED=0\n"
+            f"ALREADY=0\n"
+            f"while IFS= read -r f; do\n"
+            f"    NUM=$(echo \"$f\" | grep -oP '\\.evio\\.\\K[0-9]+')\n"
+            f"    [ -z \"$NUM\" ] && continue\n"
+            f"    N=$((10#$NUM))\n"
+            f"    if [ \"$N\" -lt {f_start} ] || [ \"$N\" -gt {f_end} ]; then continue; fi\n"
+            f"    if [ -f \"{local_run_dir}/$f\" ]; then\n"
+            f"        echo \"  Already exists: $f (skipping)\"\n"
+            f"        ALREADY=$((ALREADY+1))\n"
+            f"    else\n"
+            f"        echo \"  Copying $f\"\n"
+            f"        scp {remote_host}:{remote_run_dir}/$f {local_run_dir}/\n"
+            f"        COPIED=$((COPIED+1))\n"
+            f"    fi\n"
+            f"done <<< \"$ALL_FILES\"\n"
+            f"echo \"Done. Copied $COPIED file(s), $ALREADY already present.\"\n"
+        )
+
+        self._console.clear()
+        self._append(
+            f"<span style='color:#8b949e'>Run {run_num}, files {f_start}–{f_end}"
+            f" → {local_run_dir}</span><br>")
+        if existing:
+            self._append(
+                f"<span style='color:#d29922'>{len(existing)} file(s) skipped "
+                f"(already present).</span><br>")
+        self._run_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self._process.start("bash", ["-c", bash_cmd])
+
+    def _on_stop(self):
+        self._process.kill()
+
+    def _on_stdout(self):
+        data = self._process.readAllStandardOutput().data().decode(errors="replace")
+        self._append(data.replace("\n", "<br>"))
+
+    def _on_stderr(self):
+        data = self._process.readAllStandardError().data().decode(errors="replace")
+        self._append(f"<span style='color:#f85149'>{data.replace(chr(10), '<br>')}</span>")
+
+    def _on_finished(self, exit_code, exit_status):
+        self._run_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        color = "#3fb950" if exit_code == 0 else "#f85149"
+        self._append(f"<span style='color:{color}'>[Process finished with exit code {exit_code}]</span>")
+
+    def _append(self, html: str):
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+        self._console.insertHtml(html)
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+
+    def closeEvent(self, event):
+        if self._process.state() != QProcess.ProcessState.NotRunning:
+            self._process.kill()
+            self._process.waitForFinished(2000)
+        super().closeEvent(event)
+
+
+# ===========================================================================
+#  Do It All dialog  (Get Data + Analyze Data combined)
+# ===========================================================================
+
+class DoItAllDialog(QDialog):
+    """Runs scp then gain monitor analysis in a single sequential workflow."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Do It All")
+        self.resize(750, 600)
+        self.setStyleSheet(
+            "QDialog{background:#0d1117;color:#c9d1d9;}"
+            "QLabel{color:#c9d1d9;font-family:Consolas;font-size:10pt;}"
+            "QLineEdit{background:#161b22;color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:3px;padding:2px 6px;"
+            "font-family:Consolas;font-size:10pt;}"
+            "QTextEdit{background:#0a0e14;color:#c9d1d9;"
+            "border:1px solid #30363d;font-family:Consolas;font-size:9pt;}"
+            "QPushButton{background:#21262d;color:#c9d1d9;"
+            "border:1px solid #30363d;padding:4px 12px;"
+            "font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#30363d;}"
+            "QPushButton:disabled{color:#555;}")
+
+        self._process = QProcess(self)
+        self._process.readyReadStandardOutput.connect(self._on_stdout)
+        self._process.readyReadStandardError.connect(self._on_stderr)
+        self._process.finished.connect(self._on_finished)
+
+        root = QVBoxLayout(self)
+        root.setSpacing(8)
+
+        # ---- input fields ----
+        form = QFormLayout()
+        form.setSpacing(6)
+
+        self._run_edit = QLineEdit()
+        self._run_edit.setPlaceholderText("e.g. 023739")
+        form.addRow("Run number:", self._run_edit)
+
+        # file range
+        file_range_row = QHBoxLayout()
+        self._start_edit = QLineEdit("0")
+        self._start_edit.setFixedWidth(80)
+        self._end_edit = QLineEdit("99")
+        self._end_edit.setFixedWidth(80)
+        file_range_row.addWidget(self._start_edit)
+        file_range_row.addWidget(QLabel(" to "))
+        file_range_row.addWidget(self._end_edit)
+        file_range_row.addStretch()
+        form.addRow("File number range:", file_range_row)
+
+        self._cpu_edit = QLineEdit("25")
+        form.addRow("Number of CPUs:", self._cpu_edit)
+
+        def _dir_row(default, slot):
+            row = QHBoxLayout()
+            edit = QLineEdit(default)
+            btn = QPushButton("Browse…")
+            btn.setFixedWidth(80)
+            btn.clicked.connect(slot)
+            row.addWidget(edit)
+            row.addWidget(btn)
+            return row, edit
+
+        in_row,  self._localbase_edit = _dir_row(_LOCAL_DATA_BASE,  self._browse_local)
+        out_row, self._outdir_edit    = _dir_row(
+            "/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output",
+            self._browse_out)
+        form.addRow("Local data directory:", in_row)
+        form.addRow("Output directory:", out_row)
+
+        host_row = QHBoxLayout()
+        self._host_edit    = QLineEdit(_REMOTE_HOST)
+        self._rembase_edit = QLineEdit(_REMOTE_DATA_BASE)
+        host_row.addWidget(self._host_edit)
+        host_row.addWidget(QLabel("  base:"))
+        host_row.addWidget(self._rembase_edit)
+        form.addRow("Remote host:", host_row)
+
+        root.addLayout(form)
+
+        # ---- buttons ----
+        btn_row = QHBoxLayout()
+        self._run_btn = QPushButton("Run")
+        self._run_btn.setStyleSheet(
+            "QPushButton{background:#1f6feb;color:white;border:1px solid #388bfd;"
+            "padding:4px 16px;font:bold 10pt Consolas;border-radius:3px;}"
+            "QPushButton:hover{background:#388bfd;}"
+            "QPushButton:disabled{background:#21262d;color:#555;border-color:#30363d;}")
+        self._run_btn.clicked.connect(self._on_run)
+        self._stop_btn = QPushButton("Stop")
+        self._stop_btn.setEnabled(False)
+        self._stop_btn.clicked.connect(self._on_stop)
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.close)
+        btn_row.addWidget(self._run_btn)
+        btn_row.addWidget(self._stop_btn)
+        btn_row.addStretch()
+        btn_row.addWidget(close_btn)
+        root.addLayout(btn_row)
+
+        self._console = QTextEdit()
+        self._console.setReadOnly(True)
+        self._console.document().setMaximumBlockCount(5000)
+        root.addWidget(self._console, stretch=1)
+
+    # ------------------------------------------------------------------
+    def _browse_local(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Local Data Directory")
+        if d:
+            self._localbase_edit.setText(d)
+
+    def _browse_out(self):
+        d = QFileDialog.getExistingDirectory(self, "Select Output Directory")
+        if d:
+            self._outdir_edit.setText(d)
+
+    def _on_run(self):
+        run_num    = self._run_edit.text().strip()
+        n_cpu      = self._cpu_edit.text().strip()
+        start_text = self._start_edit.text().strip() or "0"
+        end_text   = self._end_edit.text().strip()   or "9999"
+
+        if not run_num:
+            self._append("<span style='color:#f85149'>Please enter a run number.</span>")
+            return
+        if not n_cpu.isdigit() or int(n_cpu) < 1:
+            self._append("<span style='color:#f85149'>Number of CPUs must be a positive integer.</span>")
+            return
+        if not start_text.isdigit() or not end_text.isdigit():
+            self._append("<span style='color:#f85149'>File number range must be integers.</span>")
+            return
+        f_start = int(start_text)
+        f_end   = int(end_text)
+        if f_end < f_start:
+            self._append("<span style='color:#f85149'>End file number must be ≥ start.</span>")
+            return
+        if not os.path.exists(_SCRIPT_PATH):
+            self._append(f"<span style='color:#f85149'>Script not found: {_SCRIPT_PATH}</span>")
+            return
+
+        local_base  = self._localbase_edit.text().strip() or _LOCAL_DATA_BASE
+        remote_host = self._host_edit.text().strip()      or _REMOTE_HOST
+        remote_base = self._rembase_edit.text().strip()   or _REMOTE_DATA_BASE
+        outdir      = self._outdir_edit.text().strip()    or \
+            "/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output"
+
+        local_run_dir  = f"{local_base}/prad_{run_num}"
+        remote_run_dir = f"{remote_base}/prad_{run_num}"
+        script_dir     = os.path.dirname(_SCRIPT_PATH)
+
+        # pre-check for existing local files
+        existing = []
+        if os.path.isdir(local_run_dir):
+            import glob as _glob
+            for path in sorted(_glob.glob(f"{local_run_dir}/prad_{run_num}.evio.*")):
+                m = re.search(r'\.evio\.(\d+)$', os.path.basename(path))
+                if m:
+                    n = int(m.group(1))
+                    if f_start <= n <= f_end:
+                        existing.append(os.path.basename(path))
+
+        if existing:
+            box = QMessageBox(self)
+            box.setWindowTitle("Files Already Present")
+            box.setText(
+                f"{len(existing)} file(s) in the requested range already exist "
+                f"in {local_run_dir}.\nThey will be skipped.")
+            box.setDetailedText("\n".join(existing))
+            box.setStandardButtons(
+                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(QMessageBox.StandardButton.Ok)
+            if box.exec() == QMessageBox.StandardButton.Cancel:
+                return
+
+        # -- disk space check --
+        try:
+            needed, free = _check_disk_space(
+                remote_host, remote_run_dir, local_base, f_start, f_end)
+        except Exception as exc:
+            box = QMessageBox(self)
+            box.setWindowTitle("Disk Space Check Failed")
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setText(f"Could not check remote file sizes:\n{exc}\n\nProceed anyway?")
+            box.setStandardButtons(
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+            box.setDefaultButton(QMessageBox.StandardButton.No)
+            if box.exec() != QMessageBox.StandardButton.Yes:
+                return
+        else:
+            if needed > free:
+                box = QMessageBox(self)
+                box.setWindowTitle("Insufficient Disk Space")
+                box.setIcon(QMessageBox.Icon.Critical)
+                box.setText(
+                    "Not enough disk space to copy the requested files.\n\n"
+                    f"  Required : {_fmt_bytes(needed)}\n"
+                    f"  Available: {_fmt_bytes(free)}\n\n"
+                    "Free up space and try again.")
+                box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                box.exec()
+                return
+
+        # Combined bash: step 1 = scp, step 2 = analyze
+        bash_cmd = (
+            f"set -e\n"
+            f"\n"
+            f"# ── Step 1: Get Data ──────────────────────────────────────\n"
+            f"mkdir -p {local_run_dir}\n"
+            f"echo '=== Step 1: Copying evio files ==='\n"
+            f"echo 'Local directory: {local_run_dir}'\n"
+            f"echo 'Listing remote files...'\n"
+            f"ALL_FILES=$(ssh {remote_host} 'ls {remote_run_dir}/' 2>/dev/null | sort)\n"
+            f"COPIED=0; ALREADY=0\n"
+            f"while IFS= read -r f; do\n"
+            f"    NUM=$(echo \"$f\" | grep -oP '\\.evio\\.\\K[0-9]+')\n"
+            f"    [ -z \"$NUM\" ] && continue\n"
+            f"    N=$((10#$NUM))\n"
+            f"    if [ \"$N\" -lt {f_start} ] || [ \"$N\" -gt {f_end} ]; then continue; fi\n"
+            f"    if [ -f \"{local_run_dir}/$f\" ]; then\n"
+            f"        echo \"  Already exists: $f (skipping)\"\n"
+            f"        ALREADY=$((ALREADY+1))\n"
+            f"    else\n"
+            f"        echo \"  Copying $f\"\n"
+            f"        scp {remote_host}:{remote_run_dir}/$f {local_run_dir}/\n"
+            f"        COPIED=$((COPIED+1))\n"
+            f"    fi\n"
+            f"done <<< \"$ALL_FILES\"\n"
+            f"echo \"Step 1 done. Copied $COPIED file(s), $ALREADY already present.\"\n"
+            f"\n"
+            f"# ── Step 2: Analyze Data ──────────────────────────────────\n"
+            f"echo ''\n"
+            f"echo '=== Step 2: Running gain monitor analysis ==='\n"
+            f"cd {script_dir}\n"
+            f"INPUTDIR={local_base} OUTPUTDIR={outdir} bash {_SCRIPT_PATH} {run_num} {n_cpu}\n"
+        )
+
+        self._console.clear()
+        self._append(
+            f"<span style='color:#8b949e'>Run {run_num} | files {f_start}–{f_end}"
+            f" | {n_cpu} CPUs</span><br>")
+        self._run_btn.setEnabled(False)
+        self._stop_btn.setEnabled(True)
+        self._process.start("bash", ["-c", bash_cmd])
+
+    def _on_stop(self):
+        self._process.kill()
+
+    def _on_stdout(self):
+        data = self._process.readAllStandardOutput().data().decode(errors="replace")
+        self._append(data.replace("\n", "<br>"))
+
+    def _on_stderr(self):
+        data = self._process.readAllStandardError().data().decode(errors="replace")
+        self._append(f"<span style='color:#f85149'>{data.replace(chr(10), '<br>')}</span>")
+
+    def _on_finished(self, exit_code, exit_status):
+        self._run_btn.setEnabled(True)
+        self._stop_btn.setEnabled(False)
+        color = "#3fb950" if exit_code == 0 else "#f85149"
+        self._append(f"<span style='color:{color}'>[Process finished with exit code {exit_code}]</span>")
+
+    def _append(self, html: str):
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+        self._console.insertHtml(html)
+        self._console.moveCursor(self._console.textCursor().MoveOperation.End)
+
+    def closeEvent(self, event):
+        if self._process.state() != QProcess.ProcessState.NotRunning:
+            self._process.kill()
+            self._process.waitForFinished(2000)
+        super().closeEvent(event)
+
+
+# ===========================================================================
 #  Main window
 # ===========================================================================
 
@@ -1371,6 +2386,7 @@ class GainMonitorWindow(QMainWindow):
         self._deviation_stats_cache: Optional[Dict] = None
         self._deviation_stats_key: Optional[Tuple] = None
         self._file_snapshot: Dict[int, float] = {}   # run_number -> mtime
+        self._hist_cache: OrderedDict = OrderedDict()  # (run_number, module) -> (values, edges)
         self._auto_refresh_timer = QTimer(self)
         self._auto_refresh_timer.timeout.connect(self._auto_refresh_check)
 
@@ -1414,6 +2430,18 @@ class GainMonitorWindow(QMainWindow):
             "Process Folder...", "#58a6ff", self._on_process_folder)
         top.addWidget(self._process_btn)
 
+        self._analyze_btn = self._make_btn(
+            "Analyze Data", "#3fb950", self._on_analyze_data)
+        top.addWidget(self._analyze_btn)
+
+        self._getdata_btn = self._make_btn(
+            "Get Data", "#d29922", self._on_get_data)
+        top.addWidget(self._getdata_btn)
+
+        self._doitall_btn = self._make_btn(
+            "Do It All", "#bc8cff", self._on_do_it_all)
+        top.addWidget(self._doitall_btn)
+
         self._refresh_btn = self._make_btn(
             "Refresh", "#3fb950", self._on_refresh)
         self._refresh_btn.setEnabled(False)
@@ -1453,10 +2481,17 @@ class GainMonitorWindow(QMainWindow):
         top.addWidget(self._status_lbl)
         root.addLayout(top)
 
-        # -- body splitter (horizontal: left=map, right=charts+table) --
+        # -- body splitter (horizontal: table | map | charts+reserved) --
         body = QSplitter(Qt.Orientation.Horizontal)
+        self._body = body
 
-        # ---- left panel ----
+        # ---- left panel: report table ----
+        self._irregular_table = IrregularTableWidget()
+        self._irregular_table.runClicked.connect(self._on_jump_to_run)
+        self._irregular_table.moduleClicked.connect(self._on_module_clicked)
+        body.addWidget(self._irregular_table)
+
+        # ---- middle panel: HyCal map ----
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
@@ -1676,7 +2711,7 @@ class GainMonitorWindow(QMainWindow):
 
         body.addWidget(left)
 
-        # ---- right panel (vertical splitter: charts + table) ----
+        # ---- right panel (vertical splitter: charts top, reserved bottom) ----
         right = QSplitter(Qt.Orientation.Vertical)
 
         charts = QWidget()
@@ -1693,18 +2728,16 @@ class GainMonitorWindow(QMainWindow):
             charts_layout.addWidget(chart)
 
         right.addWidget(charts)
-
-        self._irregular_table = IrregularTableWidget()
-        self._irregular_table.runClicked.connect(self._on_jump_to_run)
-        self._irregular_table.moduleClicked.connect(self._on_module_clicked)
-        right.addWidget(self._irregular_table)
-
+        self._hist_widget = RootHistWidget()
+        right.addWidget(self._hist_widget)
         right.setStretchFactor(0, 3)
         right.setStretchFactor(1, 2)
 
         body.addWidget(right)
-        body.setStretchFactor(0, 1)
-        body.setStretchFactor(1, 1)
+        body.setStretchFactor(0, 1)  # table
+        body.setStretchFactor(1, 1)  # HyCal map
+        body.setStretchFactor(2, 5)  # charts + reserved
+        QTimer.singleShot(0, lambda: self._body.setSizes([200, 350, 1050]))
 
         root.addWidget(body, stretch=1)
 
@@ -1796,12 +2829,30 @@ class GainMonitorWindow(QMainWindow):
                           if self._runs else None)
         old_last_run_number = (self._runs[-1].run_number if self._runs else None)
 
-        new_runs = load_all_runs(self._current_folder)
+        # Only parse files that are new or whose mtime changed — avoids re-reading
+        # the entire folder on every auto-refresh tick when the dataset is large.
+        changed_runs = {rnum for rnum, mtime in new_snapshot.items()
+                        if self._file_snapshot.get(rnum) != mtime}
+        if not changed_runs:
+            return
+        runs_by_number = {rd.run_number: rd for rd in self._runs}
+        for rnum in changed_runs:
+            path = os.path.join(self._current_folder,
+                                f"prad_{rnum:06d}_LMS.dat")
+            rd = parse_dat_file(path)
+            if rd is not None:
+                runs_by_number[rnum] = rd
+        # Remove runs whose files have disappeared from the snapshot
+        for rnum in list(runs_by_number):
+            if rnum not in new_snapshot:
+                del runs_by_number[rnum]
+        new_runs = sorted(runs_by_number.values(), key=lambda r: r.run_number)
         if not new_runs:
             return
         self._runs = new_runs
         self._file_snapshot = new_snapshot
         self._deviation_stats_key = None
+        self._hist_cache.clear()
 
         # rebuild start/end combos
         self._start_combo.blockSignals(True)
@@ -1853,6 +2904,18 @@ class GainMonitorWindow(QMainWindow):
         if not folder:
             return
         self._load_folder(folder)
+
+    def _on_analyze_data(self):
+        dlg = AnalyzeDialog(self)
+        dlg.exec()
+
+    def _on_get_data(self):
+        dlg = GetDataDialog(self)
+        dlg.exec()
+
+    def _on_do_it_all(self):
+        dlg = DoItAllDialog(self)
+        dlg.exec()
 
     def _load_folder(self, folder: str):
         self._status_lbl.setText("Loading...")
@@ -1951,6 +3014,7 @@ class GainMonitorWindow(QMainWindow):
         curr_run_number = self._runs[self._current_run_idx].run_number
         for chart in self._charts:
             chart.set_current_run(curr_run_number)
+        self._load_lms_hist(self._selected_module)
 
     def _on_ref_changed(self, index: int):
         self._current_ref_idx = index
@@ -2003,6 +3067,8 @@ class GainMonitorWindow(QMainWindow):
     def _on_chart_run_clicked(self, run_number: int):
         if self._view_mode != 3:
             self._on_jump_to_run(run_number)
+        else:
+            self._load_lms_hist(self._selected_module, run_number)
 
     def _on_cycle_palette(self):
         if self._view_mode == 2:
@@ -2032,10 +3098,12 @@ class GainMonitorWindow(QMainWindow):
             self._map.set_legend_mode("summary")
         if index == 3:
             self._update_summary_views()
+            self._hist_widget.clear()
         else:
             self._update_geo_view()
             if not (prev_mode in (0, 1) and index in (0, 1)):
                 self._update_irregular_table()
+            self._load_lms_hist(self._selected_module)
 
     def _on_drift_threshold_changed(self):
         for inp, attr, default in (
@@ -2094,6 +3162,61 @@ class GainMonitorWindow(QMainWindow):
         else:
             self._irregular_table._table.clearSelection()
         self._update_line_charts()
+        self._load_lms_hist(self._selected_module)
+
+    def _load_lms_hist(self, module_name: Optional[str],
+                       run_number: Optional[int] = None):
+        # In summary mode a run_number must be supplied explicitly (from chart click).
+        if self._view_mode == 3 and run_number is None:
+            self._hist_widget.clear()
+            return
+        if not module_name or not self._current_folder or not self._runs:
+            self._hist_widget.clear()
+            return
+        if not _UPROOT_OK:
+            self._hist_widget.clear()
+            return
+        if run_number is None:
+            run_number = self._runs[self._current_run_idx].run_number
+        key = (run_number, module_name)
+        if key in self._hist_cache:
+            self._hist_cache.move_to_end(key)
+            values, edges, gauss = self._hist_cache[key]
+        else:
+            root_path = os.path.join(self._current_folder,
+                                     f"prad_{run_number:06d}_LMS_fitted.root")
+            if not os.path.exists(root_path):
+                self._hist_widget.clear()
+                return
+            try:
+                with uproot.open(root_path) as rf:
+                    hist_key = f"{module_name}_LMS"
+                    if hist_key not in rf:
+                        self._hist_widget.clear()
+                        return
+                    h = rf[hist_key]
+                    values = h.values()
+                    edges = h.axis().edges()
+                    gauss = None
+                    fns = h.member("fFunctions")
+                    for fn in fns:
+                        if fn.classname == "TF1":
+                            params = fn.member("fFormula").member("fClingParameters")
+                            if len(params) >= 3:
+                                gauss = (float(params[0]), float(params[1]),
+                                         float(params[2]),
+                                         float(fn.member("fXmin")),
+                                         float(fn.member("fXmax")))
+                            break
+            except Exception:
+                self._hist_widget.clear()
+                return
+            self._hist_cache[key] = (values, edges, gauss)
+            if len(self._hist_cache) > _HIST_CACHE_MAX:
+                self._hist_cache.popitem(last=False)
+        self._hist_widget.set_histogram(values, edges,
+                                        f"{module_name}  run {run_number}",
+                                        gauss=gauss)
 
     # ---- update views ----
 
@@ -2307,6 +3430,8 @@ class GainMonitorWindow(QMainWindow):
                     indices, gains, [],
                     f"{mname}  gain[{lms_name}]  (run1={first_run})",
                     actual_runs)
+                if gains:
+                    self._charts[i].set_y_range(*_chart_y_range(gains, []))
                 self._charts[i].set_highlighted(i == ref_idx)
                 self._charts[i].set_current_run(curr_run_number)
         else:
@@ -2334,6 +3459,8 @@ class GainMonitorWindow(QMainWindow):
                     indices, ratios, errors,
                     f"{lms_name} (lms/alpha)  (run1={first_run})",
                     actual_runs)
+                if ratios:
+                    self._charts[i].set_y_range(*_chart_y_range(ratios, errors))
                 self._charts[i].set_highlighted(i == ref_idx)
                 self._charts[i].set_current_run(curr_run_number)
 

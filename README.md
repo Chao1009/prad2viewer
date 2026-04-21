@@ -128,9 +128,9 @@ prad2_client -H clonpc19 -p 8080       # connect to remote server
 
 - [test/README.md](test/README.md) — generic EVIO diagnostics (`evio_dump`, `ped_calc`, plus dev tools in `test/dev/`).
 - [gem/README.md](gem/README.md) — GEM tracker tools (`gem_dump`, `gem_event_viewer`, `gem_cluster_view`, `gem_layout`, …) plus detector reference notes.
-- [analysis/README.md](analysis/README.md) — ROOT-based replay and physics analysis.
+- [analysis/README.md](analysis/README.md) — ROOT-based replay and physics analysis (binaries are installed with a `prad2ana_` prefix).
 - [calibration/README.md](calibration/README.md) — HyCal gain-equalizer and operator calibration scan procedures.
-- [scripts/README.md](scripts/README.md) — HyCal scaler map, pedestal monitor, trigger-mask editor, tagger viewer.
+- [scripts/README.md](scripts/README.md) — HyCal scaler / pedestal / gain / map-builder GUIs, waveform viewer, tagger viewer, plus `daq_tool/` (dev-only DAQ editors) and `shell/` (operator scripts).
 
 ## Installation
 
@@ -182,7 +182,9 @@ test/               Generic EVIO diagnostic CLI tools (test/dev/ = not installed
 gem/                GEM tracker: gem_dump binary + Python tools + README
 analysis/           ROOT-based replay and physics analysis (optional)
 calibration/        HyCal calibration scan tools
-scripts/            HyCal / tagger / trigger Python utilities
+scripts/            HyCal / tagger Python utilities (installed)
+scripts/daq_tool/   Dev-only DAQ config editors (not installed)
+scripts/shell/      Operator shell scripts (not installed)
 cmake/              Build helpers (PradHelpers, WebDeps, bin-wrapper template)
 docs/               ROL references, API documentation
 ```

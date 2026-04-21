@@ -1,107 +1,136 @@
 # Scripts
 
-Python utilities for detector visualization and monitoring.
+Python utilities for HyCal / tagger visualisation and monitoring.
 
-## hycal_scaler_map.py
+All GUI tools in this directory share `hycal_geoview.py` — a reusable HyCal
+module map widget (rectangles in physical coordinates, optional colour bar,
+optional zoom/pan, hover tooltips) and a shared theme palette. New GUIs
+subclass `HyCalMapWidget` and override the paint hooks; see
+`hycal_geoview.py` for the extension points.
 
-PyQt6 live colour-coded HyCal FADC scaler map. Polls `B_DET_HYCAL_FADC_<name>` EPICS channels every 10 s. Requires `pyepics` for real EPICS; `--sim` works without it.
+Theme: the module exposes `set_theme("dark" | "light")` and an
+`apply_theme_palette(window)` helper. Scripts typically wire a `--theme`
+argument in `main()` before constructing any widget.
+
+Installed wrappers are generated when `-DBUILD_PYTHON=ON` is used at build
+time — each GUI below can then be launched from `$PATH` by its bare name
+(the `python scripts/...` examples shown work equally well from the source
+checkout).
+
+## HyCal GUIs
+
+### hycal_scaler_map.py
+
+PyQt6 live colour-coded HyCal FADC scaler map. Polls
+`B_DET_HYCAL_FADC_<name>` EPICS channels every few seconds. Requires
+`pyepics` for real EPICS; `--sim` works without it.
 
 ```bash
-python scripts/hycal_scaler_map.py          # real EPICS (default)
-python scripts/hycal_scaler_map.py --sim    # simulation (random values)
+hycal_scaler_map          # real EPICS (default)
+hycal_scaler_map --sim    # simulation (random values)
 ```
 
-## hycal_pedestal_monitor.py
+### hycal_pedestal_monitor.py
 
-PyQt6 GUI for measuring and monitoring FADC250 pedestals on all 7 HyCal crates. Reads pedestal means from `.cnf` files, parses per-channel RMS from `faV3peds` stdout, and flags irregular channels. No numpy/matplotlib -- only PyQt6.
+PyQt6 GUI for measuring and monitoring FADC250 pedestals on all 7 HyCal
+crates. Reads pedestal means from `.cnf` files, parses per-channel RMS
+from `faV3peds` stdout, and flags irregular channels.
 
 ```bash
-python scripts/hycal_pedestal_monitor.py          # view existing data
-python scripts/hycal_pedestal_monitor.py --sim     # test with simulated data
+hycal_pedestal_monitor          # view existing data
+hycal_pedestal_monitor --sim    # test with simulated data
 ```
 
-### Shift pedestal check (operator procedure)
-
-Pedestals must be measured **before the first DAQ run of each shift** while DAQ is idle.
+**Shift pedestal check (operator procedure).** Pedestals must be measured
+before the first DAQ run of each shift while DAQ is idle.
 
 1. Make sure the DAQ is **stopped**.
-2. Launch: `python scripts/hycal_pedestal_monitor.py`
-3. Click **Measure Pedestals** and confirm. The tool SSHs to `adchycal1`--`adchycal7` and runs `faV3peds` (takes a few minutes).
-4. Inspect the two maps (left: current mean, right: difference from configured) and the report panel for flagged channels:
-   - `DEAD` -- avg < 1, rms < 0.1
-   - `OUT OF RANGE` -- mean outside 50--300
-   - `HIGH RMS` -- sigma > 1.5
-   - `DRIFT` -- shifted > 3 counts from configured
+2. Launch `hycal_pedestal_monitor`.
+3. Click **Measure Pedestals** and confirm. The tool SSHs to
+   `adchycal1`..`adchycal7` and runs `faV3peds` (takes a few minutes).
+4. Inspect the two maps (left: current mean, right: difference from
+   configured) and the report panel for flagged channels:
+   - `DEAD` — avg < 1, rms < 0.1
+   - `OUT OF RANGE` — mean outside 50..300
+   - `HIGH RMS` — sigma > 1.5
+   - `DRIFT` — shifted > 3 counts from configured
 5. Click **Save Report** to save for the shift log.
-6. If new issues appear, notify the run coordinator before starting data taking.
+6. If new issues appear, notify the run coordinator before starting data
+   taking. Thresholds are defined at the top of the script.
 
-Thresholds are defined at the top of the script and can be adjusted.
+### hycal_gain_monitor.py
 
-## DAQ dev tools (`scripts/daq_tool/`)
-
-Developer GUIs that don't ship with the installation (run them from the
-source checkout).
-
-### trigger_mask_editor.py
-
-PyQt6 visual editor for FAV3 trigger masks. Displays a HyCal geo view (with LMS1-3, LMSP, V1-V4 below) and lets you click or drag modules to toggle channels off/on. Generates trigger mask `.cnf` files -- only slots with disabled channels are written. Unmapped DAQ channels (slot positions with no module) are always masked off.
+PyQt6 viewer for per-module LMS-based gain factors. Loads the text
+`prad_{run:06d}_LMS.dat` files produced by the offline gain analysis,
+plots the HyCal geo map, LMS reference-channel stability, a run-to-run
+drift view, and a table of irregular `(module, run)` outliers.
 
 ```bash
-python scripts/daq_tool/trigger_mask_editor.py                     # start fresh
-python scripts/daq_tool/trigger_mask_editor.py -i existing.cnf     # load existing mask
-python scripts/daq_tool/trigger_mask_editor.py -o output.cnf       # set default save path
+hycal_gain_monitor
 ```
 
-### fadc_gain_config.py
+### hycal_map_builder.py
 
-Generates a text-based `adchycal_gain.cnf` for the FADC250 DAQ
-(`FAV3_ALLCH_GAIN` entries, one per 16-channel slot). Gains come from a
-calibration JSON (`-c path.json`) or uniform values per module type
-(`--pbwo4-gain` / `--pbglass-gain`).
+Generic HyCal geometry viewer that colour-maps user data loaded from JSON
+or plain-text files. Supports a day/night theme toggle, PbGlass alpha
+slider, zoom/pan, and palette cycling (click the colour bar).
+
+- **JSON**: `{"<module_name>": {"<field>": <value>, ...}, ...}` — the last
+  entry of a history list is used; nested dicts are flattened with dot
+  notation; non-numeric fields (timestamps) are ignored.
+- **Text**: whitespace/comma/tab-delimited rows `<module> <v1> <v2> ...`
+  with optional header.
 
 ```bash
-python scripts/daq_tool/fadc_gain_config.py
-python scripts/daq_tool/fadc_gain_config.py -c database/calibration/adc_to_mev_factors_cosmic.json
-python scripts/daq_tool/fadc_gain_config.py --pbwo4-gain 0.15 --pbglass-gain 0.12
+hycal_map_builder                     # empty map
+hycal_map_builder mydata.json         # auto-load
+hycal_map_builder mydata.txt --field rms
 ```
 
-## Operator shell scripts (`scripts/shell/`)
+### waveform_viewer.py
 
-Not installed — used directly from the source checkout by on-site operators.
+Event-by-event browser for FADC250 waveforms. Opens an EVIO file in
+**random-access** mode (native event-pointer table via
+`evc::EvChannel::OpenRandomAccess`), does a single Scan-only pass to
+index physics sub-events, and then lets you step through events with
+Prev / Next / Jump — all fast in both directions.
 
-- `run_gain_monitor.sh` — wrapper that parallelises `prad2ana_gain_monitor`
-  across sub-files of a run and merges the outputs.
-- `prad2_server_tmux_template` — tmux session template for running
-  `prad2_server` alongside the viewer.
+The layout is a horizontal split: HyCal geo picker + raw-waveform plot on
+the left, four stacked histograms on the right (peak height, integral,
+time, peaks/event). For each viewed event the selected module's waveform
+is drawn and its four histograms accumulate; clicking a module in the
+geo picker (only lit modules are clickable) switches the selection.
 
-## GEM tools
+A **Process next 10k** button runs a background pass that fills the
+selected module's histograms without displaying waveforms, for fast
+accumulation.
 
-GEM-specific scripts and the `gem_dump` C++ binary live in the top-level
-[`gem/`](../gem/README.md) directory — see [gem/README.md](../gem/README.md)
-for details and GEM detector reference facts.
+```bash
+waveform_viewer                        # File → Open…
+waveform_viewer run.evio.00000
+```
 
-## tagger_viewer.py
+File → Save writes the current per-module histograms to JSON for later
+inspection.
 
-PyQt6 viewer for V1190 TDC hits from the tagger crate (ROC `0x008E`, bank
-`0xE107`). Shows a per-slot bar chart of hits/channel, a single-channel
-TDC-value histogram, plus event-wise correlation tabs (Δt = A − B and a
-2-D tdc(A) vs tdc(B) heatmap). No matplotlib / pyqtgraph; plots are
-drawn with QPainter (numpy is the only scientific dep). The bar chart
+## Tagger / TDC
+
+### tagger_viewer.py
+
+PyQt6 viewer for V1190 TDC hits from the tagger crate (ROC `0x008E`,
+bank `0xE107`). Shows a per-slot bar chart of hits/channel, a
+single-channel TDC-value histogram, plus event-wise correlation tabs
+(Δt = A − B and a 2-D tdc(A) vs tdc(B) heatmap). The bar chart
 auto-sizes its x-axis to 16 / 32 / 64 / 128 channels based on the
 highest channel actually hit. Human-readable counter names come from
 `database/tagger_map.json`.
 
-Two data sources:
-
 **Offline — evio file** (decoded in-process by `prad2py`):
 
 ```bash
-cmake -DBUILD_PYTHON=ON -S . -B build && cmake --build build
-# optional — the viewer auto-adds build/python/ to sys.path
-export PYTHONPATH="$PWD/build/python:$PYTHONPATH"
-python scripts/tagger_viewer.py /data/stage6/prad_023667/prad_023667.evio.00000 \
-       -n 200000          # limit number of physics events (optional)
-       --roc 0x8E         # restrict to the tagger ROC (optional)
+tagger_viewer /data/stage6/prad_023667/prad_023667.evio.00000 \
+              -n 200000          # limit number of physics events (optional)
+              --roc 0x8E         # restrict to the tagger ROC (optional)
 ```
 
 **Online — live ET stream** from a running `prad2_server`. The server
@@ -110,10 +139,10 @@ regular monitoring is unaffected:
 
 ```bash
 # DAQ machine (one-time)
-./build/bin/prad2_server --online --port 5051
+prad2_server --online --port 5051
 
 # Viewer (anywhere with PyQt6 + QtWebSockets installed)
-python scripts/tagger_viewer.py --live ws://clondaq6:5051
+tagger_viewer --live ws://clondaq6:5051
 ```
 
 On startup with `--live`, a fast subscribe/ack round-trip is done
@@ -127,7 +156,7 @@ Memory is capped at 10 M hits (rolling — oldest half is dropped).
 
 Wire protocol — WebSocket JSON messages `tagger_subscribe` /
 `tagger_subscribed` / `tagger_unsubscribe`.  Binary frame format
-(useful for anyone writing a different client):
+(useful for writing a different client):
 
 ```
 magic        "TGR1"   (4 bytes)
@@ -142,55 +171,102 @@ records      n_hits × 16-byte packed BinHit
                u32 tdc
 ```
 
+### extract_tagger_map.py
+
+One-shot helper that parses a tagger cabling source and emits
+`database/tagger_map.json` — the counter-name lookup used by
+`tagger_viewer`. See the script header for the input format.
+
+## DAQ dev tools (`scripts/daq_tool/`)
+
+Dev-only GUIs that don't ship with the installation (run them from the
+source checkout). The CMake install step excludes this directory.
+
+### trigger_mask_editor.py
+
+PyQt6 visual editor for FAV3 trigger masks. Displays a HyCal geo view
+(with LMS1-3, LMSP, V1-V4 below) and lets you click or drag modules to
+toggle channels off/on. Generates trigger mask `.cnf` files — only slots
+with disabled channels are written. Unmapped DAQ channels (slot
+positions with no module) are always masked off.
+
+```bash
+python scripts/daq_tool/trigger_mask_editor.py                     # start fresh
+python scripts/daq_tool/trigger_mask_editor.py -i existing.cnf     # load existing mask
+python scripts/daq_tool/trigger_mask_editor.py -o output.cnf       # set default save path
+```
+
+### fadc_gain_config.py
+
+Generates a text-based `adchycal_gain.cnf` for the FADC250 DAQ
+(`FAV3_ALLCH_GAIN` entries, one per 16-channel slot, grouped by
+crate/slot). Gains come from a calibration JSON (`-c path.json`,
+`{"name", "factor"}` entries) or uniform values per module type
+(`--pbwo4-gain` / `--pbglass-gain`).
+
+```bash
+python scripts/daq_tool/fadc_gain_config.py
+python scripts/daq_tool/fadc_gain_config.py -c database/calibration/adc_to_mev_factors_cosmic.json
+python scripts/daq_tool/fadc_gain_config.py --pbwo4-gain 0.15 --pbglass-gain 0.12
+```
+
+## Operator shell scripts (`scripts/shell/`)
+
+Not installed — run directly from the source checkout on DAQ machines.
+
+- `run_gain_monitor.sh` — wrapper that parallelises `prad2ana_gain_monitor`
+  across sub-files of a run and merges the outputs via `hadd`. Requires
+  the installed analysis binaries on `$PATH` (source `prad2_setup.sh`
+  first).
+
+  ```bash
+  scripts/shell/run_gain_monitor.sh <run_number> <num_cpus> [subfile_min] [subfile_max]
+  ```
+
+- `prad2_server_tmux_template` — tmux session template for running
+  `prad2_server` alongside `prad2_client` on a split window.
+
 ## Using prad2py directly
 
-`prad2py` exposes the decoder through a `dec` submodule — useful for custom
-offline analysis that goes beyond what the tagger_viewer does. Build it with
-`-DBUILD_PYTHON=ON` once, then:
+`prad2py` exposes the decoder through a `dec` submodule and the
+reconstruction through `det` — useful for custom offline analysis that
+goes beyond what the viewers above do. Build it once with
+`-DBUILD_PYTHON=ON`, then:
 
 ```python
 import prad2py
-from prad2py import dec                         # evio reader + event types
+from prad2py import dec                 # evio reader + event types
 
-cfg = dec.load_daq_config()                     # installed daq_config.json
-ch  = dec.EvChannel()
-ch.set_config(cfg)
-st = ch.open("/data/.../prad_023671.evio.00000")
-assert st == dec.Status.success
+cfg = dec.load_daq_config()             # installed daq_config.json
+ch  = dec.EvChannel(); ch.set_config(cfg)
+ch.open("/data/.../prad_023671.evio.00000")
 
 while ch.read() == dec.Status.success:
     if not ch.scan() or ch.get_event_type() != dec.EventType.Physics:
         continue
     for i in range(ch.get_n_events()):
-        ch.select_event(i)                              # picks sub-event + clears cache
-
-        # Cheapest accessor — TI/trigger metadata only (no detector decode):
-        info = ch.info()
-        # …do something with info.event_number / .trigger_bits / .timestamp …
-
-        # Decode detector products on demand — each is cached for repeat calls
-        # on the same sub-event, so asking for fadc() then gem() costs nothing
-        # extra if you only need one of them:
-        fadc_evt = ch.fadc()                            # FADC250/ADC1881M waveforms
-        tdc_evt  = ch.tdc()                             # V1190 tagger hits
-        # gem_evt = ch.gem();  vtp_evt = ch.vtp()       # when needed
-
-        for roc_idx in range(fadc_evt.nrocs):
-            roc = fadc_evt.roc(roc_idx)
-            for s in roc.present_slots():
-                slot = roc.slot(s)
-                for c in slot.present_channels():
-                    samples = slot.channel(c).samples   # numpy uint16 array
-                    …
-        for j in range(tdc_evt.n_hits):
-            h = tdc_evt.hit(j)                          # TdcHit
-            …
+        ch.select_event(i)                  # picks sub-event + clears cache
+        info = ch.info()                    # cheapest: TI/trigger metadata
+        fadc_evt = ch.fadc()                # FADC250 waveforms, cached
+        tdc_evt  = ch.tdc()                 # V1190 tagger hits, cached
+        # gem_evt = ch.gem();  vtp_evt = ch.vtp()
 ```
 
-The helper `prad2py.load_tdc_hits(path, ...)` is still available for the
-common "one-shot flat table of hits" workflow and lives on top of the
-`dec` submodule (decoder) and the `det` submodule (reconstruction: GEM
-+ HyCal + DetectorTransform + EpicsStore).
+Random-access mode (also used internally by `waveform_viewer` and
+`prad2_server`'s file mode):
+
+```python
+ch = dec.EvChannel(); ch.set_config(cfg)
+ch.open_random_access("run.evio.00000")
+n = ch.get_random_access_event_count()
+# jump to any evio event in O(1)
+for i in (0, n // 2, n - 1):
+    ch.read_event_by_index(i)
+    ch.scan(); ch.select_event(0)
+    print(int(ch.info().event_number))
+```
+
+Full reconstruction helpers live in `det`:
 
 ```python
 from prad2py import dec, det
@@ -234,12 +310,21 @@ while ch.read() == dec.Status.success:
         #     print("HyCal", c.center_id, c.x, c.y, c.energy)
 ```
 
-### Tagger ↔ HyCal coincidence
+The helper `prad2py.load_tdc_hits(path, ...)` remains for the common
+"one-shot flat table of hits" workflow.
+
+## GEM tools
+
+GEM-specific scripts and the `gem_dump` C++ binary live in the top-level
+[`gem/`](../gem/README.md) directory — see that README for details and
+GEM detector reference notes.
+
+## Tagger ↔ HyCal coincidence (ROOT macro)
 
 See `analysis/scripts/tagger_hycal_correlation.C` — a self-contained
 ROOT/ACLiC macro that builds ΔT histograms for (T10R, E49…E53) pairs,
-Gaussian-fits each coincidence peak, applies a ±Nσ timing cut, and
-plots the W1156 peak height/integral for the selected events.
+Gaussian-fits each coincidence peak, applies a ±Nσ timing cut, and plots
+the W1156 peak height/integral for the selected events.
 
 ```bash
 cd build

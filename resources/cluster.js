@@ -43,7 +43,7 @@ function geoCluster(){
             return dimmed?geoDimColor():geoEmptyColor(modules[i].t);
         },
         i => {
-            if(selectedModule&&selectedModule.n===modules[i].n) return {color:THEME.selectBorder,width:2.5};
+            if(selectedModule&&selectedModule.n===modules[i].n) return {color:'#fff',width:2.5};
             const ci=modCluster[i];
             const dimmed=selSet&&!selSet.has(i);
             if(ci!==undefined&&!dimmed){
@@ -223,7 +223,7 @@ function plotClHist(){
     const div='cl-energy-hist';
     if(!clHistBins||!clHistBins.length){
         currentClHist=null;
-        Plotly.react(div,[],{...PL,title:{text:'Cluster Energy — No data',font:{size:10,color:THEME.textMuted}}},PC2);
+        Plotly.react(div,[],{...PL,title:{text:'Cluster Energy — No data',font:{size:10,color:'#555'}}},PC2);
         return;
     }
     const x=clHistBins.map((_,i)=>clHistMin+(i+0.5)*clHistStep);
@@ -237,7 +237,7 @@ function plotClHist(){
         x,y:clHistBins,type:'bar',marker:{color:'#ff922b',line:{width:0}},
         hovertemplate:'%{x:.0f} MeV: %{y}<extra></extra>',
     }],{...PL,
-        title:{text:`Cluster Energy<br><span style="font-size:9px;color:var(--theme-text-dim)">${clHistEvents} evts | ${entries} clusters</span>`,font:{size:10,color:THEME.textDim}},
+        title:{text:`Cluster Energy<br><span style="font-size:9px;color:#888">${clHistEvents} evts | ${entries} clusters</span>`,font:{size:10,color:'#ccc'}},
         xaxis:{...PL.xaxis,title:'Energy (MeV)',range:[clHistMin,clHistMax]},
         yaxis:{...PL.yaxis,title:'Counts',
             type:document.getElementById('clhist-logy').checked?'log':'linear'},
@@ -260,7 +260,7 @@ function plotClStatHists(){
             x,y:bins,type:'bar',marker:{color,line:{width:0}},
             hovertemplate:'%{x}: %{y}<extra></extra>',
         }],{...PL,
-            title:{text:`${title}<br><span style="font-size:9px;color:var(--theme-text-dim)">${entries} entries</span>`,font:{size:10,color:THEME.textDim}},
+            title:{text:`${title}<br><span style="font-size:9px;color:#888">${entries} entries</span>`,font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,title:xTitle,range:[bmin-0.5,bmin+bins.length*bstep-0.5]},
             yaxis:{...PL.yaxis,title:'Counts'},bargap:0.05,
             shapes:refKey?refShapes(refKey):[],

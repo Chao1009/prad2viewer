@@ -22,11 +22,11 @@ function timeCutShapes(xMax){
     const shapes = refShapes('waveform') || [];
     if (isTimeCut()) {
         const dim = {type:'rect', yref:'paper', y0:0, y1:1,
-            fillcolor:THEME.overlayLight, line:{width:0}, layer:'above'};
+            fillcolor:'rgba(0,0,0,0.35)', line:{width:0}, layer:'above'};
         shapes.push({...dim, xref:'x', x0:0, x1:histConfig.time_min});
         shapes.push({...dim, xref:'x', x0:histConfig.time_max, x1:xMax});
         const edge = {type:'line', yref:'paper', y0:0, y1:1,
-            line:{color:THEME.highlight, width:1, dash:'dash'}};
+            line:{color:'rgba(255,200,50,0.5)', width:1, dash:'dash'}};
         shapes.push({...edge, x0:histConfig.time_min, x1:histConfig.time_min});
         shapes.push({...edge, x0:histConfig.time_max, x1:histConfig.time_max});
     }
@@ -36,7 +36,7 @@ function timeCutShapes(xMax){
 // Waveform plot layout with proper x-range and time cut
 function wfLayout(title, xMax){
     return {...PL,
-        title:{text:title, font:{size:11,color:THEME.textDim}},
+        title:{text:title, font:{size:11,color:'#ccc'}},
         xaxis:{...PL.xaxis, title:'Time (ns)', range:[0, xMax], autorange:false},
         yaxis:{...PL.yaxis, title:'ADC'},
         shapes:timeCutShapes(xMax),
@@ -122,13 +122,13 @@ function renderWaveform(mod, key, d, samples){
 
         const traces=wfStackTraces.map(w=>({
             x:w.x, y:w.y, type:'scatter', mode:'lines',
-            line:{color:THEME.accent, width:1, opacity:0.25},
+            line:{color:'rgba(119,119,170,0.25)', width:1},
             showlegend:false, hoverinfo:'skip',
         }));
         if(wfStackTraces.length>0){
             const last=wfStackTraces[wfStackTraces.length-1];
             traces.push({x:last.x, y:last.y, type:'scatter', mode:'lines',
-                name:'Latest', line:{color:THEME.accent, width:1.5}, showlegend:false});
+                name:'Latest', line:{color:'#7777aa', width:1.5}, showlegend:false});
         }
 
         let ylo=Infinity, yhi=-Infinity;
@@ -147,11 +147,11 @@ function renderWaveform(mod, key, d, samples){
 
     // --- normal (single event) mode ---
     const traces=[
-        {x,y:samples,type:'scatter',mode:'lines',name:'Waveform',line:{color:THEME.accent,width:1}},
-        {x:[0,tMax],y:[d.pm,d.pm],type:'scatter',mode:'lines',name:'Pedestal',line:{color:THEME.textMuted,width:1,dash:'dash'}},
+        {x,y:samples,type:'scatter',mode:'lines',name:'Waveform',line:{color:'#7777aa',width:1}},
+        {x:[0,tMax],y:[d.pm,d.pm],type:'scatter',mode:'lines',name:'Pedestal',line:{color:'#555',width:1,dash:'dash'}},
     ];
     const thr=d.pm+Math.max(5*d.pr,3);
-    traces.push({x:[0,tMax],y:[thr,thr],type:'scatter',mode:'lines',line:{color:THEME.grid,width:1,dash:'dot'},showlegend:false});
+    traces.push({x:[0,tMax],y:[thr,thr],type:'scatter',mode:'lines',line:{color:'#333',width:1,dash:'dot'},showlegend:false});
     peaks.forEach((p,i)=>{
         const col=PC[i%PC.length],px=[],py=[];
         for(let j=p.l;j<=p.r;j++){px.push(j*NS_PER_SAMPLE);py.push(samples[j]);}
@@ -166,7 +166,7 @@ function renderWaveform(mod, key, d, samples){
     });
 
     const layout = wfLayout(`${mod.n} — Event ${currentEvent}`, tMax);
-    layout.legend = {x:1,y:1,xanchor:'right',bgcolor:THEME.overlay,font:{size:9}};
+    layout.legend = {x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}};
     Plotly.react('waveform-div', traces, layout, PC2);
 
     // peaks table
@@ -186,7 +186,7 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor, 
     fetch(url).then(r=>r.json()).then(data=>{
         if(data.error||!data.bins||!data.bins.length){
             currentHist[divId]=null;
-            Plotly.react(divId,[],{...PL,title:{text:`${title} — No data`,font:{size:10,color:THEME.textMuted}}},PC2);
+            Plotly.react(divId,[],{...PL,title:{text:`${title} — No data`,font:{size:10,color:'#555'}}},PC2);
             return;
         }
         const x=data.bins.map((_,i)=>binMin+(i+0.5)*binStep);
@@ -200,11 +200,11 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor, 
         const shapes = refKey ? (refShapes(refKey)||[]) : [];
         if (timeCut && isTimeCut()) {
             const dim={type:'rect',yref:'paper',y0:0,y1:1,
-                fillcolor:THEME.overlayLight,line:{width:0},layer:'below'};
+                fillcolor:'rgba(0,0,0,0.35)',line:{width:0},layer:'below'};
             shapes.push({...dim, x0:xMin, x1:histConfig.time_min});
             shapes.push({...dim, x0:histConfig.time_max, x1:xMax});
             const edge={type:'line',yref:'paper',y0:0,y1:1,
-                line:{color:THEME.highlight, width:1, dash:'dash'}};
+                line:{color:'rgba(255,200,50,0.5)',width:1,dash:'dash'}};
             shapes.push({...edge, x0:histConfig.time_min, x1:histConfig.time_min});
             shapes.push({...edge, x0:histConfig.time_max, x1:histConfig.time_max});
         }
@@ -212,7 +212,7 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor, 
             x,y:data.bins,type:'bar',marker:{color:barColor,line:{width:0}},
             hovertemplate:'%{x:.0f}: %{y}<extra></extra>',
         }],{...PL,
-            title:{text:`${title}<br><span style="font-size:9px;color:var(--theme-text-dim)">${stats}</span>`,font:{size:10,color:THEME.textDim}},
+            title:{text:`${title}<br><span style="font-size:9px;color:#888">${stats}</span>`,font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,title:xTitle,range:[xMin,xMax]},
             yaxis:{...PL.yaxis,title:'Counts',
                 type:logYId&&document.getElementById(logYId).checked?'log':'linear'},
@@ -221,7 +221,7 @@ function fetchAndPlotHist(divId, url, title, xTitle, binMin, binStep, barColor, 
         },PC2);
     }).catch(()=>{
         currentHist[divId]=null;
-        Plotly.react(divId,[],{...PL,title:{text:'Fetch error',font:{size:10,color:THEME.danger}}},PC2);
+        Plotly.react(divId,[],{...PL,title:{text:'Fetch error',font:{size:10,color:'#f66'}}},PC2);
     });
 }
 

@@ -61,7 +61,7 @@ function fetchAndPlotEpicsSlot(slot){
                     return [ymin-pad,ymax+pad];
                 })()},
             showlegend:traces.length>1,
-            legend:{font:{size:9,color:THEME.textDim},bgcolor:'rgba(0,0,0,0)',x:0,y:1},
+            legend:{font:{size:9,color:'#aaa'},bgcolor:'rgba(0,0,0,0)',x:0,y:1},
         },PC_EPICS);
     });
 }

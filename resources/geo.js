@@ -23,9 +23,9 @@ let updateGeoTooltip=()=>{};  // set in init(), called on data refresh
 
 // Light theme flag — set by report.js captureGeoForTab for print-friendly rendering
 let geoLightTheme=false;
-function geoEmptyColor(type){ return THEME.noData; }
-function geoDimColor(){ return THEME.altBase; }
-function geoStrokeColor(){ return THEME.border; }
+function geoEmptyColor(type){ return geoLightTheme?(type==='G'?'#e8e8f0':'#dde'):(type==='G'?'#1a1a2e':'#12122a'); }
+function geoDimColor(){ return geoLightTheme?'#d0d0dd':'#0a0a18'; }
+function geoStrokeColor(){ return geoLightTheme?'#aaa':'#333'; }
 
 // =========================================================================
 // Color scale — click the colorbar to cycle palettes
@@ -208,7 +208,7 @@ function geoDq(){
 
     renderGeo(
         i => vals[i]!==null ? geoValueColor(vals[i],vmin,vmax,useLog) : geoEmptyColor(modules[i].t),
-        i => (selectedModule&&selectedModule.n===modules[i].n) ? {color:THEME.selectBorder,width:2.5} : null,
+        i => (selectedModule&&selectedModule.n===modules[i].n) ? {color:'#fff',width:2.5} : null,
         null
     );
 }
@@ -289,7 +289,7 @@ let _geoOutlineFn=null, _geoDecorateFn=null;  // stored for hover-only redraws
 function renderGeoFills(colorFn){
     if(!geoCtx)return;
     const ctx=geoCtx;
-    if(geoLightTheme){ctx.fillStyle=THEME.bg;ctx.fillRect(0,0,canvasW,canvasH);}
+    if(geoLightTheme){ctx.fillStyle='#fff';ctx.fillRect(0,0,canvasW,canvasH);}
     else ctx.clearRect(0,0,canvasW,canvasH);
     const focus=geoFocusPbWO4;
     for(let i=0;i<modules.length;i++){
@@ -340,7 +340,7 @@ function renderGeoOutlines(outlineFn, decorateFn){
     // 3. hover highlight (same for all tabs)
     if(hoveredModule){
         const m=hoveredModule,[cx,cy]=d2c(m.x,m.y),w=m.sx*scale,h=m.sy*scale;
-        ctx.strokeStyle=THEME.accent; ctx.lineWidth=1.5;
+        ctx.strokeStyle='#00b4d8'; ctx.lineWidth=1.5;
         ctx.strokeRect(cx-w/2,cy-h/2,w,h);
     }
 

@@ -34,7 +34,7 @@ function elasticEp(beamE, thetaDeg){
 function plotEnergyAngle(){
     const div='physics-plot';
     if(!physicsData||!physicsData.bins||!physicsData.bins.length||!physicsData.nx){
-        Plotly.react(div,[],{...PL,title:{text:'Energy vs Angle — No data',font:{size:12,color:THEME.textDim}}},PC_EPICS);
+        Plotly.react(div,[],{...PL,title:{text:'Energy vs Angle — No data',font:{size:12,color:'#888'}}},PC_EPICS);
         document.getElementById('physics-stats').textContent='';
         return;
     }
@@ -56,7 +56,7 @@ function plotEnergyAngle(){
         hovertemplate:'θ=%{x:.2f}° E=%{y:.0f} MeV: %{text}<extra></extra>',
         text:z.map((row,iy)=>row.map((v,ix)=>String(d.bins[iy*d.nx+ix]))),
         colorbar:{title:logZ?'log₁₀(counts)':'counts',titleside:'right',
-            titlefont:{size:10,color:THEME.textDim},tickfont:{size:9,color:THEME.textDim}},
+            titlefont:{size:10,color:'#aaa'},tickfont:{size:9,color:'#aaa'}},
     }];
 
     if(showElastic && d.beam_energy>0){
@@ -66,18 +66,18 @@ function plotEnergyAngle(){
             if(e>=d.energy_min&&e<=d.energy_max){ex.push(th);ey.push(e);}
         }
         traces.push({x:ex,y:ey,mode:'lines',
-            line:{color:THEME.success,width:2,dash:'dot'},
+            line:{color:'#00ff88',width:2,dash:'dot'},
             name:`ep elastic (${d.beam_energy} MeV)`,
             hovertemplate:'θ=%{x:.2f}° E=%{y:.0f} MeV<extra>ep elastic</extra>'});
     }
 
     Plotly.react(div,traces,{...PL,
-        title:{text:`Energy vs Angle (${d.events} evts)`,font:{size:12,color:THEME.text}},
+        title:{text:`Energy vs Angle (${d.events} evts)`,font:{size:12,color:'#ccc'}},
         xaxis:{...PL.xaxis,title:'Scattering Angle (deg)'},
         yaxis:{...PL.yaxis,title:'Energy (MeV)'},
         margin:{l:55,r:80,t:30,b:40},
         showlegend:showElastic,
-        legend:{x:0.7,y:0.95,font:{size:10,color:THEME.textDim},bgcolor:'rgba(0,0,0,0)'},
+        legend:{x:0.7,y:0.95,font:{size:10,color:'#aaa'},bgcolor:'rgba(0,0,0,0)'},
         shapes:refShapes('energy_angle'),
     },PC_EPICS);
 
@@ -92,7 +92,7 @@ function plotMollerXY(){
     const div='moller-xy-plot';
     const d=mollerData;
     if(!d||!d.xy_bins||!d.xy_bins.length||!d.xy_nx){
-        Plotly.react(div,[],{...PL,title:{text:'Møller XY — No data',font:{size:12,color:THEME.textDim}}},PC_EPICS);
+        Plotly.react(div,[],{...PL,title:{text:'Møller XY — No data',font:{size:12,color:'#888'}}},PC_EPICS);
         return;
     }
     const logZ=document.getElementById('physics-logz').checked;
@@ -114,9 +114,9 @@ function plotMollerXY(){
         hovertemplate:'x=%{x:.1f} y=%{y:.1f} mm: %{text}<extra></extra>',
         text:z.map((row,iy)=>row.map((v,ix)=>String(d.xy_bins[iy*d.xy_nx+ix]))),
         colorbar:{title:logZ?'log₁₀':'counts',titleside:'right',
-            titlefont:{size:10,color:THEME.textDim},tickfont:{size:9,color:THEME.textDim}},
+            titlefont:{size:10,color:'#aaa'},tickfont:{size:9,color:'#aaa'}},
     }],{...PL,
-        title:{text:`Møller XY (${d.moller_events} evts) ${cutTxt}`,font:{size:11,color:THEME.text}},
+        title:{text:`Møller XY (${d.moller_events} evts) ${cutTxt}`,font:{size:11,color:'#ccc'}},
         xaxis:{...PL.xaxis,title:'X (mm)',scaleanchor:'y',scaleratio:1},
         yaxis:{...PL.yaxis,title:'Y (mm)'},
         margin:{l:50,r:70,t:30,b:35},
@@ -128,7 +128,7 @@ function plotMollerEnergy(){
     const div='moller-energy-plot';
     const d=mollerData;
     if(!d||!d.energy_hist||!d.energy_hist.bins||!d.energy_hist.bins.length){
-        Plotly.react(div,[],{...PL,title:{text:'Møller Energy — No data',font:{size:12,color:THEME.textDim}}},PC_EPICS);
+        Plotly.react(div,[],{...PL,title:{text:'Møller Energy — No data',font:{size:12,color:'#888'}}},PC_EPICS);
         return;
     }
     const h=d.energy_hist;
@@ -137,10 +137,10 @@ function plotMollerEnergy(){
     Plotly.react(div,[{
         x:x, y:h.bins,
         type:'bar',
-        marker:{color:THEME.accent},
+        marker:{color:'#00b4d8'},
         hovertemplate:'E=%{x:.0f} MeV: %{y}<extra></extra>',
     }],{...PL,
-        title:{text:`Møller Cluster Energy (${d.moller_events} evts)`,font:{size:11,color:THEME.text}},
+        title:{text:`Møller Cluster Energy (${d.moller_events} evts)`,font:{size:11,color:'#ccc'}},
         xaxis:{...PL.xaxis,title:'Energy (MeV)'},
         yaxis:{...PL.yaxis,title:'Counts'},
         margin:{l:50,r:20,t:28,b:35},

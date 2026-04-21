@@ -31,9 +31,11 @@ let occData={}, occTcutData={}, occTotal=0;
 let activeTab='dq';  // 'dq' or 'cluster'
 
 // =========================================================================
-// Plotly shared config — PL is a GETTER so it tracks the active theme.
+// Plotly shared config
 // =========================================================================
-Object.defineProperty(window, 'PL', { get: () => plotlyLayout() });
+const PL={paper_bgcolor:'#1a1a2e',plot_bgcolor:'#11112a',font:{family:'Consolas,monospace',size:10,color:'#aaa'},
+    margin:{l:45,r:10,t:24,b:32},xaxis:{gridcolor:'#333',zerolinecolor:'#444'},
+    yaxis:{gridcolor:'#333',zerolinecolor:'#444'}};
 const PC2={responsive:true,displayModeBar:false};
 const PC_EPICS={responsive:true,displayModeBar:true,
     modeBarButtonsToRemove:['sendDataToCloud','lasso2d','select2d'],
@@ -45,8 +47,8 @@ const PC_EPICS={responsive:true,displayModeBar:true,
 const plotRegistry=[];  // [{id, tab, layout, config}]
 
 function registerPlot(id, tab, title, config){
-    const layout = plotlyLayout();
-    if(title) layout.title={text:title, font:{size:10,color:THEME.textMuted}};
+    const layout={...PL};
+    if(title) layout.title={text:title, font:{size:10,color:'#555'}};
     plotRegistry.push({id, tab, layout, config: config||PC2});
 }
 
@@ -82,7 +84,7 @@ function geoHandleClick(cx,cy){
         } else if(activeTab==='lms'){
             lmsSelectedModule=-1;
             currentLmsData=null;
-            Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:THEME.textMuted}}},PC2);
+            Plotly.react('lms-plot',[],{...PL,title:{text:'LMS History',font:{size:10,color:'#555'}}},PC2);
             document.getElementById('lms-detail-header').innerHTML=
                 '<span class="cl-info-text">Click a module to view LMS history</span>';
             updateLmsTable(); geoLms();
@@ -93,9 +95,9 @@ function geoHandleClick(cx,cy){
             document.getElementById('detail-header').innerHTML=
                 '<div class="empty-msg">Click a module to view details</div>';
             Plotly.react('waveform-div',[], wfLayout('', wfWindowNs()), PC2);
-            Plotly.react('heighthist-div',[],{...PL,title:{text:'Height Histogram',font:{size:10,color:THEME.textMuted}}},PC2);
-            Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:THEME.textMuted}}},PC2);
-            Plotly.react('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:THEME.textMuted}}},PC2);
+            Plotly.react('heighthist-div',[],{...PL,title:{text:'Height Histogram',font:{size:10,color:'#555'}}},PC2);
+            Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
+            Plotly.react('poshist-div',[],{...PL,title:{text:'Position Histogram',font:{size:10,color:'#555'}}},PC2);
             document.getElementById('peaks-tbody').innerHTML='';
             geoDq();
         }
@@ -733,20 +735,6 @@ function init(){
     document.getElementById('ring-select').onfocus=()=>{ updateRingSelector(); };
     document.getElementById('follow-status').onclick=()=>{ autoFollow=true; updateFollowStatus(); loadLatestEvent(); };
     // per-tab clear buttons
-
-    // Theme toggle — flips dark ↔ light and retheme every registered plot
-    const themeBtn = document.getElementById('btn-theme');
-    function updateThemeBtn(){
-        themeBtn.textContent = currentTheme() === 'light' ? '☾' : '☀';
-        themeBtn.title = `Theme: ${currentTheme()} — click to switch`;
-    }
-    updateThemeBtn();
-    themeBtn.onclick = () => toggleTheme();
-    onThemeChange(() => {
-        updateThemeBtn();
-        // Re-apply chrome to every previously-drawn plot.
-        for(const p of plotRegistry) plotlyRelayout(p.id);
-    });
 
     // Clear All — resets all tabs' data for new run
     document.getElementById('btn-clear-all').onclick=()=>{

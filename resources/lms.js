@@ -32,15 +32,15 @@ function geoLms(){
             const md=mods[String(i)];
             const val=lmsVal(md);
             if(val!==null&&val>0){
-                if(metric==='warn') return md.warn?THEME.danger:THEME.success;
+                if(metric==='warn') return md.warn?'#f66':'#51cf66';
                 return geoValueColor(val,vmin,vmax,useLog);
             }
             return geoEmptyColor(modules[i].t);
         },
         i => {
-            if(lmsSelectedModule===i) return {color:THEME.selectBorder,width:2.5};
+            if(lmsSelectedModule===i) return {color:'#fff',width:2.5};
             const md=mods[String(i)];
-            if(md&&md.warn) return {color:THEME.danger,width:1.5};
+            if(md&&md.warn) return {color:'#f66',width:1.5};
             return null;
         },
         null
@@ -72,7 +72,7 @@ function fetchLmsHistory(modIdx, modName){
         if(!data.time||!data.time.length){
             currentLmsData=null;
             Plotly.react('lms-plot',[],{...PL,
-                title:{text:`${modName} — No LMS data`,font:{size:10,color:THEME.textMuted}}},PC2);
+                title:{text:`${modName} — No LMS data`,font:{size:10,color:'#555'}}},PC2);
             return;
         }
         currentLmsData={x:Array.from(data.time), y:Array.from(data.integral)};
@@ -86,20 +86,20 @@ function fetchLmsHistory(modIdx, modName){
             {x:data.time, y:data.integral, type:'scatter', mode:'markers',
              marker:{color:'#ff922b',size:3}, name:'LMS integral'},
             {x:tRange, y:[mean,mean],
-             type:'scatter', mode:'lines', line:{color:THEME.success,width:1,dash:'dash'}, name:`Mean ${mean.toFixed(0)}`},
+             type:'scatter', mode:'lines', line:{color:'#51cf66',width:1,dash:'dash'}, name:`Mean ${mean.toFixed(0)}`},
             {x:tRange, y:[warnHi,warnHi],
-             type:'scatter', mode:'lines', line:{color:THEME.danger,width:1,dash:'dot'}, showlegend:false},
+             type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
             {x:tRange, y:[warnLo,warnLo],
-             type:'scatter', mode:'lines', line:{color:THEME.danger,width:1,dash:'dot'}, showlegend:false},
+             type:'scatter', mode:'lines', line:{color:'#f66',width:1,dash:'dot'}, showlegend:false},
         ],{...PL,
             title:{text:`LMS — ${modName} (${data.events} pts)${g_lmsRefIndex>=0?' [ref corrected]':''}`,
-                font:{size:10,color:THEME.text}},
+                font:{size:10,color:'#ccc'}},
             xaxis:{...PL.xaxis,
                 title:data.sync_unix
                     ?`Time (s) after ${new Date((data.sync_unix - data.sync_rel_sec)*1000).toISOString().replace('T',' ').slice(0,19)} UTC`
                     :'Time (s)'},
             yaxis:{...PL.yaxis,title:g_lmsRefIndex>=0?'Corrected Integral':'Integral'},
-            legend:{x:1,y:1,xanchor:'right',bgcolor:THEME.overlay,font:{size:9}},
+            legend:{x:1,y:1,xanchor:'right',bgcolor:'rgba(0,0,0,0.6)',font:{size:9}},
             margin:{...PL.margin,t:28,b:36},
             shapes:refShapes('lms'),
         },PC2);

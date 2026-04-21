@@ -23,13 +23,13 @@ function setEtStatus(connected, waiting, retries) {
     const el = document.getElementById('et-status');
     if (connected) {
         el.textContent = '● Connected';
-        el.style.color = THEME.success;
+        el.style.color = '#51cf66';
     } else if (waiting) {
         el.textContent = `● Waiting for ET (${retries||'...'})`;
-        el.style.color = THEME.warn;
+        el.style.color = '#ffd43b';
     } else {
         el.textContent = '● Disconnected';
-        el.style.color = THEME.danger;
+        el.style.color = '#f66';
     }
 }
 
@@ -54,10 +54,10 @@ function pollLivetime(){
         el.style.display='';
         if(d.livetime>=0){
             el.textContent='DAQ Livetime: '+d.livetime.toFixed(1)+'%';
-            el.style.color=d.livetime>=90?THEME.success:d.livetime>=80?THEME.warn:THEME.danger;
+            el.style.color=d.livetime>=90?'#51cf66':d.livetime>=80?'#ffd43b':'#f66';
         } else {
             el.textContent='DAQ Livetime: N/A';
-            el.style.color=THEME.textDim;
+            el.style.color='#888';
         }
     }).catch(()=>{});
 }

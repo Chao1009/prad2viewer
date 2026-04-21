@@ -255,16 +255,16 @@ int main(int argc, char *argv[])
     }
 
     //fit histograms, and get the beam position and vertex distance for each detector plane
-    double hycal_vertex_z = fitAndDraw(vertex_hycal, "calib_result/hycal_vertex_z", 100.);
-    double hycal_center_x = fitAndDraw(center_hycal_x, "calib_result/hycal_center_x", 2.);
-    double hycal_center_y = fitAndDraw(center_hycal_y, "calib_result/hycal_center_y", 2.);
+    double hycal_vertex_z = fitAndDraw(vertex_hycal, "Poscalib_result/" + run_str +"/hycal_vertex_z", 100.);
+    double hycal_center_x = fitAndDraw(center_hycal_x, "Poscalib_result/" + run_str +"/hycal_center_x", 2.);
+    double hycal_center_y = fitAndDraw(center_hycal_y, "Poscalib_result/" + run_str +"/hycal_center_y", 2.);
     double gem_vertex_z[4];
     double gem_center_x[4];
     double gem_center_y[4];
     for (int d = 0; d < 4; d++) {
-        gem_vertex_z[d] = fitAndDraw(vertex_gem[d], Form("calib_result/gem%d_vertex_z", d), 25.);
-        gem_center_x[d] = fitAndDraw(center_gem_x[d], Form("calib_result/gem%d_center_x", d), 0.3);
-        gem_center_y[d] = fitAndDraw(center_gem_y[d], Form("calib_result/gem%d_center_y", d), 1.);
+        gem_vertex_z[d] = fitAndDraw(vertex_gem[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_vertex_z", 25.);
+        gem_center_x[d] = fitAndDraw(center_gem_x[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_x", 0.3);
+        gem_center_y[d] = fitAndDraw(center_gem_y[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_y", 1.);
     }
     //print summary of calibration results
     std::cerr << "HyCal vertex z distance: " << hycal_vertex_z << " mm (pre-entered number " << hycal_z << " mm)" << "\n";
@@ -332,6 +332,7 @@ double fitAndDraw(TH1F* hist, const std::string& out_path, const double fit_rang
     latex->SetNDC();
     latex->SetTextSize(0.04);
     latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1), hist->GetFunction("gaus")->GetParError(1)));
+    fs::create_directories(fs::path(out_path).parent_path());
     c->SaveAs((out_path + ".png").c_str());
     delete c;
 

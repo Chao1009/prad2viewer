@@ -573,8 +573,10 @@ if(!prad1){
                         if (cd.nsamples <= 0) continue;
                         if(is_lms || is_alpha) {
                             std::string mod_name = moduleName(crate, s, c);
+                            if(mod_name.empty()) continue;
                             if(mod_name[0] != 'W' && mod_name[0] != 'G'){
                                 if(mod_name[0] == 'V'){
+                                    if(mod_name.length() != 2) continue;
                                     ev->veto_id[veto_nch] = mod_name[1] - '0';
                                     ana.Analyze(cd.samples, cd.nsamples, wres);
                                     ev->veto_npeaks[veto_nch] = wres.npeaks;
@@ -584,6 +586,7 @@ if(!prad1){
                                     veto_nch++;
                                 }
                                 else if(mod_name[0] == 'L'){
+                                    if(mod_name.length() != 4) continue;
                                     if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
                                     else ev->lms_id[lms_nch] = mod_name[3] - '0';
                                     ana.Analyze(cd.samples, cd.nsamples, wres);

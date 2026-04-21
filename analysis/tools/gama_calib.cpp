@@ -24,6 +24,9 @@
 #include <string>
 #include <cstdlib>
 #include <getopt.h>
+#include <filesystem>
+#include <vector>
+#include <algorithm>
 
 #ifndef DATABASE_DIR
 #define DATABASE_DIR "."
@@ -108,8 +111,6 @@ int main(int argc, char *argv[])
     //setup for reconstruction
     fdec::HyCalSystem hycal;
     evc::DaqConfig daq_cfg;
-    std::string db_dir = DATABASE_DIR;
-    if (const char *env = std::getenv("PRAD2_DATABASE_DIR"))  db_dir = env;
     std::string daq_config_file = db_dir + "/daq_config.json"; // default DAQ config for PRad2
     evc::load_daq_config(daq_config_file, daq_cfg);
     hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/daq_map.json");
@@ -163,15 +164,16 @@ int main(int argc, char *argv[])
     }
     //calculate calibration constants for each module, output calibration file to database
     for (int m = 0; m < hycal.module_count(); m++) {
-        auto [peak, sigma, chi2] = physics.FitPeakResolution(m);
+        auto mod = hycal.module(m);
+        auto [peak, sigma, chi2] = physics.FitPeakResolution(mod->id);
         if (peak > 0 && sigma > 0) {
-            std::string name = hycal.module(m).name;
+            std::string name = mod->name;
             if(name[0] != 'W') continue; // only calibrate PbWO4
             float expected_peak = physics.ExpectedPeakPosition(name);
             if (expected_peak > 0) {
                 float ratio = expected_peak / peak;
-                float calib_const = ratio * hycal.module(m).cal_factor;
-                hycal.SetCalibConstant(hycal.module(m).id, calib_const);
+                float calib_const = ratio * mod->cal_factor;
+                hycal.SetCalibConstant(mod->id, calib_const);
                 ratio_module_all->Fill(ratio);
                 std::cerr << "Module " << name << ": peak = " << peak << ", expected = " << expected_peak << ", ratio = " << ratio << ", new calib const = " << calib_const << "\n";
             }

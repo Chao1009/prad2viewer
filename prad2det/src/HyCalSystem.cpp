@@ -45,7 +45,7 @@ int HyCalSystem::name_to_id(const std::string &name)
     return -1;
 }
 
-int HyCalSystem::id_to_index(int id)
+int HyCalSystem::id_to_index(int id) const
 {
     auto it = id_map_.find(id);
     return (it != id_map_.end()) ? it->second : -1;

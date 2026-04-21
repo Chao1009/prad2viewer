@@ -248,7 +248,7 @@ public:
 
     // --- static helpers -----------------------------------------------------
     static int          name_to_id(const std::string &name);
-    int                 id_to_index(int id);
+    int                 id_to_index(int id) const;
     static std::string  id_to_name(int id);
     static ModuleType   parse_type(const std::string &t);
 

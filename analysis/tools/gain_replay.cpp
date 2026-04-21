@@ -72,7 +72,6 @@ int main(int argc, char *argv[])
     }
 
     evc::DaqConfig daq_cfg;
-    if (!daq_config.empty()) daq_config = db_dir + "/daq_config.json"; // default DAQ config for PRad2
     evc::load_daq_config(daq_config, daq_cfg);
 
     analysis::Replay replay;
@@ -159,7 +158,9 @@ int main(int argc, char *argv[])
                             int mod_id = replay.moduleID(crate, s, c);
                             if(mod_id < 0){
                                 std::string mod_name = replay.moduleName(crate, s, c);
+                                if(mod_name.empty()) continue;
                                 if(mod_name[0] == 'L'){
+                                    if(mod_name.length() != 4) continue;
                                     int lms_id;
                                     if(mod_name[3] == 'P') lms_id = 0;
                                     else lms_id = mod_name[3] - '0';
@@ -218,13 +219,14 @@ done:
     }
 
     //variables to store fit results
+    const int nmod = hycal.module_count();
     float lms_ref[4] = {0}, alpha_ref[4] = {0};
     float lms_sigma[4] = {0}, alpha_sigma[4] = {0};
     float lms_chi2[4] = {0}, alpha_chi2[4] = {0};
-    float mod_lms[hycal.module_count()] = {0};
-    float mod_lms_sigma[hycal.module_count()] = {0};
-    float mod_lms_chi2[hycal.module_count()] = {0};
-    float g[hycal.module_count()][4] = {{0}}; // gain factors for each module and alpha peak
+    float mod_lms[nmod] = {0};
+    float mod_lms_sigma[nmod] = {0};
+    float mod_lms_chi2[nmod] = {0};
+    float g[nmod][4] = {{0}}; // gain factors for each module and alpha peak
 
     int n_lms = 0;
     for (int i = 0; i < 4; ++i) {

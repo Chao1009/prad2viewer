@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
 {
     std::string input_calib_file, output_calib_file;
     std::string output_root_file, daq_config_file;
-    int iteration = 1; // default to iteration 1, which uses cosmic calibration as input. User can specify -i 0 to start from scratch (no input calib file, just use adc*0.1 as energy)
+    int iteration = 1; // default to iteration 1, which uses cosmic calibration as input. User can specify -i 1 to start from scratch (no input calib file, just use adc*0.1 as energy)
     std::string db_dir = prad2::resolve_data_dir(
         "PRAD2_DATABASE_DIR",
         {"../share/prad2evviewer/database"},
@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
     }
     if (root_files.empty()) {
         std::cerr << "No input files specified.\n";
-        std::cerr << "Usage: epCalib <input_raw.root|dir> [more files...] -i iteration -o output_root_file -E Ebeam -D daq_config.json -n max_events]\n";
+        std::cerr << "Usage: epCalib <input_raw.root|dir> [more files...] -i iteration -o output_root_file -E Ebeam -D daq_config.json -n max_events\n";
         return 1;
     }
 

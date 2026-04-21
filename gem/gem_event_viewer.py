@@ -142,6 +142,20 @@ class EventMeta:
     trigger_bits: int
 
 
+def _open_any(ch, path: str) -> bool:
+    """Open ``path`` in evio random-access mode if possible, otherwise
+    sequential.  Returns True iff RA was used (i.e. ``read_event_by_index``
+    is supported on this handle).  Raises on outright open failure.
+    """
+    if ch.open_random_access(path) == dec.Status.success:
+        return True
+    # Some evio-4 files lack the optional block-index arrays RA needs.
+    # Try the plain sequential mode as a fallback.
+    if ch.open(path) == dec.Status.success:
+        return False
+    raise RuntimeError(f"cannot open {path} (neither ra nor sequential)")
+
+
 class ScanWorker(QObject):
     """Builds an EventMeta list for every Physics sub-event in a file.
 
@@ -170,46 +184,71 @@ class ScanWorker(QObject):
             cfg = dec.load_daq_config(self._daq)
             ch = dec.EvChannel()
             ch.set_config(cfg)
-            st = ch.open_random_access(self._path)
-            if st != dec.Status.success:
-                raise RuntimeError(f"cannot open {self._path} (ra): {st}")
+            is_ra = _open_any(ch, self._path)
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(f"{type(exc).__name__}: {exc}")
             return
 
         events: List[EventMeta] = []
-        n_evio = ch.get_random_access_event_count()
         start = time.monotonic()
         try:
-            for evio_idx in range(n_evio):
-                if self._cancel:
-                    break
-                if ch.read_event_by_index(evio_idx) != dec.Status.success:
-                    continue
-                if not ch.scan():
-                    continue
-                if ch.get_event_type() != dec.EventType.Physics:
-                    continue
-                n_sub = ch.get_n_events()
-                for i in range(n_sub):
-                    ch.select_event(i)
-                    info = ch.info()
-                    events.append(EventMeta(
-                        record_idx=evio_idx,
-                        subevt_idx=i,
-                        event_number=int(info.event_number),
-                        trigger_number=int(info.trigger_number),
-                        trigger_bits=int(info.trigger_bits),
-                    ))
-                    if len(events) % self.PROGRESS_EVERY == 0:
-                        self.progress.emit(len(events), evio_idx + 1)
+            if is_ra:
+                n_evio = ch.get_random_access_event_count()
+                for evio_idx in range(n_evio):
+                    if self._cancel:
+                        break
+                    if ch.read_event_by_index(evio_idx) != dec.Status.success:
+                        continue
+                    if not ch.scan():
+                        continue
+                    if ch.get_event_type() != dec.EventType.Physics:
+                        continue
+                    n_sub = ch.get_n_events()
+                    for i in range(n_sub):
+                        ch.select_event(i)
+                        info = ch.info()
+                        events.append(EventMeta(
+                            record_idx=evio_idx,
+                            subevt_idx=i,
+                            event_number=int(info.event_number),
+                            trigger_number=int(info.trigger_number),
+                            trigger_bits=int(info.trigger_bits),
+                        ))
+                        if len(events) % self.PROGRESS_EVERY == 0:
+                            self.progress.emit(len(events), evio_idx + 1)
+            else:
+                record_idx = 0
+                while ch.read() == dec.Status.success:
+                    if self._cancel:
+                        break
+                    if not ch.scan():
+                        record_idx += 1
+                        continue
+                    if ch.get_event_type() != dec.EventType.Physics:
+                        record_idx += 1
+                        continue
+                    n_sub = ch.get_n_events()
+                    for i in range(n_sub):
+                        ch.select_event(i)
+                        info = ch.info()
+                        events.append(EventMeta(
+                            record_idx=record_idx,
+                            subevt_idx=i,
+                            event_number=int(info.event_number),
+                            trigger_number=int(info.trigger_number),
+                            trigger_bits=int(info.trigger_bits),
+                        ))
+                        if len(events) % self.PROGRESS_EVERY == 0:
+                            self.progress.emit(len(events), record_idx + 1)
+                    record_idx += 1
         except Exception as exc:  # noqa: BLE001
             ch.close()
             self.failed.emit(f"{type(exc).__name__}: {exc}")
             return
         ch.close()
         elapsed = time.monotonic() - start
-        self.progress.emit(len(events), n_evio)
+        self.progress.emit(len(events),
+                           n_evio if is_ra else record_idx)
         self.finished.emit(events, elapsed)
 
 
@@ -319,8 +358,7 @@ class PedestalWorker(QObject):
         try:
             cfg = dec.load_daq_config(self._daq)
             ch = dec.EvChannel(); ch.set_config(cfg)
-            if ch.open_random_access(self._path) != dec.Status.success:
-                raise RuntimeError(f"cannot open {self._path} for pedestals")
+            is_ra = _open_any(ch, self._path)
         except Exception as exc:  # noqa: BLE001
             self.failed.emit(f"{type(exc).__name__}: {exc}")
             return
@@ -328,41 +366,59 @@ class PedestalWorker(QObject):
         accum: Dict[Tuple[int, int, int, int], List[float]] = {}
         n_used = 0
         target = self._max
-        n_evio = ch.get_random_access_event_count()
-        try:
-            for evio_idx in range(n_evio):
-                if self._cancel or n_used >= target:
+
+        def _process_current_event():
+            """Fold the current scanned event into ``accum`` if it's a
+            physics event with at least one full-readout APV.  Returns
+            True if anything was accumulated."""
+            nonlocal n_used
+            if ch.get_event_type() != dec.EventType.Physics:
+                return False
+            any_used = False
+            for i in range(ch.get_n_events()):
+                if n_used >= target:
                     break
-                if ch.read_event_by_index(evio_idx) != dec.Status.success:
-                    continue
-                if not ch.scan():
-                    continue
-                if ch.get_event_type() != dec.EventType.Physics:
-                    continue
-                for i in range(ch.get_n_events()):
-                    if n_used >= target:
-                        break
-                    ch.select_event(i)
-                    ssp = ch.gem()
-                    # require at least one full-readout APV (nstrips == 128)
-                    has_full = False
-                    for m in range(ssp.nmpds):
-                        mpd = ssp.mpd(m)
-                        if not mpd.present:
-                            continue
-                        for a in range(_MAX_APVS_PER_MPD):
-                            apv = mpd.apv(a)
-                            if apv.present and apv.nstrips == _APV_STRIP_SIZE:
-                                has_full = True
-                                break
-                        if has_full:
-                            break
-                    if not has_full:
+                ch.select_event(i)
+                ssp = ch.gem()
+                has_full = False
+                for m in range(ssp.nmpds):
+                    mpd = ssp.mpd(m)
+                    if not mpd.present:
                         continue
-                    _accumulate_pedestals(ssp, accum)
-                    n_used += 1
-                    if n_used % self.PROGRESS_EVERY == 0:
-                        self.progress.emit(n_used, target)
+                    for a in range(_MAX_APVS_PER_MPD):
+                        apv = mpd.apv(a)
+                        if apv.present and apv.nstrips == _APV_STRIP_SIZE:
+                            has_full = True
+                            break
+                    if has_full:
+                        break
+                if not has_full:
+                    continue
+                _accumulate_pedestals(ssp, accum)
+                n_used += 1
+                any_used = True
+                if n_used % self.PROGRESS_EVERY == 0:
+                    self.progress.emit(n_used, target)
+            return any_used
+
+        try:
+            if is_ra:
+                n_evio = ch.get_random_access_event_count()
+                for evio_idx in range(n_evio):
+                    if self._cancel or n_used >= target:
+                        break
+                    if ch.read_event_by_index(evio_idx) != dec.Status.success:
+                        continue
+                    if not ch.scan():
+                        continue
+                    _process_current_event()
+            else:
+                while not self._cancel and n_used < target:
+                    if ch.read() != dec.Status.success:
+                        break
+                    if not ch.scan():
+                        continue
+                    _process_current_event()
         except Exception as exc:  # noqa: BLE001
             ch.close()
             self.failed.emit(f"{type(exc).__name__}: {exc}")
@@ -388,8 +444,13 @@ class PedestalWorker(QObject):
 
 class Stepper:
     """Positioned EVIO reader.  Fetches SspEventData for any event by its
-    evio record index via EvChannel's random-access mode — Prev/Next/Jump
-    are all O(1).  A small LRU cache keeps repeat visits instant.
+    evio record index.
+
+    Uses random-access mode when the file supports it — Prev/Next/Jump
+    are then O(1).  For evio-4 files without a RA-friendly block index
+    falls back to sequential mode, where backward jumps cost a
+    close/reopen + walk.  A small LRU cache keeps repeat visits instant
+    in both modes.
     """
 
     CACHE_SIZE = 16
@@ -398,6 +459,8 @@ class Stepper:
         self._path = path
         self._daq = daq_config_path
         self._ch: Optional[object] = None
+        self._is_ra = False
+        self._position = -1            # sequential-mode read cursor
         self._cache: Dict[int, object] = {}  # event_idx -> SspEventData
         self._cache_order: List[int] = []
 
@@ -407,14 +470,17 @@ class Stepper:
         cfg = dec.load_daq_config(self._daq)
         self._ch = dec.EvChannel()
         self._ch.set_config(cfg)
-        st = self._ch.open_random_access(self._path)
-        if st != dec.Status.success:
-            raise RuntimeError(f"cannot open {self._path} (ra): {st}")
+        self._is_ra = _open_any(self._ch, self._path)
+        self._position = -1
 
     def close(self):
         if self._ch is not None:
             self._ch.close()
             self._ch = None
+        self._position = -1
+
+    def is_random_access(self) -> bool:
+        return self._is_ra
 
     # --- fetch -----------------------------------------------------------
 
@@ -429,12 +495,24 @@ class Stepper:
         if self._ch is None:
             self.open()
 
-        if self._ch.read_event_by_index(evmeta.record_idx) != dec.Status.success:
-            raise RuntimeError(
-                f"read_event_by_index({evmeta.record_idx}) failed")
+        target = evmeta.record_idx
+        if self._is_ra:
+            if self._ch.read_event_by_index(target) != dec.Status.success:
+                raise RuntimeError(
+                    f"read_event_by_index({target}) failed")
+        else:
+            # Sequential mode: re-open if we need to go backward, then
+            # walk forward to the target record.
+            if self._position > target:
+                self.close()
+                self.open()
+            while self._position < target:
+                if self._ch.read() != dec.Status.success:
+                    raise RuntimeError(
+                        f"EOF before reaching record {target}")
+                self._position += 1
         if not self._ch.scan():
-            raise RuntimeError(
-                f"scan failed on record {evmeta.record_idx}")
+            raise RuntimeError(f"scan failed on record {target}")
 
         self._ch.select_event(evmeta.subevt_idx)
         ssp = self._ch.gem()
@@ -1020,9 +1098,11 @@ class GemEventViewer(QMainWindow):
         self.goto_spin.blockSignals(True); self.goto_spin.setRange(lo_ev, hi_ev); self.goto_spin.setValue(events[0].event_number); self.goto_spin.setEnabled(True); self.goto_spin.blockSignals(False)
         self.btn_prev.setEnabled(True); self.btn_next.setEnabled(True)
 
+        mode_note = ("" if self._stepper.is_random_access()
+                     else "  [sequential mode — Prev is slow]")
         self.file_label.setText(
             f"{os.path.basename(self._evio_path)} — {len(events):,} physics events "
-            f"(scanned in {elapsed:.1f} s)")
+            f"(scanned in {elapsed:.1f} s){mode_note}")
         self._show_event(0)
 
     def _tear_down_worker(self):

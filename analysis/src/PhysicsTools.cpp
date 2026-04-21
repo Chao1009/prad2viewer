@@ -294,13 +294,15 @@ float PhysicsTools::EnergyLoss(float theta_deg, float E)
     float sec = (std::cos(theta) > 0.01f) ? (1.f / std::cos(theta)) : 100.f;
 
     // material thicknesses (mm) and dE/dx (MeV/mm) — approximate values
-    // aluminum window: 0.025 mm, dE/dx ~ 1.6 MeV/mm
-    // GEM foils: ~0.05 mm effective, dE/dx ~ 2.0 MeV/mm
-    // kapton window: ~0.05 mm, dE/dx ~ 1.8 MeV/mm
+    // aluminum window: 0.5 mm, dE/dx ~ 1.6 MeV/mm, vacuum window
+    // GEM foils: ~0.05 mm effective per GEM, dE/dx ~ 2.0 MeV/mm
+    // GEM win Al foils: ~0.06 mm effective per GEM, dE/dx ~ 1.6 MeV/mm
+    // kapton window: ~0.24 mm per GEM, dE/dx ~ 1.8 MeV/mm,
     float eloss = 0.f;
-    eloss += 0.025f * 1.6f * sec;  // Al window
-    eloss += 0.050f * 2.0f * sec;  // GEM
-    eloss += 0.050f * 1.8f * sec;  // kapton cover
+    eloss += 0.500f * 1.6f * sec;  // Al window
+    eloss += 0.120f * 1.6f * sec;  // GEM win Al foils (2 GEMs)
+    eloss += 0.100f * 2.0f * sec;  // GEM foils (2 GEMs)
+    eloss += 0.480f * 1.8f * sec;  // kapton cover
 
     return eloss;  // total energy loss in MeV
 }

@@ -40,13 +40,14 @@ from PyQt6.QtCore import (
     Qt, QObject, QPointF, QRectF, QSize, QThread, pyqtSignal, QTimer,
 )
 from PyQt6.QtGui import (
-    QAction, QPainter, QColor, QPen, QBrush, QFont, QPolygonF,
+    QAction, QKeySequence, QPainter, QColor, QPen, QBrush, QFont, QPolygonF,
+    QShortcut,
 )
 
 from hycal_geoview import (
     Module as GeoModule, load_modules as load_geo_modules,
-    HyCalMapWidget, apply_theme_palette, set_theme, available_themes,
-    THEME, themed,
+    HyCalMapWidget, cmap_qcolor, apply_theme_palette, set_theme,
+    available_themes, THEME, themed,
 )
 
 
@@ -476,8 +477,9 @@ class IndexerWorker(QObject):
 
 class BatchWorker(QObject):
     """Reads events start_idx .. start_idx + n - 1 (no display updates) and
-    fills the selected module's histograms.  Runs in its own thread with
-    its own EvChannel handle (separate from the UI's)."""
+    fills histograms.  Runs in its own thread with its own EvChannel handle
+    (separate from the UI's).  If ``accum_all`` is True every channel found
+    in each event is analysed; otherwise only ``target_key``."""
 
     progressed = pyqtSignal(int, int, int)  # (done, target, peaks_found)
     finished   = pyqtSignal(int)            # events_processed
@@ -487,9 +489,11 @@ class BatchWorker(QObject):
                  index: List[Tuple[int, int]],
                  start_idx: int, count: int,
                  target_key: Tuple[int, int, int],
-                 hists: ChannelHists,
+                 channels: Dict[Tuple[int, int, int], ChannelHists],
                  wcfg: WaveConfig, hist_threshold: float,
-                 accept_mask: int, reject_mask: int):
+                 accept_mask: int, reject_mask: int,
+                 accum_all: bool,
+                 accumulated: Optional[np.ndarray] = None):
         super().__init__()
         self._path = evio_path
         self._daq_cfg_path = daq_config_path
@@ -497,11 +501,13 @@ class BatchWorker(QObject):
         self._start = start_idx
         self._count = count
         self._target_key = target_key
-        self._hists = hists
+        self._channels = channels
         self._wcfg = wcfg
         self._thr = hist_threshold
         self._accept = accept_mask
         self._reject = reject_mask
+        self._accum_all = accum_all
+        self._accumulated = accumulated     # shared bool array, mutated in place
         self._cancel = False
 
     def request_cancel(self):
@@ -523,10 +529,14 @@ class BatchWorker(QObject):
         if st != dec.Status.success:
             raise RuntimeError(f"cannot open {self._path} in RA mode: {st}")
 
-        t_roc, t_slot, t_chan = self._target_key
         n_done = 0
         peaks_found = 0
         progress_every = max(1, self._count // 100)
+        wcfg = self._wcfg
+        thr = self._thr
+        channels = self._channels
+        accum_all = self._accum_all
+        tgt_key = self._target_key
 
         try:
             for i in range(self._count):
@@ -535,6 +545,12 @@ class BatchWorker(QObject):
                 phys_idx = self._start + i
                 if phys_idx >= len(self._index):
                     break
+                # Dedup: skip events already folded in by browsing.
+                if (self._accumulated is not None
+                        and 0 <= phys_idx < self._accumulated.size
+                        and self._accumulated[phys_idx]):
+                    n_done += 1
+                    continue
                 ev_idx, sub_idx = self._index[phys_idx]
                 if ch.read_event_by_index(ev_idx) != dec.Status.success:
                     continue
@@ -551,21 +567,36 @@ class BatchWorker(QObject):
                     continue
 
                 fadc_evt = ch.fadc()
-                samples = _find_channel_samples(fadc_evt, t_roc, t_slot, t_chan)
-                if samples is not None and samples.size >= 10:
-                    self._hists.events += 1
-                    _, _, peaks = analyze(samples, self._wcfg)
-                    np_kept = 0
-                    for p in peaks:
-                        if p.height >= self._thr:
-                            self._hists.height.fill(p.height)
-                            self._hists.integral.fill(p.integral)
-                            self._hists.position.fill(p.time)
-                            np_kept += 1
-                            peaks_found += 1
-                    self._hists.npeaks.fill(np_kept)
-                    if np_kept > 0:
-                        self._hists.peak_events += 1
+                for r in range(fadc_evt.nrocs):
+                    roc = fadc_evt.roc(r)
+                    roc_tag = int(roc.tag)
+                    for s in roc.present_slots():
+                        slot = roc.slot(s)
+                        for c in slot.present_channels():
+                            key = (roc_tag, s, c)
+                            if not accum_all and key != tgt_key:
+                                continue
+                            hits = channels.get(key)
+                            if hits is None:
+                                continue
+                            samples = slot.channel(c).samples
+                            if samples.size < 10:
+                                continue
+                            _, _, peaks = analyze(samples, wcfg)
+                            np_kept = 0
+                            for p in peaks:
+                                if p.height >= thr:
+                                    hits.height.fill(p.height)
+                                    hits.integral.fill(p.integral)
+                                    hits.position.fill(p.time)
+                                    np_kept += 1
+                                    peaks_found += 1
+                            hits.npeaks.fill(np_kept)
+                            hits.events += 1
+                            if np_kept > 0:
+                                hits.peak_events += 1
+                if self._accumulated is not None and 0 <= phys_idx < self._accumulated.size:
+                    self._accumulated[phys_idx] = True
                 n_done += 1
 
                 if (i % progress_every) == 0:
@@ -919,6 +950,9 @@ class WaveformPlotWidget(QWidget):
         self._update_stack_counter()
         self.update()
 
+    def is_stacking(self) -> bool:
+        return self._stack_enabled
+
     # ------------------------------------------------------------------
     #  Internals
     # ------------------------------------------------------------------
@@ -1175,18 +1209,21 @@ class WaveformPlotWidget(QWidget):
 _LABEL_TYPES = {"LMS", "SCINT"}
 
 class WaveformGeoView(HyCalMapWidget):
-    """Compact HyCal geo view used as a module picker.
+    """Compact HyCal geo view with two colour-coding modes.
 
-    Modules already observed in at least one viewed event are drawn in the
-    active colour; unseen modules are drawn in a dim grey.  Clicking an
-    active module emits moduleClicked with its name.
+    * ``current``  — module colour = max peak integral in the current event.
+    * ``overall``  — module colour = occupancy (events-with-peak / accumulated
+      events) across all events the user has browsed / batched.
+
+    Modules that have never been seen in an event are drawn in a flat grey
+    so "no-data" stays visually distinct from "data, low value".  Clicking
+    any module emits moduleClicked with its name.
     """
 
-    # Resolved at paint time so the active theme wins; see :class:`THEME`.
-    @property
-    def AVAIL_COLOR(self) -> QColor:
-        return QColor(THEME.ACCENT_STRONG)
+    MODE_CURRENT = "current"
+    MODE_OVERALL = "overall"
 
+    # Resolved at paint time so the active theme wins; see :class:`THEME`.
     @property
     def UNAVAIL_COLOR(self) -> QColor:
         return QColor(THEME.BORDER)
@@ -1196,12 +1233,30 @@ class WaveformGeoView(HyCalMapWidget):
         return QColor(THEME.SELECT_BORDER)
 
     def __init__(self, parent=None):
-        super().__init__(parent, show_colorbar=False, include_lms=True,
-                         margin_top=4, margin_bottom=4,
-                         min_size=(220, 220), shrink=0.90)
+        super().__init__(parent, show_colorbar=True, include_lms=True,
+                         margin_top=4, margin_bottom=38,
+                         min_size=(220, 260), shrink=0.90)
         self._available: set = set()
         self._selected_name: Optional[str] = None
-        self._label_names: set = set()   # filled in set_modules()
+        self._label_names: set = set()          # filled in set_modules()
+        self._mode = self.MODE_CURRENT
+        self._current_vals: Dict[str, float] = {}
+        self._overall_vals: Dict[str, float] = {}
+
+        # Top-left mode toggle.  Default label matches MODE_CURRENT.
+        self._mode_btn = QPushButton("Current", self)
+        self._mode_btn.setFixedSize(74, 22)
+        _f = QFont("Consolas", 9); _f.setBold(True)
+        self._mode_btn.setFont(_f)
+        self._mode_btn.setToolTip(
+            "Colour coding:\n"
+            "  Current — max peak integral in the currently viewed event\n"
+            "  Overall — occupancy (events-with-peak / accumulated events)")
+        self._mode_btn.setStyleSheet(themed(
+            "QPushButton{background:rgba(29,29,31,220);color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:4px;}"
+            "QPushButton:hover{background:#28282a;color:#e6edf3;}"))
+        self._mode_btn.clicked.connect(self._toggle_mode)
 
     def set_modules(self, modules):
         super().set_modules(modules)
@@ -1217,15 +1272,60 @@ class WaveformGeoView(HyCalMapWidget):
             self._selected_name = name
             self.update()
 
+    def set_current_values(self, vals: Dict[str, float]):
+        self._current_vals = vals
+        if self._mode == self.MODE_CURRENT:
+            self._apply_mode_values()
+
+    def set_overall_values(self, vals: Dict[str, float]):
+        self._overall_vals = vals
+        if self._mode == self.MODE_OVERALL:
+            self._apply_mode_values()
+
+    def _toggle_mode(self):
+        self._mode = (self.MODE_OVERALL if self._mode == self.MODE_CURRENT
+                      else self.MODE_CURRENT)
+        self._mode_btn.setText(
+            "Overall" if self._mode == self.MODE_OVERALL else "Current")
+        self._apply_mode_values()
+
+    def _apply_mode_values(self):
+        if self._mode == self.MODE_OVERALL:
+            self.set_values(self._overall_vals)
+            self.set_range(0.0, 1.0)          # occupancy fraction
+        else:
+            self.set_values(self._current_vals)
+            self.auto_range()                  # max-integral per-event rescales
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._mode_btn.move(6, 6)
+
+    def _colorbar_center_text(self) -> str:
+        return ("occupancy" if self._mode == self.MODE_OVERALL
+                else "max peak integral")
+
     def _paint_modules(self, p):
+        # Keep the "not yet seen" grey distinct from the colormap's low end
+        # so unused modules don't masquerade as "low value".
         avail = self._available
-        a_col = self.AVAIL_COLOR
         u_col = self.UNAVAIL_COLOR
+        no_data = self.NO_DATA_COLOR
+        stops = self.palette_stops()
+        vmin, vmax = self._vmin, self._vmax
+        vals = self._values
         for name, rect in self._rects.items():
-            p.fillRect(rect, a_col if name in avail else u_col)
+            if name not in avail:
+                p.fillRect(rect, u_col)
+                continue
+            v = vals.get(name)
+            if v is None:
+                p.fillRect(rect, no_data)
+                continue
+            t = ((v - vmin) / (vmax - vmin)) if vmax > vmin else 0.5
+            p.fillRect(rect, cmap_qcolor(t, stops))
 
     def _paint_overlays(self, p, w, h):
-        # LMS / V labels — tiny bold text centred on each non-calorimeter cell.
         p.setPen(QColor(THEME.TEXT))
         p.setFont(QFont("Monospace", 7, QFont.Weight.Bold))
         for name in self._label_names:
@@ -1240,9 +1340,14 @@ class WaveformGeoView(HyCalMapWidget):
         super()._paint_overlays(p, w, h)   # hover border
 
     def _tooltip_text(self, name: str) -> str:
-        if name in self._available:
-            return f"{name}  (click to select)"
-        return f"{name}  (not seen yet)"
+        if name not in self._available:
+            return f"{name}  (not seen yet)"
+        v = self._values.get(name)
+        unit = ("occupancy" if self._mode == self.MODE_OVERALL
+                else "max integral")
+        if v is None:
+            return f"{name}  ({unit}: —)"
+        return f"{name}  {unit}={v:.3g}"
 
 
 # ===========================================================================
@@ -1294,6 +1399,11 @@ class WaveformViewerWindow(QMainWindow):
         self._evio_path: Optional[Path] = None
         self._index: List[Tuple[int, int]] = []
         self._current_idx: int = -1
+        # One bool per physics sub-event — True once its peaks have been
+        # folded into self._channels hists.  Lets Prev/Next re-display an
+        # event without double-counting.  np.bool = 1 byte/event, so 1 M
+        # events ≈ 1 MB, 10 M ≈ 10 MB — negligible.
+        self._accumulated: Optional[np.ndarray] = None
 
         # Per-channel accumulated hists, keyed by (roc, slot, ch)
         self._channels: Dict[Tuple[int, int, int], ChannelHists] = {}
@@ -1366,6 +1476,18 @@ class WaveformViewerWindow(QMainWindow):
                                                  self._on_cancel_batch)
         self._cancel_batch_btn.setVisible(False)
         top.addWidget(self._cancel_batch_btn)
+
+        self._accum_all_cb = QCheckBox("Accumulate all modules")
+        self._accum_all_cb.setChecked(True)
+        self._accum_all_cb.setToolTip(
+            "On: browsing fills histograms for every channel present in the event "
+            "(slow ~1-5 s per Next, analysis runs per channel).\n"
+            "Off: only the selected channel's hist accumulates (instant browse).")
+        self._accum_all_cb.setStyleSheet(themed(
+            "QCheckBox{color:#c9d1d9;font:10pt Monospace;}"
+            "QCheckBox:hover{color:#e6edf3;}"))
+        top.addSpacing(8)
+        top.addWidget(self._accum_all_cb)
 
         self._batch_status = QLabel("")
         self._batch_status.setFont(QFont("Monospace", 10))
@@ -1452,6 +1574,10 @@ class WaveformViewerWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
         self._clear_plots()
 
+        # Keyboard: ← / → to navigate prev / next.
+        QShortcut(QKeySequence(Qt.Key.Key_Left),  self, activated=self._on_prev)
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self, activated=self._on_next)
+
     def _small_btn(self, text: str, slot, primary: bool = False) -> QPushButton:
         btn = QPushButton(text)
         bg = "#1f6feb" if primary else "#21262d"
@@ -1517,6 +1643,7 @@ class WaveformViewerWindow(QMainWindow):
         self._combo.blockSignals(True); self._combo.clear(); self._combo.blockSignals(False)
         self._index = []
         self._current_idx = -1
+        self._accumulated = None
         self._clear_plots()
 
         # Start indexer
@@ -1561,6 +1688,7 @@ class WaveformViewerWindow(QMainWindow):
         self._index = res["index"]
         n_phys = len(self._index)
         cancelled = bool(res.get("cancelled"))
+        self._accumulated = np.zeros(n_phys, dtype=bool)
 
         # Open reader handle for browse use
         ok, err = self._open_reader(str(path))
@@ -1750,43 +1878,83 @@ class WaveformViewerWindow(QMainWindow):
     # -- accumulate + display --
 
     def _accumulate_and_display(self, fadc_evt, info, trig_ok: bool):
-        key = self._selected_key
-        if key is None:
-            # No channel selected yet — just show info, clear waveform
+        # Always analyse the selected channel (for waveform display).  When
+        # "Accumulate all modules" is on, analyse every channel.  Histogram
+        # fills are dedup'd via self._accumulated: an event already folded in
+        # still gets re-analysed for display, but isn't counted again.
+        sel_peaks: List[Peak] = []
+        accum_all = self._accum_all_cb.isChecked()
+        threshold = self._hist_threshold
+        wcfg = self._wcfg
+        sel_key = self._selected_key
+        idx = self._current_idx
+        already = (self._accumulated is not None and 0 <= idx < self._accumulated.size
+                   and bool(self._accumulated[idx]))
+        do_fill = trig_ok and not already
+
+        current_vals: Dict[str, float] = {}   # module_name -> max peak integral
+
+        for r in range(fadc_evt.nrocs):
+            roc = fadc_evt.roc(r)
+            roc_tag = int(roc.tag)
+            for s in roc.present_slots():
+                slot = roc.slot(s)
+                for c in slot.present_channels():
+                    key = (roc_tag, s, c)
+                    is_sel = (key == sel_key)
+                    if not is_sel and not accum_all:
+                        continue
+                    hits = self._channels.get(key)
+                    if hits is None:
+                        continue
+                    samples = slot.channel(c).samples
+                    if samples.size < 10:
+                        continue
+                    _, _, peaks = analyze(samples, wcfg)
+                    if is_sel:
+                        sel_peaks = peaks
+                    # Max peak integral (above threshold) for the geo view's
+                    # "current" mode.
+                    above = [p.integral for p in peaks if p.height >= threshold]
+                    if above and hits.module:
+                        current_vals[hits.module] = max(above)
+                    if not do_fill:
+                        continue
+                    kept = 0
+                    for p in peaks:
+                        if p.height >= threshold:
+                            hits.height.fill(p.height)
+                            hits.integral.fill(p.integral)
+                            hits.position.fill(p.time)
+                            kept += 1
+                    hits.npeaks.fill(kept)
+                    hits.events += 1
+                    if kept > 0:
+                        hits.peak_events += 1
+
+        if do_fill and self._accumulated is not None and 0 <= idx < self._accumulated.size:
+            self._accumulated[idx] = True
+
+        self._geo.set_current_values(current_vals)
+        # Overall occupancy only needs refreshing when hists actually changed.
+        if do_fill:
+            self._geo.set_overall_values(self._compute_overall_occupancy())
+
+        if sel_key is None:
             self._set_info_line(info, peaks=None)
             self._wave.clear("(select a module to view its waveform)")
-            self._display_hists_for_selected()
-            return
-
-        hits = self._channels.get(key)
-        if hits is None:
-            self._set_info_line(info, peaks=None)
-            self._wave.clear(f"(module {key} not in current event)")
-            return
-
-        roc_tag, slot, ch = key
-        samples = _find_channel_samples(fadc_evt, roc_tag, slot, ch)
-        peaks: List[Peak] = []
-        ped_mean = 0.0
-        ped_rms = 0.0
-        if samples is not None and samples.size >= 10:
-            ped_mean, ped_rms, peaks = analyze(samples, self._wcfg)
-            if trig_ok:
-                kept = 0
-                for p in peaks:
-                    if p.height >= self._hist_threshold:
-                        hits.height.fill(p.height)
-                        hits.integral.fill(p.integral)
-                        hits.position.fill(p.time)
-                        kept += 1
-                hits.npeaks.fill(kept)
-                hits.events += 1
-                if kept > 0:
-                    hits.peak_events += 1
-
-        self._set_info_line(info, peaks=peaks)
+        else:
+            self._set_info_line(info, peaks=sel_peaks)
         self._display_hists_for_selected()
         self._display_waveform(fadc_evt)
+
+    def _compute_overall_occupancy(self) -> Dict[str, float]:
+        """module_name -> events_with_peak / events_accumulated (skip empty)."""
+        out: Dict[str, float] = {}
+        for hits in self._channels.values():
+            if hits.module and hits.events > 0:
+                out[hits.module] = hits.peak_events / hits.events
+        return out
 
     def _set_info_line(self, info, peaks: Optional[List[Peak]]):
         pieces = [
@@ -1840,6 +2008,11 @@ class WaveformViewerWindow(QMainWindow):
         roc_tag, slot, ch = key
         samples = _find_channel_samples(fadc_evt, roc_tag, slot, ch)
         if samples is None or samples.size == 0:
+            # Keep the stacker intact — matches resources/waveform.js:105
+            # where empty events in stack mode return without touching the
+            # plot.
+            if self._wave.is_stacking():
+                return
             hits = self._channels.get(key)
             mod = hits.module if hits and hits.module else "(unmapped)"
             self._wave.clear(f"{mod} not present in event #{self._current_idx}")
@@ -1875,6 +2048,7 @@ class WaveformViewerWindow(QMainWindow):
         hits.events = 0
         hits.peak_events = 0
         self._display_hists_for_selected()
+        self._geo.set_overall_values(self._compute_overall_occupancy())
         self.statusBar().showMessage(
             f"Reset histograms for {hits.module or '(unmapped)'}")
 
@@ -1906,9 +2080,11 @@ class WaveformViewerWindow(QMainWindow):
             daq_config_path=self._daq_cfg_path,
             index=self._index, start_idx=start_idx, count=count,
             target_key=self._selected_key,
-            hists=hits, wcfg=self._wcfg,
+            channels=self._channels, wcfg=self._wcfg,
             hist_threshold=self._hist_threshold,
             accept_mask=self._accept_mask, reject_mask=self._reject_mask,
+            accum_all=self._accum_all_cb.isChecked(),
+            accumulated=self._accumulated,
         )
         thread = QThread(self)
         worker.moveToThread(thread)
@@ -1916,8 +2092,9 @@ class WaveformViewerWindow(QMainWindow):
         def _on_progress(done: int, target: int, peaks: int):
             self._batch_status.setText(
                 f"batch: {done:,}/{target:,}  peaks={peaks:,}")
-            # refresh hists incrementally
+            # refresh hists + geo overall map incrementally
             self._display_hists_for_selected()
+            self._geo.set_overall_values(self._compute_overall_occupancy())
 
         def _on_finished(n: int):
             self._current_idx = start_idx + n - 1
@@ -1927,6 +2104,7 @@ class WaveformViewerWindow(QMainWindow):
             self._batch_status.setText(
                 f"batch done: {n:,} events processed")
             self._display_hists_for_selected()
+            self._geo.set_overall_values(self._compute_overall_occupancy())
             # advance one more to show the next waveform
             if self._current_idx + 1 < len(self._index):
                 self._goto(self._current_idx + 1)

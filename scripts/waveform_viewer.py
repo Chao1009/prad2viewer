@@ -293,14 +293,13 @@ class IndexerWorker(QObject):
 
 
 # ===========================================================================
-#  Batch processor — fills the current module's hists for the next N events
+#  Batch processor — fills all-module hists for the next N events
 # ===========================================================================
 
 class BatchWorker(QObject):
     """Reads events start_idx .. start_idx + n - 1 (no display updates) and
-    fills histograms.  Runs in its own thread with its own EvChannel handle
-    (separate from the UI's).  If ``accum_all`` is True every channel found
-    in each event is analysed; otherwise only ``target_key``."""
+    fills histograms for every channel present.  Runs in its own thread with
+    its own EvChannel handle (separate from the UI's)."""
 
     progressed = pyqtSignal(int, int, int)  # (done, target, peaks_found)
     finished   = pyqtSignal(int)            # events_processed
@@ -309,11 +308,9 @@ class BatchWorker(QObject):
     def __init__(self, evio_path: str, daq_config_path: str,
                  index: List[Tuple[int, int]],
                  start_idx: int, count: int,
-                 target_key: Tuple[int, int, int],
                  channels: Dict[Tuple[int, int, int], ChannelHists],
                  wcfg: WaveConfig, hist_threshold: float,
                  accept_mask: int, reject_mask: int,
-                 accum_all: bool,
                  accumulated: Optional[np.ndarray] = None):
         super().__init__()
         self._path = evio_path
@@ -321,13 +318,11 @@ class BatchWorker(QObject):
         self._index = index
         self._start = start_idx
         self._count = count
-        self._target_key = target_key
         self._channels = channels
         self._wcfg = wcfg
         self._thr = hist_threshold
         self._accept = accept_mask
         self._reject = reject_mask
-        self._accum_all = accum_all
         self._accumulated = accumulated     # shared bool array, mutated in place
         self._cancel = False
 
@@ -357,13 +352,11 @@ class BatchWorker(QObject):
         wcfg = self._wcfg
         thr = self._thr
         channels = self._channels
-        accum_all = self._accum_all
-        tgt_key = self._target_key
 
         def _fold_event(phys_idx: int, sub_idx: int) -> int:
-            """Scan + select current event, accumulate hists, return peaks
-            found this event (or -1 if the event is rejected by trigger mask
-            or dedup)."""
+            """Scan + select current event, accumulate hists for every
+            channel, return peaks found this event (or -1 if the event
+            is rejected by trigger mask or dedup)."""
             nonlocal n_done
             if (self._accumulated is not None
                     and 0 <= phys_idx < self._accumulated.size
@@ -390,8 +383,6 @@ class BatchWorker(QObject):
                     slot = roc.slot(s)
                     for c in slot.present_channels():
                         key = (roc_tag, s, c)
-                        if not accum_all and key != tgt_key:
-                            continue
                         hits = channels.get(key)
                         if hits is None:
                             continue
@@ -1339,18 +1330,6 @@ class WaveformViewerWindow(QMainWindow):
         self._batch_btn.setEnabled(False)
         top.addWidget(self._batch_btn)
 
-        self._accum_all_cb = QCheckBox("Accumulate all modules")
-        self._accum_all_cb.setChecked(True)
-        self._accum_all_cb.setToolTip(
-            "On: browsing fills histograms for every channel present in the event "
-            "(slow ~1-5 s per Next, analysis runs per channel).\n"
-            "Off: only the selected channel's hist accumulates (instant browse).")
-        self._accum_all_cb.setStyleSheet(themed(
-            "QCheckBox{color:#c9d1d9;font:10pt Monospace;}"
-            "QCheckBox:hover{color:#e6edf3;}"))
-        top.addSpacing(8)
-        top.addWidget(self._accum_all_cb)
-
         self._batch_status = QLabel("")
         self._batch_status.setFont(QFont("Monospace", 10))
         self._batch_status.setStyleSheet(themed("color:#8b949e;"))
@@ -1765,12 +1744,12 @@ class WaveformViewerWindow(QMainWindow):
     # -- accumulate + display --
 
     def _accumulate_and_display(self, fadc_evt, info, trig_ok: bool):
-        # Always analyse the selected channel (for waveform display).  When
-        # "Accumulate all modules" is on, analyse every channel.  Histogram
-        # fills are dedup'd via self._accumulated: an event already folded in
-        # still gets re-analysed for display, but isn't counted again.
+        # Analyse every channel present in the event.  The C++ WaveAnalyzer
+        # makes this cheap (~50× faster than the old Python port), so we
+        # no longer need a "selected-channel-only" fast path.  Histogram
+        # fills are dedup'd via self._accumulated: an event already folded
+        # in still gets re-analysed for display, but isn't counted again.
         sel_peaks: List[Peak] = []
-        accum_all = self._accum_all_cb.isChecked()
         threshold = self._hist_threshold
         wcfg = self._wcfg
         sel_key = self._selected_key
@@ -1788,9 +1767,6 @@ class WaveformViewerWindow(QMainWindow):
                 slot = roc.slot(s)
                 for c in slot.present_channels():
                     key = (roc_tag, s, c)
-                    is_sel = (key == sel_key)
-                    if not is_sel and not accum_all:
-                        continue
                     hits = self._channels.get(key)
                     if hits is None:
                         continue
@@ -1798,7 +1774,7 @@ class WaveformViewerWindow(QMainWindow):
                     if samples.size < 10:
                         continue
                     _, _, peaks = analyze(samples, wcfg)
-                    if is_sel:
+                    if key == sel_key:
                         sel_peaks = peaks
                     # Max peak integral (above threshold) for the geo view's
                     # "current" mode.
@@ -1945,11 +1921,6 @@ class WaveformViewerWindow(QMainWindow):
         if self._batch_thread is not None:
             QMessageBox.information(self, "Busy", "Batch already running.")
             return
-        if self._selected_key is None:
-            QMessageBox.information(self, "No module selected",
-                                    "Select a module first (browse to at "
-                                    "least one event so the list populates).")
-            return
         start_idx = max(0, self._current_idx + 1)
         if start_idx >= len(self._index):
             QMessageBox.information(self, "End of file",
@@ -1958,19 +1929,13 @@ class WaveformViewerWindow(QMainWindow):
         remaining = len(self._index) - start_idx
         count = min(10_000, remaining)
 
-        hits = self._channels.get(self._selected_key)
-        if hits is None:
-            return
-
         worker = BatchWorker(
             evio_path=str(self._evio_path),
             daq_config_path=self._daq_cfg_path,
             index=self._index, start_idx=start_idx, count=count,
-            target_key=self._selected_key,
             channels=self._channels, wcfg=self._wcfg,
             hist_threshold=self._hist_threshold,
             accept_mask=self._accept_mask, reject_mask=self._reject_mask,
-            accum_all=self._accum_all_cb.isChecked(),
             accumulated=self._accumulated,
         )
         thread = QThread(self)

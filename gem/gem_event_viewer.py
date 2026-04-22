@@ -703,15 +703,17 @@ class RawApvTab(QWidget):
         self._tabs = QTabWidget()
         lay.addWidget(self._tabs, stretch=1)
 
-        # Data cache populated per event
-        self._apv_meta: List[Dict] = []     # one dict per apv_index
+        # Data cache populated per event.  Keys are GemSystem APV indices.
+        self._apv_meta: Dict[int, Dict] = {}
         self._processed: Dict[int, np.ndarray] = {}    # apv_idx → (128,6) float32
         self._raw:       Dict[int, np.ndarray] = {}    # apv_idx → (128,6) int16
         self._hits:      Dict[int, np.ndarray] = {}    # apv_idx → (128,) bool
-        # (crate, mpd) → list of apv_index in order
-        self._grouped: Dict[Tuple[int, int], List[int]] = {}
-        # (crate, mpd) → {apv_idx: ApvPanel}
-        self._panels: Dict[Tuple[int, int], Dict[int, ApvPanel]] = {}
+        # crate → list of apv_index in order
+        self._grouped: Dict[int, List[int]] = {}
+        # crate → {apv_idx: ApvPanel}
+        self._panels: Dict[int, Dict[int, ApvPanel]] = {}
+        # crate → tab index (for re-enable / text colour)
+        self._tab_index_of: Dict[int, int] = {}
         self._dets_seen: set = set()
 
     def reset_all(self):
@@ -730,17 +732,15 @@ class RawApvTab(QWidget):
         self._status.setText("")
 
     def set_apv_metadata(self, apv_meta: List[Dict]):
-        """Call once per run (after geometry load): fixes the (crate, mpd)
+        """Call once per run (after geometry load): fixes the per-crate
         groupings and builds the sub-tab skeletons.  ``apv_meta`` is a list
-        of dicts with keys ``crate_id, mpd_id, adc_ch, det_id, plane_type,
-        det_pos, det_name``, one per GemSystem APV index."""
+        of dicts keyed by ``apv_index`` (GemSystem index)."""
         self.reset_all()
-        self._apv_meta = list(apv_meta)
+        self._apv_meta = {int(m["apv_index"]): m for m in apv_meta}
 
-        # Group by (crate, mpd)
-        for idx, m in enumerate(self._apv_meta):
-            key = (int(m["crate_id"]), int(m["mpd_id"]))
-            self._grouped.setdefault(key, []).append(idx)
+        # Group by crate; panels within a crate sort by (mpd, adc_ch).
+        for idx, m in self._apv_meta.items():
+            self._grouped.setdefault(int(m["crate_id"]), []).append(idx)
             self._dets_seen.add(m["det_name"])
 
         # Populate detector filter
@@ -749,9 +749,8 @@ class RawApvTab(QWidget):
             self.det_combo.addItem(name, name)
         self.det_combo.blockSignals(False)
 
-        # Build one sub-tab per (crate, mpd)
-        for key in sorted(self._grouped.keys()):
-            crate, mpd = key
+        # Build one sub-tab per crate
+        for crate in sorted(self._grouped.keys()):
             page = QScrollArea()
             page.setWidgetResizable(True)
             content = QWidget()
@@ -759,19 +758,25 @@ class RawApvTab(QWidget):
             grid.setHorizontalSpacing(4)
             grid.setVerticalSpacing(4)
             panels: Dict[int, ApvPanel] = {}
-            for n, idx in enumerate(self._grouped[key]):
+            sorted_apvs = sorted(
+                self._grouped[crate],
+                key=lambda i: (self._apv_meta[i]["mpd_id"],
+                               self._apv_meta[i]["adc_ch"]))
+            for n, idx in enumerate(sorted_apvs):
                 r, c = divmod(n, self.COLS)
                 panel = ApvPanel()
                 m = self._apv_meta[idx]
                 panel.setToolTip(
                     f"crate {m['crate_id']} mpd {m['mpd_id']} adc {m['adc_ch']}  "
-                    f"{m['det_name']} {m['plane_type']} pos={m['det_pos']}")
+                    f"{m['det_name']} {m['plane_type']} pos={m['det_pos']}  "
+                    f"(GemSystem idx {idx})")
                 grid.addWidget(panel, r, c)
                 panels[idx] = panel
             grid.setRowStretch(grid.rowCount(), 1)
             page.setWidget(content)
-            self._panels[key] = panels
-            self._tabs.addTab(page, f"crate {crate}  mpd {mpd}")
+            self._panels[crate] = panels
+            tab_i = self._tabs.addTab(page, f"crate {crate}")
+            self._tab_index_of[crate] = tab_i
 
     def set_event_data(self,
                        processed: Dict[int, np.ndarray],
@@ -795,7 +800,13 @@ class RawApvTab(QWidget):
 
         shown = 0
         total = 0
-        for key, panels in self._panels.items():
+        tab_bar = self._tabs.tabBar()
+        active_col = tab_bar.palette().color(tab_bar.foregroundRole())
+        dim_col = QColor(active_col)
+        dim_col.setAlpha(100)
+
+        for crate, panels in self._panels.items():
+            visible_in_tab = 0
             for idx, panel in panels.items():
                 m = self._apv_meta[idx]
                 total += 1
@@ -808,6 +819,7 @@ class RawApvTab(QWidget):
                     continue
                 panel.setVisible(True)
                 shown += 1
+                visible_in_tab += 1
 
                 frame = (self._raw.get(idx) if show_raw
                          else self._processed.get(idx))
@@ -816,6 +828,12 @@ class RawApvTab(QWidget):
                 badge = ("full-readout" if idx in self._full_readout
                          and not show_raw and not has_any_zs else "")
                 panel.set_frame(title, frame, has_zs, badge)
+
+            # Grey the tab header if nothing survives the current filters.
+            tab_i = self._tab_index_of.get(crate)
+            if tab_i is not None:
+                tab_bar.setTabTextColor(
+                    tab_i, dim_col if visible_in_tab == 0 else active_col)
 
         mode = "raw" if show_raw else "processed"
         self._status.setText(f"{shown}/{total} APVs  [{mode}]")
@@ -1277,9 +1295,9 @@ class GemEventViewer(QMainWindow):
         self._ped_warning_shown = bool(
             self._gem_ped_path and os.path.isfile(self._gem_ped_path))
 
-        # Feed the Raw APV tab its static per-APV metadata.  Detector
-        # names come from the detector config list; plane_type is "X"/"Y"
-        # straight out of the APV config.
+        # Feed the Raw APV tab its static per-APV metadata.  Skip APVs
+        # without a DAQ assignment (crate/mpd/adc all -1) — those are
+        # placeholder slots in gem_map.json and carry no data.
         try:
             det_names = {d.id: d.name for d in self._gsys.get_detectors()}
         except Exception:
@@ -1287,7 +1305,10 @@ class GemEventViewer(QMainWindow):
         apv_meta = []
         for i in range(self._gsys.get_n_apvs()):
             cfg = self._gsys.get_apv_config(i)
+            if int(cfg.crate_id) < 0 or int(cfg.mpd_id) < 0 or int(cfg.adc_ch) < 0:
+                continue
             apv_meta.append({
+                "apv_index":  i,
                 "crate_id":   int(cfg.crate_id),
                 "mpd_id":     int(cfg.mpd_id),
                 "adc_ch":     int(cfg.adc_ch),

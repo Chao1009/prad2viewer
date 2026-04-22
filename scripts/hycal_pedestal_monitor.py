@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import re
 import subprocess
@@ -29,7 +28,7 @@ from typing import Dict, List, Optional, Tuple
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QTextEdit, QMessageBox, QSplitter,
+    QPushButton, QLabel, QTextEdit, QMessageBox,
     QFileDialog, QLineEdit,
 )
 from PyQt6.QtCore import Qt, QRectF, QThread, pyqtSignal

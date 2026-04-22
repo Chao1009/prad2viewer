@@ -34,14 +34,14 @@ except ImportError:
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QComboBox, QLineEdit, QDoubleSpinBox, QSpinBox,
+    QPushButton, QLabel, QComboBox, QLineEdit, QSpinBox,
     QFileDialog, QSplitter, QSizePolicy, QTableWidget,
     QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu,
-    QDialog, QFormLayout, QTextEdit, QDialogButtonBox, QMessageBox,
+    QDialog, QFormLayout, QTextEdit, QMessageBox,
 )
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, QTimer, QProcess
 from PyQt6.QtGui import (
-    QPainter, QColor, QPen, QBrush, QFont, QPalette,
+    QPainter, QColor, QPen, QFont, QPalette,
 )
 
 from hycal_geoview import (
@@ -293,61 +293,6 @@ def compute_drift_entries(
                                 math.isinf(e.rel_change),
                                 -(abs(e.gain_current - e.gain_prev) / min(abs(e.gain_current), abs(e.gain_prev))
                                   if min(abs(e.gain_current), abs(e.gain_prev)) != 0 else 0)))
-    return entries
-
-
-def compute_summary(
-    runs: List[RunData],
-    ref_idx: int,
-    mod_by_name: Dict[str, "Module"],
-    threshold: float = 0.05,
-) -> List[SummaryEntry]:
-    """Count run-to-run drift events per module across all consecutive run pairs."""
-    stats: Dict[str, List] = {}  # name -> [count, max_rel, max_run, max_prev_run]
-
-    for i in range(1, len(runs)):
-        rd_curr = runs[i]
-        rd_prev = runs[i - 1]
-        curr_run_num = rd_curr.run_number
-        prev_run_num = rd_prev.run_number
-        # pre-flatten previous run gains to avoid chained lookups in inner loop
-        prev_gains: Dict[str, float] = {}
-        for mname, mrec in rd_prev.modules.items():
-            prev_gains[mname] = mrec.gain_factors[ref_idx]
-
-        for mname, mrec in rd_curr.modules.items():
-            g_prev = prev_gains.get(mname)
-            if g_prev is None:
-                continue
-            rel = math.inf if g_prev == 0 else abs(mrec.gain_factors[ref_idx] - g_prev) / g_prev
-            if rel > threshold:
-                s = stats.get(mname)
-                if s is None:
-                    stats[mname] = [1, rel, curr_run_num, prev_run_num]
-                else:
-                    s[0] += 1
-                    if rel > s[1]:
-                        s[1] = rel
-                        s[2] = curr_run_num
-                        s[3] = prev_run_num
-
-    entries: List[SummaryEntry] = []
-    for mname, (count, max_rel, max_run, max_prev) in stats.items():
-        mod = mod_by_name.get(mname)
-        entries.append(SummaryEntry(
-            name=mname,
-            mod_type=mod.mod_type if mod else "?",
-            drift_count=count,
-            max_rel_change=max_rel,
-            max_run=max_run,
-            max_prev_run=max_prev,
-        ))
-    entries.sort(key=lambda e: (
-        0 if e.name.startswith("W") else 1,
-        0 if e.name.startswith("W") else int(math.isinf(e.max_rel_change)),
-        -e.drift_count,
-        0 if math.isinf(e.max_rel_change) else -e.max_rel_change,
-    ))
     return entries
 
 

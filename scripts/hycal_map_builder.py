@@ -53,7 +53,7 @@ from PyQt6.QtGui import QColor, QFont, QPen
 
 from hycal_geoview import (
     Module, load_modules, HyCalMapWidget, cmap_qcolor,
-    PALETTES, PALETTE_NAMES, apply_theme_palette, set_theme,
+    PALETTE_NAMES, apply_theme_palette, set_theme,
     available_themes, THEME,
 )
 

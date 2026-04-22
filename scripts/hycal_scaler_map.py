@@ -26,11 +26,11 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QFont
 
 from hycal_geoview import (
-    Module, load_modules, HyCalMapWidget, PALETTES, PALETTE_NAMES,
+    Module, load_modules, HyCalMapWidget, PALETTES,
     apply_theme_palette, set_theme, available_themes, THEME,
 )
 

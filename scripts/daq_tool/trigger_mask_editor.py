@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -33,7 +32,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QTextEdit, QSplitter, QFileDialog,
 )
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QColor, QPen, QFont, QPalette
+from PyQt6.QtGui import QColor, QPen, QFont
 
 from hycal_geoview import (
     HyCalMapWidget as _HyCalMapBase,

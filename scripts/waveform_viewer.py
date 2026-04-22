@@ -31,21 +31,21 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from PyQt6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QCheckBox, QCompleter, QFileDialog, QMessageBox,
     QProgressDialog, QSizePolicy, QStatusBar, QToolTip, QPushButton, QSpinBox,
     QSplitter,
 )
 from PyQt6.QtCore import (
-    Qt, QObject, QPointF, QRectF, QSize, QThread, pyqtSignal, QTimer,
+    Qt, QObject, QPointF, QRectF, QThread, pyqtSignal, QTimer,
 )
 from PyQt6.QtGui import (
-    QAction, QKeySequence, QPainter, QColor, QPen, QBrush, QFont, QPolygonF,
+    QAction, QKeySequence, QPainter, QColor, QPen, QFont, QPolygonF,
     QShortcut,
 )
 
 from hycal_geoview import (
-    Module as GeoModule, load_modules as load_geo_modules,
+    load_modules as load_geo_modules,
     HyCalMapWidget, cmap_qcolor, apply_theme_palette, set_theme,
     available_themes, THEME, themed,
 )

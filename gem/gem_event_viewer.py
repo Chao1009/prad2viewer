@@ -57,9 +57,11 @@ except Exception as _exc:  # noqa: BLE001
 
 
 from PyQt6.QtCore import (  # noqa: E402
-    QObject, Qt, QThread, QTimer, pyqtSignal,
+    QObject, QRectF, Qt, QThread, QTimer, pyqtSignal,
 )
-from PyQt6.QtGui import QAction, QKeySequence  # noqa: E402
+from PyQt6.QtGui import (  # noqa: E402
+    QAction, QColor, QImage, QKeySequence, QPainter,
+)
 from PyQt6.QtWidgets import (  # noqa: E402
     QApplication,
     QComboBox,
@@ -77,31 +79,29 @@ from PyQt6.QtWidgets import (  # noqa: E402
     QSlider,
     QSpinBox,
     QStatusBar,
+    QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg  # noqa: E402
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT  # noqa: E402
-from matplotlib.figure import Figure  # noqa: E402
-
 # Sibling imports — this file lives in gem/ alongside the helpers.
-# These modules in turn import gem_strip_map which requires prad2py.det, so
-# wrap the whole block so the GUI can still *start* and show an error
-# dialog when the module is missing.
+# gem_view imports gem_strip_map which requires prad2py.det, so wrap so
+# the GUI can still *start* and show an error dialog when missing.
 try:
-    from gem_layout import build_strip_layout, load_gem_map  # noqa: E402
     from gem_view import (  # noqa: E402
         build_apv_map,
         build_det_list_from_gemsys,
+        build_strip_layout,
         build_zs_apvs_from_gemsys,
-        draw_event,
+        draw_event_panels,
+        draw_layout,
+        load_gem_map,
         process_zs_hits,
     )
 except Exception as _sib_exc:  # noqa: BLE001
     build_strip_layout = load_gem_map = None  # type: ignore
     build_apv_map = build_det_list_from_gemsys = build_zs_apvs_from_gemsys = None  # type: ignore
-    draw_event = process_zs_hits = None  # type: ignore
+    draw_event_panels = draw_layout = process_zs_hits = None  # type: ignore
     if HAVE_PRAD2PY:
         PRAD2PY_ERROR = (PRAD2PY_ERROR + "\n" if PRAD2PY_ERROR else "") + \
                         f"sibling import: {type(_sib_exc).__name__}: {_sib_exc}"
@@ -448,14 +448,69 @@ class Stepper:
 
 
 # ---------------------------------------------------------------------------
-# Matplotlib canvas
+# GEM event canvas — native QPainter, no matplotlib
 # ---------------------------------------------------------------------------
 
 
-class MplCanvas(FigureCanvasQTAgg):
-    def __init__(self):
-        self.fig = Figure(figsize=(10, 4), constrained_layout=True)
-        super().__init__(self.fig)
+class GemEventCanvas(QWidget):
+    """Custom widget that renders multi-detector event views via
+    ``gem_view.draw_event_panels``.  Stores the last rendered payload so
+    it can re-paint on resize and export to PNG on demand."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumSize(600, 300)
+        self.setAutoFillBackground(False)
+        self._payload: Optional[Tuple[dict, list, dict, Optional[dict], Optional[str], int]] = None
+        self._bg = QColor(getattr(THEME, "BG", "white"))
+        self._fg = QColor(getattr(THEME, "TEXT", "#222"))
+
+    def set_event(self, detectors, det_list, det_hits, hole,
+                  *, title=None, det_filter=-1):
+        self._payload = (detectors, det_list, det_hits, hole, title, det_filter)
+        self.update()
+
+    def clear(self):
+        self._payload = None
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        try:
+            self._render(p, QRectF(self.rect()))
+        finally:
+            p.end()
+
+    def _render(self, p: QPainter, rect: QRectF):
+        if self._payload is None or draw_event_panels is None:
+            p.fillRect(rect, self._bg)
+            p.setPen(self._fg)
+            p.setFont(self.font())
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter,
+                       "(open an EVIO file — File → Open EVIO…)")
+            return
+        detectors, det_list, det_hits, hole, title, det_filter = self._payload
+        draw_event_panels(p, rect, detectors, det_list, det_hits, hole,
+                          title=title, det_filter=det_filter,
+                          bg=self._bg, fg=self._fg)
+
+    def save_png(self, path: str, *, width: int = 2400, height: int = 900) -> bool:
+        """Render current state into a fresh QImage and save as PNG."""
+        if self._payload is None:
+            return False
+        image = QImage(width, height, QImage.Format.Format_ARGB32)
+        image.fill(QColor("white"))
+        p = QPainter(image)
+        try:
+            # Force light-on-white for printed output regardless of theme.
+            detectors, det_list, det_hits, hole, title, det_filter = self._payload
+            draw_event_panels(p, QRectF(image.rect()),
+                              detectors, det_list, det_hits, hole,
+                              title=title, det_filter=det_filter,
+                              bg=QColor("white"), fg=QColor("#222"))
+        finally:
+            p.end()
+        return image.save(path, "PNG")
 
 
 # ---------------------------------------------------------------------------
@@ -733,10 +788,16 @@ class GemEventViewer(QMainWindow):
         thr.addStretch(1)
         root.addLayout(thr)
 
-        # --- Canvas + matplotlib toolbar ---
-        self.canvas = MplCanvas()
-        mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
-        root.addWidget(mpl_toolbar)
+        # --- Canvas + minimal toolbar (save PNG) ---
+        cbar = QToolBar(self)
+        cbar.setMovable(False)
+        act_save = QAction("Save as PNG…", self)
+        act_save.setShortcut(QKeySequence("Ctrl+S"))
+        act_save.triggered.connect(self._save_canvas_png)
+        cbar.addAction(act_save)
+        root.addWidget(cbar)
+
+        self.canvas = GemEventCanvas()
         root.addWidget(self.canvas, 1)
 
         # --- Status bar ---
@@ -1282,9 +1343,8 @@ class GemEventViewer(QMainWindow):
                  f"ev #{evmeta.event_number}  "
                  f"trig #{evmeta.trigger_number}  "
                  f"bits 0x{evmeta.trigger_bits:X}")
-        draw_event(self.canvas.fig, self._detectors, det_list, det_hits,
-                   self._hole, title=title)
-        self.canvas.draw_idle()
+        self.canvas.set_event(self._detectors, det_list, det_hits,
+                              self._hole, title=title)
 
         n_2d = sum(len(d.get("hits_2d", [])) for d in det_list)
         self._set_status(
@@ -1301,6 +1361,24 @@ class GemEventViewer(QMainWindow):
         self.adv_dock.setVisible(checked)
         self.act_adv.setChecked(checked)
         self.btn_advanced.setChecked(checked)
+
+    def _save_canvas_png(self):
+        if self.canvas is None or self._current < 0:
+            QMessageBox.information(self, "Nothing to save",
+                                    "Load an EVIO file and step to an event first.")
+            return
+        default = f"gem_event_{self._events[self._current].event_number}.png" \
+                  if self._events else "gem_event.png"
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save canvas as PNG", default,
+            "PNG image (*.png);;All files (*)")
+        if not path:
+            return
+        if not self.canvas.save_png(path):
+            QMessageBox.warning(self, "Save failed",
+                                f"Could not write {path}")
+        else:
+            self._set_status(f"Saved canvas to {path}")
 
     def _set_status(self, text: str):
         self._status.setText(text)
@@ -1330,14 +1408,333 @@ class GemEventViewer(QMainWindow):
 
 
 # ---------------------------------------------------------------------------
+# Batch mode — render events / layout to PNG without a GUI
+# ---------------------------------------------------------------------------
+
+
+def _parse_event_spec(spec: str) -> List[int]:
+    """Parse 'N' / 'N-M' / 'N,M-K,...' into a sorted unique list of indices."""
+    out: List[int] = []
+    for chunk in spec.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if "-" in chunk:
+            a, b = chunk.split("-", 1)
+            lo, hi = int(a), int(b)
+            if lo > hi:
+                lo, hi = hi, lo
+            out.extend(range(lo, hi + 1))
+        else:
+            out.append(int(chunk))
+    return sorted(set(out))
+
+
+def _scan_events_sync(path: str, daq_cfg: str) -> List[EventMeta]:
+    """Non-Qt version of ScanWorker.run(): walk the file, return EventMeta list."""
+    cfg = dec.load_daq_config(daq_cfg)
+    ch = dec.EvChannel()
+    ch.set_config(cfg)
+    is_ra = _open_channel(ch, path)
+    events: List[EventMeta] = []
+    try:
+        if is_ra:
+            n_evio = ch.get_random_access_event_count()
+            for evio_idx in range(n_evio):
+                if ch.read_event_by_index(evio_idx) != dec.Status.success:
+                    continue
+                if not ch.scan():
+                    continue
+                if ch.get_event_type() != dec.EventType.Physics:
+                    continue
+                for i in range(ch.get_n_events()):
+                    ch.select_event(i)
+                    info = ch.info()
+                    events.append(EventMeta(
+                        record_idx=evio_idx, subevt_idx=i,
+                        event_number=int(info.event_number),
+                        trigger_number=int(info.trigger_number),
+                        trigger_bits=int(info.trigger_bits),
+                    ))
+        else:
+            record_idx = 0
+            while ch.read() == dec.Status.success:
+                if not ch.scan():
+                    record_idx += 1; continue
+                if ch.get_event_type() != dec.EventType.Physics:
+                    record_idx += 1; continue
+                for i in range(ch.get_n_events()):
+                    ch.select_event(i)
+                    info = ch.info()
+                    events.append(EventMeta(
+                        record_idx=record_idx, subevt_idx=i,
+                        event_number=int(info.event_number),
+                        trigger_number=int(info.trigger_number),
+                        trigger_bits=int(info.trigger_bits),
+                    ))
+                record_idx += 1
+    finally:
+        ch.close()
+    return events
+
+
+def _batch_render(detectors, det_list, det_hits, hole,
+                  title: Optional[str], out_path: str,
+                  width: int, height: int) -> bool:
+    image = QImage(width, height, QImage.Format.Format_ARGB32)
+    image.fill(QColor("white"))
+    p = QPainter(image)
+    try:
+        draw_event_panels(p, QRectF(image.rect()),
+                          detectors, det_list, det_hits, hole,
+                          title=title,
+                          bg=QColor("white"), fg=QColor("#222"))
+    finally:
+        p.end()
+    return image.save(out_path, "PNG")
+
+
+def _load_json_event(path: str) -> dict:
+    import json as _json
+    raw = open(path, "rb").read()
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        text = raw.decode("utf-16")
+    elif raw[:3] == b"\xef\xbb\xbf":
+        text = raw.decode("utf-8-sig")
+    else:
+        text = raw.decode("utf-8")
+    return _json.loads(text)
+
+
+def _print_event_summary(det_list, det_hits):
+    """Match gem_cluster_view's stdout layout for --verbose mode."""
+    for dd in det_list:
+        did = dd["id"]
+        hits = det_hits.get(did, {"x": [], "y": []})
+        xcl = dd.get("x_clusters", [])
+        ycl = dd.get("y_clusters", [])
+        print(f"\n  {dd['name']}: {len(hits['x'])} X hits, "
+              f"{len(hits['y'])} Y hits, "
+              f"{len(xcl)}+{len(ycl)} clusters, "
+              f"{len(dd.get('hits_2d', []))} 2D hits")
+        if xcl or ycl:
+            print(f"  {'plane':>5} {'pos(mm)':>8} {'peak':>8} {'total':>8} "
+                  f"{'size':>4} {'tbin':>4} {'xtalk':>5}  strips")
+            for plane, cls in [("X", xcl), ("Y", ycl)]:
+                for cl in cls:
+                    strips = cl.get("hit_strips", [])
+                    srange = f"{min(strips)}-{max(strips)}" if strips else ""
+                    print(f"  {plane:>5} {cl['position']:>8.2f} "
+                          f"{cl['peak_charge']:>8.1f} "
+                          f"{cl['total_charge']:>8.1f} {cl['size']:>4} "
+                          f"{cl['max_timebin']:>4} "
+                          f"{'y' if cl.get('cross_talk') else '':>5}  {srange}")
+
+
+def _default_output_path(event_number: int, out: Optional[str],
+                         single: bool) -> str:
+    if out is None:
+        return f"gem_event_{event_number:06d}.png"
+    if single:
+        return out
+    # out is a directory
+    os.makedirs(out, exist_ok=True)
+    return os.path.join(out, f"gem_event_{event_number:06d}.png")
+
+
+def _resolve_path(user_value, finder):
+    if user_value:
+        return user_value
+    try:
+        p = finder()
+        return str(p) if p else None
+    except Exception:
+        return None
+
+
+def _run_batch_layout(args) -> int:
+    gem_map = _resolve_path(args.gem_map, default_gem_map)
+    if not gem_map or not os.path.isfile(gem_map):
+        print(f"error: gem_map.json not found (pass -G <path>)", file=sys.stderr)
+        return 2
+    layers, apvs, hole, raw = load_gem_map(gem_map)
+    detectors = build_strip_layout(layers, apvs, hole, raw)
+    det = detectors[min(detectors.keys())]
+
+    out = args.output or "gem_layout.png"
+    image = QImage(args.width, args.height, QImage.Format.Format_ARGB32)
+    image.fill(QColor("white"))
+    p = QPainter(image)
+    try:
+        draw_layout(p, QRectF(image.rect()), det, hole,
+                    show_every=args.show_every,
+                    title=f"PRad-II GEM Strip Layout ({det['name']})",
+                    bg=QColor("white"), fg=QColor("#222"))
+    finally:
+        p.end()
+    if not image.save(out, "PNG"):
+        print(f"error: failed to save {out}", file=sys.stderr)
+        return 1
+    print(f"wrote {out}")
+    return 0
+
+
+def _run_batch_evio(args) -> int:
+    if not args.evio or not os.path.isfile(args.evio):
+        print("error: EVIO file required (first positional arg)", file=sys.stderr)
+        return 2
+    daq_cfg = _resolve_path(args.daq_config, default_daq_config)
+    gem_map = _resolve_path(args.gem_map, default_gem_map)
+    if not daq_cfg or not os.path.isfile(daq_cfg):
+        print("error: daq_config.json not found (pass -D)", file=sys.stderr); return 2
+    if not gem_map or not os.path.isfile(gem_map):
+        print("error: gem_map.json not found (pass -G)", file=sys.stderr); return 2
+
+    indices: List[int] = []
+    if args.event is not None:
+        indices = [int(args.event)]
+    elif args.events:
+        indices = _parse_event_spec(args.events)
+    if not indices:
+        print("error: provide --event N or --events SPEC", file=sys.stderr); return 2
+
+    layers, apvs, hole, raw = load_gem_map(gem_map)
+    detectors = build_strip_layout(layers, apvs, hole, raw)
+    apv_map = build_apv_map(apvs)
+
+    print(f"Scanning {args.evio} …")
+    events = _scan_events_sync(args.evio, daq_cfg)
+    if not events:
+        print("error: no physics events found", file=sys.stderr); return 1
+    print(f"  {len(events):,} physics events")
+
+    gsys = det.GemSystem()
+    gsys.init(gem_map)
+    if args.gem_ped and os.path.isfile(args.gem_ped):
+        gsys.load_pedestals(args.gem_ped)
+    gcl = det.GemCluster()
+
+    stepper = Stepper(args.evio, daq_cfg)
+    stepper.open()
+    try:
+        single = len(indices) == 1 and args.output and \
+                 not args.output.endswith(("/", "\\"))
+        rendered = 0
+        for idx in indices:
+            if not (0 <= idx < len(events)):
+                print(f"  skipping index {idx}: out of range", file=sys.stderr)
+                continue
+            evmeta = events[idx]
+            try:
+                ssp = stepper.get_ssp(evmeta, idx)
+            except Exception as exc:  # noqa: BLE001
+                print(f"  skipping index {idx}: {exc}", file=sys.stderr)
+                continue
+            gsys.clear()
+            gsys.process_event(ssp)
+            gsys.reconstruct(gcl)
+            det_list = build_det_list_from_gemsys(gsys)
+            zs_apvs = build_zs_apvs_from_gemsys(gsys)
+            det_hits = process_zs_hits(zs_apvs, apv_map, detectors, hole, raw)
+
+            if args.det >= 0:
+                det_list = [d for d in det_list if d["id"] == args.det]
+
+            title = (f"GEM Event #{evmeta.event_number}  "
+                     f"trig #{evmeta.trigger_number}  "
+                     f"bits 0x{evmeta.trigger_bits:X}")
+            out_path = _default_output_path(evmeta.event_number,
+                                            args.output, single)
+            ok = _batch_render(detectors, det_list, det_hits, hole,
+                               title, out_path, args.width, args.height)
+            if ok:
+                print(f"  wrote {out_path}")
+                rendered += 1
+                if args.verbose:
+                    _print_event_summary(det_list, det_hits)
+            else:
+                print(f"  error: failed to save {out_path}", file=sys.stderr)
+        print(f"Done: {rendered}/{len(indices)} rendered.")
+        return 0 if rendered > 0 else 1
+    finally:
+        stepper.close()
+
+
+def _run_batch_json(args) -> int:
+    import glob as globmod
+    gem_map = _resolve_path(args.gem_map, default_gem_map)
+    if not gem_map or not os.path.isfile(gem_map):
+        print("error: gem_map.json not found (pass -G)", file=sys.stderr); return 2
+
+    files: List[str] = []
+    for arg in args.json:
+        if os.path.isdir(arg):
+            files += sorted(globmod.glob(os.path.join(arg, "gem_event*.json")))
+        elif "*" in arg or "?" in arg:
+            files += sorted(globmod.glob(arg))
+        else:
+            files.append(arg)
+    files = [f for f in files if f.lower().endswith(".json")]
+    if not files:
+        print("error: no JSON files found", file=sys.stderr); return 2
+
+    layers, apvs, hole, raw = load_gem_map(gem_map)
+    detectors = build_strip_layout(layers, apvs, hole, raw)
+    apv_map = build_apv_map(apvs)
+
+    single = len(files) == 1 and args.output and \
+             not args.output.endswith(("/", "\\"))
+    rendered = 0
+    for i, fpath in enumerate(files):
+        try:
+            event = _load_json_event(fpath)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  [{i+1}/{len(files)}] {os.path.basename(fpath)} — "
+                  f"parse error: {exc}", file=sys.stderr)
+            continue
+        if not isinstance(event, dict) or "detectors" not in event:
+            print(f"  [{i+1}/{len(files)}] {os.path.basename(fpath)} — "
+                  f"skipped (not an event file)")
+            continue
+        det_list = event.get("detectors", [])
+        if args.det >= 0:
+            det_list = [d for d in det_list if d["id"] == args.det]
+        det_hits = process_zs_hits(event.get("zs_apvs", []), apv_map,
+                                   detectors, hole, raw)
+        ev_num = int(event.get("event_number", i))
+        title = f"GEM Cluster View — Event #{ev_num}"
+
+        if single:
+            out_path = args.output
+        elif args.output:
+            os.makedirs(args.output, exist_ok=True)
+            out_path = os.path.join(args.output,
+                                    os.path.splitext(os.path.basename(fpath))[0] + ".png")
+        else:
+            out_path = os.path.splitext(fpath)[0] + ".png"
+
+        ok = _batch_render(detectors, det_list, det_hits, hole,
+                           title, out_path, args.width, args.height)
+        print(f"  [{i+1}/{len(files)}] {os.path.basename(fpath)} -> "
+              f"{out_path}" + (" (failed)" if not ok else ""))
+        if ok:
+            rendered += 1
+            if args.verbose:
+                _print_event_summary(det_list, det_hits)
+    print(f"Done: {rendered}/{len(files)} rendered.")
+    return 0 if rendered > 0 else 1
+
+
+# ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Interactive PyQt6 GEM event viewer — step through an "
-                    "EVIO file with live threshold tuning.")
+        description="PyQt6 GEM event viewer.  Launches an interactive GUI by "
+                    "default; export-mode flags (--layout / --event / --events "
+                    "/ --json) render PNGs and exit without showing a window.")
     parser.add_argument("evio", nargs="?", help="EVIO file to open on start.")
     parser.add_argument("-D", "--daq-config", default=None,
                         help="Override daq_config.json path.")
@@ -1347,8 +1744,53 @@ def main():
                         help="Pedestal file (required for full-readout data; "
                              "ignored for online-ZS production data).")
     parser.add_argument("--theme", choices=available_themes(), default="dark",
-                        help="Colour theme (default: dark).")
+                        help="Colour theme (GUI only, default: dark).")
+
+    exp = parser.add_argument_group("export mode (no GUI)")
+    exp.add_argument("--layout", action="store_true",
+                     help="Render strip-layout PNG and exit.")
+    exp.add_argument("--event", type=int, default=None,
+                     help="Render a single event (index into the EVIO file).")
+    exp.add_argument("--events", default=None,
+                     help="Event spec for multi-event export: 'N', 'N-M', or "
+                          "comma-separated mix (e.g. '10-20,30,45-50').")
+    exp.add_argument("--json", nargs="+", default=None,
+                     help="Render from gem_dump JSON files / directory / glob "
+                          "instead of EVIO.")
+    exp.add_argument("-o", "--output", default=None,
+                     help="Output PNG (single) or directory (multi).")
+    exp.add_argument("--det", type=int, default=-1,
+                     help="Export only detector N (default: all).")
+    exp.add_argument("--width", type=int, default=None,
+                     help="PNG width in pixels (default: 2400, layout: 1500).")
+    exp.add_argument("--height", type=int, default=None,
+                     help="PNG height in pixels (default: 900, layout: 1100).")
+    exp.add_argument("--show-every", type=int, default=8,
+                     help="Strip decimation for --layout (default: 8).")
+    exp.add_argument("--verbose", action="store_true",
+                     help="Print per-event cluster summary to stdout.")
     args = parser.parse_args()
+
+    batch = args.layout or args.event is not None or \
+            args.events is not None or args.json is not None
+    if batch:
+        # Headless-safe Qt: offscreen platform plugin, no visible windows.
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        app = QApplication.instance() or QApplication(sys.argv)
+        if not HAVE_PRAD2PY:
+            print(f"error: prad2py not available\n{PRAD2PY_ERROR}",
+                  file=sys.stderr)
+            return 2
+        if args.layout:
+            # Layout defaults: taller PNG since it's a single panel.
+            if args.width is None: args.width = 1500
+            if args.height is None: args.height = 1100
+            return _run_batch_layout(args)
+        if args.width is None: args.width = 2400
+        if args.height is None: args.height = 900
+        if args.json is not None:
+            return _run_batch_json(args)
+        return _run_batch_evio(args)
 
     set_theme(args.theme)
     app = QApplication(sys.argv)
@@ -1363,4 +1805,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    rc = main()
+    if rc is not None:
+        sys.exit(rc)

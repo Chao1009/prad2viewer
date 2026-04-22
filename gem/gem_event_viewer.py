@@ -57,7 +57,7 @@ except Exception as _exc:  # noqa: BLE001
 
 
 from PyQt6.QtCore import (  # noqa: E402
-    QObject, QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal,
+    QObject, QPointF, QRectF, QSize, Qt, QThread, QTimer, pyqtSignal,
 )
 from PyQt6.QtGui import (  # noqa: E402
     QAction, QColor, QFont, QImage, QKeySequence,
@@ -533,6 +533,8 @@ class ApvPanel(QWidget):
 
     MIN_W = 180
     MIN_H = 110
+    HINT_W = 260
+    HINT_H = 150
     TITLE_H = 16
     HIT_ROW_H = 6
 
@@ -540,12 +542,15 @@ class ApvPanel(QWidget):
         super().__init__(parent)
         self.setMinimumSize(self.MIN_W, self.MIN_H)
         self._title = ""
-        self._badge = ""                # e.g. "full-readout" warning
+        self._badge = ""                # "full-readout" when firmware did NOT run ZS
         self._frame: Optional[np.ndarray] = None    # (128, 6) float or int16
         self._hits:  Optional[np.ndarray] = None    # (128,) bool
         self._y_auto = True
         self._y_lo = 0.0
         self._y_hi = 1.0
+
+    def sizeHint(self):
+        return QSize(self.HINT_W, self.HINT_H)
 
     def set_frame(self, title: str, frame: np.ndarray,
                   hits: Optional[np.ndarray] = None,
@@ -590,10 +595,10 @@ class ApvPanel(QWidget):
         dim = QColor(getattr(THEME, "TEXT_DIM", "#8b949e"))
         p.fillRect(0, 0, w, h, bg)
 
-        # Frame border; tint with the theme accent when a badge is set so
-        # the informational flag is visible at a glance but not alarming.
+        # Frame border; red tint when a badge is set — makes the "this
+        # APV shipped firmware-ZS'd data" state impossible to miss.
         border = QColor(getattr(THEME, "BORDER", "#30363d"))
-        badge_col = QColor(getattr(THEME, "ACCENT", "#ffd166"))
+        badge_col = QColor(getattr(THEME, "DANGER", "#ff6b6b"))
         if self._badge:
             border = badge_col
         p.setPen(QPen(border, 1))
@@ -677,13 +682,14 @@ class RawApvTab(QWidget):
         bar = QHBoxLayout()
         bar.setSpacing(8)
 
-        bar.addWidget(QLabel("Show:"))
-        self.show_combo = QComboBox()
-        self.show_combo.addItems(["Processed", "Raw"])
-        self.show_combo.currentIndexChanged.connect(self._on_control_changed)
-        bar.addWidget(self.show_combo)
+        # Checked: show processed (pedestal + CM + software-ZS applied).
+        # Unchecked: show raw firmware samples straight from SspEventData.
+        self.process_cb = QCheckBox("Process")
+        self.process_cb.setChecked(True)
+        self.process_cb.toggled.connect(self._on_control_changed)
+        bar.addWidget(self.process_cb)
 
-        self.zs_only_cb = QCheckBox("ZS-hit only")
+        self.zs_only_cb = QCheckBox("Signal Only")
         self.zs_only_cb.setChecked(False)
         self.zs_only_cb.toggled.connect(self._on_control_changed)
         bar.addWidget(self.zs_only_cb)
@@ -759,6 +765,12 @@ class RawApvTab(QWidget):
                     f"(GemSystem idx {idx})")
                 grid.addWidget(panel, r, c)
                 panels[idx] = panel
+            # Freeze the layout: panels take their own sizeHint, leftover
+            # width and height go into terminal stretches.  Hiding some
+            # panels via setVisible no longer re-flows survivors.
+            for c in range(self.COLS):
+                grid.setColumnStretch(c, 0)
+            grid.setColumnStretch(self.COLS, 1)
             grid.setRowStretch(grid.rowCount(), 1)
             page.setWidget(content)
             self._panels[det_name] = panels
@@ -769,25 +781,25 @@ class RawApvTab(QWidget):
                        processed: Dict[int, np.ndarray],
                        raw:       Dict[int, np.ndarray],
                        hits:      Dict[int, np.ndarray],
-                       online_zs_apvs: Optional[set] = None):
+                       full_readout_apvs: Optional[set] = None):
         """Push per-event data; call after process_event() returns.
 
-        ``online_zs_apvs`` = set of GemSystem indices where the firmware
-        applied zero suppression (nstrips < 128).  Used to tag affected
-        panels with a 'zero-suppressed' badge so users know the raw view
-        is already sparse when that flag is on."""
+        ``full_readout_apvs`` = set of GemSystem indices where the firmware
+        shipped all 128 strips (no online ZS).  These get a red frame +
+        'full-readout' badge so users can tell them apart from the normal
+        (firmware-ZS'd) case."""
         self._processed = processed
         self._raw       = raw
         self._hits      = hits
-        self._online_zs = online_zs_apvs or set()
+        self._full_readout = full_readout_apvs or set()
         self._refresh_all_panels()
 
     def _on_control_changed(self, *_):
         self._refresh_all_panels()
 
     def _refresh_all_panels(self):
-        show_raw = self.show_combo.currentIndex() == 1
-        zs_only  = self.zs_only_cb.isChecked()
+        processed_view = self.process_cb.isChecked()
+        signal_only    = self.zs_only_cb.isChecked()
 
         shown = 0
         total = 0
@@ -803,27 +815,29 @@ class RawApvTab(QWidget):
                 total += 1
                 has_zs = self._hits.get(idx)
                 has_any_zs = bool(has_zs is not None and has_zs.any())
-                if zs_only and not has_any_zs:
+                if signal_only and not has_any_zs:
                     panel.setVisible(False)
                     continue
                 panel.setVisible(True)
                 shown += 1
                 visible_in_tab += 1
 
-                frame = (self._raw.get(idx) if show_raw
-                         else self._processed.get(idx))
+                frame = (self._processed.get(idx) if processed_view
+                         else self._raw.get(idx))
                 title = (f"c{m['crate_id']} m{m['mpd_id']} a{m['adc_ch']}  "
                          f"{m['det_name']} {m['plane_type']} p{m['det_pos']}")
-                badge = "zero-suppressed" if idx in self._online_zs else ""
+                # Highlight APVs where firmware did NOT run ZS — these
+                # ship all 128 strips, and the software has to do the
+                # suppression.  Normal (firmware-ZS'd) APVs stay unmarked.
+                badge = "full-readout" if idx in self._full_readout else ""
                 panel.set_frame(title, frame, has_zs, badge)
 
-            # Grey the tab header if nothing survives the current filters.
             tab_i = self._tab_index_of.get(det_name)
             if tab_i is not None:
                 tab_bar.setTabTextColor(
                     tab_i, dim_col if visible_in_tab == 0 else active_col)
 
-        mode = "raw" if show_raw else "processed"
+        mode = "processed" if processed_view else "raw"
         self._status.setText(f"{shown}/{total} APVs  [{mode}]")
 
 
@@ -1670,7 +1684,7 @@ class GemEventViewer(QMainWindow):
         # returns references through the standard cast path and works.
         MAX_APVS_PER_MPD = 16
         raw_by_addr: Dict[Tuple[int, int, int], np.ndarray] = {}
-        online_zs_addrs: set = set()
+        full_readout_addrs: set = set()
         ssp = self._last_ssp
         for m in range(ssp.nmpds):
             mpd = ssp.mpd(m)
@@ -1684,15 +1698,16 @@ class GemEventViewer(QMainWindow):
                        int(apv.addr.adc_ch))
                 # Copy so the array outlives the SSP object if cached.
                 raw_by_addr[key] = np.asarray(apv.strips).copy()
-                # nstrips < 128 means firmware already applied ZS — only
-                # surviving channels shipped.  nstrips == 128 is full-readout.
-                if 0 < apv.nstrips < 128:
-                    online_zs_addrs.add(key)
+                # nstrips == 128 → firmware shipped all 128 channels (no
+                # online ZS).  Software has to do the suppression —
+                # highlight so the user can tell apart from hardware-ZS'd.
+                if apv.nstrips == 128:
+                    full_readout_addrs.add(key)
 
         processed: Dict[int, np.ndarray] = {}
         raw:       Dict[int, np.ndarray] = {}
         hits:      Dict[int, np.ndarray] = {}
-        online_zs: set = set()
+        full_readout: set = set()
         for i in range(self._gsys.get_n_apvs()):
             try:
                 processed[i] = self._gsys.get_apv_frame(i)
@@ -1703,9 +1718,9 @@ class GemEventViewer(QMainWindow):
             key = (int(cfg.crate_id), int(cfg.mpd_id), int(cfg.adc_ch))
             if key in raw_by_addr:
                 raw[i] = raw_by_addr[key]
-                if key in online_zs_addrs:
-                    online_zs.add(i)
-        self.raw_apv_tab.set_event_data(processed, raw, hits, online_zs)
+                if key in full_readout_addrs:
+                    full_readout.add(i)
+        self.raw_apv_tab.set_event_data(processed, raw, hits, full_readout)
 
     def _re_reconstruct_current(self):
         if self._gsys is None or self._gcl is None:

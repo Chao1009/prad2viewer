@@ -86,7 +86,7 @@ endif()
 set(WITH_ROOT ${BUILD_ANALYSIS})
 
 # ---------------------------------------------------------------------------
-# Server library (shared between prad2_server and prad2evviewer)
+# Server library (linked by prad2_server)
 # ---------------------------------------------------------------------------
 find_package(Threads REQUIRED)
 
@@ -153,9 +153,12 @@ if(BUILD_PYTHON)
 endif()
 
 # ---------------------------------------------------------------------------
-# Optional feature: Qt GUI applications (prad2evviewer, prad2_client)
+# Optional feature: Qt GUI applications (prad2_client)
 # ---------------------------------------------------------------------------
-prad_option(BUILD_GUI ON "Build Qt GUI applications (prad2evviewer, prad2_client)")
+# The Python GUIs (hycal_event_viewer, gem_event_viewer) cover per-event
+# inspection; the remaining Qt-native binary is prad2_client, a thin
+# WebEngine wrapper for a remote prad2_server.
+prad_option(BUILD_GUI ON "Build Qt GUI application (prad2_client)")
 
 if(BUILD_GUI)
     find_package(Qt6 QUIET COMPONENTS Widgets WebEngineWidgets)
@@ -177,17 +180,6 @@ endif()
 if(BUILD_GUI)
     message(STATUS "Qt: using Qt${QT_VERSION_MAJOR}")
 
-    # Standalone viewer (embedded server + WebEngine).
-    add_executable(prad2evviewer src/prad2evviewer.cpp)
-    target_compile_definitions(prad2evviewer PRIVATE
-        DATABASE_DIR="${DATABASE_DIR}" RESOURCE_DIR="${RESOURCE_DIR}")
-    target_link_libraries(prad2evviewer PRIVATE
-        prad2srv
-        Qt${QT_VERSION_MAJOR}::Widgets
-        Qt${QT_VERSION_MAJOR}::WebEngineWidgets)
-    set_target_properties(prad2evviewer PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin AUTOMOC ON)
-
     # Thin remote client.
     add_executable(prad2_client src/prad2_client.cpp)
     target_link_libraries(prad2_client PRIVATE
@@ -203,7 +195,7 @@ endif()
 install(TARGETS prad2_server evio_dump ped_calc
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(BUILD_GUI)
-    install(TARGETS prad2evviewer prad2_client
+    install(TARGETS prad2_client
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 

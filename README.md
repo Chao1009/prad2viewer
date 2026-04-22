@@ -103,25 +103,29 @@ http://localhost:5678
 
 This also works for online monitoring -- start `prad2_server --et -p 5678` on the ifarm node where the ET system is accessible.
 
-## Qt Standalone Viewer (optional)
+## Native event-by-event GUIs
+
+For interactive per-event inspection, use the PyQt6 tools in `scripts/` and `gem/`:
+
+- `hycal_event_viewer` — FADC waveform browser + live HyCal clustering (two tabs: Waveform, Cluster).
+- `gem_event_viewer`   — GEM strip hits + clusters, live threshold tuning.
+
+Both run standalone against an evio file; no server needed.
+
+```bash
+hycal_event_viewer data.evio
+gem_event_viewer   data.evio
+```
+
+## Qt thin client (optional)
 
 Build with `-DBUILD_GUI=ON` (uses Qt6 WebEngine by default, falls back to Qt5 if Qt6 is not found).
 
-`prad2evviewer` embeds the server and web frontend in a native Qt window. No separate server process needed -- updates to the web frontend or server API are automatically reflected.
-
-```bash
-prad2evviewer                           # empty, use File > Open
-prad2evviewer data.evio -H              # open file with histograms
-prad2evviewer -d /data/stage6           # enable file browser
-```
-
-Features: native file dialogs (File > Open), drag-and-drop `.evio` files, View > Go Online (if compiled with ET), status bar with loading progress.
-
-`prad2_client` is a thin Qt WebEngine wrapper that connects to a remote `prad2_server` instance:
+`prad2_client` is a Qt WebEngine wrapper that connects to a remote `prad2_server` instance -- useful when you want the web dashboard in its own native window instead of a browser tab:
 
 ```bash
 prad2_client                            # connect to localhost:5051
-prad2_client -H clonpc19 -p 8080       # connect to remote server
+prad2_client -H clonpc19 -p 8080        # connect to remote server
 ```
 
 ## Tools
@@ -130,7 +134,7 @@ prad2_client -H clonpc19 -p 8080       # connect to remote server
 - [gem/README.md](gem/README.md) — GEM tracker tools (`gem_dump`, `gem_event_viewer`, `gem_cluster_view`, `gem_layout`, …) plus detector reference notes.
 - [analysis/README.md](analysis/README.md) — ROOT-based replay and physics analysis (binaries are installed with a `prad2ana_` prefix).
 - [calibration/README.md](calibration/README.md) — HyCal gain-equalizer and operator calibration scan procedures.
-- [scripts/README.md](scripts/README.md) — HyCal scaler / pedestal / gain / map-builder GUIs, waveform viewer, tagger viewer, plus `daq_tool/` (dev-only DAQ editors) and `shell/` (operator scripts).
+- [scripts/README.md](scripts/README.md) — HyCal scaler / pedestal / gain / map-builder GUIs, HyCal event viewer (waveform + cluster), tagger viewer, plus `daq_tool/` (dev-only DAQ editors) and `shell/` (operator scripts).
 
 ## Installation
 

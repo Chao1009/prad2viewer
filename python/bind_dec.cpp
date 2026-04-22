@@ -180,12 +180,11 @@ void bind_fadc(py::module_ &m)
             py::return_value_policy::reference_internal,
             "Access the i-th active ROC by slot in roc_index[].")
         .def("find_roc",
-            [](const fdec::EventData &e, uint32_t tag) -> py::object {
-                const auto *r = e.findRoc(tag);
-                if (!r) return py::none();
-                return py::cast(r, py::return_value_policy::reference_internal);
+            [](const fdec::EventData &e, uint32_t tag) -> const fdec::RocData* {
+                return e.findRoc(tag);   // nullptr → None via pybind11
             },
             py::arg("tag"),
+            py::return_value_policy::reference_internal,
             "Locate a ROC by its bank tag (e.g. 0x80). Returns None if absent.")
         .def("clear", &fdec::EventData::clear);
 
@@ -323,12 +322,17 @@ void bind_ssp(py::module_ &m)
             },
             py::return_value_policy::reference_internal)
         .def("find_apv",
-            [](const ssp::SspEventData &e, int crate, int mpd, int adc) -> py::object {
-                const auto *a = e.findApv(crate, mpd, adc);
-                if (!a) return py::none();
-                return py::cast(a, py::return_value_policy::reference_internal);
+            [](const ssp::SspEventData &e, int crate, int mpd, int adc)
+                -> const ssp::ApvData* {
+                // Return a raw pointer and let the .def handler do the
+                // cast — manual py::cast(..., reference_internal) loses
+                // the parent linkage and keep_alive<0,1> fails with
+                // "Could not activate keep_alive".  nullptr → None is
+                // handled automatically by pybind11.
+                return e.findApv(crate, mpd, adc);
             },
-            py::arg("crate"), py::arg("mpd"), py::arg("adc"))
+            py::arg("crate"), py::arg("mpd"), py::arg("adc"),
+            py::return_value_policy::reference_internal)
         .def("clear", &ssp::SspEventData::clear);
 }
 

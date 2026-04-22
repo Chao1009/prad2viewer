@@ -540,29 +540,27 @@ static void bind_hycal(py::module_ &m)
             py::return_value_policy::reference_internal,
             "Module by array index (0 .. module_count()-1).")
         .def("module_by_name",
-            [](const fdec::HyCalSystem &self, const std::string &name) -> py::object {
-                const fdec::Module *m = self.module_by_name(name);
-                if (!m) return py::none();
-                return py::cast(m, py::return_value_policy::reference_internal);
+            [](const fdec::HyCalSystem &self, const std::string &name)
+                -> const fdec::Module* {
+                return self.module_by_name(name);
             },
             py::arg("name"),
+            py::return_value_policy::reference_internal,
             "Module by name (e.g. 'W735'); None if not found.")
         .def("module_by_id",
-            [](const fdec::HyCalSystem &self, int id) -> py::object {
-                const fdec::Module *m = self.module_by_id(id);
-                if (!m) return py::none();
-                return py::cast(m, py::return_value_policy::reference_internal);
+            [](const fdec::HyCalSystem &self, int id) -> const fdec::Module* {
+                return self.module_by_id(id);
             },
             py::arg("primex_id"),
+            py::return_value_policy::reference_internal,
             "Module by PrimEx id (G: 1-576, W: 1001-2152); None if not found.")
         .def("module_by_daq",
             [](const fdec::HyCalSystem &self, int crate, int slot, int ch)
-                -> py::object {
-                const fdec::Module *m = self.module_by_daq(crate, slot, ch);
-                if (!m) return py::none();
-                return py::cast(m, py::return_value_policy::reference_internal);
+                -> const fdec::Module* {
+                return self.module_by_daq(crate, slot, ch);
             },
             py::arg("crate"), py::arg("slot"), py::arg("channel"),
+            py::return_value_policy::reference_internal,
             "Module by DAQ address; None if not found.")
 
         .def("get_calib_constant", &fdec::HyCalSystem::GetCalibConstant,
@@ -809,12 +807,12 @@ static void bind_epics(py::module_ &m)
             "Return the most recent value of `channel` at or before "
             "`event_number`, or None if unknown / not yet seen.")
         .def("find_snapshot",
-            [](const fdec::EpicsStore &self, int32_t event_number) -> py::object {
-                const auto *s = self.FindSnapshot(event_number);
-                if (!s) return py::none();
-                return py::cast(s, py::return_value_policy::reference_internal);
+            [](const fdec::EpicsStore &self, int32_t event_number)
+                -> const fdec::EpicsStore::Snapshot* {
+                return self.FindSnapshot(event_number);
             },
             py::arg("event_number"),
+            py::return_value_policy::reference_internal,
             "Return the whole snapshot at or before `event_number`, or None.")
         .def("get_channel_count", &fdec::EpicsStore::GetChannelCount)
         .def("get_channel_id",    &fdec::EpicsStore::GetChannelId,

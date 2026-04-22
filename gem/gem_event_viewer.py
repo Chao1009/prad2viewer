@@ -1654,25 +1654,45 @@ class GemEventViewer(QMainWindow):
         straight from the cached SspEventData (what firmware shipped)."""
         if self._gsys is None or self._last_ssp is None:
             return
+
+        # Walk the SSP structure once → (crate, mpd, adc) → raw (128, 6)
+        # ndarray.  find_apv() is currently unusable due to a pybind11
+        # keep_alive issue with its manual py::cast path; MPD iteration
+        # returns references through the standard cast path and works.
+        MAX_APVS_PER_MPD = 16
+        raw_by_addr: Dict[Tuple[int, int, int], np.ndarray] = {}
+        full_readout_addrs: set = set()
+        ssp = self._last_ssp
+        for m in range(ssp.nmpds):
+            mpd = ssp.mpd(m)
+            if not mpd.present:
+                continue
+            for a in range(MAX_APVS_PER_MPD):
+                apv = mpd.apv(a)
+                if not apv.present:
+                    continue
+                key = (int(mpd.crate_id), int(mpd.mpd_id),
+                       int(apv.addr.adc_ch))
+                # Copy so the array outlives the SSP object if cached.
+                raw_by_addr[key] = np.asarray(apv.strips).copy()
+                if apv.nstrips == 128:
+                    full_readout_addrs.add(key)
+
         processed: Dict[int, np.ndarray] = {}
         raw:       Dict[int, np.ndarray] = {}
         hits:      Dict[int, np.ndarray] = {}
         full_readout: set = set()
-        n = self._gsys.get_n_apvs()
-        for i in range(n):
+        for i in range(self._gsys.get_n_apvs()):
             try:
                 processed[i] = self._gsys.get_apv_frame(i)
                 hits[i]      = self._gsys.get_apv_hit_mask(i)
             except Exception:
                 continue
             cfg = self._gsys.get_apv_config(i)
-            apv_sd = self._last_ssp.find_apv(int(cfg.crate_id),
-                                              int(cfg.mpd_id),
-                                              int(cfg.adc_ch))
-            if apv_sd is not None and apv_sd.present:
-                # .strips is already bound as (128, 6) int16
-                raw[i] = np.asarray(apv_sd.strips)
-                if apv_sd.nstrips == 128:
+            key = (int(cfg.crate_id), int(cfg.mpd_id), int(cfg.adc_ch))
+            if key in raw_by_addr:
+                raw[i] = raw_by_addr[key]
+                if key in full_readout_addrs:
                     full_readout.add(i)
         self.raw_apv_tab.set_event_data(processed, raw, hits, full_readout)
 

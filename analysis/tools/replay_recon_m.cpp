@@ -1,9 +1,10 @@
 //=============================================================================
 // replay_recon_m — convert multiple EVIO files to reconstructed ROOT trees (multi-threaded)
 //
-// Usage: replay_recon_m <evio_dir> [-f max_files] [-n max_events] [-p] [-j num_threads]
-//                                  [-o merged.root] [-D daq_config.json]
+// Usage: replay_recon_m <evio_dir> -o output_dir [-f max_files] [-n max_events] [-p] [-j num_threads]
+//                                  [-D daq_config.json]
 //                                  [-g gem_pedestal.json] [-z zerosup_threshold]
+//   -o  output directory (REQUIRED)
 //   -f  max files to process (default: all)
 //   -n  max events per file (default: all)
 //   -p  read prad1 data and do not include GEM
@@ -11,7 +12,6 @@
 //   -D  DAQ configuration file
 //   -g  GEM pedestal file
 //   -z  zero-suppression threshold override
-//   -o  merged output ROOT file (optional, skipped if not given)
 //=============================================================================
 
 #include "Replay.h"
@@ -49,7 +49,7 @@ static std::vector<std::string> getFilesInDir(const std::string &dir_path)
     return files;
 }
 
-static std::string makeOutputPath(const std::string &evio_path)
+static std::string makeOutputFile(const std::string &evio_path)
 {
     std::string out = std::filesystem::path(evio_path).filename().string();
     auto pos = out.find(".evio");
@@ -69,7 +69,7 @@ int main(int argc, char *argv[])
     TClass::GetClass("TFile");
     TClass::GetClass("TBranch");
 
-    std::string input, daq_config, gem_ped_file, merged_output;
+    std::string input, daq_config, gem_ped_file, output_dir;
     float zerosup_override = 0.f;
     int max_files = -1;
     int num_threads = 4;
@@ -82,12 +82,12 @@ int main(int argc, char *argv[])
     daq_config = db_dir + "/daq_config.json"; // default DAQ config for PRad2
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:D:j:o:g:z:p")) != -1) {
+    while ((opt = getopt(argc, argv, "o:f:D:j:g:z:p")) != -1) {
         switch (opt) {
+            case 'o': output_dir = optarg; break;
             case 'f': max_files = std::atoi(optarg); break;
             case 'D': daq_config = optarg; break;
             case 'j': num_threads = std::atoi(optarg); break;
-            case 'o': merged_output = optarg; break;
             case 'g': gem_ped_file = optarg; break;
             case 'z': zerosup_override = std::atof(optarg); break;
             case 'p': prad1 = true; break;
@@ -95,10 +95,16 @@ int main(int argc, char *argv[])
     }
     if (optind < argc) input = argv[optind];
 
-    if (input.empty()) {
-        std::cerr << "Usage: replay_recon_m <evio_dir> [-f max_files] [-j threads]"
-                  << " [-D daq_config.json] [-g gem_ped.json] [-z threshold] [-p]"
-                  << " [-o merged.root]\n";
+    if (input.empty() || output_dir.empty()) {
+        std::cerr << "Usage: replay_recon_m <evio_dir> -o output_dir [-f max_files] [-j threads]"
+                  << " [-D daq_config.json] [-g gem_ped.json] [-z threshold] [-p]\n";
+        std::cerr << "  -o  output directory (REQUIRED)\n";
+        std::cerr << "  -f  max files to process (default: all)\n";
+        std::cerr << "  -j  number of threads (default: 4)\n";
+        std::cerr << "  -D  DAQ config JSON (default: <db>/daq_config.json)\n";
+        std::cerr << "  -g  GEM pedestal JSON\n";
+        std::cerr << "  -z  zero-suppression threshold override\n";
+        std::cerr << "  -p  PRad1 mode (no GEM)\n";
         return 1;
     }
 
@@ -118,7 +124,6 @@ int main(int argc, char *argv[])
     std::atomic<int> next_file{0};
     std::mutex io_mtx;
     std::atomic<int> errors{0};
-    std::vector<std::string> merged_files;
 
     auto worker = [&]() {
         // each thread gets its own Replay instance (own EvChannel, own buffers)
@@ -131,7 +136,7 @@ int main(int argc, char *argv[])
             int idx = next_file.fetch_add(1);
             if (idx >= num_files) break;
 
-            std::string out = makeOutputPath(evio_files[idx]);
+            std::string out = output_dir + "/" + makeOutputFile(evio_files[idx]);
             bool ok = replay.ProcessWithRecon(evio_files[idx], out, daq_config,
                                               gem_ped_file, zerosup_override, prad1);
 
@@ -139,8 +144,6 @@ int main(int argc, char *argv[])
             if (ok) {
                 std::cout << "  [" << (idx + 1) << "/" << num_files << "] "
                           << evio_files[idx] << " -> " << out << "\n";
-                if (!merged_output.empty())
-                    merged_files.push_back(out);
             } else {
                 std::cerr << "  [" << (idx + 1) << "/" << num_files << "] FAILED: "
                           << evio_files[idx] << "\n";
@@ -159,20 +162,6 @@ int main(int argc, char *argv[])
     std::cout << "Done: " << num_files << " files"
               << (errors > 0 ? ", " + std::to_string(errors.load()) + " errors" : "")
               << "\n";
-
-    if (!merged_output.empty() && !merged_files.empty()) {
-        std::cout << "Merging " << merged_files.size() << " files into " << merged_output << " ...\n";
-        TFileMerger merger(/*isLocal=*/false);
-        merger.OutputFile(merged_output.c_str(), "RECREATE");
-        for (auto &f : merged_files)
-            merger.AddFile(f.c_str());
-        if (merger.Merge())
-            std::cout << "Merged -> " << merged_output << "\n";
-        else {
-            std::cerr << "Merge failed!\n";
-            return 1;
-        }
-    }
 
     return errors > 0 ? 1 : 0;
 }

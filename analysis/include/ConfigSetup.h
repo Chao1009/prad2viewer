@@ -22,10 +22,9 @@
 #include <string>
 #include <vector>
 
-namespace fs = std::filesystem;
-
 namespace analysis {
 
+namespace fs = std::filesystem;
 // --- detector geometry configuration struct ---------------------------------
 // Holds all run-specific detector geometry and beam parameters.
 // Using a struct allows multi-run processing without shared mutable state:

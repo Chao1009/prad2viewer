@@ -51,6 +51,24 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("cl_nblocks",   ev.cl_nblocks);
     tree->SetBranchAddress("cl_center",    ev.cl_center);
     tree->SetBranchAddress("cl_flag",      ev.cl_flag);
+    // Matching results
+    tree->SetBranchAddress("matchFlag",    ev.matchFlag);
+    tree->SetBranchAddress("matchHC_x",    ev.matchHC_x);
+    tree->SetBranchAddress("matchHC_y",    ev.matchHC_y);
+    tree->SetBranchAddress("matchHC_z",    ev.matchHC_z);
+    tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
+    tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
+    tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);
+    tree->SetBranchAddress("matchNum",     &ev.matchNum);
+    //quick and simple matching results for quick check
+    tree->SetBranchAddress("mHit_E", ev.mHit_E);
+    tree->SetBranchAddress("mHit_x", ev.mHit_x);
+    tree->SetBranchAddress("mHit_y", ev.mHit_y);
+    tree->SetBranchAddress("mHit_z", ev.mHit_z);
+    tree->SetBranchAddress("mHit_gx", ev.mHit_gx);
+    tree->SetBranchAddress("mHit_gy", ev.mHit_gy);
+    tree->SetBranchAddress("mHit_gz", ev.mHit_gz);
+    tree->SetBranchAddress("mHit_gid", ev.mHit_gid);
     // GEM part
     tree->SetBranchAddress("n_gem_hits",   &ev.n_gem_hits);
     tree->SetBranchAddress("det_id",       ev.det_id);
@@ -62,18 +80,6 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("gem_y_peak",   ev.gem_y_peak);
     tree->SetBranchAddress("gem_x_size",   ev.gem_x_size);
     tree->SetBranchAddress("gem_y_size",   ev.gem_y_size);
-    // Matching results
-    tree->SetBranchAddress("match_num",       &ev.match_num);
-    tree->SetBranchAddress("matchHC_x",       ev.matchHC_x);
-    tree->SetBranchAddress("matchHC_y",       ev.matchHC_y);
-    tree->SetBranchAddress("matchHC_z",       ev.matchHC_z);
-    tree->SetBranchAddress("matchHC_energy",  ev.matchHC_energy);
-    tree->SetBranchAddress("matchHC_center",  ev.matchHC_center);
-    tree->SetBranchAddress("matchHC_flag",    ev.matchHC_flag);
-    tree->SetBranchAddress("matchG_x",        ev.matchG_x);
-    tree->SetBranchAddress("matchG_y",        ev.matchG_y);
-    tree->SetBranchAddress("matchG_z",        ev.matchG_z);
-    tree->SetBranchAddress("matchG_det_id",   ev.matchG_det_id);
 }
 
 static std::vector<std::string> collectRootFiles(const std::string &path);
@@ -182,8 +188,8 @@ int main(int argc, char *argv[])
             std::cerr << "\rPass 1: " << i << " / " << N << std::flush;
 
         bool good_moller = false;
-        if(ev.match_num == 2){
-            float Epair = ev.matchHC_energy[0] + ev.matchHC_energy[1];
+        if(ev.matchNum == 2){
+            float Epair = ev.mHit_E[0] + ev.mHit_E[1];
             if(geo.Ebeam <= 0.f){
                 std::cerr << "Error: Ebeam not set, cannot apply Moller energy cut.\n";
                 break;
@@ -199,26 +205,26 @@ int main(int argc, char *argv[])
         MollerEvent g_m;
         
         h_m = MollerEvent(
-                {ev.matchHC_x[0], ev.matchHC_y[0], ev.matchHC_z[0], ev.matchHC_energy[0]},
-                {ev.matchHC_x[1], ev.matchHC_y[1], ev.matchHC_z[1], ev.matchHC_energy[1]});
+                {ev.mHit_x[0], ev.mHit_y[0], ev.mHit_z[0], ev.mHit_E[0]},
+                {ev.mHit_x[1], ev.mHit_y[1], ev.mHit_z[1], ev.mHit_E[1]});
         hycal_mollers.push_back(h_m);
         
         // select two moller on one chamber for upstream GEMs 
-        if(ev.matchG_det_id[0][0] == ev.matchG_det_id[1][0]){
+        if(ev.mHit_gid[0][0] == ev.mHit_gid[1][0]){
             g_m = MollerEvent(
-                {ev.matchG_x[0][0], ev.matchG_y[0][0], ev.matchG_z[0][0], ev.matchHC_energy[0]},
-                {ev.matchG_x[1][0], ev.matchG_y[1][0], ev.matchG_z[1][0], ev.matchHC_energy[1]});
-            int det_id = ev.matchG_det_id[0][0];
+                {ev.mHit_gx[0][0], ev.mHit_gy[0][0], ev.mHit_gz[0][0], ev.mHit_E[0]},
+                {ev.mHit_gx[1][0], ev.mHit_gy[1][0], ev.mHit_gz[1][0], ev.mHit_E[1]});
+            int det_id = ev.mHit_gid[0][0];
             if(det_id >= 0 && det_id < 4) gem_mollers[det_id].push_back(g_m);
             else std::cerr << "Warning: Invalid GEM det_id " << det_id << " in event " << ev.event_num << "\n";
         }
 
         // select two moller on one chamber for downstream GEMs
-        if(ev.matchG_det_id[0][1] == ev.matchG_det_id[1][1]){
+        if(ev.mHit_gid[0][1] == ev.mHit_gid[1][1]){
             g_m = MollerEvent(
-                {ev.matchG_x[0][1], ev.matchG_y[0][1], ev.matchG_z[0][1], ev.matchHC_energy[0]},
-                {ev.matchG_x[1][1], ev.matchG_y[1][1], ev.matchG_z[1][1], ev.matchHC_energy[1]});
-            int det_id = ev.matchG_det_id[0][1];
+                {ev.mHit_gx[0][1], ev.mHit_gy[0][1], ev.mHit_gz[0][1], ev.mHit_E[0]},
+                {ev.mHit_gx[1][1], ev.mHit_gy[1][1], ev.mHit_gz[1][1], ev.mHit_E[1]});
+            int det_id = ev.mHit_gid[0][1];
             if(det_id >= 0 && det_id < 4) gem_mollers[det_id].push_back(g_m);
             else std::cerr << "Warning: Invalid GEM det_id " << det_id << " in event " << ev.event_num << "\n";
         }

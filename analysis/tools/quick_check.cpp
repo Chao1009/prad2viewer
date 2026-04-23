@@ -60,6 +60,24 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("cl_nblocks",   ev.cl_nblocks);
     tree->SetBranchAddress("cl_center",    ev.cl_center);
     tree->SetBranchAddress("cl_flag",      ev.cl_flag);
+    // Matching results
+    tree->SetBranchAddress("matchFlag",    ev.matchFlag);
+    tree->SetBranchAddress("matchHC_x",    ev.matchHC_x);
+    tree->SetBranchAddress("matchHC_y",    ev.matchHC_y);
+    tree->SetBranchAddress("matchHC_z",    ev.matchHC_z);
+    tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
+    tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
+    tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);
+    tree->SetBranchAddress("matchNum",     &ev.matchNum);
+    //quick and simple matching results for quick check
+    tree->SetBranchAddress("mHit_E", ev.mHit_E);
+    tree->SetBranchAddress("mHit_x", ev.mHit_x);
+    tree->SetBranchAddress("mHit_y", ev.mHit_y);
+    tree->SetBranchAddress("mHit_z", ev.mHit_z);
+    tree->SetBranchAddress("mHit_gx", ev.mHit_gx);
+    tree->SetBranchAddress("mHit_gy", ev.mHit_gy);
+    tree->SetBranchAddress("mHit_gz", ev.mHit_gz);
+    tree->SetBranchAddress("mHit_gid", ev.mHit_gid);
     // GEM part
     tree->SetBranchAddress("n_gem_hits",   &ev.n_gem_hits);
     tree->SetBranchAddress("det_id",       ev.det_id);
@@ -71,18 +89,6 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("gem_y_peak",   ev.gem_y_peak);
     tree->SetBranchAddress("gem_x_size",   ev.gem_x_size);
     tree->SetBranchAddress("gem_y_size",   ev.gem_y_size);
-    // Matching results
-    tree->SetBranchAddress("match_num",       &ev.match_num);
-    tree->SetBranchAddress("matchHC_x",       ev.matchHC_x);
-    tree->SetBranchAddress("matchHC_y",       ev.matchHC_y);
-    tree->SetBranchAddress("matchHC_z",       ev.matchHC_z);
-    tree->SetBranchAddress("matchHC_energy",  ev.matchHC_energy);
-    tree->SetBranchAddress("matchHC_center",  ev.matchHC_center);
-    tree->SetBranchAddress("matchHC_flag",    ev.matchHC_flag);
-    tree->SetBranchAddress("matchG_x",        ev.matchG_x);
-    tree->SetBranchAddress("matchG_y",        ev.matchG_y);
-    tree->SetBranchAddress("matchG_z",        ev.matchG_z);
-    tree->SetBranchAddress("matchG_det_id",   ev.matchG_det_id);
 };
 
 static std::vector<std::string> collectRootFiles(const std::string &path);

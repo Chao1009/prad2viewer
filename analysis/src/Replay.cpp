@@ -92,7 +92,7 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
     ev.total_energy = 0.f;
     ev.n_clusters = 0;
     ev.n_gem_hits = 0;
-    ev.match_num = 0;
+    ev.matchNum = 0;
     ev.veto_nch = 0;
     ev.lms_nch = 0;
     ev.ssp_raw.clear();
@@ -181,6 +181,17 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][2]/F");
     tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][2]/F");
     tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][2]/F");
+    tree->Branch("match_num", &ev.matchNum,  "match_num/I");
+    //quick and simple matching results for quick check
+    tree->Branch("mHit_E", ev.mHit_E,  "mHit_E[match_num]/F");
+    tree->Branch("mHit_x", ev.mHit_x,  "mHit_x[match_num]/F");
+    tree->Branch("mHit_y", ev.mHit_y,  "mHit_y[match_num]/F");
+    tree->Branch("mHit_z", ev.mHit_z,  "mHit_z[match_num]/F");
+    tree->Branch("mHit_gx", ev.mHit_gx,  "mHit_gx[match_num][2]/F");
+    tree->Branch("mHit_gy", ev.mHit_gy,  "mHit_gy[match_num][2]/F");
+    tree->Branch("mHit_gz", ev.mHit_gz,  "mHit_gz[match_num][2]/F");
+    tree->Branch("mHit_gid", ev.mHit_gid,  "mHit_gid[match_num][2]/F");
+
     // GEM part
     //detector coordinate system (GEM plane)
     tree->Branch("n_gem_hits",   &ev.n_gem_hits,   "n_gem_hits/I");
@@ -653,13 +664,6 @@ if(!prad1){
                 ev->cl_nblocks[i] = hits[i].nblocks;
                 ev->cl_center[i]  = hits[i].center_id;
                 ev->cl_flag[i]    = hits[i].flag;
-                //reset matching flags and matched GEM positions
-                ev->cl_matchFlag[i] = 0;
-                for(int j = 0; j < 2; ++j){
-                    ev->cl_matchGEMx[i][j] = -999.f;
-                    ev->cl_matchGEMy[i][j] = -999.f;
-                    ev->cl_matchGEMz[i][j] = -999.f;
-                }
             }
 
             //decode GEM data and reconstruct GEM hits
@@ -700,15 +704,29 @@ if(!prad1){
             //transform the coordinates of detector data
             
             TransformDetData(hc_hits, gCalibConfig);
-            GetProjection(hc_hits, hycal_z_);
+            GetProjection(hc_hits, gCalibConfig.hycal_z);
             for(int i = 0; i < 4; ++i) TransformDetData(gem_hits[i], gCalibConfig);
 
             //matching.SetMatchRange(5.0f); // matching radius in mm, 15mm default
             matching.SetSquareSelection(true); // use square cut instead of circular cut
             std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
 
-            int match_num = std::min((int)matched_hits.size(), prad2::kMaxClusters);
-            for (int i = 0; i < match_num; i++){
+            //save the transformed hycal cluster positions in matchHC_x/y/z (no matter is matched or not)
+            // and the matched GEM hit positions in cl_matchGEMx/y/z (only for matched clusters, otherwise set to -999)
+            for (int i = 0; i < ev->n_clusters; ++i) {
+                ev->matchHC_x[i] = hc_hits[i].x;
+                ev->matchHC_y[i] = hc_hits[i].y;
+                ev->matchHC_z[i] = hc_hits[i].z;
+                for(int j = 0; j < 2; j++) {
+                    ev->matchGEMx[i][j] = -999.f;
+                    ev->matchGEMy[i][j] = -999.f;
+                    ev->matchGEMz[i][j] = -999.f;
+                }
+                //reset matchFlag for all clusters
+                ev->matchFlag[i] = 0; // default no match
+            }
+            ev->matchNum = std::min((int)matched_hits.size(), prad2::kMaxClusters);
+            for (int i = 0; i < ev->matchNum; i++){
                 //set matchFlag for hycal clusters
                 int cl_idx = matched_hits[i].hycal_idx;
                 ev->matchFlag[cl_idx] = matched_hits[i].mflag;
@@ -716,9 +734,20 @@ if(!prad1){
                 ev->matchHC_y[cl_idx] = matched_hits[i].hycal_hit.y;
                 ev->matchHC_z[cl_idx] = matched_hits[i].hycal_hit.z;
                 for(int j = 0; j < 2; j++) {
-                    ev->cl_matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
-                    ev->cl_matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;
-                    ev->cl_matchGEMz[cl_idx][j] = matched_hits[i].gem[j].z;
+                    ev->matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
+                    ev->matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;
+                    ev->matchGEMz[cl_idx][j] = matched_hits[i].gem[j].z;
+                }
+                // also save the matched GEM hit info in mHit_ arrays for quick check
+                ev->mHit_E[i] = matched_hits[i].hycal_hit.energy;
+                ev->mHit_x[i] = matched_hits[i].hycal_hit.x;
+                ev->mHit_y[i] = matched_hits[i].hycal_hit.y;
+                ev->mHit_z[i] = matched_hits[i].hycal_hit.z;
+                for(int j = 0; j < 2; j++) {
+                    ev->mHit_gx[i][j] =  matched_hits[i].gem[j].x;
+                    ev->mHit_gy[i][j] =  matched_hits[i].gem[j].y;
+                    ev->mHit_gz[i][j] =  matched_hits[i].gem[j].z;
+                    ev->mHit_gid[i][j] = matched_hits[i].gem[j].det_id; // placeholder for GEM hit ID if needed
                 }
             }
 

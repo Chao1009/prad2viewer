@@ -76,11 +76,6 @@ static std::vector<std::string> collectRootFiles(const std::string &path);
 int main(int argc, char *argv[])
 {
     std::string output;
-
-    // --- geometry constants (can be made configurable) ---
-    const float gem_z[4] = {5407.f + 39.71f/2, 5407.f - 39.71f/2,
-                            5807.f + 39.71f/2, 5807.f - 39.71f/2};
-    const float hycal_z = 6225.f;
     
     int max_events = -1;
     int opt;
@@ -205,9 +200,9 @@ int main(int argc, char *argv[])
             int hycal_idx = m.hycal_idx;  //index of the cluster in the original vector
 
             //projection to same z plane (e.g. Hycal crystal surface)
-            GetProjection(hycal_hit, hycal_z);
-            GetProjection(gem_up_hit, hycal_z);
-            GetProjection(gem_down_hit, hycal_z);
+            GetProjection(hycal_hit, geoconfig.hycal_z);
+            GetProjection(gem_up_hit, geoconfig.hycal_z);
+            GetProjection(gem_down_hit, geoconfig.hycal_z);
 
             //save the matching result into output tree
             if (hitN < 100) { // safety check for array size

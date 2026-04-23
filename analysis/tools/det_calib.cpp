@@ -184,11 +184,11 @@ int main(int argc, char *argv[])
         bool good_moller = false;
         if(ev.match_num == 2){
             float Epair = ev.matchHC_energy[0] + ev.matchHC_energy[1];
-            if(Ebeam_ <= 0.f){
+            if(geo.Ebeam <= 0.f){
                 std::cerr << "Error: Ebeam not set, cannot apply Moller energy cut.\n";
                 break;
             }
-            if (std::abs(Epair - Ebeam_) < 4.f * Ebeam_ * 0.025f / std::sqrt(Ebeam_ / 1000.f)) {
+            if (std::abs(Epair - geo.Ebeam) < 4.f * geo.Ebeam * 0.025f / std::sqrt(geo.Ebeam / 1000.f)) {
                 good_moller = true;
             }
         }

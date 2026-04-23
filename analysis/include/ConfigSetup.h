@@ -13,7 +13,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -139,7 +141,89 @@ inline GeoConfig LoadTransformConfig(const std::string &transform_config, int ru
     return result;
 }
 
-// --- coordinate transforms --------------------------------------------------
+// --- config file writing ----------------------------------------------------
+// Appends a new entry (run_number + GeoConfig) to the "configurations" array
+// in the given JSON file. If the file does not exist, it is created from
+// scratch. If an entry with the same run_number already exists, it is
+// overwritten in-place. The updated JSON is written back atomically via a
+// temporary file to avoid corruption on failure.
+inline bool WriteTransformConfig(const std::string &transform_config, int run_num,
+                                 const GeoConfig &geo)
+{
+    // --- load existing file (or start empty) --------------------------------
+    nlohmann::json cfg;
+    {
+        std::ifstream cfg_f(transform_config);
+        if (cfg_f) {
+            cfg = nlohmann::json::parse(cfg_f, nullptr, false, true);
+            if (cfg.is_discarded()) {
+                std::cerr << "Warning: failed to parse " << transform_config
+                          << ", will overwrite with new data.\n";
+                cfg = nlohmann::json::object();
+            }
+        } else {
+            cfg = nlohmann::json::object();
+        }
+    }
+
+    // ensure top-level structure
+    if (!cfg.contains("information"))
+        cfg["information"] = "z positions(mm) from target center, x/y (mm) from beam center";
+    if (!cfg.contains("units"))
+        cfg["units"] = "Ebeam is in MeV, z in mm, x/y in mm";
+    if (!cfg.contains("configurations") || !cfg["configurations"].is_array())
+        cfg["configurations"] = nlohmann::json::array();
+
+    // --- build new entry ----------------------------------------------------
+    nlohmann::json entry;
+    entry["run_number"] = run_num;
+    entry["Ebeam"]      = geo.Ebeam;
+    entry["hycal"]["z"] = geo.hycal_z;
+    entry["hycal"]["x"] = geo.hycal_x;
+    entry["hycal"]["y"] = geo.hycal_y;
+    entry["gem"]["z"]   = nlohmann::json::array({geo.gem_z[0], geo.gem_z[1], geo.gem_z[2], geo.gem_z[3]});
+    entry["gem"]["x"]   = nlohmann::json::array({geo.gem_x[0], geo.gem_x[1], geo.gem_x[2], geo.gem_x[3]});
+    entry["gem"]["y"]   = nlohmann::json::array({geo.gem_y[0], geo.gem_y[1], geo.gem_y[2], geo.gem_y[3]});
+
+    // --- replace existing entry or append -----------------------------------
+    auto &arr = cfg["configurations"];
+    bool replaced = false;
+    for (auto &e : arr) {
+        if (e.contains("run_number") && e["run_number"].get<int>() == run_num) {
+            e = entry;
+            replaced = true;
+            break;
+        }
+    }
+    if (!replaced) arr.push_back(entry);
+
+    // sort by run_number for readability
+    std::sort(arr.begin(), arr.end(), [](const nlohmann::json &a, const nlohmann::json &b) {
+        int ra = a.contains("run_number") ? a["run_number"].get<int>() : -1;
+        int rb = b.contains("run_number") ? b["run_number"].get<int>() : -1;
+        return ra < rb;
+    });
+
+    // --- write back atomically via a temporary file -------------------------
+    std::string tmp_path = transform_config + ".tmp";
+    {
+        std::ofstream out(tmp_path);
+        if (!out) {
+            std::cerr << "Error: cannot write to " << tmp_path << "\n";
+            return false;
+        }
+        out << cfg.dump(4) << "\n";
+    }
+    if (std::rename(tmp_path.c_str(), transform_config.c_str()) != 0) {
+        std::cerr << "Error: failed to rename " << tmp_path << " -> " << transform_config << "\n";
+        return false;
+    }
+    std::cerr << (replaced ? "Updated" : "Appended") << " run_number=" << run_num
+              << " in " << transform_config << "\n";
+    return true;
+}
+
+
 // Transform detector-frame coordinates to the target/beam-centered frame.
 //
 // Explicit-offset overloads (float beamX, float beamY, float ZfromTarget):

@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
     if (transform_config.empty()) {
         transform_config = dbDir + "/calibration/det_position_calib.json";
     }
-    gGeoConfig = LoadTransformConfig(transform_config, run_num);
+    GeoConfig geo = LoadTransformConfig(transform_config, run_num);
 
     // --- init detector system ---
     fdec::HyCalSystem hycal;
@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
     //move to beam center coordinates
     TransformDetData(hycal_mollers, hycal_x_, hycal_y_, 0.f);
     for (int i = 0; i < hycal_mollers.size(); i++) {
-        vertex_hycal->Fill(physics.GetMollerZdistance(hycal_mollers[i], Ebeam_));
+        vertex_hycal->Fill(physics.GetMollerZdistance(hycal_mollers[i], geo.Ebeam));
         if (i >= 1) {
             auto c = physics.GetMollerCenter(hycal_mollers[i-1], hycal_mollers[i]);
             center_hycal->Fill(c[0], c[1]);
@@ -250,7 +250,7 @@ int main(int argc, char *argv[])
     for (int d = 0; d < 4; d++) {
         TransformDetData(gem_mollers[d], gem_x_[d], gem_y_[d], 0.f);
         for (int i = 0; i < gem_mollers[d].size(); i++) {
-            vertex_gem[d]->Fill(physics.GetMollerZdistance(gem_mollers[d][i], Ebeam_));
+            vertex_gem[d]->Fill(physics.GetMollerZdistance(gem_mollers[d][i], geo.Ebeam));
             if (i >= 1) {
                 auto c = physics.GetMollerCenter(gem_mollers[d][i-1], gem_mollers[d][i]);
                 center_gem[d]->Fill(c[0], c[1]);
@@ -261,27 +261,39 @@ int main(int argc, char *argv[])
     }
 
     //fit histograms, and get the beam position and vertex distance for each detector plane
-    float hycal_vertex_z = fitAndDraw(vertex_hycal, "Poscalib_result/" + run_str +"/hycal_vertex_z", hycal_z_,  100.);
-    float hycal_center_x = fitAndDraw(center_hycal_x, "Poscalib_result/" + run_str +"/hycal_center_x", hycal_x_, 2.);
-    float hycal_center_y = fitAndDraw(center_hycal_y, "Poscalib_result/" + run_str +"/hycal_center_y", hycal_y_, 2.);
+    float hycal_vertex_z = fitAndDraw(vertex_hycal, "Poscalib_result/" + run_str +"/hycal_vertex_z", geo.hycal_z,  100.);
+    float hycal_center_x = fitAndDraw(center_hycal_x, "Poscalib_result/" + run_str +"/hycal_center_x", geo.hycal_x, 2.);
+    float hycal_center_y = fitAndDraw(center_hycal_y, "Poscalib_result/" + run_str +"/hycal_center_y", geo.hycal_y, 2.);
     float gem_vertex_z[4];
     float gem_center_x[4];
     float gem_center_y[4];
     for (int d = 0; d < 4; d++) {
-        gem_vertex_z[d] = fitAndDraw(vertex_gem[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_vertex_z", gem_z_[d], 25.);
-        gem_center_x[d] = fitAndDraw(center_gem_x[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_x", gem_x_[d], 0.3);
-        gem_center_y[d] = fitAndDraw(center_gem_y[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_y", gem_y_[d], 1.);
+        gem_vertex_z[d] = fitAndDraw(vertex_gem[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_vertex_z", geo.gem_z[d], 25.);
+        gem_center_x[d] = fitAndDraw(center_gem_x[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_x", geo.gem_x[d], 0.3);
+        gem_center_y[d] = fitAndDraw(center_gem_y[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_y", geo.gem_y[d], 1.);
     }
     //print summary of calibration results
-    std::cerr << "HyCal vertex z distance: " << hycal_vertex_z << " mm (survey position " << hycal_z_ << " mm)" << "\n";
-    std::cerr << "HyCal center x: " << hycal_center_x << " mm (survey position " << hycal_x_ << " mm)\n";
-    std::cerr << "HyCal center y: " << hycal_center_y << " mm (survey position " << hycal_y_ << " mm)\n";
+    std::cerr << "HyCal vertex z distance: " << hycal_vertex_z << " mm (survey position " << geo.hycal_z << " mm)" << "\n";
+    std::cerr << "HyCal center x: " << hycal_center_x << " mm (survey position " << geo.hycal_x << " mm)\n";
+    std::cerr << "HyCal center y: " << hycal_center_y << " mm (survey position " << geo.hycal_y << " mm)\n";
     
     for (int d = 0; d < 4; d++) {
-        std::cerr << "GEM " << d << " vertex z distance: " << gem_vertex_z[d] << " mm (survey position " << gem_z_[d] << " mm)\n";
-        std::cerr << "GEM " << d << " center x: " << gem_center_x[d] << " mm (survey position " << gem_x_[d] << " mm)\n";
-        std::cerr << "GEM " << d << " center y: " << gem_center_y[d] << " mm (survey position " << gem_y_[d] << " mm)\n";
+        std::cerr << "GEM " << d << " vertex z distance: " << gem_vertex_z[d] << " mm (survey position " << geo.gem_z[d] << " mm)\n";
+        std::cerr << "GEM " << d << " center x: " << gem_center_x[d] << " mm (survey position " << geo.gem_x[d] << " mm)\n";
+        std::cerr << "GEM " << d << " center y: " << gem_center_y[d] << " mm (survey position " << geo.gem_y[d] << " mm)\n";
     }
+
+    geo.hycal_z = hycal_vertex_z;
+    geo.hycal_x = hycal_center_x;
+    geo.hycal_y = hycal_center_y;
+    for (int d = 0; d < 4; d++) {
+        geo.gem_z[d] = gem_vertex_z[d];
+        geo.gem_x[d] = gem_center_x[d];
+        geo.gem_y[d] = gem_center_y[d];
+    }
+    //write back the updated geometry config to JSON file
+    WriteTransformConfig(transform_config, run_num, geo);
+    
 
     //save histograms
     outfile.cd();

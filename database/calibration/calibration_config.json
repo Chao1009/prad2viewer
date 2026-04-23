@@ -2,7 +2,7 @@
     "units": "Ebeam is in MeV, z in mm, x/y in mm",
     "configurations": [
         {   
-            "energy_calibration": "adc_to_mev_factors_cosmic.json",
+            "energy_calibration": "calibration/calibration_factor_0.json",
             "run_number": 0,
             "Ebeam": 3500.0,
             "hycal": {

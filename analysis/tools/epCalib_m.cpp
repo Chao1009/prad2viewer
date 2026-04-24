@@ -172,7 +172,7 @@ int main(int argc, char *argv[])
 
     std::string input_calib_file, output_calib_file;
     if (iteration == 1)
-        input_calib_file = db_dir + "/calibration/adc_to_mev_factors_cosmic.json";
+        input_calib_file = db_dir + "/calibration/calibration_factor_0.json";
     else if (iteration > 1)
         input_calib_file = run_out_dir + Form("/calib_iter%d.json", iteration - 1);
     else {
@@ -411,6 +411,8 @@ int main(int argc, char *argv[])
 
     int n_calibrated = 0;
     for (int m = 0; m < nmod; ++m) {
+        const std::string &name = hycal.module(m).name;
+        if (name[0] != 'W') continue;
         int mod_id = hycal.module(m).id;
         auto [peak, sigma, chi2] = physics.FitPeakResolution(mod_id);
         if (peak <= 0 || sigma <= 0 || sigma > 5 * 0.026*peak || chi2 >= 2.f) {
@@ -419,9 +421,11 @@ int main(int argc, char *argv[])
                  << ", sigma=" << sigma
                  << ", chi2/ndf=" << chi2 << ")\n";
         }
-        if (peak <= 0) continue; // skip modules with no valid peak
-        const std::string &name = hycal.module(m).name;
-        if (name[0] != 'W') continue;
+
+        if(physics.GetModuleEnergyHist(mod_id)->GetEntries() < 1.) continue; // skip modules with no entries
+        if(peak <= 0) peak = physics.GetModuleEnergyHist(mod_id)->GetMean(); // fallback to mean if fit failed
+        if(peak <= 0) continue; // still no valid peak after fallback — skip to avoid Inf factor
+        
         float theta_deg = std::atan(std::sqrt(hycal.module(m).x * hycal.module(m).x +
                                                 hycal.module(m).y * hycal.module(m).y)
                                     / hycal_z) * 180.f / 3.14159265f;
@@ -431,6 +435,7 @@ int main(int argc, char *argv[])
 
         double current_factor = hycal.GetCalibConstant(mod_id);
         hycal.SetCalibConstant(mod_id, current_factor * ratio);
+        hycal.SetCalibBaseEnergy(mod_id, expected_peak);
 
         module_ratio->Fill(hycal.module(m).x, hycal.module(m).y,
                             std::abs(1.f - 1.f / ratio));

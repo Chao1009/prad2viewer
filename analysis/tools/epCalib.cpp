@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
     fs::create_directories(run_out_dir);
     std::cerr << "Output directory: " << run_out_dir << "\n";
     if( iteration == 1 )
-        input_calib_file = db_dir + "/calibration/adc_to_mev_factors_cosmic.json";
+        input_calib_file = db_dir + "/calibration/calibration_factor_0.json";
     else if( iteration > 1 )
         input_calib_file = run_out_dir + Form("/calib_iter%d.json",   iteration-1);
     else{
@@ -243,6 +243,8 @@ int main(int argc, char *argv[])
     int n_calibrated = 0;
     for (int m = 0; m < nmod; m++) {
         int mod_id = hycal.module(m).id;
+        std::string name = hycal.module(m).name;
+        if(name[0] != 'W') continue;
         auto [peak, sigma, chi2] = physics.FitPeakResolution(mod_id);
         if (peak <= 0 || sigma <= 0 || sigma > 5 * 0.026*peak || chi2 >= 2.f) {
             std::cout << "Check!!! Module " << hycal.module(m).name
@@ -250,9 +252,11 @@ int main(int argc, char *argv[])
                  << ", sigma=" << sigma
                  << ", chi2/ndf=" << chi2 << ")\n";
         }
-        if(peak <=0 ) continue; // skip modules with no valid peak
-        std::string name = hycal.module(m).name;
-        if(name[0] != 'W') continue; 
+        
+        if(physics.GetModuleEnergyHist(mod_id)->GetEntries() < 1.) continue; // skip modules with no entries
+        if(peak <= 0) peak = physics.GetModuleEnergyHist(mod_id)->GetMean(); // fallback to mean if fit failed
+        if(peak <= 0) continue; // still no valid peak after fallback — skip to avoid Inf factor
+         
         float theta_deg = atan(sqrt(pow(hycal.module(m).x, 2) + pow(hycal.module(m).y, 2)) / hycal_z) * 180.f / 3.14159265f;
         float expected_peak = physics.ExpectedEnergy(theta_deg, Ebeam, "ep");
         float ratio = expected_peak / peak;
@@ -262,6 +266,7 @@ int main(int argc, char *argv[])
         double current_factor = hycal.GetCalibConstant(hycal.module(m).id);
         double new_factor = current_factor * ratio;
         hycal.SetCalibConstant(hycal.module(m).id, new_factor);
+        hycal.SetCalibBaseEnergy(hycal.module(m).id, expected_peak);
 
         module_ratio->Fill(hycal.module(m).x, hycal.module(m).y, abs(1.f-1.f/ratio));
 

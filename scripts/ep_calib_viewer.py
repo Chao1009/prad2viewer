@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal
+from PyQt6.QtCore import Qt, QRectF, QThread, pyqtSignal
 from PyQt6.QtGui import QColor, QFont
 from PyQt6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog,
@@ -96,6 +96,7 @@ class IterData:
         self.root_path:      Optional[Path]           = None
         self.factors:        Dict[str, dict]          = {}   # raw JSON entries
         self.expected_peaks: Dict[str, float]         = {}   # from .dat ExpectedPeak
+        self._hist_cache:    Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
 
     @property
     def json_path(self) -> Optional[Path]:
@@ -232,6 +233,7 @@ def compute_metrics(data: IterData) -> None:
                 # hname like "h_W1" -> module name "W1"
                 mod_name = hname[len("h_"):]
                 counts, edges = f[raw_key].to_numpy()
+                data._hist_cache[mod_name] = (counts, edges)
                 mm = data.metrics.setdefault(mod_name, ModuleMetrics(mod_name))
                 mm.stats = float(counts.sum())
                 mm.peak, mm.sigma, mm.chi2 = _fit_histogram(counts, edges)
@@ -492,14 +494,21 @@ class ModuleDetailPanel(QWidget):
 
     def _read_module_hist(self, name: str
                           ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        # Fast path: return in-memory cache populated during compute_metrics
+        if self._iter_data is not None and name in self._iter_data._hist_cache:
+            return self._iter_data._hist_cache[name]
         if not HAS_UPROOT or self._root_path is None:
             return None
         key = f"module_energy/h_{name}"
         try:
             with uproot.open(str(self._root_path)) as f:
-                if key not in [k.split(";")[0] for k in f.keys()]:
+                avail = {k.split(";")[0] for k in f.keys()}
+                if key not in avail:
                     return None
-                return f[key].to_numpy()
+                result = f[key].to_numpy()
+                if self._iter_data is not None:
+                    self._iter_data._hist_cache[name] = result
+                return result
         except Exception:
             return None
 
@@ -815,6 +824,7 @@ class GlobalStatsPanel(QWidget):
         super().__init__(parent)
         self._root_path: Optional[Path] = None
         self._right_view_idx = 0
+        self._cached_hists: dict = {}
         self._build_ui()
 
     def _build_ui(self):
@@ -845,6 +855,20 @@ class GlobalStatsPanel(QWidget):
 
     def set_root_path(self, path: Optional[Path]):
         self._root_path = path
+        self._cached_hists.clear()
+        if HAS_UPROOT and path is not None:
+            try:
+                with uproot.open(str(path)) as f:
+                    avail = {k.split(";")[0] for k in f.keys()}
+                    for key in ("ratio_all", "h2_energy_theta",
+                                "one_cluster_energy", "recon_sigma"):
+                        if key in avail:
+                            try:
+                                self._cached_hists[key] = f[key].to_numpy()
+                            except Exception:
+                                pass
+            except Exception:
+                pass
         self._draw_ratio()
         self._draw_right()
 
@@ -868,11 +892,10 @@ class GlobalStatsPanel(QWidget):
     def _draw_ratio(self):
         ax = self._cv_ratio.ax
         self._cv_ratio.clear_ax()
-        f = self._open_root()
-        if f is not None:
+        data = self._cached_hists.get("ratio_all")
+        if data is not None:
             try:
-                h = f["ratio_all"]
-                counts, edges = h.to_numpy()
+                counts, edges = data
                 centers = 0.5 * (edges[:-1] + edges[1:])
                 nz = counts > 0
                 if nz.any():
@@ -888,8 +911,6 @@ class GlobalStatsPanel(QWidget):
                           facecolor=THEME.PANEL, edgecolor=THEME.BORDER)
             except Exception:
                 pass
-            finally:
-                f.close()
         else:
             ax.text(0.5, 0.5, "ratio_all\nnot found",
                     transform=ax.transAxes, ha="center", va="center",
@@ -905,11 +926,10 @@ class GlobalStatsPanel(QWidget):
             self._etheta_cbar.remove()
             self._etheta_cbar = None
         self._cv_etheta.clear_ax()
-        f = self._open_root()
-        if f is not None:
+        data = self._cached_hists.get("h2_energy_theta")
+        if data is not None:
             try:
-                h = f["h2_energy_theta"]
-                counts, xedges, yedges = h.to_numpy()
+                counts, xedges, yedges = data
                 pcm = ax.pcolormesh(xedges, yedges, counts.T,
                                     cmap="viridis", shading="flat")
                 self._etheta_cbar = self._cv_etheta.fig.colorbar(pcm, ax=ax, pad=0.01)
@@ -917,8 +937,6 @@ class GlobalStatsPanel(QWidget):
                 ax.text(0.5, 0.5, "h2_energy_theta\nnot found",
                         transform=ax.transAxes, ha="center", va="center",
                         color=THEME.TEXT_DIM, fontsize=9)
-            finally:
-                f.close()
         self._cv_etheta._style_ax("Energy vs θ", "θ (deg)", "Energy (MeV)")
         self._cv_etheta.redraw()
 
@@ -930,11 +948,10 @@ class GlobalStatsPanel(QWidget):
             self._etheta_cbar = None
         ax = self._cv_etheta.ax
         self._cv_etheta.clear_ax()
-        f = self._open_root()
-        if f is not None:
+        data = self._cached_hists.get(hist_key)
+        if data is not None:
             try:
-                h = f[hist_key]
-                counts, edges = h.to_numpy()
+                counts, edges = data
                 centers = 0.5 * (edges[:-1] + edges[1:])
                 nz = counts > 0
                 if nz.any():
@@ -950,8 +967,6 @@ class GlobalStatsPanel(QWidget):
                 ax.text(0.5, 0.5, f"{hist_key}\nnot found",
                         transform=ax.transAxes, ha="center", va="center",
                         color=THEME.TEXT_DIM, fontsize=9)
-            finally:
-                f.close()
         self._cv_etheta._style_ax(title, xlabel, "Counts")
         self._cv_etheta.redraw()
 
@@ -964,6 +979,23 @@ class GlobalStatsPanel(QWidget):
         self._draw_1d_hist("recon_sigma",
                            "Resolution (σ)", "σ (MeV)",
                            color=THEME.SUCCESS)
+
+
+# =============================================================================
+#  Background worker
+# =============================================================================
+
+class _MetricsWorker(QThread):
+    """Run compute_metrics() in a background thread to keep the UI responsive."""
+    finished = pyqtSignal(object)   # emits the IterData when done
+
+    def __init__(self, data: "IterData", parent=None):
+        super().__init__(parent)
+        self._data = data
+
+    def run(self) -> None:
+        compute_metrics(self._data)
+        self.finished.emit(self._data)
 
 
 # =============================================================================
@@ -987,6 +1019,7 @@ class EpCalibViewerWindow(QMainWindow):
         self._modules:   List[Module] = []
         self._cur_data:  Optional[IterData] = None
         self._map_mode = CalibMapWidget.MODE_DELTA_E
+        self._worker:    Optional[_MetricsWorker] = None
 
         self._build_ui()
         self.setWindowTitle("epCalib Viewer")
@@ -1229,13 +1262,29 @@ class EpCalibViewerWindow(QMainWindow):
         data = self._scan_data.get(run, {}).get(it)
         if data is None:
             return
-        if not data.metrics:
-            compute_metrics(data)
         self._cur_data = data
         self._detail.set_root_path(data.root_path)
         self._detail.set_iter_data(data)
         self._stats.set_root_path(data.root_path)
-        self._refresh_map()
+        if not data.metrics:
+            # stop any previous worker still running
+            if self._worker is not None and self._worker.isRunning():
+                self._worker.quit()
+                self._worker.wait()
+            self.statusBar().showMessage(
+                f"Computing metrics for run {run} iter {it} …")
+            self._worker = _MetricsWorker(data, self)
+            self._worker.finished.connect(self._on_metrics_ready)
+            self._worker.start()
+        else:
+            self._refresh_map()
+
+    def _on_metrics_ready(self, data: IterData) -> None:
+        """Called from background worker when compute_metrics finishes."""
+        self.statusBar().clearMessage()
+        if data is self._cur_data:
+            self._refresh_map()
+        self._worker = None
 
     # ── map mode ──────────────────────────────────────────────────────────────
 

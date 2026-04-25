@@ -52,6 +52,11 @@ struct RingEntry {
     std::string json_str;       // pre-encoded event JSON
     std::string cluster_str;    // pre-encoded cluster JSON
     std::string gem_apv_str;    // pre-encoded GEM per-APV waveform JSON
+    // Pre-compressed gzip bytes for the big payload — deflated once per
+    // event in the ET reader thread so each viewer's HTTP request just
+    // copies the cached blob instead of re-running zlib.  Empty when
+    // gem_apv_str is empty (e.g. GEM disabled).
+    std::string gem_apv_gz;
 
     // Raw event copies kept so /api/hist_config can recompute cluster_str
     // (and re-encode json_str) under a new time/threshold window without

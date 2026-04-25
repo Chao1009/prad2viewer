@@ -89,6 +89,9 @@ set(WITH_ROOT ${BUILD_ANALYSIS})
 # Server library (linked by prad2_server)
 # ---------------------------------------------------------------------------
 find_package(Threads REQUIRED)
+# zlib for HTTP gzip on big JSON payloads (gem_apv ~1.3 MB/event).  Comes
+# pre-installed on most Linux distros and Windows toolchains.
+find_package(ZLIB REQUIRED)
 
 set(SRV_SOURCES
     src/viewer_server.cpp src/viewer_server_http.cpp src/viewer_server_et.cpp
@@ -103,7 +106,7 @@ add_library(prad2srv STATIC ${SRV_SOURCES})
 target_include_directories(prad2srv PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(prad2srv PUBLIC
     prad2dec prad2det
-    nlohmann_json::nlohmann_json websocketpp_lib Threads::Threads)
+    nlohmann_json::nlohmann_json websocketpp_lib Threads::Threads ZLIB::ZLIB)
 if(WITH_ET)
     target_compile_definitions(prad2srv PUBLIC WITH_ET)
 endif()

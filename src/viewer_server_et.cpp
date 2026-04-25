@@ -1,4 +1,5 @@
 #include "viewer_server.h"
+#include "http_compress.h"
 
 #ifdef WITH_ET
 #include "EtChannel.h"
@@ -276,6 +277,19 @@ void ViewerServer::etReaderThread()
                         std::string gemapvjson = app_online_.gem_enabled
                             ? app_online_.apiGemApv(ssp_evt, seq).dump()
                             : std::string("{\"enabled\":false}");
+                        // Pre-compress the gem_apv payload once here so
+                        // every viewer's HTTP fetch serves the cached
+                        // bytes (vs deflating the same ~1.3 MB JSON for
+                        // each viewer × 5 Hz refresh).  Skip below the
+                        // gzip threshold — the disabled stub is tiny.
+                        std::string gemapvgz;
+                        if (gemapvjson.size() >= prad2::kGzipMinBytes) {
+                            try {
+                                gemapvgz = prad2::gzip_compress(gemapvjson);
+                            } catch (...) {
+                                gemapvgz.clear();   // serve plain on failure
+                            }
+                        }
 
                         // Snapshot raw event data so /api/hist_config can
                         // recompute clusters under a new window without
@@ -288,6 +302,7 @@ void ViewerServer::etReaderThread()
                             ring_.push_back({seq, std::move(evjson),
                                              std::move(cljson),
                                              std::move(gemapvjson),
+                                             std::move(gemapvgz),
                                              std::move(ev_copy),
                                              std::move(ssp_copy)});
                             while ((int)ring_.size() > ring_size_)

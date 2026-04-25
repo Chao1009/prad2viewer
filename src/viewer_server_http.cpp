@@ -1,4 +1,5 @@
 #include "viewer_server.h"
+#include "http_compress.h"
 
 #include <filesystem>
 #include <fstream>
@@ -212,11 +213,37 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     auto con = srv->get_con_from_hdl(hdl);
     std::string uri = con->get_resource();
 
+    // gzip if the client advertised it (browsers always do; the urllib-
+    // based Python tools don't and keep getting plain bytes).  Read once
+    // per request — cheap header lookup, but no point doing it twice.
+    bool wants_gzip = prad2::client_accepts_gzip(
+        con->get_request_header("Accept-Encoding"));
+
+    // reply(body, [content_type], [pre_gz]) — when pre_gz is non-null and
+    // the client accepts gzip, the cached compressed bytes are served
+    // verbatim (saves re-deflating the same payload for each viewer).
+    // Otherwise, large bodies are compressed on demand if the client
+    // accepts gzip; small bodies and gzip-disabled clients get plain.
     auto reply = [&](const std::string &body,
-                     const std::string &ct = "application/json") {
+                     const std::string &ct = "application/json",
+                     const std::string *pre_gz = nullptr) {
         con->set_status(websocketpp::http::status_code::ok);
-        con->set_body(body);
         con->append_header("Content-Type", ct);
+        if (wants_gzip && pre_gz && !pre_gz->empty()) {
+            con->set_body(*pre_gz);
+            con->append_header("Content-Encoding", "gzip");
+            return;
+        }
+        if (wants_gzip && body.size() >= prad2::kGzipMinBytes) {
+            try {
+                con->set_body(prad2::gzip_compress(body));
+                con->append_header("Content-Encoding", "gzip");
+                return;
+            } catch (...) {
+                // Fall through to plain body on any zlib failure.
+            }
+        }
+        con->set_body(body);
     };
 
     // Any exception thrown below (e.g. std::stoi on a malformed %xx in the
@@ -464,7 +491,7 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
                     if (e.gem_apv_str.empty())
                         reply("{\"error\":\"gem apv pending\"}");
                     else
-                        reply(e.gem_apv_str);
+                        reply(e.gem_apv_str, "application/json", &e.gem_apv_gz);
                     return;
                 }
             }

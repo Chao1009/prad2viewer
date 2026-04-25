@@ -1,7 +1,7 @@
 {
     "runinfo": "runinfo/2p1_general.json",
     "online": {
-        "et_host": "clondaq6",
+        "et_host": "clondaq2",
         "et_port": 11111,
         "et_file": "/et/clasprod",
         "et_station": "prad2_monitor",

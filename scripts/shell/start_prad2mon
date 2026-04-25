@@ -16,7 +16,7 @@
 # ───────────────────────────────────────────────────────────────────────
 
 # ── Site-specific config — edit these for your setup ───────────────────
-set HOST_MACHINE  = "clondaq6"
+set HOST_MACHINE  = "clondaq2"
 set REMOTE_ENV    = "/home/clasrun/prad2_daq/prad2_env.csh"
 set SESSION       = "prad2mon"
 set BINARY        = "prad2_server"

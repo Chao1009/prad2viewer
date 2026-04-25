@@ -15,13 +15,19 @@
 //      Derives the install prefix from PRAD2_DATABASE_DIR (the parent of
 //      share/prad2evviewer/database), then picks up libs from
 //      <prefix>/lib{,64}/ and headers from <prefix>/include/{prad2dec,
-//      prad2det,prad2analysis,nlohmann}.  Falls back to the Hall-B CODA
+//      prad2det,prad2ana,nlohmann}.  Falls back to the Hall-B CODA
 //      path for libevio.a if not installed alongside (override with
 //      PRAD2_CODA_ROOT).
 //
 // Each path probe is logged as "[+] tag : path" (found) or "[-] tag : path"
-// (skipped/not present) so a failed setup is easy to debug.  Set
-// PRAD2_ROOTLOGON_QUIET=1 to suppress the per-probe lines.
+// (skipped/not present) so a failed setup is easy to debug.
+//
+// Environment overrides (in order of priority):
+//   PRAD2_BUILD_DIR        — build dir if not the cwd
+//   PRAD2_DATABASE_DIR     — install-mode prefix anchor (set by prad2_setup.sh)
+//   PRAD2_EVIO_LIB         — explicit libevio.a path (skips all evio probes)
+//   PRAD2_CODA_ROOT        — non-default CODA install root
+//   PRAD2_ROOTLOGON_QUIET  — suppress the per-probe lines
 
 {
     // -------------------------------------------------------------------------
@@ -65,7 +71,7 @@
     TString sourceDir;        // build mode
     TString prefix;           // install mode
     TString incDec, incDet, incAna, incJson, incCoda;
-    TString libDec, libDet, libEvio;
+    TString libDec, libDet, libAna, libEvio;
     TString modeLabel = inBuildMode ? "build" : "install";
 
     if (inBuildMode) {
@@ -148,22 +154,75 @@
             Form("%s/prad2det/lib%s.a",  buildDir.Data(), "prad2det"),
             Form("%s/lib/lib%s.so",      buildDir.Data(), "prad2det"),
         });
+        VLOG("[probe] libprad2ana.a");
+        libAna = pickFirst("prad2ana.a", {
+            Form("%s/lib/lib%s.a",       buildDir.Data(), "prad2ana"),
+            Form("%s/lib%s.a",           buildDir.Data(), "prad2ana"),
+            Form("%s/analysis/lib%s.a",  buildDir.Data(), "prad2ana"),
+            Form("%s/lib/lib%s.so",      buildDir.Data(), "prad2ana"),
+        });
+        // libevio.a — same Hall-B-first-then-fetch shape that
+        // prad2dec/CMakeLists.txt uses at configure time, repeated here so
+        // ACLiC can resolve the link target whichever path the build took:
+        //
+        //   1. PRAD2_EVIO_LIB env var (explicit override)
+        //   2. EVIO_LIB from CMakeCache.txt (cmake's own resolved path)
+        //   3. CMakeCache CODA_LIB_DIR (Hall-B install)
+        //   4. fetched evio under <build>/_deps/evio-build/ (FetchContent)
+        //   5. <build>/lib/ or <build>/ (other install layouts)
+        //
+        // The fetched evio's exact archive path varies between releases, so
+        // we enumerate the layouts we've seen.  If your build lands it
+        // somewhere else, point PRAD2_EVIO_LIB at it and skip the search.
         VLOG("[probe] libevio.a");
-        if (!evioLibPath.IsNull() && probe("evio (cache)", evioLibPath)) {
+        const char *envEvio = gSystem->Getenv("PRAD2_EVIO_LIB");
+        if (envEvio && *envEvio && probe("evio (env)", envEvio)) {
+            libEvio = envEvio;
+        }
+        else if (!evioLibPath.IsNull() && probe("evio (cache)", evioLibPath)) {
             libEvio = evioLibPath;
         } else {
-            // No cache hint or it didn't resolve — sweep build dir, then
-            // fall back to the CODA lib dir parsed from CMakeCache.txt.
-            std::vector<TString> evCandidates = {
-                Form("%s/lib/libevio.a", buildDir.Data()),
-                Form("%s/libevio.a",     buildDir.Data()),
-            };
+            std::vector<TString> evCandidates;
             if (!codaLibDir.IsNull())
                 evCandidates.push_back(Form("%s/libevio.a", codaLibDir.Data()));
+            // FetchContent layouts (evio-6.x).  The legacy Hall-B-style
+            // build puts archives under src/libsrc/<arch>/; the modernized
+            // CMake build puts them at the top of evio-build/lib/ or just
+            // evio-build/.
+            evCandidates.push_back(Form("%s/_deps/evio-build/lib/libevio.a",
+                                        buildDir.Data()));
+            evCandidates.push_back(Form("%s/_deps/evio-build/libevio.a",
+                                        buildDir.Data()));
+            evCandidates.push_back(Form("%s/_deps/evio-build/src/libsrc/libevio.a",
+                                        buildDir.Data()));
+            evCandidates.push_back(Form("%s/_deps/evio-build/src/libsrc/Linux-x86_64/libevio.a",
+                                        buildDir.Data()));
+            evCandidates.push_back(Form("%s/lib/libevio.a", buildDir.Data()));
+            evCandidates.push_back(Form("%s/libevio.a",     buildDir.Data()));
             for (const auto &p : evCandidates) {
                 bool ok = !p.IsNull() && !gSystem->AccessPathName(p);
                 VLOG("  [%s] %-14s %s", ok ? "+" : "-", "evio.a", p.Data());
                 if (ok && libEvio.IsNull()) libEvio = p;
+            }
+            // Last resort — recursive scan under _deps/evio-build/ for any
+            // libevio.a we missed.  Bounded depth, executed only when the
+            // enumerated candidates all failed, so this is cheap.
+            if (libEvio.IsNull()) {
+                TString depsDir = Form("%s/_deps/evio-build", buildDir.Data());
+                if (!gSystem->AccessPathName(depsDir)) {
+                    VLOG("  [.] %-14s scanning %s ...", "evio.a", depsDir.Data());
+                    TString cmd = Form("find '%s' -maxdepth 5 -name libevio.a "
+                                       "-print -quit 2>/dev/null", depsDir.Data());
+                    TString hit = gSystem->GetFromPipe(cmd);
+                    hit = hit.Strip(TString::kBoth);
+                    if (!hit.IsNull() && !gSystem->AccessPathName(hit)) {
+                        VLOG("  [+] %-14s %s", "evio.a", hit.Data());
+                        libEvio = hit;
+                    } else {
+                        VLOG("  [-] %-14s (no libevio.a under _deps/evio-build)",
+                             "evio.a");
+                    }
+                }
             }
         }
     }
@@ -189,7 +248,7 @@
             // automatically via FetchContent.
             incDec  = Form("%s/include/prad2dec",      prefix.Data());
             incDet  = Form("%s/include/prad2det",      prefix.Data());
-            incAna  = Form("%s/include/prad2analysis", prefix.Data());
+            incAna  = Form("%s/include/prad2ana",      prefix.Data());
             incJson = Form("%s/include",               prefix.Data());
 
             // --- libs in <prefix>/lib or lib64 (RHEL convention) ---
@@ -203,22 +262,34 @@
                 Form("%s/lib/libprad2det.a",   prefix.Data()),
                 Form("%s/lib64/libprad2det.a", prefix.Data()),
             });
-
-            // libevio: try install prefix first, then Hall-B CODA default
-            // (override with PRAD2_CODA_ROOT for non-RHEL9 nodes).
-            VLOG("[probe] libevio.a");
-            libEvio = pickFirst("evio.a", {
-                Form("%s/lib/libevio.a",   prefix.Data()),
-                Form("%s/lib64/libevio.a", prefix.Data()),
+            VLOG("[probe] libprad2ana.a");
+            libAna = pickFirst("prad2ana.a", {
+                Form("%s/lib/libprad2ana.a",   prefix.Data()),
+                Form("%s/lib64/libprad2ana.a", prefix.Data()),
             });
-            if (libEvio.IsNull()) {
-                const char *codaRoot = gSystem->Getenv("PRAD2_CODA_ROOT");
-                if (!codaRoot || !*codaRoot)
-                    codaRoot = "/usr/clas12/release/2.0.0/coda/Linux_x86_64_RHEL9";
-                VLOG("[probe] libevio.a (CODA fallback at %s)", codaRoot);
+
+            // libevio: PRAD2_EVIO_LIB override > install prefix (covers both
+            // FetchContent-bundled evio and CODA-installed) > Hall-B CODA
+            // default at /usr/clas12/.../RHEL9 (override with PRAD2_CODA_ROOT
+            // for other arch/distro combos).
+            VLOG("[probe] libevio.a");
+            const char *envEvio = gSystem->Getenv("PRAD2_EVIO_LIB");
+            if (envEvio && *envEvio && probe("evio (env)", envEvio)) {
+                libEvio = envEvio;
+            } else {
                 libEvio = pickFirst("evio.a", {
-                    Form("%s/lib/libevio.a", codaRoot),
+                    Form("%s/lib/libevio.a",   prefix.Data()),
+                    Form("%s/lib64/libevio.a", prefix.Data()),
                 });
+                if (libEvio.IsNull()) {
+                    const char *codaRoot = gSystem->Getenv("PRAD2_CODA_ROOT");
+                    if (!codaRoot || !*codaRoot)
+                        codaRoot = "/usr/clas12/release/2.0.0/coda/Linux_x86_64_RHEL9";
+                    VLOG("[probe] libevio.a (CODA fallback at %s)", codaRoot);
+                    libEvio = pickFirst("evio.a", {
+                        Form("%s/lib/libevio.a", codaRoot),
+                    });
+                }
             }
         }
     }
@@ -238,7 +309,7 @@
     };
     addInc("prad2dec",      incDec);
     addInc("prad2det",      incDet);
-    addInc("prad2analysis", incAna);
+    addInc("prad2ana",      incAna);
     addInc("nlohmann/json", incJson);
     addInc("CODA",          incCoda);
     if (inBuildMode) {
@@ -257,11 +328,20 @@
             Printf("       Reinstall the project so libraries land in <prefix>/lib.");
         Printf("       Scripts that require ACLiC (.C+) will fail to link.\n");
     } else {
-        TString linkLibs = Form("%s %s", libDet.Data(), libDec.Data());
+        // Order matters for static-archive linking: a symbol referenced by
+        // libprad2ana lives in libprad2det/dec, so analysis comes first
+        // (left), det/dec to the right.  evio + expat are leaf deps.
+        TString linkLibs;
+        if (!libAna.IsNull()) linkLibs += Form("%s ", libAna.Data());
+        linkLibs += Form("%s %s", libDet.Data(), libDec.Data());
         if (!libEvio.IsNull()) linkLibs += Form(" %s", libEvio.Data());
         linkLibs += " -lexpat";   // evio dependency
         gSystem->AddLinkedLibs(linkLibs);
         Printf("[link]  %s", linkLibs.Data());
+        if (libAna.IsNull())
+            Printf("[note]  libprad2ana.a not found — scripts that call "
+                   "analysis::* (PhysicsTools / MatchingTools / Replay) will "
+                   "fail to link.  Build the analysis target.");
     }
 
     // -------------------------------------------------------------------------

@@ -42,3 +42,16 @@ install(TARGETS replay_rawdata replay_rawdata_m replay_recon replay_recon_m epCa
                 cosmic_test quick_check matching det_calib cosmic_lg sim2replay gain_replay
                 gain_monitor gain_fitter
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+# Install analysis/include headers so installed-tree ACLiC scripts can
+# include "PhysicsTools.h" / "MatchingTools.h" / "Replay.h" / "ConfigSetup.h"
+# the same way they do from the build tree.
+include(GNUInstallDirs)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/prad2analysis
+        FILES_MATCHING PATTERN "*.h")
+
+# Install the ACLiC macro scripts (rootlogon.C, gem_*, lms_*, tagger_*) so
+# the install-tree workflow described in rootlogon.C actually has files to
+# load: `root -l <prefix>/share/prad2evviewer/analysis/scripts/rootlogon.C`.
+install(DIRECTORY scripts/ DESTINATION ${CMAKE_INSTALL_DATADIR}/prad2evviewer/analysis/scripts
+        FILES_MATCHING PATTERN "*.C")

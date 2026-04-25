@@ -38,12 +38,25 @@
 // -----
 //   cd build
 //   root -l ../analysis/scripts/rootlogon.C
+//
+//   // simplest — pedestal/CM auto-discovered from database/config.json's
+//   // runinfo (latest entry):
 //   .x ../analysis/scripts/gem_clusters_to_root.C+( \
 //       "/data/stage6/prad_023867/prad_023867.evio.00000", \
-//       "gem_clusters_023867.root", \
+//       "gem_clusters_023867.root")
+//
+//   // pin to a specific run's runinfo entry:
+//   .x ../analysis/scripts/gem_clusters_to_root.C+( \
+//       "/data/.../prad_023867.evio.00000", \
+//       "out.root", nullptr, nullptr, 0, /*run_num=*/23867)
+//
+//   // explicit pedestal / CM override (paths relative to PRAD2_DATABASE_DIR
+//   // or absolute):
+//   .x ../analysis/scripts/gem_clusters_to_root.C+( \
+//       "/data/.../prad_023867.evio.00000", \
+//       "out.root", \
 //       "gem_peds/peds_23867.txt", \
-//       "gem_peds/cm_23867.txt", \
-//       0)        // 0 = all events
+//       "gem_peds/cm_23867.txt")
 //============================================================================
 
 #include "EvChannel.h"
@@ -54,6 +67,9 @@
 
 #include "GemSystem.h"
 #include "GemCluster.h"
+#include "RunInfoConfig.h"     // prad2::LoadRunConfig (header-only)
+
+#include <nlohmann/json.hpp>
 
 #include <TFile.h>
 #include <TTree.h>
@@ -63,6 +79,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <string>
@@ -93,6 +110,26 @@ static std::map<int, int> build_gem_crate_remap(const DaqConfig &cfg)
     for (const auto &re : cfg.roc_tags)
         if (re.type == "gem") remap[(int)re.tag] = re.crate;
     return remap;
+}
+
+// Read the "runinfo" pointer out of database/config.json and return the
+// resolved path to the runinfo JSON.  Returns empty string if not found.
+static std::string discover_runinfo_path()
+{
+    const char *db = std::getenv("PRAD2_DATABASE_DIR");
+    std::string db_dir = db ? db : "database";
+
+    std::ifstream f(db_dir + "/config.json");
+    if (!f) return {};
+    auto j = nlohmann::json::parse(f, nullptr, false, true);
+    if (j.is_discarded() || !j.contains("runinfo") || !j["runinfo"].is_string())
+        return {};
+
+    std::string rel = j["runinfo"].get<std::string>();
+    if (rel.empty()) return {};
+    if (rel[0] == '/' || rel[0] == '\\') return rel;          // absolute
+    if (rel.size() >= 2 && rel[1] == ':') return rel;          // Windows drive
+    return db_dir + "/" + rel;
 }
 
 // Per-event vectors filled by the loop, bound to the TTree once at setup.
@@ -168,11 +205,16 @@ static void bind_branches(TTree *tree, EventVars &ev)
 //=============================================================================
 // Entry point
 //=============================================================================
+// Pass nullptr for gem_ped_file / gem_cm_file to auto-discover via the
+// runinfo pointed to by database/config.json (falls back to the entry
+// matching `run_num` — pass -1 for "latest").  Pass an explicit path to
+// override.
 int gem_clusters_to_root(const char *evio_path,
                          const char *out_path     = "gem_clusters.root",
-                         const char *gem_ped_file = "gem_peds/peds_23867.txt",
-                         const char *gem_cm_file  = "gem_peds/cm_23867.txt",
+                         const char *gem_ped_file = nullptr,
+                         const char *gem_cm_file  = nullptr,
                          long        max_events   = 0,
+                         int         run_num      = -1,
                          const char *daq_config   = nullptr,
                          const char *gem_map_file = nullptr)
 {
@@ -198,8 +240,27 @@ int gem_clusters_to_root(const char *evio_path,
               << "  (" << gem_sys.GetNDetectors() << " detectors)\n";
 
     auto remap = build_gem_crate_remap(cfg);
+
+    // Pedestal + common-mode files: explicit args win, otherwise look up
+    // via runinfo (same path the live monitor uses through app_state_init).
     std::string ped_path = gem_ped_file ? resolve_db_path(gem_ped_file) : "";
     std::string cm_path  = gem_cm_file  ? resolve_db_path(gem_cm_file)  : "";
+    if (ped_path.empty() || cm_path.empty()) {
+        std::string ri_path = discover_runinfo_path();
+        if (ri_path.empty()) {
+            std::cerr << "WARN: no runinfo pointer in database/config.json — "
+                         "GEM pedestal / common-mode auto-discovery skipped.\n";
+        } else {
+            std::cout << "RunInfo    : " << ri_path
+                      << "  (run_num=" << run_num << ")\n";
+            prad2::RunConfig rc = prad2::LoadRunConfig(ri_path, run_num);
+            if (ped_path.empty() && !rc.gem_pedestal_file.empty())
+                ped_path = resolve_db_path(rc.gem_pedestal_file);
+            if (cm_path.empty() && !rc.gem_common_mode_file.empty())
+                cm_path = resolve_db_path(rc.gem_common_mode_file);
+        }
+    }
+
     if (!ped_path.empty()) {
         gem_sys.LoadPedestals(ped_path, remap);
         std::cout << "Pedestals  : " << ped_path << "\n";

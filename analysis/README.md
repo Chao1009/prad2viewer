@@ -91,16 +91,19 @@ Tree layout (one entry per physics event):
 `cl_first` + `cl_nhits` slice the hit arrays per cluster; `hit_cl` is the back-pointer for hit→cluster joins.
 
 ```bash
+# simplest — pedestal/CM auto-discovered from database/config.json's
+# runinfo (latest entry; same path the live monitor uses):
 .x ../analysis/scripts/gem_clusters_to_root.C+( \
     "/data/stage6/prad_023867/prad_023867.evio.00000", \
-    "gem_clusters_023867.root", \
-    "gem_peds/peds_23867.txt", \
-    "gem_peds/cm_23867.txt", \
-    0)
-# args: evio_path, out_path, gem_ped_file, gem_cm_file, max_events (0=all)
+    "gem_clusters_023867.root")
+
+# explicit override (paths relative to PRAD2_DATABASE_DIR or absolute):
+.x ../analysis/scripts/gem_clusters_to_root.C+( \
+    "/data/.../prad_023867.evio.00000", "out.root", \
+    "gem_peds/peds_23867.txt", "gem_peds/cm_23867.txt")
 ```
 
-The pedestal / common-mode paths are resolved relative to `PRAD2_DATABASE_DIR`; pass absolute paths to override. The script reads the GEM crate-remap from `daq_config.json` so it always matches what the live monitor reconstructs.
+Full signature: `gem_clusters_to_root(evio_path, out_path, gem_ped_file=nullptr, gem_cm_file=nullptr, max_events=0, run_num=-1, daq_config=nullptr, gem_map_file=nullptr)`. Pass `nullptr` for the ped/cm args to auto-discover via `database/config.json` → `runinfo` → `LoadRunConfig(run_num)`. The script reads the GEM crate-remap from `daq_config.json` so it always matches what the live monitor reconstructs.
 
 ### tagger_hycal_correlation.C
 

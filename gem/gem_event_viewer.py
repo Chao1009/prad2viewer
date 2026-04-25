@@ -71,6 +71,7 @@ from PyQt6.QtWidgets import (  # noqa: E402
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -793,6 +794,25 @@ class ApvPanel(QWidget):
         return f"{v/1000:.1f}k"
 
 
+# Per-GEM faint background tints used in the "All" sub-tab so adjacent
+# detector sections read as different rows even when their headers scroll
+# off-screen.  Alpha is intentionally low (~0.13) — the tint should be
+# noticeable in the gaps between panels without competing with trace data.
+GEM_SECTION_TINTS: Dict[int, str] = {
+    0: "rgba(0, 180, 216, 0.13)",   # cyan
+    1: "rgba(81, 207, 102, 0.13)",  # green
+    2: "rgba(255, 146, 43, 0.13)",  # orange
+    3: "rgba(204, 93, 232, 0.13)",  # purple
+}
+
+
+def _gem_section_tint(det_id: int) -> str:
+    if det_id in GEM_SECTION_TINTS:
+        return GEM_SECTION_TINTS[det_id]
+    palette = list(GEM_SECTION_TINTS.values())
+    return palette[det_id % len(palette)]
+
+
 class RawApvTab(QWidget):
     """Sub-tabbed APV viewer — one tab per (crate, mpd), grid of ApvPanel
     per tab.  Data cache is a dict ``{apv_idx: ApvFrame}`` filled once per
@@ -885,6 +905,17 @@ class RawApvTab(QWidget):
         # det_name → tab index (for grey-out)
         self._tab_index_of: Dict[str, int] = {}
 
+        # ---- "All" sub-tab parallel state ----
+        # ApvPanel can have only one Qt parent, so the All tab needs its
+        # own copies of every panel.  They share the same per-event data
+        # dicts above and are refreshed in lock-step from
+        # _refresh_all_panels.
+        self._all_panels:    Dict[str, Dict[int, ApvPanel]] = {}
+        self._all_grids:     Dict[str, QGridLayout] = {}
+        self._all_sections:  Dict[str, QFrame] = {}
+        self._all_sorted_idx: Dict[str, List[int]] = {}
+        self._all_tab_idx: Optional[int] = None
+
     def reset_all(self):
         self._apv_meta.clear()
         self._processed.clear()
@@ -898,6 +929,11 @@ class RawApvTab(QWidget):
         self._sorted_idx.clear()
         self._grids.clear()
         self._tab_index_of.clear()
+        self._all_panels.clear()
+        self._all_grids.clear()
+        self._all_sections.clear()
+        self._all_sorted_idx.clear()
+        self._all_tab_idx = None
         self._tabs.clear()
         self._status.setText("")
 
@@ -913,6 +949,9 @@ class RawApvTab(QWidget):
         # to each other while X/Y planes stay grouped.
         for idx, m in self._apv_meta.items():
             self._grouped.setdefault(m["det_name"], []).append(idx)
+
+        # Build the "All" overview tab first so it lands at index 0.
+        self._build_all_tab()
 
         for det_name in sorted(self._grouped.keys()):
             page = QScrollArea()
@@ -951,6 +990,101 @@ class RawApvTab(QWidget):
             self._tab_index_of[det_name] = tab_i
         self._apply_panel_max_width()
 
+    def _build_all_tab(self):
+        """Construct the "All" overview sub-tab — vertical stack of GEM
+        sections, each with a faint per-detector tint and separated from
+        its neighbours by a thin horizontal line.  An empty section
+        (no APVs visible under Signal Only) still renders as a tinted
+        empty row so the user can see the GEM is present but quiet."""
+        if not self._grouped:
+            return
+
+        # Sort detectors by det_id (numeric, stable across runs).  Falls
+        # back to det_name when det_id is missing.
+        det_id_of = {n: int(self._apv_meta[idxs[0]].get("det_id", -1))
+                     for n, idxs in self._grouped.items()}
+        det_names_ordered = sorted(self._grouped.keys(),
+                                   key=lambda n: (det_id_of[n], n))
+
+        page = QScrollArea()
+        page.setWidgetResizable(True)
+        content = QWidget()
+        outer = QVBoxLayout(content)
+        outer.setContentsMargins(2, 2, 2, 2)
+        outer.setSpacing(0)
+
+        for k, det_name in enumerate(det_names_ordered):
+            if k > 0:
+                sep = QFrame()
+                sep.setFrameShape(QFrame.Shape.HLine)
+                sep.setFixedHeight(1)
+                sep.setStyleSheet(
+                    f"background-color:{THEME.BORDER};"
+                    f"color:{THEME.BORDER};border:none;")
+                outer.addWidget(sep)
+
+            det_id = det_id_of[det_name]
+            section = QFrame()
+            section.setObjectName(f"_all_sec_{det_id}_{k}")
+            # Object-name selector keeps the rgba tint scoped to *this*
+            # section so it doesn't leak into child widgets (the panels
+            # paint their own background in ApvPanel._paint).
+            section.setStyleSheet(
+                f"QFrame#{section.objectName()} {{"
+                f" background-color:{_gem_section_tint(det_id)}; }}")
+            sec_lay = QVBoxLayout(section)
+            sec_lay.setContentsMargins(8, 6, 8, 8)
+            sec_lay.setSpacing(4)
+
+            n_apvs = len(self._grouped[det_name])
+            tag = f"GEM {det_id}" if det_id >= 0 else det_name
+            header = QLabel(f"{tag} — {det_name}   ({n_apvs} APVs)")
+            header.setStyleSheet(
+                f"color:{THEME.TEXT};font-weight:600;padding:2px 0;")
+            sec_lay.addWidget(header)
+
+            grid = QGridLayout()
+            grid.setHorizontalSpacing(4)
+            grid.setVerticalSpacing(4)
+            grid.setContentsMargins(0, 0, 0, 0)
+            sec_lay.addLayout(grid)
+
+            panels: Dict[int, ApvPanel] = {}
+            sorted_apvs = sorted(
+                self._grouped[det_name],
+                key=lambda i: (self._apv_meta[i]["plane_type"],
+                               self._apv_meta[i]["crate_id"],
+                               self._apv_meta[i]["mpd_id"],
+                               self._apv_meta[i]["adc_ch"]))
+            for n, idx in enumerate(sorted_apvs):
+                r, c = divmod(n, self.COLS)
+                panel = ApvPanel()
+                m = self._apv_meta[idx]
+                panel.setToolTip(
+                    f"crate {m['crate_id']} mpd {m['mpd_id']} adc {m['adc_ch']}  "
+                    f"{m['det_name']} {m['plane_type']} pos={m['det_pos']}  "
+                    f"(GemSystem idx {idx})")
+                grid.addWidget(panel, r, c)
+                panels[idx] = panel
+            for c in range(self.COLS):
+                grid.setColumnStretch(c, 1)
+
+            # Keep the section visible even when every panel is hidden by
+            # Signal Only — the tint + header alone signal "GEM N is
+            # present but quiet this event".
+            section.setMinimumHeight(70)
+
+            outer.addWidget(section)
+            self._all_panels[det_name]    = panels
+            self._all_grids[det_name]     = grid
+            self._all_sections[det_name]  = section
+            self._all_sorted_idx[det_name] = sorted_apvs
+
+        outer.addStretch(1)
+        page.setWidget(content)
+        self._all_tab_idx = self._tabs.insertTab(0, page, "All")
+        self._tabs.setCurrentIndex(0)
+
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self._apply_panel_max_width()
@@ -958,12 +1092,15 @@ class RawApvTab(QWidget):
     def _apply_panel_max_width(self):
         """Cap each panel at ``viewport_width / COLS`` so filtering (hide
         via setVisible) can't make survivors balloon past 1/COLS."""
-        if not self._panels:
+        if not self._panels and not self._all_panels:
             return
         # Use the tab widget's content area width — scroll bar reserved.
         vp_w = self._tabs.width() if self._tabs.count() else self.width()
         max_w = max(ApvPanel.MIN_W, (vp_w - 24) // self.COLS)
         for panels in self._panels.values():
+            for p in panels.values():
+                p.setMaximumWidth(int(max_w))
+        for panels in self._all_panels.values():
             for p in panels.values():
                 p.setMaximumWidth(int(max_w))
 
@@ -994,6 +1131,64 @@ class RawApvTab(QWidget):
     def _on_control_changed(self, *_):
         self._refresh_all_panels()
 
+    def _refresh_section(self, panels: Dict[int, ApvPanel],
+                         sorted_ids: List[int],
+                         grid: Optional[QGridLayout],
+                         *,
+                         source: Dict[int, np.ndarray],
+                         sample_mask: Tuple[bool, ...],
+                         signal_only: bool,
+                         shared_range: Optional[Tuple[float, float]],
+                         show_thr: bool,
+                         show_cm: bool) -> Tuple[int, int]:
+        """Push frames into one grid of panels and repack visible ones to
+        the front.  Returns (total, shown).  Used for both per-detector
+        tabs and the "All" tab's per-GEM sections."""
+        visible_ordered: List[int] = []
+        total = 0
+        for idx in sorted_ids:
+            panel = panels[idx]
+            m = self._apv_meta[idx]
+            total += 1
+            has_zs = self._hits.get(idx)
+            has_any_zs = bool(has_zs is not None and has_zs.any())
+            if signal_only and not has_any_zs:
+                panel.setVisible(False)
+                continue
+            panel.setVisible(True)
+            visible_ordered.append(idx)
+
+            frame = source.get(idx)
+            title = (f"c{m['crate_id']} m{m['mpd_id']} a{m['adc_ch']}  "
+                     f"{m['det_name']} {m['plane_type']} p{m['det_pos']}")
+            badge = "no hits" if idx in self._no_hit_apvs else ""
+            # Highlight signal panels only when showing all APVs —
+            # under Signal Only every visible panel has hits, so
+            # highlighting would be redundant.
+            signal_flag = has_any_zs and not signal_only
+            panel.set_frame(
+                title, frame, has_zs, badge,
+                sample_mask=sample_mask,
+                y_fixed=shared_range,
+                thr_trace=self._thr.get(idx) if show_thr else None,
+                cm_trace=self._cm.get(idx) if show_cm else None,
+                signal_flag=signal_flag,
+            )
+
+        # Repack: put visible panels into the front slots in sorted
+        # order so filtering doesn't leave gaps.  Hidden panels are
+        # removed from the layout entirely (they'll rejoin when
+        # visible again).  The columns keep equal stretch so panels
+        # still scale with the window.
+        if grid is not None:
+            for idx, panel in panels.items():
+                grid.removeWidget(panel)
+            for n, idx in enumerate(visible_ordered):
+                r, c = divmod(n, self.COLS)
+                grid.addWidget(panels[idx], r, c)
+
+        return total, len(visible_ordered)
+
     def _refresh_all_panels(self):
         processed_view = self.process_cb.isChecked()
         signal_only    = self.zs_only_cb.isChecked()
@@ -1023,55 +1218,32 @@ class RawApvTab(QWidget):
         dim_col = QColor(active_col)
         dim_col.setAlpha(100)
 
+        # Per-detector tabs — canonical panels, contribute to status counts.
         for det_name, panels in self._panels.items():
-            visible_ordered: List[int] = []
-            for idx in self._sorted_idx.get(det_name, list(panels.keys())):
-                panel = panels[idx]
-                m = self._apv_meta[idx]
-                total += 1
-                has_zs = self._hits.get(idx)
-                has_any_zs = bool(has_zs is not None and has_zs.any())
-                if signal_only and not has_any_zs:
-                    panel.setVisible(False)
-                    continue
-                panel.setVisible(True)
-                shown += 1
-                visible_ordered.append(idx)
-
-                frame = source.get(idx)
-                title = (f"c{m['crate_id']} m{m['mpd_id']} a{m['adc_ch']}  "
-                         f"{m['det_name']} {m['plane_type']} p{m['det_pos']}")
-                badge = "no hits" if idx in self._no_hit_apvs else ""
-                # Highlight signal panels only when showing all APVs —
-                # under Signal Only every visible panel has hits, so
-                # highlighting would be redundant.
-                signal_flag = has_any_zs and not signal_only
-                panel.set_frame(
-                    title, frame, has_zs, badge,
-                    sample_mask=sample_mask,
-                    y_fixed=shared_range,
-                    thr_trace=self._thr.get(idx) if show_thr else None,
-                    cm_trace=self._cm.get(idx) if show_cm else None,
-                    signal_flag=signal_flag,
-                )
-
-            # Repack: put visible panels into the front slots in sorted
-            # order so filtering doesn't leave gaps.  Hidden panels are
-            # removed from the layout entirely (they'll rejoin when
-            # visible again).  The columns keep equal stretch so panels
-            # still scale with the window.
-            grid = self._grids.get(det_name)
-            if grid is not None:
-                for idx, panel in panels.items():
-                    grid.removeWidget(panel)
-                for n, idx in enumerate(visible_ordered):
-                    r, c = divmod(n, self.COLS)
-                    grid.addWidget(panels[idx], r, c)
-
+            sorted_ids = self._sorted_idx.get(det_name, list(panels.keys()))
+            t, v = self._refresh_section(
+                panels, sorted_ids, self._grids.get(det_name),
+                source=source, sample_mask=sample_mask,
+                signal_only=signal_only, shared_range=shared_range,
+                show_thr=show_thr, show_cm=show_cm)
+            total += t
+            shown += v
             tab_i = self._tab_index_of.get(det_name)
             if tab_i is not None:
                 tab_bar.setTabTextColor(
-                    tab_i, dim_col if len(visible_ordered) == 0 else active_col)
+                    tab_i, dim_col if v == 0 else active_col)
+
+        # "All" tab — parallel panels for the overview view.  Same data
+        # source, separate widgets (Qt parenting is single-owner).  These
+        # don't add to the status count to avoid double-reporting.
+        for det_name, panels in self._all_panels.items():
+            sorted_ids = self._all_sorted_idx.get(det_name,
+                                                  list(panels.keys()))
+            self._refresh_section(
+                panels, sorted_ids, self._all_grids.get(det_name),
+                source=source, sample_mask=sample_mask,
+                signal_only=signal_only, shared_range=shared_range,
+                show_thr=show_thr, show_cm=show_cm)
 
         mode = "processed" if processed_view else "raw"
         self._status.setText(f"{shown}/{total} APVs  [{mode}]")

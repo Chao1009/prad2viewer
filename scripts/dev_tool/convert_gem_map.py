@@ -10,12 +10,15 @@ Usage
         [--crate-map OLD=NEW,OLD=NEW,...] \
         [--template database/gem_map.json]
 
-Example (HallB layout: crate 146 -> logical crate 1, crate 147 -> 2)
+Example (HallB layout — keep upstream CrateIDs 146/147 as-is, which is
+the current convention in daq_config.json)
     python scripts/dev_tool/convert_gem_map.py \
         docs/gem/gem_map_prad2_hallB.txt \
         database/gem_map.json \
-        --crate-map 146=21,147=22 \
         --template database/gem_map.json
+
+Pass --crate-map only when you need to remap (e.g. legacy maps that
+used different IDs).  Without it the upstream CrateID is preserved.
 
 Text format (per upstream mpd_gem_view_ssp)
 -------------------------------------------
@@ -407,7 +410,9 @@ def main() -> int:
     ap.add_argument("output_json", type=Path,
                     help="Output JSON file (e.g. database/gem_map.json)")
     ap.add_argument("--crate-map", default="",
-                    help="Comma-separated OLD=NEW pairs (e.g. 146=21,147=22)")
+                    help="Optional: comma-separated OLD=NEW pairs to remap "
+                         "upstream CrateID values (e.g. 146=21,147=22). "
+                         "Default: empty -> keep upstream IDs unchanged.")
     ap.add_argument("--template", type=Path, default=None,
                     help="Existing JSON to source header config from")
     args = ap.parse_args()

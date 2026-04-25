@@ -31,7 +31,7 @@
     ],
 
     "apvs": [
-        {"// ====== Chamber 0 (GEM0) — crate 21 (fibers 0-12) ======": ""},
+        {"// ====== Chamber 0 (GEM0) — crate 146 (fibers 0-12) ======": ""},
 
         {"// X-dimension MPD slot 2 (fiber 0)": ""},
         {"crate": 146, "mpd": 0, "adc": 0, "det": 0, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "pin_rotate": 16, "shared_pos": 10, "match": "-Y"},
@@ -95,7 +95,7 @@
         {"crate": 146, "mpd": 12, "adc": 1, "det": 0, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
         {"crate": 146, "mpd": 12, "adc": 2, "det": 0, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0},
 
-        {"// ====== Chamber 1 (GEM1) — crate 21 (fibers 13-23), crate 22 (fibers 0-1) ======": ""},
+        {"// ====== Chamber 1 (GEM1) — crate 146 (fibers 13-23), crate 147 (fibers 0-1) ======": ""},
 
         {"// X-dimension MPD slot 17 (fiber 13)": ""},
         {"crate": 146, "mpd": 13, "adc": 0, "det": 1, "plane": "X", "orient": 0, "pos": 11, "det_pos": 1, "pin_rotate": 16, "shared_pos": 10, "match": "-Y"},
@@ -159,7 +159,7 @@
         {"crate": 147, "mpd": 1, "adc": 1, "det": 1, "plane": "X", "orient": 1, "pos": 9, "det_pos": 1},
         {"crate": 147, "mpd": 1, "adc": 2, "det": 1, "plane": "X", "orient": 1, "pos": 8, "det_pos": 1},
 
-        {"// ====== Chamber 2 (GEM2) — crate 22 (fibers 2-14) ======": ""},
+        {"// ====== Chamber 2 (GEM2) — crate 147 (fibers 2-14) ======": ""},
 
         {"// X-dimension MPD6 (fiber 2)": ""},
         {"crate": 147, "mpd": 2, "adc": 0, "det": 2, "plane": "X", "orient": 0, "pos": 11, "det_pos": 0, "pin_rotate": 16, "shared_pos": 10, "match": "-Y"},
@@ -223,7 +223,7 @@
         {"crate": 147, "mpd": 14, "adc": 1, "det": 2, "plane": "X", "orient": 1, "pos": 9, "det_pos": 0},
         {"crate": 147, "mpd": 14, "adc": 2, "det": 2, "plane": "X", "orient": 1, "pos": 8, "det_pos": 0},
 
-        {"// ====== Chamber 3 (GEM3) — crate 22 (fibers 15-27) ======": ""},
+        {"// ====== Chamber 3 (GEM3) — crate 147 (fibers 15-27) ======": ""},
 
         {"// X-dimension MPD6 (fiber 15)": ""},
         {"crate": 147, "mpd": 15, "adc": 0, "det": 3, "plane": "X", "orient": 0, "pos": 11, "det_pos": 1, "pin_rotate": 16, "shared_pos": 10, "match": "-Y"},

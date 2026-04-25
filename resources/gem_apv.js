@@ -526,9 +526,10 @@ function drawApvCanvas(canvas, apv, field, sharedRange) {
     // CM overlay: one horizontal dashed line per enabled time sample,
     // colour-matched (desaturated) with the trace so reader can pair
     // firmware CM with the same-colour strip waveform.  Drawn AFTER the
-    // traces so it sits on top.  Skipped if the firmware didn't emit
-    // type-0xD debug-header words (apv.cm == null).
-    if (gemApvShowCm && Array.isArray(apv.cm)) {
+    // traces so it sits on top.  Skipped in Process mode (raw ADC values
+    // would land off the pedestal-subtracted axis) and when the firmware
+    // didn't emit type-0xD debug-header words (apv.cm == null).
+    if (gemApvShowCm && !gemApvShowProcessed && Array.isArray(apv.cm)) {
         ctx.lineWidth = 1.4;
         ctx.setLineDash([5, 3]);
         for (let t = 0; t < apv.cm.length && t < 6; t++) {
@@ -671,12 +672,16 @@ function setupGemApvControls() {
     }
 }
 
-// Threshold band assumes a pedestal-subtracted Y axis, so it only makes
-// sense in Process mode.  Reflect that in the UI by disabling the
-// Threshold checkbox when Process is off.
+// The two overlays have opposite Y-axis requirements:
+//   Threshold band — needs a pedestal-subtracted axis (Process on)
+//   CM overlay     — values are raw ADC counts, only fit the raw axis
+// so we mirror that in the UI by disabling whichever checkbox is
+// inapplicable in the current mode.
 function syncGemApvControlEnables() {
-    const el = document.getElementById('gem-apv-threshold');
-    if (el) el.disabled = !gemApvShowProcessed;
+    const thr = document.getElementById('gem-apv-threshold');
+    if (thr) thr.disabled = !gemApvShowProcessed;
+    const cm  = document.getElementById('gem-apv-cm');
+    if (cm)  cm.disabled  =  gemApvShowProcessed;
 }
 
 // POST a new σ to the server.  Cached calib is updated optimistically

@@ -193,7 +193,7 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("mHit_gid", ev.mHit_gid,  "mHit_gid[match_num][2]/F");
 
     // GEM part
-    //detector coordinate system (GEM plane)
+    //detector local coordinate (GEM plane)
     tree->Branch("n_gem_hits",   &ev.n_gem_hits,   "n_gem_hits/I");
     tree->Branch("det_id",       ev.det_id,        "det_id[n_gem_hits]/b");
     tree->Branch("gem_x",        ev.gem_x,         "gem_x[n_gem_hits]/F");
@@ -471,7 +471,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     
     std::string run_str = get_run_str(input_evio);
     int run_num = get_run_int(input_evio);
-    gRunConfig = LoadRunConfig(db_dir + "/calibration/2p1_general.json", run_num);
+    gRunConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
 
     std::string calib_file = db_dir + "/" + gRunConfig.energy_calib_file;
     int nmatched = hycal.LoadCalibration(calib_file);
@@ -494,10 +494,10 @@ if(!prad1){
     std::cerr << "GEM map  : " << gem_map_file
                 << " (" << gem_sys->GetNDetectors() << " detectors)\n";
 
-    if (!gem_ped_file.empty()) {
+    if (!gem_ped_file.empty()) 
         gem_sys->LoadPedestals(gem_ped_file);
-        std::cerr << "GEM peds : " << gem_ped_file << "\n";
-    }
+    else gem_sys->LoadPedestals(db_dir + "/" + gRunConfig.gem_pedestal_file);
+    std::cerr << "GEM peds : " << gem_ped_file << "\n";
 
     if (zerosup_override >= 0.f) {
         gem_sys->SetZeroSupThreshold(zerosup_override);

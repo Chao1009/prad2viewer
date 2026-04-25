@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
 
     // --- load detector geometry config from JSON ---
     if (run_config.empty()) {
-        run_config = dbDir + "/calibration/2p1_general.json";
+        run_config = dbDir + "/runinfo/2p1_general.json";
     }
     RunConfig geo = LoadRunConfig(run_config, run_num);
 
@@ -165,6 +165,12 @@ int main(int argc, char *argv[])
         center_gem[d] = new TH2F(Form("center_gem%d", d), Form("Moller center distribution GEM%d;X (mm);Y (mm)", d), 200, -100, 100, 200, -100, 100);
         center_gem_x[d] = new TH1F(Form("center_gem_x%d", d), Form("Moller center X distribution GEM%d;X (mm);Counts", d), 80*5, -20, 20);
         center_gem_y[d] = new TH1F(Form("center_gem_y%d", d), Form("Moller center Y distribution GEM%d;Y (mm);Counts", d), 80*4, -20, 20);
+    }
+
+    TH2F *hits_hycal = new TH2F("hits_hycal", "Moller hit HyCal positions;X (mm);Y (mm)", 400, -400, 400, 400, -400, 400);
+    TH2F *hits_gem[4];
+    for (int d = 0; d < 4; d++) {
+        hits_gem[d] = new TH2F(Form("hits_gem%d", d), Form("Moller hit GEM%d positions;X (mm);Y (mm)", d), 400, -400, 400, 400, -400, 400);
     }
 
     // --- output file ---
@@ -228,6 +234,15 @@ int main(int argc, char *argv[])
             if(det_id >= 0 && det_id < 4) gem_mollers[det_id].push_back(g_m);
             else std::cerr << "Warning: Invalid GEM det_id " << det_id << " in event " << ev.event_num << "\n";
         }
+
+        hits_hycal->Fill(h_m.first.x, h_m.first.y);
+        hits_hycal->Fill(h_m.second.x, h_m.second.y);
+        for (int d = 0; d < 4; d++) {
+            for (const auto &m : gem_mollers[d]) {
+                hits_gem[d]->Fill(m.first.x, m.first.y);
+                hits_gem[d]->Fill(m.second.x, m.second.y);
+            }
+        }
     }
 
     // After collecting Moller events, analyze them for detector calibration
@@ -285,8 +300,8 @@ int main(int argc, char *argv[])
     
     for (int d = 0; d < 4; d++) {
         std::cerr << "GEM " << d << " vertex z distance: " << gem_vertex_z[d] << " mm (survey position " << geo.gem_z[d] << " mm)\n";
-        std::cerr << "GEM " << d << " center x: " << gem_center_x[d]+geo.gem_x[d] << " mm (survey position " << geo.gem_x[d] << " mm)\n";
-        std::cerr << "GEM " << d << " center y: " << gem_center_y[d]+geo.gem_y[d] << " mm (survey position " << geo.gem_y[d] << " mm)\n";
+        std::cerr << "GEM " << d << " center x: " << gem_center_x[d] << " mm (survey position " << geo.gem_x[d] << " mm)\n";
+        std::cerr << "GEM " << d << " center y: " << gem_center_y[d] << " mm (survey position " << geo.gem_y[d] << " mm)\n";
     }
 
     geo.hycal_z = hycal_vertex_z;
@@ -312,6 +327,10 @@ int main(int argc, char *argv[])
         center_gem[d]->Write();
         center_gem_x[d]->Write();
         center_gem_y[d]->Write();
+    }
+    hits_hycal->Write();
+    for (int d = 0; d < 4; d++) {
+        hits_gem[d]->Write();
     }
     outfile.Close();
     std::cerr << "Calibration histograms saved to " << outName << "\n";
@@ -356,7 +375,7 @@ float fitAndDraw(TH1F* hist, const std::string& out_path, const float survey_pos
     TLatex *latex = new TLatex();
     latex->SetNDC();
     latex->SetTextSize(0.04);
-    latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1)+survey_position, hist->GetFunction("gaus")->GetParError(1)));
+    latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1), hist->GetFunction("gaus")->GetParError(1)));
     latex->DrawLatex(0.15, 0.80, Form("Survey position: %.2f mm", survey_position));
     fs::create_directories(fs::path(out_path).parent_path());
     c->SaveAs((out_path + ".png").c_str());

@@ -23,7 +23,7 @@
                 ]
             },
             "time_cuts": {
-                "hc_time_window": [100.0, 200.0]
+                "hc_time_window": [160.0, 200.0]
             },
             "matching": {
                 "radius": 15.0,

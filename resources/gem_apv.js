@@ -313,6 +313,15 @@ function renderGemApvPanels() {
         }
     }
     if (!isFinite(yLo) || !isFinite(yHi)) { yLo = 0; yHi = 1; }
+    // In Process mode, force the Y axis symmetric around zero so the dashed
+    // zero line is always centered and the threshold band reads as a
+    // mirrored pair.  Raw mode keeps the auto-fit range — pedestal-level
+    // traces (~1500-2500 ADC) all positive, so symmetric would waste half
+    // the panel.
+    if (gemApvShowProcessed) {
+        const m = Math.max(Math.abs(yLo), Math.abs(yHi));
+        yLo = -m; yHi = m;
+    }
     if (yHi - yLo < 8) {
         const m = 0.5 * (yLo + yHi);
         yLo = m - 4; yHi = m + 4;
@@ -457,6 +466,12 @@ function drawApvCanvas(canvas, apv, field, sharedRange) {
             }
         }
         if (!isFinite(yLo) || !isFinite(yHi)) { yLo = 0; yHi = 1; }
+        // Process mode: clamp to a symmetric band around zero (see the
+        // matching comment in renderGemApvPanels for rationale).
+        if (gemApvShowProcessed) {
+            const m = Math.max(Math.abs(yLo), Math.abs(yHi));
+            yLo = -m; yHi = m;
+        }
         if (yHi - yLo < 8) { const m = 0.5*(yLo+yHi); yLo = m-4; yHi = m+4; }
         const pad = 0.08 * (yHi - yLo);
         yLo -= pad; yHi += pad;

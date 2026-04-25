@@ -1,5 +1,5 @@
 {
-    "runinfo": "runinfo/2p2_general.json",
+    "runinfo": "runinfo/2p1_general.json",
     "online": {
         "et_host": "clondaq6",
         "et_port": 11111,

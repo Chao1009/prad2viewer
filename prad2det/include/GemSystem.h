@@ -19,6 +19,7 @@
 //=============================================================================
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 #include <array>
@@ -158,8 +159,23 @@ public:
 
     // --- initialization -----------------------------------------------------
     void Init(const std::string &map_file);
-    void LoadPedestals(const std::string &ped_file);
-    void LoadCommonModeRange(const std::string &cm_file);
+
+    // Load per-strip pedestals from the upstream APV-block text format
+    // (one "APV crate slot fiber adc" header followed by 128 strip lines:
+    // "<strip> <offset> <noise>"). The "slot" field is hardware metadata
+    // and is ignored for matching — APVs are keyed by (crate, fiber, adc).
+    //
+    // crate_remap maps file-side hardware crate IDs to the logical crate
+    // IDs used by gem_map.json (e.g. 146 -> 1, 147 -> 2).  Empty map = no
+    // remap (file IDs are used directly).
+    void LoadPedestals(const std::string &ped_file,
+                       const std::map<int, int> &crate_remap = {});
+
+    // Load per-APV common-mode range from the upstream text format:
+    // "<crate> <slot> <fiber> <adc> <cm_min> <cm_max>" (one APV per line,
+    // slot is ignored).  See LoadPedestals for crate_remap semantics.
+    void LoadCommonModeRange(const std::string &cm_file,
+                             const std::map<int, int> &crate_remap = {});
 
     // --- per-event processing -----------------------------------------------
     void Clear();

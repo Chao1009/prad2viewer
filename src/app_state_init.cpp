@@ -1,6 +1,7 @@
 #include "app_state.h"
 #include "data_source.h"
 #include "load_daq_config.h"
+#include "RunInfoConfig.h"
 
 #include <fstream>
 #include <iostream>
@@ -9,14 +10,12 @@
 
 using json = nlohmann::json;
 
-static void loadTransform(DetectorTransform &t, const json &j)
+static void setTransform(DetectorTransform &t,
+                         float x, float y, float z,
+                         float rx, float ry, float rz)
 {
-    if (j.contains("position") && j["position"].is_array() && j["position"].size()>=3) {
-        t.x = j["position"][0]; t.y = j["position"][1]; t.z = j["position"][2];
-    }
-    if (j.contains("tilting") && j["tilting"].is_array() && j["tilting"].size()>=3) {
-        t.rx = j["tilting"][0]; t.ry = j["tilting"][1]; t.rz = j["tilting"][2];
-    }
+    t.x = x; t.y = y; t.z = z;
+    t.rx = rx; t.ry = ry; t.rz = rz;
     t.prepare();
 }
 
@@ -186,14 +185,11 @@ void AppState::init(const std::string &db_dir,
     // --- GEM system (optional) ---
     {
         std::string gem_map_filename = "gem_map.json";
-        std::string gem_ped_filename;
         std::ifstream dcf_gem(daq_cfg_path);
         if (dcf_gem.is_open()) {
             auto dcj_gem = json::parse(dcf_gem, nullptr, false, true);
             if (dcj_gem.contains("gem_map_file"))
                 gem_map_filename = dcj_gem["gem_map_file"].get<std::string>();
-            if (dcj_gem.contains("gem_pedestal_file"))
-                gem_ped_filename = dcj_gem["gem_pedestal_file"].get<std::string>();
         }
         std::string gem_map_file = findFile(gem_map_filename, db_dir);
         if (!gem_map_file.empty()) {
@@ -207,13 +203,8 @@ void AppState::init(const std::string &db_dir,
                 for (auto &t : gem_transforms) t.prepare();
                 gem_occupancy.resize(ndet);
                 for (auto &h : gem_occupancy) h.init(GEM_OCC_NX, GEM_OCC_NY);
-                if (!gem_ped_filename.empty()) {
-                    std::string gem_ped_file = findFile(gem_ped_filename, db_dir);
-                    if (!gem_ped_file.empty()) {
-                        gem_sys.LoadPedestals(gem_ped_file);
-                        std::cerr << "GEM peds  : " << gem_ped_file << "\n";
-                    }
-                }
+                // Pedestals + common-mode ranges are loaded later from the
+                // runinfo block (per-run calibration data).
             }
         }
     }
@@ -328,51 +319,89 @@ void AppState::init(const std::string &db_dir,
             std::cerr << "Color ranges: " << color_range_defaults.size() << " entries\n";
         }
 
-        if (rcfg.contains("runinfo")) {
-            // runinfo can be inline object or a string path to an external file
-            json ri;
-            if (rcfg["runinfo"].is_string()) {
-                std::string ri_file = findFile(rcfg["runinfo"].get<std::string>(), db_dir);
-                if (!ri_file.empty()) {
-                    std::ifstream rif(ri_file);
-                    if (rif.is_open()) {
-                        ri = json::parse(rif, nullptr, false, true);
-                        std::cerr << "RunInfo   : loaded from " << ri_file << "\n";
+        if (rcfg.contains("runinfo") && rcfg["runinfo"].is_string()) {
+            // Run number isn't known at init time (no event yet) — pick the
+            // entry with the largest run_number ("latest"). The shared loader
+            // logs which entry it selected.
+            std::string ri_file = findFile(rcfg["runinfo"].get<std::string>(), db_dir);
+            if (ri_file.empty()) {
+                std::cerr << "Warning: runinfo file '"
+                          << rcfg["runinfo"].get<std::string>()
+                          << "' not found in " << db_dir << "\n";
+            } else {
+                prad2::RunConfig rc = prad2::LoadRunConfig(ri_file, /*run_num=*/-1);
+
+                beam_energy = rc.Ebeam;
+                target_x = rc.target_x;
+                target_y = rc.target_y;
+                target_z = rc.target_z;
+                adc_to_mev = rc.default_adc2mev;
+                setTransform(hycal_transform,
+                             rc.hycal_x, rc.hycal_y, rc.hycal_z,
+                             rc.hycal_tilt_x, rc.hycal_tilt_y, rc.hycal_tilt_z);
+
+                if (!rc.energy_calib_file.empty()) {
+                    std::string calib_file = findFile(rc.energy_calib_file, db_dir);
+                    if (calib_file.empty()) {
+                        std::cerr << "Warning: calibration file '"
+                                  << rc.energy_calib_file
+                                  << "' not found in " << db_dir << "\n";
+                    } else {
+                        int nmatched = hycal.LoadCalibration(calib_file);
+                        if (nmatched >= 0)
+                            std::cerr << "Calibration: " << calib_file
+                                      << " (" << nmatched << " modules)\n";
                     }
                 }
-            } else {
-                ri = rcfg["runinfo"];
-            }
-            if (ri.contains("beam_energy")) beam_energy = ri["beam_energy"];
-            if (ri.contains("target") && ri["target"].is_array() && ri["target"].size()>=3) {
-                target_x=ri["target"][0]; target_y=ri["target"][1]; target_z=ri["target"][2];
-            }
-            if (ri.contains("hycal"))
-                loadTransform(hycal_transform, ri["hycal"]);
-            if (ri.contains("calibration")) {
-                auto &cal = ri["calibration"];
-                if (cal.contains("default_adc2mev")) adc_to_mev = cal["default_adc2mev"];
-                if (cal.contains("file")) {
-                    std::string calib_file = findFile(cal["file"].get<std::string>(), db_dir);
-                    int nmatched = hycal.LoadCalibration(calib_file);
-                    if (nmatched >= 0)
-                        std::cerr << "Calibration: " << calib_file << " (" << nmatched << " modules)\n";
-                }
-            }
-            std::cerr << "RunInfo   : beam=" << beam_energy << "MeV default_adc2mev=" << adc_to_mev
-                      << " target=(" << target_x << "," << target_y << "," << target_z
-                      << ") HyCal=(" << hycal_transform.x << "," << hycal_transform.y << ","
-                      << hycal_transform.z << ")\n";
+                std::cerr << "RunInfo   : beam=" << beam_energy
+                          << "MeV default_adc2mev=" << adc_to_mev
+                          << " target=(" << target_x << "," << target_y << "," << target_z
+                          << ") HyCal=(" << hycal_transform.x << ","
+                          << hycal_transform.y << "," << hycal_transform.z << ")\n";
 
-            // GEM per-detector transforms (same position/tilting format as HyCal)
-            if (gem_enabled && ri.contains("gem") && ri["gem"].is_array()) {
-                for (auto &entry : ri["gem"]) {
-                    int id = entry.value("id", -1);
-                    if (id < 0 || id >= (int)gem_transforms.size()) continue;
-                    loadTransform(gem_transforms[id], entry);
+                if (gem_enabled) {
+                    int n = std::min<int>(4, (int)gem_transforms.size());
+                    for (int id = 0; id < n; ++id) {
+                        setTransform(gem_transforms[id],
+                                     rc.gem_x[id], rc.gem_y[id], rc.gem_z[id],
+                                     rc.gem_tilt_x[id], rc.gem_tilt_y[id], rc.gem_tilt_z[id]);
+                    }
+                    std::cerr << "GEM geom  : " << gem_transforms.size()
+                              << " detectors configured\n";
+
+                    // Build hardware-crate -> logical-crate remap from
+                    // daq_config.roc_tags so the upstream pedestal/CM files
+                    // (which key by EVIO bank tag = decimal hardware ID,
+                    // e.g. 146/147) match our gem_map.json (logical 1/2).
+                    std::map<int, int> gem_crate_remap;
+                    for (const auto &re : daq_cfg.roc_tags) {
+                        if (re.type == "gem")
+                            gem_crate_remap[(int)re.tag] = re.crate;
+                    }
+
+                    if (!rc.gem_pedestal_file.empty()) {
+                        std::string ped = findFile(rc.gem_pedestal_file, db_dir);
+                        if (ped.empty())
+                            std::cerr << "Warning: gem pedestal file '"
+                                      << rc.gem_pedestal_file
+                                      << "' not found in " << db_dir << "\n";
+                        else
+                            gem_sys.LoadPedestals(ped, gem_crate_remap);
+                    }
+                    if (!rc.gem_common_mode_file.empty()) {
+                        std::string cm = findFile(rc.gem_common_mode_file, db_dir);
+                        if (cm.empty())
+                            std::cerr << "Warning: gem common-mode file '"
+                                      << rc.gem_common_mode_file
+                                      << "' not found in " << db_dir << "\n";
+                        else
+                            gem_sys.LoadCommonModeRange(cm, gem_crate_remap);
+                    }
                 }
-                std::cerr << "GEM geom  : " << gem_transforms.size() << " detectors configured\n";
             }
+        } else if (rcfg.contains("runinfo")) {
+            std::cerr << "Warning: 'runinfo' must be a path string to a "
+                         "configurations-format JSON file\n";
         }
         if (rcfg.contains("elog")) {
             auto &el = rcfg["elog"];

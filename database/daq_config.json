@@ -71,8 +71,8 @@
         {"tag": "0x8C", "name": "adchycal7", "crate": 6,  "type": "roc"},
         {"tag": "0x8D", "name": "tihycal7",  "crate": 6,  "type": "ti_slave"},
         {"tag": "0x8E", "name": "tagger",    "crate": 7,  "type": "tdc"},
-        {"tag": "0x31", "name": "gemroc1",   "crate": 49, "type": "gem"},
-        {"tag": "0x34", "name": "gemroc2",   "crate": 52, "type": "gem"}
+        {"tag": "0x92", "name": "gem_1",     "crate": 1,  "type": "gem"},
+        {"tag": "0x93", "name": "gem_2",     "crate": 2,  "type": "gem"}
     ],
 
     "ti_master_tag": "0x27",

@@ -121,12 +121,31 @@ void GemSystem::Init(const std::string &map_file)
 }
 
 //=============================================================================
-// LoadPedestals — load per-strip pedestal from JSON file
+// Helper — translate a hardware crate ID via the optional remap.
+//=============================================================================
+static inline int remapCrate(int crate, const std::map<int, int> &m)
+{
+    if (m.empty()) return crate;
+    auto it = m.find(crate);
+    return (it != m.end()) ? it->second : crate;
+}
+
+//=============================================================================
+// LoadPedestals — per-strip pedestal from upstream APV-block text format
 //
-// Format: [{"crate":49,"mpd":0,"adc":0,"offset":[...128...],"noise":[...128...]}, ...]
+// Each APV block:
+//   APV <crate> <slot> <fiber> <adc>            (header line)
+//   <strip> <offset> <noise>                     (128 strip lines)
+//
+// "<slot>" is hardware metadata (physical MPD slot in the VME crate); it
+// is ignored for matching — APVs are looked up by (crate, fiber, adc).
+//
+// crate_remap: hardware crate ID -> logical crate ID expected by
+// gem_map.json (e.g. 146 -> 1, 147 -> 2). Empty = identity.
 //=============================================================================
 
-void GemSystem::LoadPedestals(const std::string &ped_file)
+void GemSystem::LoadPedestals(const std::string &ped_file,
+                              const std::map<int, int> &crate_remap)
 {
     std::ifstream f(ped_file);
     if (!f.is_open()) {
@@ -134,42 +153,64 @@ void GemSystem::LoadPedestals(const std::string &ped_file)
         return;
     }
 
-    nlohmann::json j;
-    try { j = nlohmann::json::parse(f, nullptr, true, true); }
-    catch (const nlohmann::json::parse_error &e) {
-        std::cerr << "GemSystem::LoadPedestals: parse error: " << e.what() << std::endl;
-        return;
-    }
+    int n_apvs_loaded = 0;
+    int n_apvs_unmapped = 0;
+    int cur_idx = -1;       // index into apvs_ for the current APV block
+    int strips_in_block = 0;
 
-    int loaded = 0;
-    for (auto &entry : j) {
-        int crate = entry.value("crate", -1);
-        int mpd   = entry.value("mpd", -1);
-        int adc   = entry.value("adc", -1);
+    std::string line;
+    while (std::getline(f, line)) {
+        if (line.empty()) continue;
+        // strip leading whitespace and check first non-whitespace char
+        size_t firstc = line.find_first_not_of(" \t");
+        if (firstc == std::string::npos) continue;
+        if (line[firstc] == '#') continue;
 
-        int idx = FindApvIndex(crate, mpd, adc);
-        if (idx < 0) continue;
-
-        auto &offsets = entry["offset"];
-        auto &noises  = entry["noise"];
-        int nstrips = std::min({(int)offsets.size(), (int)noises.size(), APV_STRIP_SIZE});
-
-        for (int s = 0; s < nstrips; ++s) {
-            apvs_[idx].pedestal[s].offset = offsets[s].get<float>();
-            apvs_[idx].pedestal[s].noise  = noises[s].get<float>();
+        std::istringstream iss(line);
+        std::string tok;
+        iss >> tok;
+        if (tok == "APV") {
+            int crate, slot, fiber, adc;
+            if (!(iss >> crate >> slot >> fiber >> adc)) {
+                std::cerr << "GemSystem::LoadPedestals: malformed APV header: "
+                          << line << "\n";
+                cur_idx = -1;
+                continue;
+            }
+            cur_idx = FindApvIndex(remapCrate(crate, crate_remap), fiber, adc);
+            strips_in_block = 0;
+            if (cur_idx < 0) ++n_apvs_unmapped;
+            else             ++n_apvs_loaded;
+        } else {
+            // strip line: "<strip> <offset> <noise>"
+            if (cur_idx < 0) continue;   // current APV not in our map
+            int strip = std::stoi(tok);
+            float offset, noise;
+            if (!(iss >> offset >> noise)) continue;
+            if (strip < 0 || strip >= APV_STRIP_SIZE) continue;
+            apvs_[cur_idx].pedestal[strip].offset = offset;
+            apvs_[cur_idx].pedestal[strip].noise  = noise;
+            ++strips_in_block;
         }
-        loaded += nstrips;
     }
-    std::cerr << "GemSystem: loaded " << loaded << " pedestal entries from " << ped_file << "\n";
+
+    std::cerr << "GemSystem::LoadPedestals: " << n_apvs_loaded
+              << " APVs loaded";
+    if (n_apvs_unmapped)
+        std::cerr << " (" << n_apvs_unmapped << " unmapped — wrong crate IDs?)";
+    std::cerr << " from " << ped_file << "\n";
 }
 
 //=============================================================================
-// LoadCommonModeRange — load per-APV common mode range
+// LoadCommonModeRange — per-APV common mode range from upstream text
 //
-// Format: crate  mpd  adc  cm_min  cm_max
+// Format: <crate> <slot> <fiber> <adc> <cm_min> <cm_max>     (one per line)
+//
+// Same crate_remap and (crate, fiber, adc) keying as LoadPedestals.
 //=============================================================================
 
-void GemSystem::LoadCommonModeRange(const std::string &cm_file)
+void GemSystem::LoadCommonModeRange(const std::string &cm_file,
+                                    const std::map<int, int> &crate_remap)
 {
     std::ifstream f(cm_file);
     if (!f.is_open()) {
@@ -177,20 +218,31 @@ void GemSystem::LoadCommonModeRange(const std::string &cm_file)
         return;
     }
 
+    int n_loaded = 0;
+    int n_unmapped = 0;
     std::string line;
     while (std::getline(f, line)) {
-        if (line.empty() || line[0] == '#') continue;
-        std::istringstream iss(line);
-        int crate, mpd, adc;
-        float cm_min, cm_max;
-        if (!(iss >> crate >> mpd >> adc >> cm_min >> cm_max)) continue;
+        if (line.empty()) continue;
+        size_t firstc = line.find_first_not_of(" \t");
+        if (firstc == std::string::npos || line[firstc] == '#') continue;
 
-        int idx = FindApvIndex(crate, mpd, adc);
-        if (idx < 0) continue;
+        std::istringstream iss(line);
+        int crate, slot, fiber, adc;
+        float cm_min, cm_max;
+        if (!(iss >> crate >> slot >> fiber >> adc >> cm_min >> cm_max)) continue;
+
+        int idx = FindApvIndex(remapCrate(crate, crate_remap), fiber, adc);
+        if (idx < 0) { ++n_unmapped; continue; }
 
         apvs_[idx].cm_range_min = cm_min;
         apvs_[idx].cm_range_max = cm_max;
+        ++n_loaded;
     }
+    std::cerr << "GemSystem::LoadCommonModeRange: " << n_loaded
+              << " APVs loaded";
+    if (n_unmapped)
+        std::cerr << " (" << n_unmapped << " unmapped — wrong crate IDs?)";
+    std::cerr << " from " << cm_file << "\n";
 }
 
 //=============================================================================

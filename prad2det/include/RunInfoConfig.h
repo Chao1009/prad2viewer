@@ -1,0 +1,271 @@
+#pragma once
+//=============================================================================
+// RunInfoConfig.h — run-period detector geometry / calibration metadata
+//
+// Shared across the viewer/server, analysis tools, Python bindings, and
+// ROOT scripts. Loads the nested-format runinfo file:
+//
+//     {
+//       "configurations": [
+//         {"run_number":     0, "beam_energy": 2100.0, "calibration": {...},
+//          "target": [...], "hycal": {...}, "gem": [...],
+//          "time_cuts": {...}, "matching": {...}},
+//         {"run_number": 23000, ...}
+//       ]
+//     }
+//
+// LoadRunConfig() picks the entry with the largest run_number <= the
+// requested run, or the largest entry if run_num < 0 ("latest").
+//
+// Header-only (nlohmann::json + std). Lives in prad2det/include/ so all
+// libraries can pull it in without dragging analysis/ROOT dependencies.
+//=============================================================================
+
+#include <nlohmann/json.hpp>
+
+#include <algorithm>
+#include <cstdio>
+#include <fstream>
+#include <iostream>
+#include <string>
+
+namespace prad2 {
+
+// Holds all run-specific detector geometry and beam parameters.
+// Defaults match the historical 2.2 GeV setup so single-run tools that
+// fail to load a runinfo file still produce sensible numbers.
+struct RunConfig {
+    std::string energy_calib_file;
+    float default_adc2mev = 0.078f;
+    float Ebeam     = 0.f;
+    float target_x  = 0.f;
+    float target_y  = 0.f;
+    float target_z  = 0.f;
+    float hycal_x      = 0.f;
+    float hycal_y      = 0.f;
+    float hycal_z      = 6225.0f;
+    float hycal_tilt_x = 0.f;
+    float hycal_tilt_y = 0.f;
+    float hycal_tilt_z = 0.f;
+    float gem_x[4]      = {-252.8f,  252.8f, -252.8f,  252.8f};
+    float gem_y[4]      = {0.f, 0.f, 0.f, 0.f};
+    float gem_z[4]      = {5423.0f, 5384.0f, 5823.0f, 5784.0f};
+    float gem_tilt_x[4] = {0.f, 0.f, 0.f, 0.f};
+    float gem_tilt_y[4] = {0.f, 0.f, 0.f, 0.f};
+    float gem_tilt_z[4] = {0.f, 180.f, 0.f, 180.f};
+    // Per-run GEM calibration files (paths resolved by the caller against
+    // the database dir). Empty -> skip loading (use defaults baked into
+    // GemSystem: zero pedestals, permissive CM range).
+    std::string gem_pedestal_file;
+    std::string gem_common_mode_file;
+    // Analysis-specific extras (viewer ignores).
+    float hc_time_win_lo = 100.f;  // ns
+    float hc_time_win_hi = 200.f;  // ns
+    float matching_radius     = 15.f;
+    bool  matching_use_square = true;
+};
+
+// Returns a RunConfig populated from the best-matching entry in `path`.
+// Selection rule:
+//   run_num >= 0 -> entry with the largest run_number that is <= run_num
+//   run_num <  0 -> entry with the largest run_number ("latest")
+//
+// On any failure (file missing, parse error, no "configurations" array,
+// no matching entry) emits a warning and returns the default-constructed
+// RunConfig — callers that need to know success/failure should check
+// e.g. `result.Ebeam > 0`.
+inline RunConfig LoadRunConfig(const std::string &path, int run_num)
+{
+    RunConfig result;
+
+    std::ifstream f(path);
+    if (!f) {
+        std::cerr << "Warning: cannot open runinfo file " << path
+                  << ", using defaults.\n";
+        return result;
+    }
+    auto cfg = nlohmann::json::parse(f, nullptr, false, true);
+    if (cfg.is_discarded()) {
+        std::cerr << "Warning: failed to parse " << path
+                  << ", using defaults.\n";
+        return result;
+    }
+    if (!cfg.contains("configurations") || !cfg["configurations"].is_array()) {
+        std::cerr << "Warning: " << path
+                  << " has no \"configurations\" array, using defaults.\n";
+        return result;
+    }
+
+    const nlohmann::json *best = nullptr;
+    int best_run = -1;
+    if (run_num < 0) {
+        std::cerr << "Warning: unknown run number, picking the entry with "
+                     "the largest run_number from " << path << ".\n";
+    }
+    for (const auto &entry : cfg["configurations"]) {
+        if (!entry.contains("run_number")) continue;
+        int rn = entry["run_number"].get<int>();
+        if (run_num < 0) {
+            if (rn > best_run) { best = &entry; best_run = rn; }
+        } else if (rn <= run_num && rn > best_run) {
+            best = &entry; best_run = rn;
+        }
+    }
+    if (best == nullptr) {
+        std::cerr << "Warning: no matching configuration in " << path
+                  << " for run " << run_num << ", using defaults.\n";
+        return result;
+    }
+
+    const auto &c = *best;
+    if (c.contains("beam_energy")) result.Ebeam = c["beam_energy"].get<float>();
+    if (c.contains("calibration")) {
+        const auto &cal = c["calibration"];
+        if (cal.contains("file"))            result.energy_calib_file = cal["file"].get<std::string>();
+        if (cal.contains("default_adc2mev")) result.default_adc2mev   = cal["default_adc2mev"].get<float>();
+    }
+    if (c.contains("target") && c["target"].is_array() && c["target"].size() >= 3) {
+        result.target_x = c["target"][0].get<float>();
+        result.target_y = c["target"][1].get<float>();
+        result.target_z = c["target"][2].get<float>();
+    }
+    if (c.contains("hycal")) {
+        const auto &h = c["hycal"];
+        if (h.contains("position") && h["position"].is_array() && h["position"].size() >= 3) {
+            result.hycal_x = h["position"][0].get<float>();
+            result.hycal_y = h["position"][1].get<float>();
+            result.hycal_z = h["position"][2].get<float>();
+        }
+        if (h.contains("tilting") && h["tilting"].is_array() && h["tilting"].size() >= 3) {
+            result.hycal_tilt_x = h["tilting"][0].get<float>();
+            result.hycal_tilt_y = h["tilting"][1].get<float>();
+            result.hycal_tilt_z = h["tilting"][2].get<float>();
+        }
+    }
+    if (c.contains("gem") && c["gem"].is_object()) {
+        const auto &g = c["gem"];
+        if (g.contains("pedestal_file"))    result.gem_pedestal_file    = g["pedestal_file"].get<std::string>();
+        if (g.contains("common_mode_file")) result.gem_common_mode_file = g["common_mode_file"].get<std::string>();
+        if (g.contains("detectors") && g["detectors"].is_array()) {
+            for (const auto &d : g["detectors"]) {
+                if (!d.contains("id")) continue;
+                int id = d["id"].get<int>();
+                if (id < 0 || id >= 4) continue;
+                if (d.contains("position") && d["position"].is_array() && d["position"].size() >= 3) {
+                    result.gem_x[id] = d["position"][0].get<float>();
+                    result.gem_y[id] = d["position"][1].get<float>();
+                    result.gem_z[id] = d["position"][2].get<float>();
+                }
+                if (d.contains("tilting") && d["tilting"].is_array() && d["tilting"].size() >= 3) {
+                    result.gem_tilt_x[id] = d["tilting"][0].get<float>();
+                    result.gem_tilt_y[id] = d["tilting"][1].get<float>();
+                    result.gem_tilt_z[id] = d["tilting"][2].get<float>();
+                }
+            }
+        }
+    }
+    if (c.contains("time_cuts")) {
+        const auto &tc = c["time_cuts"];
+        if (tc.contains("hc_time_window") && tc["hc_time_window"].is_array()
+                && tc["hc_time_window"].size() >= 2) {
+            result.hc_time_win_lo = tc["hc_time_window"][0].get<float>();
+            result.hc_time_win_hi = tc["hc_time_window"][1].get<float>();
+        }
+    }
+    if (c.contains("matching")) {
+        const auto &m = c["matching"];
+        if (m.contains("radius"))         result.matching_radius     = m["radius"].get<float>();
+        if (m.contains("use_square_cut")) result.matching_use_square = m["use_square_cut"].get<bool>();
+    }
+    std::cerr << "RunInfo   : loaded run_number=" << best_run
+              << " from " << path << "\n";
+    return result;
+}
+
+// Append (or overwrite by run_number) an entry into the "configurations"
+// array of `path`. Creates the file if missing. Sorts the array by
+// run_number for readability. Atomic-rename via tmp file.
+inline bool WriteRunConfig(const std::string &path, int run_num,
+                           const RunConfig &geo)
+{
+    nlohmann::json cfg;
+    {
+        std::ifstream in(path);
+        if (in) {
+            cfg = nlohmann::json::parse(in, nullptr, false, true);
+            if (cfg.is_discarded()) {
+                std::cerr << "Warning: failed to parse " << path
+                          << ", overwriting with new data.\n";
+                cfg = nlohmann::json::object();
+            }
+        } else {
+            cfg = nlohmann::json::object();
+        }
+    }
+
+    if (!cfg.contains("configurations") || !cfg["configurations"].is_array())
+        cfg["configurations"] = nlohmann::json::array();
+
+    nlohmann::json entry;
+    entry["run_number"]                      = run_num;
+    entry["beam_energy"]                     = geo.Ebeam;
+    entry["calibration"]["file"]             = geo.energy_calib_file;
+    entry["calibration"]["default_adc2mev"]  = geo.default_adc2mev;
+    entry["target"] = nlohmann::json::array({geo.target_x, geo.target_y, geo.target_z});
+    entry["hycal"]["position"] = nlohmann::json::array({geo.hycal_x, geo.hycal_y, geo.hycal_z});
+    entry["hycal"]["tilting"]  = nlohmann::json::array({geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z});
+    {
+        nlohmann::json gem = nlohmann::json::object();
+        if (!geo.gem_pedestal_file.empty())    gem["pedestal_file"]    = geo.gem_pedestal_file;
+        if (!geo.gem_common_mode_file.empty()) gem["common_mode_file"] = geo.gem_common_mode_file;
+        nlohmann::json detectors = nlohmann::json::array();
+        for (int i = 0; i < 4; ++i) {
+            nlohmann::json g;
+            g["id"]       = i;
+            g["position"] = nlohmann::json::array({geo.gem_x[i], geo.gem_y[i], geo.gem_z[i]});
+            g["tilting"]  = nlohmann::json::array({geo.gem_tilt_x[i], geo.gem_tilt_y[i], geo.gem_tilt_z[i]});
+            detectors.push_back(g);
+        }
+        gem["detectors"] = detectors;
+        entry["gem"] = gem;
+    }
+    entry["time_cuts"]["hc_time_window"] = nlohmann::json::array({geo.hc_time_win_lo, geo.hc_time_win_hi});
+    entry["matching"]["radius"]          = geo.matching_radius;
+    entry["matching"]["use_square_cut"]  = geo.matching_use_square;
+
+    auto &arr = cfg["configurations"];
+    bool replaced = false;
+    for (auto &e : arr) {
+        if (e.contains("run_number") && e["run_number"].get<int>() == run_num) {
+            e = entry;
+            replaced = true;
+            break;
+        }
+    }
+    if (!replaced) arr.push_back(entry);
+
+    std::sort(arr.begin(), arr.end(), [](const nlohmann::json &a, const nlohmann::json &b) {
+        int ra = a.contains("run_number") ? a["run_number"].get<int>() : -1;
+        int rb = b.contains("run_number") ? b["run_number"].get<int>() : -1;
+        return ra < rb;
+    });
+
+    std::string tmp = path + ".tmp";
+    {
+        std::ofstream out(tmp);
+        if (!out) {
+            std::cerr << "Error: cannot write " << tmp << "\n";
+            return false;
+        }
+        out << cfg.dump(4) << "\n";
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0) {
+        std::cerr << "Error: failed to rename " << tmp << " -> " << path << "\n";
+        return false;
+    }
+    std::cerr << (replaced ? "Updated" : "Appended") << " run_number=" << run_num
+              << " in " << path << "\n";
+    return true;
+}
+
+} // namespace prad2

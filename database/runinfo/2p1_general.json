@@ -1,6 +1,6 @@
-{   
-    "configurations":[
-        {   
+{
+    "configurations": [
+        {
             "run_number": 0,
             "beam_energy": 2100.0,
             "calibration": {
@@ -12,12 +12,16 @@
                 "position": [0.0, 0.0, 6225.0],
                 "tilting": [0.0, 0.0, 0.0]
             },
-            "gem": [
-                {"id": 0, "position": [-252.8, 0.0, 5423.0], "tilting": [0.0, 0.0, 0.0]},
-                {"id": 1, "position": [252.8, 0.0, 5384.0],  "tilting": [0.0, 0.0, 180.0]},
-                {"id": 2, "position": [-252.8, 0.0, 5823.0], "tilting": [0.0, 0.0, 0.0]},
-                {"id": 3, "position": [252.8, 0.0, 5784.0],  "tilting": [0.0, 0.0, 180.0]}
-            ],
+            "gem": {
+                "pedestal_file":    "gem_peds/peds_23867.txt",
+                "common_mode_file": "gem_peds/cm_23867.txt",
+                "detectors": [
+                    {"id": 0, "position": [-252.8, 0.0, 5423.0], "tilting": [0.0, 0.0, 0.0]},
+                    {"id": 1, "position": [252.8,  0.0, 5384.0], "tilting": [0.0, 0.0, 180.0]},
+                    {"id": 2, "position": [-252.8, 0.0, 5823.0], "tilting": [0.0, 0.0, 0.0]},
+                    {"id": 3, "position": [252.8,  0.0, 5784.0], "tilting": [0.0, 0.0, 180.0]}
+                ]
+            },
             "time_cuts": {
                 "hc_time_window": [100.0, 200.0]
             },

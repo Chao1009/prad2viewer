@@ -104,6 +104,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -121,6 +122,21 @@ static std::string resolve_db_path(const std::string &p)
     const char *db = std::getenv("PRAD2_DATABASE_DIR");
     if (!db) return p;
     return std::string(db) + "/" + p;
+}
+
+// Sniff the run number out of an EVIO file path: the project-wide naming
+// convention is `prad_NNNNNN.evio.NNNNN` (also "run_NNNN" for legacy /
+// cosmic captures).  Returns -1 if no plausible match is found, in which
+// case LoadRunConfig falls back to the largest known runinfo entry.
+static int extract_run_number_from_path(const std::string &path)
+{
+    static const std::regex pat(R"((?:prad|run)_0*(\d+))",
+                                std::regex_constants::icase);
+    std::smatch m;
+    if (std::regex_search(path, m, pat)) {
+        try { return std::stoi(m[1].str()); } catch (...) {}
+    }
+    return -1;
 }
 
 // Reads database/config.json and returns the resolved runinfo path.
@@ -450,7 +466,20 @@ int gem_clusters_to_root(const char *evio_path,
                " — cannot resolve calibration / geometry.");
         return 1;
     }
-    analysis::gRunConfig = prad2::LoadRunConfig(ri_path, run_num);
+    // If the caller didn't pass an explicit run number, sniff it out of
+    // the EVIO filename so LoadRunConfig picks the right runinfo entry
+    // (instead of always falling back to the largest known run).
+    int eff_run = run_num;
+    if (eff_run <= 0) {
+        int sniff = extract_run_number_from_path(evio_path ? evio_path : "");
+        if (sniff > 0) {
+            eff_run = sniff;
+            Printf("[setup] Run number : %d (extracted from filename)", eff_run);
+        }
+    } else {
+        Printf("[setup] Run number : %d (caller-provided)", eff_run);
+    }
+    analysis::gRunConfig = prad2::LoadRunConfig(ri_path, eff_run);
     auto &geo = analysis::gRunConfig;
     Printf("[setup] RunInfo    : %s  beam=%.0f MeV  hycal_z=%.1f mm",
            ri_path.c_str(), geo.Ebeam, geo.hycal_z);
@@ -542,6 +571,8 @@ int gem_clusters_to_root(const char *evio_path,
 
     long n_read = 0, n_phys = 0, n_filled = 0;
     long total_clusters = 0, total_matches = 0, total_strips = 0;
+    long total_gem_2d   = 0;
+    long gem_2d_per_det[4] = {0, 0, 0, 0};
 
     while (ch.Read() == status::success) {
         ++n_read;
@@ -624,6 +655,8 @@ int gem_clusters_to_root(const char *evio_path,
             std::vector<analysis::GEMHit> gem_lab[4];
             for (int d = 0; d < gem_sys.GetNDetectors() && d < 4; ++d) {
                 const auto &raw = gem_sys.GetHits(d);
+                gem_2d_per_det[d] += static_cast<long>(raw.size());
+                total_gem_2d     += static_cast<long>(raw.size());
                 for (const auto &h : raw) {
                     analysis::GEMHit gh;
                     gh.x = h.x; gh.y = h.y; gh.z = 0.f;
@@ -767,6 +800,10 @@ done:
     Printf("  physics events        : %ld", n_phys);
     Printf("  tree entries written  : %ld", n_filled);
     Printf("  total HyCal clusters  : %ld", total_clusters);
+    Printf("  total GEM 2D hits     : %ld  (det0=%ld det1=%ld det2=%ld det3=%ld)",
+           total_gem_2d,
+           gem_2d_per_det[0], gem_2d_per_det[1],
+           gem_2d_per_det[2], gem_2d_per_det[3]);
     Printf("  total matches         : %ld", total_matches);
     Printf("  total strip rows      : %ld", total_strips);
     Printf("  elapsed (s)           : %.2f", secs);

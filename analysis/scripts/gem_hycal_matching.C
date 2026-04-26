@@ -27,6 +27,14 @@
 // Defaults: N = 3 (3-sigma).  The actual residual is stored in the tree so
 // downstream cuts can be tightened or loosened without re-running.
 //
+// Best-match rule: HyCal cluster is the baseline.  For each (HC cluster,
+// GEM detector) pair we keep at most ONE matched GEM hit — the candidate
+// with the smallest 2D residual that's still ≤ N·σ_total.  A GEM hit
+// CAN be the best match for multiple HC clusters (no exclusivity on the
+// GEM side — that would require Hungarian assignment).  The Python
+// counterpart in analysis/pyscripts/gem_hycal_matching.py applies the
+// same rule.
+//
 // Trigger filter: only events with `trigger_bits == 0x100` (production
 // physics trigger) are reconstructed and written.  Everything else
 // (LMS / Alpha / cosmic / etc.) is skipped.  The summary lines report
@@ -664,20 +672,24 @@ int gem_hycal_matching(const char *evio_path,
                 ev.hc_sigma.push_back(2.6f / std::sqrt(E_GeV));
             }
 
-            // ---------- straight-line matching per HC cluster × GEM ---------
+            // ---------- best-match per HC cluster × GEM detector ------------
             // For each HyCal cluster, draw a line from (0,0,0) target through
-            // the cluster centroid (lab); intersect with each GEM z-plane;
-            // call any GEM hit within match_nsigma·σ_total a match.
+            // the cluster centroid (lab); intersect with each GEM z-plane.
+            // Per (HC cluster, GEM det) pair, keep AT MOST one row — the
+            // candidate with the smallest 2D residual that's still inside
+            // the match_nsigma · σ_total window.  A GEM hit can win against
+            // multiple HC clusters (no GEM-side exclusivity).
             for (int k = 0; k < ev.ncl; ++k) {
                 const auto &h = hc_hits[k];
                 if (h.z <= 0.f) continue;
                 const float sigma_face = ev.hc_sigma[k];
 
                 for (int d = 0; d < 4; ++d) {
-                    if (gem_lab[d].empty()) continue;
+                    const auto &gl = gem_lab[d];
+                    if (gl.empty()) continue;
                     // GEM z (lab) is the same for every hit on plane d —
                     // just read the first one we have.
-                    const float z_gem = gem_lab[d].front().z;
+                    const float z_gem = gl.front().z;
                     if (z_gem <= 0.f) continue;
                     const float scale  = z_gem / h.z;
                     const float proj_x = h.x * scale;
@@ -687,72 +699,80 @@ int gem_hycal_matching(const char *evio_path,
                         sig_hc_at_gem * sig_hc_at_gem + 0.1f * 0.1f);
                     const float cut = match_nsigma * sig_total;
 
-                    const auto &raw_hits = gem_sys.GetHits(d);
-                    for (size_t gi = 0; gi < gem_lab[d].size(); ++gi) {
-                        const auto &g = gem_lab[d][gi];
-                        const float dx = g.x - proj_x;
-                        const float dy = g.y - proj_y;
+                    // Find the closest GEM hit on detector d — must be
+                    // within `cut`.  best_dr starts at cut so any candidate
+                    // outside the window is automatically rejected.
+                    int   best_gi = -1;
+                    float best_dr = cut;
+                    for (size_t gi = 0; gi < gl.size(); ++gi) {
+                        const float dx = gl[gi].x - proj_x;
+                        const float dy = gl[gi].y - proj_y;
                         const float dr = std::sqrt(dx*dx + dy*dy);
-                        if (dr > cut) continue;
-
-                        // Look up the X and Y constituent clusters by the
-                        // (position, total_charge) values that GEMHit
-                        // copied verbatim from each StripCluster.
-                        const auto &raw_g = raw_hits[gi];
-                        const auto *xc = find_constituent(
-                            gem_sys.GetPlaneClusters(d, 0),
-                            raw_g.x, raw_g.x_charge);
-                        const auto *yc = find_constituent(
-                            gem_sys.GetPlaneClusters(d, 1),
-                            raw_g.y, raw_g.y_charge);
-
-                        const int mi = ev.nmatch;
-                        ev.m_hc_idx.push_back(k);
-                        ev.m_det.push_back(d);
-                        ev.m_gem_x.push_back(g.x);
-                        ev.m_gem_y.push_back(g.y);
-                        ev.m_gem_z.push_back(g.z);
-                        ev.m_gem_x_charge.push_back(raw_g.x_charge);
-                        ev.m_gem_y_charge.push_back(raw_g.y_charge);
-                        ev.m_gem_x_size.push_back(raw_g.x_size);
-                        ev.m_gem_y_size.push_back(raw_g.y_size);
-                        ev.m_proj_x.push_back(proj_x);
-                        ev.m_proj_y.push_back(proj_y);
-                        ev.m_residual.push_back(dr);
-                        ev.m_sigma_total.push_back(sig_total);
-
-                        if (xc) {
-                            ev.m_xcl_position.push_back(xc->position);
-                            ev.m_xcl_total.push_back(xc->total_charge);
-                            ev.m_xcl_peak.push_back(xc->peak_charge);
-                            ev.m_xcl_max_tb.push_back(xc->max_timebin);
-                        } else {
-                            ev.m_xcl_position.push_back(0.f);
-                            ev.m_xcl_total.push_back(0.f);
-                            ev.m_xcl_peak.push_back(0.f);
-                            ev.m_xcl_max_tb.push_back(-1);
+                        if (dr <= best_dr) {
+                            best_dr = dr;
+                            best_gi = static_cast<int>(gi);
                         }
-                        if (yc) {
-                            ev.m_ycl_position.push_back(yc->position);
-                            ev.m_ycl_total.push_back(yc->total_charge);
-                            ev.m_ycl_peak.push_back(yc->peak_charge);
-                            ev.m_ycl_max_tb.push_back(yc->max_timebin);
-                        } else {
-                            ev.m_ycl_position.push_back(0.f);
-                            ev.m_ycl_total.push_back(0.f);
-                            ev.m_ycl_peak.push_back(0.f);
-                            ev.m_ycl_max_tb.push_back(-1);
-                        }
-
-                        auto xs = append_strips(ev, mi, 0, xc);
-                        ev.m_xcl_first.push_back(xs.first);
-                        ev.m_xcl_nstrips.push_back(xs.second);
-                        auto ys = append_strips(ev, mi, 1, yc);
-                        ev.m_ycl_first.push_back(ys.first);
-                        ev.m_ycl_nstrips.push_back(ys.second);
-
-                        ++ev.nmatch;
                     }
+                    if (best_gi < 0) continue;
+
+                    const auto &g       = gl[best_gi];
+                    const auto &raw_g   = gem_sys.GetHits(d)[best_gi];
+                    // Look up the X and Y constituent clusters by the
+                    // (position, total_charge) values that GEMHit copied
+                    // verbatim from each StripCluster.
+                    const auto *xc = find_constituent(
+                        gem_sys.GetPlaneClusters(d, 0),
+                        raw_g.x, raw_g.x_charge);
+                    const auto *yc = find_constituent(
+                        gem_sys.GetPlaneClusters(d, 1),
+                        raw_g.y, raw_g.y_charge);
+
+                    const int mi = ev.nmatch;
+                    ev.m_hc_idx.push_back(k);
+                    ev.m_det.push_back(d);
+                    ev.m_gem_x.push_back(g.x);
+                    ev.m_gem_y.push_back(g.y);
+                    ev.m_gem_z.push_back(g.z);
+                    ev.m_gem_x_charge.push_back(raw_g.x_charge);
+                    ev.m_gem_y_charge.push_back(raw_g.y_charge);
+                    ev.m_gem_x_size.push_back(raw_g.x_size);
+                    ev.m_gem_y_size.push_back(raw_g.y_size);
+                    ev.m_proj_x.push_back(proj_x);
+                    ev.m_proj_y.push_back(proj_y);
+                    ev.m_residual.push_back(best_dr);
+                    ev.m_sigma_total.push_back(sig_total);
+
+                    if (xc) {
+                        ev.m_xcl_position.push_back(xc->position);
+                        ev.m_xcl_total.push_back(xc->total_charge);
+                        ev.m_xcl_peak.push_back(xc->peak_charge);
+                        ev.m_xcl_max_tb.push_back(xc->max_timebin);
+                    } else {
+                        ev.m_xcl_position.push_back(0.f);
+                        ev.m_xcl_total.push_back(0.f);
+                        ev.m_xcl_peak.push_back(0.f);
+                        ev.m_xcl_max_tb.push_back(-1);
+                    }
+                    if (yc) {
+                        ev.m_ycl_position.push_back(yc->position);
+                        ev.m_ycl_total.push_back(yc->total_charge);
+                        ev.m_ycl_peak.push_back(yc->peak_charge);
+                        ev.m_ycl_max_tb.push_back(yc->max_timebin);
+                    } else {
+                        ev.m_ycl_position.push_back(0.f);
+                        ev.m_ycl_total.push_back(0.f);
+                        ev.m_ycl_peak.push_back(0.f);
+                        ev.m_ycl_max_tb.push_back(-1);
+                    }
+
+                    auto xs = append_strips(ev, mi, 0, xc);
+                    ev.m_xcl_first.push_back(xs.first);
+                    ev.m_xcl_nstrips.push_back(xs.second);
+                    auto ys = append_strips(ev, mi, 1, yc);
+                    ev.m_ycl_first.push_back(ys.first);
+                    ev.m_ycl_nstrips.push_back(ys.second);
+
+                    ++ev.nmatch;
                 }
             }
 

@@ -294,14 +294,56 @@ class CalibMapWidget(HyCalMapWidget):
     MODE_STATS   = "Statistics"
     MODE_FACTOR  = "Calib Factor"
 
+    multiSelectionChanged = pyqtSignal(set)  # emitted when selected set changes
+
     def __init__(self, parent=None):
         super().__init__(parent, enable_zoom_pan=True, min_size=(460, 460))
         self._label = ""
-        self._marked_modules: set = set()  # modules to draw red-cross on
+        self._marked_modules: set = set()    # red ✕ (manually edited)
+        self._selected_modules: set = set()  # blue ○ (multi-select pending)
+        self._multi_select_mode: bool = False
+
+    # ── marked (red ✕) ──────────────────────────────────────────────────────
 
     def set_marked_modules(self, names: set) -> None:
         self._marked_modules = set(names)
         self.update()
+
+    # ── multi-select (blue ○) ────────────────────────────────────────────────
+
+    def set_multi_select_mode(self, enabled: bool) -> None:
+        self._multi_select_mode = enabled
+        if not enabled:
+            self._selected_modules.clear()
+            self.multiSelectionChanged.emit(set())
+        self.update()
+
+    def clear_selection(self) -> None:
+        self._selected_modules.clear()
+        self.multiSelectionChanged.emit(set())
+        self.update()
+
+    def get_selected_modules(self) -> set:
+        return set(self._selected_modules)
+
+    def _handle_click(self, pos):
+        if self._check_inline_range_edit_click(pos):
+            return
+        if self._cb_rect and self._cb_rect.contains(pos):
+            self.paletteClicked.emit()
+            return
+        name = self._hit(pos)
+        if self._multi_select_mode and name:
+            if name in self._selected_modules:
+                self._selected_modules.discard(name)
+            else:
+                self._selected_modules.add(name)
+            self.multiSelectionChanged.emit(set(self._selected_modules))
+            self.update()
+        else:
+            self.moduleClicked.emit(name or "")
+
+    # ── tooltip ─────────────────────────────────────────────────────────────
 
     def set_map_label(self, label: str):
         self._label = label
@@ -312,30 +354,51 @@ class CalibMapWidget(HyCalMapWidget):
     def _tooltip_text(self, name: str) -> str:
         v = self._values.get(name)
         base = name if v is None else f"{name}: {self._fmt_value(v)}"
+        tags = []
         if name in self._marked_modules:
-            base += "  [☓ manually set]"
+            tags.append("✕ edited")
+        if name in self._selected_modules:
+            tags.append("◯ selected")
+        if tags:
+            base += f"  [{', '.join(tags)}]"
         return base
+
+    # ── overlays ─────────────────────────────────────────────────────────────
 
     def _paint_overlays(self, p, w, h):
         super()._paint_overlays(p, w, h)
-        if not self._marked_modules:
-            return
         from PyQt6.QtGui import QPen, QColor
         from PyQt6.QtCore import Qt
-        pen = QPen(QColor("#ff3b30"), 1.5)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        p.setPen(pen)
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        for name in self._marked_modules:
-            rect = self._rects.get(name)
-            if rect is None:
-                continue
-            # shrink the X slightly inside the rect
-            m = max(rect.width(), rect.height()) * 0.18
-            x0, y0 = rect.x() + m, rect.y() + m
-            x1, y1 = rect.right() - m, rect.bottom() - m
-            p.drawLine(int(x0), int(y0), int(x1), int(y1))
-            p.drawLine(int(x1), int(y0), int(x0), int(y1))
+        # red ✕ for manually edited modules
+        if self._marked_modules:
+            pen = QPen(QColor("#ff3b30"), 1.5)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for name in self._marked_modules:
+                rect = self._rects.get(name)
+                if rect is None:
+                    continue
+                m = max(rect.width(), rect.height()) * 0.18
+                x0, y0 = rect.x() + m, rect.y() + m
+                x1, y1 = rect.right() - m, rect.bottom() - m
+                p.drawLine(int(x0), int(y0), int(x1), int(y1))
+                p.drawLine(int(x1), int(y0), int(x0), int(y1))
+        # blue ○ for multi-selected modules
+        if self._selected_modules:
+            pen = QPen(QColor("#3b9eff"), 2.0)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for name in self._selected_modules:
+                rect = self._rects.get(name)
+                if rect is None:
+                    continue
+                m = max(rect.width(), rect.height()) * 0.08
+                p.drawEllipse(
+                    int(rect.x() + m), int(rect.y() + m),
+                    int(rect.width() - 2 * m), int(rect.height() - 2 * m)
+                )
 
 
 # =============================================================================
@@ -1394,7 +1457,50 @@ class EpCalibViewerWindow(QMainWindow):
         self._map = CalibMapWidget()
         self._map.moduleClicked.connect(self._on_module_clicked)
         self._map.moduleHovered.connect(self._on_module_hovered)
+        self._map.multiSelectionChanged.connect(self._on_multi_selection_changed)
         ml.addWidget(self._map)
+
+        # ── batch multi-select bar ────────────────────────────────────────
+        batch_bar = QHBoxLayout()
+        batch_bar.setSpacing(6)
+        self._multiselect_btn = QPushButton("◯ Multi-Select")
+        self._multiselect_btn.setCheckable(True)
+        self._multiselect_btn.setToolTip(
+            "Toggle multi-select mode\n"
+            "Click modules to add/remove from selection (blue circle)\n"
+            "Then set a factor for all selected modules at once")
+        self._multiselect_btn.toggled.connect(self._map.set_multi_select_mode)
+        batch_bar.addWidget(self._multiselect_btn)
+        self._sel_count_lbl = QLabel("0 selected")
+        self._sel_count_lbl.setStyleSheet(
+            f"color: {THEME.TEXT_DIM}; font-size: 11px; min-width: 72px;")
+        batch_bar.addWidget(self._sel_count_lbl)
+        batch_bar.addSpacing(8)
+        batch_bar.addWidget(QLabel("Factor:"))
+        self._batch_factor_edit = QLineEdit()
+        self._batch_factor_edit.setFixedWidth(80)
+        self._batch_factor_edit.setPlaceholderText("value")
+        batch_bar.addWidget(self._batch_factor_edit)
+        for _preset in (0.122, 0.15):
+            _btn = QPushButton(f"{_preset}")
+            _btn.setFixedWidth(54)
+            _btn.setToolTip(f"Fill factor field with {_preset}")
+            _btn.clicked.connect(
+                lambda _, v=_preset: self._batch_factor_edit.setText(str(v)))
+            batch_bar.addWidget(_btn)
+        self._batch_apply_btn = QPushButton("Apply to All Selected")
+        self._batch_apply_btn.setEnabled(False)
+        self._batch_apply_btn.setToolTip(
+            "Write the given factor to all selected modules and save JSON")
+        self._batch_apply_btn.clicked.connect(self._do_batch_set_factor)
+        batch_bar.addWidget(self._batch_apply_btn)
+        self._batch_clear_btn = QPushButton("Clear Selection")
+        self._batch_clear_btn.setEnabled(False)
+        self._batch_clear_btn.clicked.connect(self._do_batch_clear_selection)
+        batch_bar.addWidget(self._batch_clear_btn)
+        batch_bar.addStretch()
+        ml.addLayout(batch_bar)
+
         splitter.addWidget(map_box)
 
         # right panel
@@ -1627,6 +1733,70 @@ class EpCalibViewerWindow(QMainWindow):
         self._refresh_map()
         if self._cur_data is not None:
             self._map.set_marked_modules(self._cur_data.modified_modules)
+
+    def _on_multi_selection_changed(self, selected: set) -> None:
+        n = len(selected)
+        self._sel_count_lbl.setText(f"{n} selected")
+        self._batch_apply_btn.setEnabled(n > 0)
+        self._batch_clear_btn.setEnabled(n > 0)
+
+    def _do_batch_clear_selection(self) -> None:
+        self._map.clear_selection()
+
+    def _do_batch_set_factor(self) -> None:
+        """Apply the batch factor to all multi-selected modules and save JSON."""
+        txt = self._batch_factor_edit.text().strip()
+        try:
+            value = float(txt)
+        except ValueError:
+            self.statusBar().showMessage(
+                "Batch apply: invalid factor value — enter a number", 4000)
+            return
+        if value <= 0:
+            self.statusBar().showMessage(
+                "Batch apply: factor must be positive", 4000)
+            return
+        data = self._cur_data
+        if data is None:
+            return
+        selected = self._map.get_selected_modules()
+        if not selected:
+            return
+
+        updated: List[str] = []
+        for name in selected:
+            mm = data.metrics.get(name)
+            if mm is None:
+                continue
+            mm.factor = value
+            entry = data.factors.get(name)
+            if entry is not None:
+                entry["factor"] = value
+            data.modified_modules.add(name)
+            updated.append(name)
+
+        jpath = data.json_path
+        if jpath is not None:
+            try:
+                entries = list(data.factors.values())
+                with open(jpath, "w") as fj:
+                    json.dump(entries, fj, indent=2)
+                note = f"saved {jpath.name}"
+            except Exception as exc:
+                self.statusBar().showMessage(
+                    f"Batch apply: save failed: {exc}", 6000)
+                return
+        else:
+            note = "JSON path not found — not saved"
+
+        self.statusBar().showMessage(
+            f"Set factor={value:.5f} for {len(updated)} module(s).  {note}", 6000)
+
+        # turn off multi-select mode, clear selection, refresh display
+        self._multiselect_btn.setChecked(False)
+        self._map.clear_selection()
+        self._refresh_map()
+        self._map.set_marked_modules(data.modified_modules)
 
 
 # =============================================================================

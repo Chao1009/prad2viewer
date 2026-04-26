@@ -65,7 +65,7 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
     tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
     tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);
-    tree->SetBranchAddress("matchNum",     &ev.matchNum);
+    tree->SetBranchAddress("match_num",     &ev.matchNum);
     //quick and simple matching results for quick check
     tree->SetBranchAddress("mHit_E", ev.mHit_E);
     tree->SetBranchAddress("mHit_x", ev.mHit_x);

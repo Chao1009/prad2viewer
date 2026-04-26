@@ -67,7 +67,7 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][4]/F");
     tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][4]/F");
     tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][4]/F");
-    tree->Branch("match_num", &ev.matchNum,  "match_num/I");
+    tree->Branch("match_num", &ev.match_num,  "match_num/I");
     // quick access matching arrays (indexed by match_num)
     tree->Branch("mHit_E",   ev.mHit_E,   "mHit_E[match_num]/F");
     tree->Branch("mHit_x",   ev.mHit_x,   "mHit_x[match_num]/F");

@@ -62,9 +62,6 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("cl_flag",      ev.cl_flag);
     // Matching results
     tree->SetBranchAddress("matchFlag",    ev.matchFlag);
-    tree->SetBranchAddress("matchHC_x",    ev.matchHC_x);
-    tree->SetBranchAddress("matchHC_y",    ev.matchHC_y);
-    tree->SetBranchAddress("matchHC_z",    ev.matchHC_z);
     tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
     tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
     tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);

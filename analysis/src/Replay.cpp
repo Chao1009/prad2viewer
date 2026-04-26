@@ -175,9 +175,6 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("cl_flag",      ev.cl_flag,       "cl_flag[n_clusters]/i");
     // Matching results
     tree->Branch("matchFlag", ev.matchFlag,  "matchFlag[n_clusters]/i");
-    tree->Branch("matchHC_x", ev.matchHC_x,  "matchHC_x[n_clusters]/F");
-    tree->Branch("matchHC_y", ev.matchHC_y,  "matchHC_y[n_clusters]/F");
-    tree->Branch("matchHC_z", ev.matchHC_z,  "matchHC_z[n_clusters]/F");
     tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][2]/F");
     tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][2]/F");
     tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][2]/F");
@@ -198,6 +195,7 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("det_id",       ev.det_id,        "det_id[n_gem_hits]/b");
     tree->Branch("gem_x",        ev.gem_x,         "gem_x[n_gem_hits]/F");
     tree->Branch("gem_y",        ev.gem_y,         "gem_y[n_gem_hits]/F");
+    tree->Branch("gem_z",        ev.gem_z,         "gem_z[n_gem_hits]/F");
     tree->Branch("gem_x_charge", ev.gem_x_charge,  "gem_x_charge[n_gem_hits]/F");
     tree->Branch("gem_y_charge", ev.gem_y_charge,  "gem_y_charge[n_gem_hits]/F");
     tree->Branch("gem_x_peak",   ev.gem_x_peak,    "gem_x_peak[n_gem_hits]/F");
@@ -494,10 +492,15 @@ if(!prad1){
     std::cerr << "GEM map  : " << gem_map_file
                 << " (" << gem_sys->GetNDetectors() << " detectors)\n";
 
-    if (!gem_ped_file.empty()) 
+    if (!gem_ped_file.empty()) {
         gem_sys->LoadPedestals(gem_ped_file);
-    else gem_sys->LoadPedestals(db_dir + "/" + gRunConfig.gem_pedestal_file);
-    std::cerr << "GEM peds : " << gem_ped_file << "\n";
+        std::cerr << "GEM peds : " << gem_ped_file << "\n";
+    }
+    else {
+        gem_sys->LoadPedestals(db_dir + "/" + gRunConfig.gem_pedestal_file);
+            std::cerr << "GEM peds : " << db_dir + "/" + gRunConfig.gem_pedestal_file << "\n";
+
+    }
 
     if (zerosup_override >= 0.f) {
         gem_sys->SetZeroSupThreshold(zerosup_override);
@@ -662,8 +665,19 @@ if(!prad1){
                 ev->cl_z[i]       = fdec::shower_depth(hits[i].center_id, hits[i].energy);
                 ev->cl_energy[i]  = hits[i].energy;
                 ev->cl_nblocks[i] = hits[i].nblocks;
-                ev->cl_center[i]  = hits[i].center_id;
-                ev->cl_flag[i]    = hits[i].flag;
+                //transform the cluster positions to the lab coordinate
+                HCHit local_hit = {hits[i].x, hits[i].y, 
+                    PhysicsTools::GetShowerDepth(hits[i].center_id, hits[i].energy), 
+                    hits[i].energy, static_cast<uint16_t>(hits[i].center_id), hits[i].flag};
+                RotateDetData(local_hit, gRunConfig);
+                TransformDetData(local_hit, gRunConfig);
+                GetProjection(local_hit, gRunConfig.hycal_z);
+                ev->cl_x[i] = local_hit.x;
+                ev->cl_y[i] = local_hit.y;
+                ev->cl_z[i] = local_hit.z;
+                ev->cl_energy[i] = local_hit.energy;
+                ev->cl_center[i] = local_hit.center_id;
+                ev->cl_flag[i] = local_hit.flag;
             }
 
             //decode GEM data and reconstruct GEM hits
@@ -683,14 +697,19 @@ if(!prad1){
             for (int i = 0; i < ev->n_gem_hits; i++) {
                 auto &h = all_hits[i];
                 ev->det_id[i] = h.det_id;
-                ev->gem_x[i] = h.x;
-                ev->gem_y[i] = h.y;
                 ev->gem_x_charge[i] = h.x_charge;
                 ev->gem_y_charge[i] = h.y_charge;
                 ev->gem_x_peak[i] = h.x_peak;
                 ev->gem_y_peak[i] = h.y_peak;
                 ev->gem_x_size[i] = h.x_size;
                 ev->gem_y_size[i] = h.y_size;
+                //transform the GEM hit positions to the lab coordinate
+                GEMHit local_hit = {h.x, h.y, 0.f, static_cast<uint8_t>(h.det_id)};
+                RotateDetData(local_hit, gRunConfig);
+                TransformDetData(local_hit, gRunConfig);
+                ev->gem_x[i] = local_hit.x;
+                ev->gem_y[i] = local_hit.y;
+                ev->gem_z[i] = local_hit.z;
             }
 
             // Perform matching between HyCal clusters and GEM hits
@@ -701,15 +720,8 @@ if(!prad1){
                 hc_hits.push_back({ev->cl_x[i], ev->cl_y[i], ev->cl_z[i], ev->cl_energy[i], ev->cl_center[i], ev->cl_flag[i]});
             for (int i = 0; i < ev->n_gem_hits; ++i)
                 gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], 0.f, ev->det_id[i]});
-            //transform the coordinates of detector data
             
-            TransformDetData(hc_hits, gRunConfig);
-            RotateDetData(hc_hits, gRunConfig);
-            GetProjection(hc_hits, gRunConfig.hycal_z);
-            for(int i = 0; i < 4; ++i) {
-                RotateDetData(gem_hits[i], gRunConfig);
-                TransformDetData(gem_hits[i], gRunConfig);
-            }
+            // already transform to the coordinates
 
             matching.SetMatchRange(gRunConfig.matching_radius); // matching radius in mm, 15mm default
             matching.SetSquareSelection(gRunConfig.matching_use_square); // square/circular cut
@@ -718,9 +730,6 @@ if(!prad1){
             //save the transformed hycal cluster positions in matchHC_x/y/z (no matter is matched or not)
             // and the matched GEM hit positions in cl_matchGEMx/y/z (only for matched clusters, otherwise set to -999)
             for (int i = 0; i < ev->n_clusters; ++i) {
-                ev->matchHC_x[i] = hc_hits[i].x;
-                ev->matchHC_y[i] = hc_hits[i].y;
-                ev->matchHC_z[i] = hc_hits[i].z;
                 for(int j = 0; j < 2; j++) {
                     ev->matchGEMx[i][j] = -999.f;
                     ev->matchGEMy[i][j] = -999.f;
@@ -734,9 +743,6 @@ if(!prad1){
                 //set matchFlag for hycal clusters
                 int cl_idx = matched_hits[i].hycal_idx;
                 ev->matchFlag[cl_idx] = matched_hits[i].mflag;
-                ev->matchHC_x[cl_idx] = matched_hits[i].hycal_hit.x;
-                ev->matchHC_y[cl_idx] = matched_hits[i].hycal_hit.y;
-                ev->matchHC_z[cl_idx] = matched_hits[i].hycal_hit.z;
                 for(int j = 0; j < 2; j++) {
                     ev->matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
                     ev->matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;

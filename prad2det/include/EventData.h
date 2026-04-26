@@ -115,9 +115,6 @@ struct ReconEventData {
     uint32_t cl_flag[kMaxClusters]    = {};
     // Matching results
     uint32_t matchFlag[kMaxClusters] = {};
-    float    matchHC_x[kMaxClusters] = {};
-    float    matchHC_y[kMaxClusters] = {};
-    float    matchHC_z[kMaxClusters] = {};
     float    matchGEMx[kMaxClusters][2] = {};
     float    matchGEMy[kMaxClusters][2] = {};
     float    matchGEMz[kMaxClusters][2] = {};
@@ -138,6 +135,7 @@ struct ReconEventData {
     uint8_t det_id[kMaxGemHits]       = {};
     float   gem_x[kMaxGemHits]        = {};
     float   gem_y[kMaxGemHits]        = {};
+    float   gem_z[kMaxGemHits]        = {};
     float   gem_x_charge[kMaxGemHits] = {};
     float   gem_y_charge[kMaxGemHits] = {};
     float   gem_x_peak[kMaxGemHits]   = {};

@@ -66,7 +66,7 @@ int main(int argc, char *argv[])
     TClass::GetClass("TFile");
     TClass::GetClass("TBranch");
 
-    std::string input, daq_config, merged_output, output_dir;
+    std::string input, daq_config, output_dir;
     int max_events = -1;
     int max_files = -1;
     bool peaks = false;
@@ -119,7 +119,6 @@ int main(int argc, char *argv[])
     std::atomic<int> next_file{0};
     std::mutex io_mtx;
     std::atomic<int> errors{0};
-    std::vector<std::string> merged_files;
 
     auto worker = [&]() {
         // each thread gets its own Replay instance (own EvChannel, own buffers)

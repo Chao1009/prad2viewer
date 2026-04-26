@@ -64,9 +64,6 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     // Matching results
     // the x,y,z positions in this part are in the target and beam center coordinate system
     tree->Branch("matchFlag", ev.matchFlag,  "matchFlag[n_clusters]/i");
-    tree->Branch("matchHC_x", ev.matchHC_x,  "matchHC_x[n_clusters]/F");
-    tree->Branch("matchHC_y", ev.matchHC_y,  "matchHC_y[n_clusters]/F");
-    tree->Branch("matchHC_z", ev.matchHC_z,  "matchHC_z[n_clusters]/F");
     tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][2]/F");
     tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][2]/F");
     tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][2]/F");
@@ -261,7 +258,7 @@ int main (int argc, char *argv[])
 
         // Here you can fill the ev structure with the HyCal virtual plane hit and GEM hit information
         // For example, you can use the matching tools to match HyCal clusters and GEM hits
-        // and fill the ev.matchHC_x, ev.matchG_x, etc. arrays accordingly
+        // and fill the ev.matchG_x, etc. arrays accordingly
         // This part will depend on how you want to do the reconstruction and matching based on the input simulation data structure
         // You can also use the physics tools to calculate expected energies, angles, etc. for the clusters and hits, and fill the ev structure with those values as well
 
@@ -324,9 +321,6 @@ int main (int argc, char *argv[])
 
         // save transformed HyCal positions for all clusters (regardless of match)
         for (int i = 0; i < ev->n_clusters; ++i) {
-            ev->matchHC_x[i] = hc_hits[i].x;
-            ev->matchHC_y[i] = hc_hits[i].y;
-            ev->matchHC_z[i] = hc_hits[i].z;
             for (int j = 0; j < 2; j++) {
                 ev->matchGEMx[i][j] = -999.f;
                 ev->matchGEMy[i][j] = -999.f;
@@ -338,9 +332,6 @@ int main (int argc, char *argv[])
         for (int i = 0; i < ev->matchNum; i++) {
             int cl_idx = matched_hits[i].hycal_idx;
             ev->matchFlag[cl_idx] = matched_hits[i].mflag;
-            ev->matchHC_x[cl_idx] = matched_hits[i].hycal_hit.x;
-            ev->matchHC_y[cl_idx] = matched_hits[i].hycal_hit.y;
-            ev->matchHC_z[cl_idx] = matched_hits[i].hycal_hit.z;
             for (int j = 0; j < 2; j++) {
                 ev->matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
                 ev->matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;

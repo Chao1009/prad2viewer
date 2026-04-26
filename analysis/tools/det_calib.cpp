@@ -24,7 +24,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <algorithm>
-#include <unistd.h>
+#include <getopt.h>
 
 #ifndef DATABASE_DIR
 #define DATABASE_DIR "."
@@ -53,9 +53,6 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("cl_flag",      ev.cl_flag);
     // Matching results
     tree->SetBranchAddress("matchFlag",    ev.matchFlag);
-    tree->SetBranchAddress("matchHC_x",    ev.matchHC_x);
-    tree->SetBranchAddress("matchHC_y",    ev.matchHC_y);
-    tree->SetBranchAddress("matchHC_z",    ev.matchHC_z);
     tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
     tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
     tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);
@@ -93,13 +90,45 @@ int main(int argc, char *argv[])
     std::string output;
     std::string run_config;
 
+    float HyCal_shift_x = 0.f;
+    float HyCal_shift_y = 0.f;
+    float GEM_shift_x[4] = {0.f, 0.f, 0.f, 0.f};
+    float GEM_shift_y[4] = {0.f, 0.f, 0.f, 0.f};
+
     int max_events = -1;
-    int opt;
-    while ((opt = getopt(argc, argv, "o:n:c:")) != -1) {
+
+    enum { OPT_HX=256, OPT_HY,
+           OPT_G0X, OPT_G0Y, OPT_G1X, OPT_G1Y,
+           OPT_G2X, OPT_G2Y, OPT_G3X, OPT_G3Y };
+    static const struct option long_opts[] = {
+        {"hx",  required_argument, nullptr, OPT_HX},
+        {"hy",  required_argument, nullptr, OPT_HY},
+        {"g0x", required_argument, nullptr, OPT_G0X},
+        {"g0y", required_argument, nullptr, OPT_G0Y},
+        {"g1x", required_argument, nullptr, OPT_G1X},
+        {"g1y", required_argument, nullptr, OPT_G1Y},
+        {"g2x", required_argument, nullptr, OPT_G2X},
+        {"g2y", required_argument, nullptr, OPT_G2Y},
+        {"g3x", required_argument, nullptr, OPT_G3X},
+        {"g3y", required_argument, nullptr, OPT_G3Y},
+        {nullptr, 0, nullptr, 0}
+    };
+    int longidx = 0, opt;
+    while ((opt = getopt_long(argc, argv, "o:n:c:", long_opts, &longidx)) != -1) {
         switch (opt) {
-            case 'o': output = optarg; break;
+            case 'o': output     = optarg; break;
             case 'n': max_events = std::atoi(optarg); break;
             case 'c': run_config = optarg; break;
+            case OPT_HX:  HyCal_shift_x  = std::atof(optarg); break;
+            case OPT_HY:  HyCal_shift_y  = std::atof(optarg); break;
+            case OPT_G0X: GEM_shift_x[0] = std::atof(optarg); break;
+            case OPT_G0Y: GEM_shift_y[0] = std::atof(optarg); break;
+            case OPT_G1X: GEM_shift_x[1] = std::atof(optarg); break;
+            case OPT_G1Y: GEM_shift_y[1] = std::atof(optarg); break;
+            case OPT_G2X: GEM_shift_x[2] = std::atof(optarg); break;
+            case OPT_G2Y: GEM_shift_y[2] = std::atof(optarg); break;
+            case OPT_G3X: GEM_shift_x[3] = std::atof(optarg); break;
+            case OPT_G3Y: GEM_shift_y[3] = std::atof(optarg); break;
         }
     }
     // collect input files (can be files, directories, or mixed)
@@ -110,7 +139,10 @@ int main(int argc, char *argv[])
     }
     if (root_files.empty()) {
         std::cerr << "No input files specified.\n";
-        std::cerr << "Usage: det_calib <input_recon.root|dir> [more files...] [-o out.root] [-n max_events] [-c run_config.json]\n";
+        std::cerr << "Usage: det_calib <input_recon.root|dir> [more files...]\n"
+                     "    [-o out.root] [-n max_events] [-c run_config.json]\n"
+                     "    [--hx val] [--hy val]                  HyCal shift (mm)\n"
+                     "    [--g0x val] [--g0y val] .. [--g3x val] [--g3y val]  GEM shift (mm)\n";
         return 1;
     }
     // extract run number from first input file name (e.g. prad_023626.00000_recon.root -> 23626)
@@ -237,12 +269,6 @@ int main(int argc, char *argv[])
 
         hits_hycal->Fill(h_m.first.x, h_m.first.y);
         hits_hycal->Fill(h_m.second.x, h_m.second.y);
-        for (int d = 0; d < 4; d++) {
-            for (const auto &m : gem_mollers[d]) {
-                hits_gem[d]->Fill(m.first.x, m.first.y);
-                hits_gem[d]->Fill(m.second.x, m.second.y);
-            }
-        }
     }
 
     // After collecting Moller events, analyze them for detector calibration
@@ -256,7 +282,7 @@ int main(int argc, char *argv[])
     //hycal Moller events
     //projectToHyCalSurface(hycal_mollers, hycal_z); //project to HyCal surface
     //move to beam center coordinates
-    TransformDetData(hycal_mollers, geo.hycal_x, geo.hycal_y, 0.f);
+    TransformDetData(hycal_mollers, HyCal_shift_x, HyCal_shift_y, 0.f);
     for (int i = 0; i < hycal_mollers.size(); i++) {
         vertex_hycal->Fill(physics.GetMollerZdistance(hycal_mollers[i], geo.Ebeam));
         if (i >= 1) {
@@ -269,7 +295,7 @@ int main(int argc, char *argv[])
 
     //gem Moller events
     for (int d = 0; d < 4; d++) {
-        TransformDetData(gem_mollers[d], geo.gem_x[d], geo.gem_y[d], 0.f);
+        TransformDetData(gem_mollers[d], GEM_shift_x[d], GEM_shift_y[d], 0.f);
         for (int i = 0; i < gem_mollers[d].size(); i++) {
             vertex_gem[d]->Fill(physics.GetMollerZdistance(gem_mollers[d][i], geo.Ebeam));
             if (i >= 1) {
@@ -278,20 +304,23 @@ int main(int argc, char *argv[])
                 center_gem_x[d]->Fill(c[0]);
                 center_gem_y[d]->Fill(c[1]);
             }
+            const auto &m = gem_mollers[d][i];
+            hits_gem[d]->Fill(m.first.x, m.first.y);
+            hits_gem[d]->Fill(m.second.x, m.second.y);
         }
     }
 
     //fit histograms, and get the beam position and vertex distance for each detector plane
     float hycal_vertex_z = fitAndDraw(vertex_hycal, "Poscalib_result/" + run_str +"/hycal_vertex_z", geo.hycal_z,  100.);
-    float hycal_center_x = fitAndDraw(center_hycal_x, "Poscalib_result/" + run_str +"/hycal_center_x", geo.hycal_x, 2.);
-    float hycal_center_y = fitAndDraw(center_hycal_y, "Poscalib_result/" + run_str +"/hycal_center_y", geo.hycal_y, 2.);
+    float hycal_center_x = fitAndDraw(center_hycal_x, "Poscalib_result/" + run_str +"/hycal_center_x", geo.hycal_x+HyCal_shift_x, 2.);
+    float hycal_center_y = fitAndDraw(center_hycal_y, "Poscalib_result/" + run_str +"/hycal_center_y", geo.hycal_y+HyCal_shift_y, 2.);
     float gem_vertex_z[4];
     float gem_center_x[4];
     float gem_center_y[4];
     for (int d = 0; d < 4; d++) {
         gem_vertex_z[d] = fitAndDraw(vertex_gem[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_vertex_z", geo.gem_z[d], 25.);
-        gem_center_x[d] = fitAndDraw(center_gem_x[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_x", geo.gem_x[d], 0.3);
-        gem_center_y[d] = fitAndDraw(center_gem_y[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_y", geo.gem_y[d], 1.);
+        gem_center_x[d] = fitAndDraw(center_gem_x[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_x", geo.gem_x[d]+GEM_shift_x[d], 0.3);
+        gem_center_y[d] = fitAndDraw(center_gem_y[d], "Poscalib_result/" + run_str + "/gem" + std::to_string(d) + "_center_y", geo.gem_y[d]+GEM_shift_y[d], 1.);
     }
     //print summary of calibration results
     std::cerr << "HyCal vertex z distance: " << hycal_vertex_z << " mm (survey position " << geo.hycal_z << " mm)" << "\n";
@@ -376,7 +405,7 @@ float fitAndDraw(TH1F* hist, const std::string& out_path, const float survey_pos
     latex->SetNDC();
     latex->SetTextSize(0.04);
     latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1), hist->GetFunction("gaus")->GetParError(1)));
-    latex->DrawLatex(0.15, 0.80, Form("Survey position: %.2f mm", survey_position));
+    latex->DrawLatex(0.15, 0.80, Form("Calibrated position(except z): %.2f mm", survey_position));
     fs::create_directories(fs::path(out_path).parent_path());
     c->SaveAs((out_path + ".png").c_str());
     delete c;

@@ -207,8 +207,9 @@ int main(int argc, char *argv[])
                 MollerEvent mp(
                     {ev.cl_x[0], ev.cl_y[0], ev.cl_z[0], ev.cl_energy[0]},
                     {ev.cl_x[1], ev.cl_y[1], ev.cl_z[1], ev.cl_energy[1]});
-                hycal_mollers.push_back(mp);
                 physics.FillMollerPhiDiff(physics.GetMollerPhiDiff(mp));
+                if(fabs(physics.GetMollerPhiDiff(mp)) > 5.f ) continue;
+                hycal_mollers.push_back(mp);
                 physics.Fill2armMollerPosHist(mp.first.x, mp.first.y);
                 physics.Fill2armMollerPosHist(mp.second.x, mp.second.y);
             }

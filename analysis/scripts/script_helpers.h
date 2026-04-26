@@ -68,7 +68,7 @@ inline std::string discover_runinfo_path()
 
 // EVIO bank-tag → logical-crate index (every ROC type).  Mirrors the
 // roc_to_crate map in src/app_state_init.cpp / analysis/src/Replay.cpp.
-inline std::map<int, int> build_full_crate_remap(const DaqConfig &cfg)
+inline std::map<int, int> build_full_crate_remap(const evc::DaqConfig &cfg)
 {
     std::map<int, int> remap;
     for (const auto &re : cfg.roc_tags)
@@ -77,7 +77,7 @@ inline std::map<int, int> build_full_crate_remap(const DaqConfig &cfg)
 }
 
 // Same shape but only GEM ROCs — for GemSystem::LoadPedestals().
-inline std::map<int, int> build_gem_crate_remap(const DaqConfig &cfg)
+inline std::map<int, int> build_gem_crate_remap(const evc::DaqConfig &cfg)
 {
     std::map<int, int> remap;
     for (const auto &re : cfg.roc_tags)

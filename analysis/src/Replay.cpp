@@ -424,6 +424,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
 }
 
 bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &output_root, RunConfig &gRunConfig,
+                                const std::string &db_dir,
                                 const std::string &daq_config_file, const std::string &gem_ped_file,
                                 const float zerosup_override, bool prad1)
 {
@@ -433,11 +434,6 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     // - After decoding, we run the HyCal clusterer to reconstruct clusters and hits.
     // - We also run the GemSystem reconstruction to get GEM hits.
     // - We fill a different TTree with reconstructed quantities instead of raw data.
-
-    std::string db_dir = prad2::resolve_data_dir(
-        "PRAD2_DATABASE_DIR",
-        {"../share/prad2evviewer/database"},
-        DATABASE_DIR);
 
     // build ROC tag → crate index mapping from DAQ config JSON
     std::unordered_map<int, int> roc_to_crate;

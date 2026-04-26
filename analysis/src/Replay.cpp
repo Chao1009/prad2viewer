@@ -661,8 +661,7 @@ if(!prad1){
                 ev->cl_energy[i]  = hits[i].energy;
                 ev->cl_nblocks[i] = hits[i].nblocks;
                 //transform the cluster positions to the lab coordinate
-                HCHit local_hit = {hits[i].x, hits[i].y, 
-                    PhysicsTools::GetShowerDepth(hits[i].center_id, hits[i].energy), 
+                HCHit local_hit = {hits[i].x, hits[i].y, fdec::shower_depth(hits[i].center_id, hits[i].energy), 
                     hits[i].energy, static_cast<uint16_t>(hits[i].center_id), hits[i].flag};
                 RotateDetData(local_hit, gRunConfig);
                 TransformDetData(local_hit, gRunConfig);

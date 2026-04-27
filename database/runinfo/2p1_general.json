@@ -2,7 +2,7 @@
     "configurations": [
         {
             "run_number": 0,
-            "beam_energy": 2100.0,
+            "beam_energy": 2108.8,
             "calibration": {
                 "file": "calibration/calibration_factor_0_2.json",
                 "default_adc2mev": 0.078
@@ -16,10 +16,10 @@
                 "pedestal_file":    "gem_peds/peds_23867.txt",
                 "common_mode_file": "gem_peds/cm_23867.txt",
                 "detectors": [
-                    {"id": 0, "position": [-228.0, 0.0, 5823.0], "tilting": [180.0, 0.0, 0.0]},
-                    {"id": 1, "position": [230.0,  0.0, 5784.0], "tilting": [180.0, 0.0, 180.0]},
-                    {"id": 2, "position": [-228.0, 0.0, 5423.0], "tilting": [180.0, 0.0, 0.0]},
-                    {"id": 3, "position": [230.0,  0.0, 5384.0], "tilting": [180.0, 0.0, 180.0]}
+                    {"id": 0, "position": [-230.0, 0.0, 5823.0], "tilting": [180.0, 0.0, 0.0]},
+                    {"id": 1, "position": [228.0,  0.0, 5784.0], "tilting": [180.0, 0.0, 180.0]},
+                    {"id": 2, "position": [-232.0, 0.0, 5423.0], "tilting": [180.0, 0.0, 0.0]},
+                    {"id": 3, "position": [224.0,  0.0, 5384.0], "tilting": [180.0, 0.0, 180.0]}
                 ]
             },
             "time_cuts": {

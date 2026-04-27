@@ -46,6 +46,7 @@ struct RawEventData {
     float   ped_mean[kMaxChannels] = {};
     float   ped_rms[kMaxChannels]  = {};
     float   integral[kMaxChannels] = {};
+    float   gain_factor[kMaxChannels] = {};
 
     //Veto per-channel data
     int          veto_nch = 0;

@@ -237,7 +237,11 @@ inline bool WriteRunConfig(const std::string &path, int run_num,
     bool replaced = false;
     for (auto &e : arr) {
         if (e.contains("run_number") && e["run_number"].get<int>() == run_num) {
-            e = entry;
+            // Merge entry into e field-by-field: existing keys are updated
+            // in-place (preserving their original position); new keys are
+            // appended at the end.
+            for (auto it = entry.begin(); it != entry.end(); ++it)
+                e[it.key()] = it.value();
             replaced = true;
             break;
         }

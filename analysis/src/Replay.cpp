@@ -112,6 +112,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     //tree->Branch("hycal.ped_mean",  ev.ped_mean,   "hycal.ped_mean[hycal.nch]/F");
     //tree->Branch("hycal.ped_rms",   ev.ped_rms,    "hycal.ped_rms[hycal.nch]/F");
     //tree->Branch("hycal.integral",  ev.integral,   "hycal.integral[hycal.nch]/F");
+    tree->Branch("hycal.gain_factor", ev.gain_factor, "hycal.gain_factor[hycal.nch]/F");
     if (write_peaks) {
         tree->Branch("hycal.npeaks",       &ev.npeaks,       "hycal.npeaks[hycal.nch]/I");
         //tree->Branch("hycal.peak_height",  ev.peak_height,  Form("hycal.peak_height[hycal.nch][%d]/F", fdec::MAX_PEAKS));
@@ -221,7 +222,7 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("ssp_raw", &ev.ssp_raw);
 }
 
-bool Replay::Process(const std::string &input_evio, const std::string &output_root,
+bool Replay::Process(const std::string &input_evio, const std::string &output_root, const std::string &db_dir,
                      int max_events, bool write_peaks , const std::string &daq_config_file)
 {
     // build ROC tag → crate index mapping from DAQ config JSON
@@ -269,6 +270,10 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     fdec::WaveResult wres;
     int total = 0;
 
+    fdec::HyCalSystem hycal;
+    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/daq_map.json");
+    analysis::PhysicsTools physics(hycal);
+
     while (ch.Read() == evc::status::success) {
         if (!ch.Scan()) continue;
         if (ch.GetEventType() != evc::EventType::Physics) continue;
@@ -281,6 +286,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ssp_raw_snapshot.assign(p, p + n_e10c->data_words);
         }
 
+        int lms_count = 0; // Count LMS triggers to decide when to recompute gains
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
             event->clear();
             ssp_evt->clear();
@@ -293,6 +299,17 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ev->trigger_bits      = event->info.trigger_bits;
             ev->timestamp    = event->info.timestamp;
             ev->ssp_raw      = ssp_raw_snapshot;
+
+            static constexpr uint32_t TBIT_lms = (1u << 24);
+            static constexpr uint32_t TBIT_alpha = (1u << 25);
+            bool is_lms = (ev->trigger_bits & TBIT_lms) != 0;
+            bool is_alpha = (ev->trigger_bits & TBIT_alpha) != 0;
+
+            if(is_lms) lms_count++;
+            if(lms_count > 1000) {
+                physics.ComputeModuleGains();
+                lms_count = 0;
+            }
 
             // decode HyCal FADC250 data
             int nch = 0;
@@ -344,12 +361,21 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                 ev->lms_ped_rms[lms_nch]  = wres.ped.rms;
                                 ev->lms_integral[lms_nch] = computeIntegral(cd, wres.ped.mean);
                                 if (write_peaks) {
+                                    int best = -1; float best_h = -1.f;
                                     ev->lms_npeaks[lms_nch] = wres.npeaks;
                                     for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                         ev->lms_peak_height[lms_nch][p]   = wres.peaks[p].height;
                                         ev->lms_peak_time[lms_nch][p]     = wres.peaks[p].time;
                                         ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                        if(wres.peaks[p].time > 100.f && wres.peaks[p].time < 200.f
+                                            && wres.peaks[p].height > best_h) {
+                                            best_h = wres.peaks[p].height; best = p;
+                                        }
                                     }
+                                    if (best < 0) continue;
+                                    //for gain factor
+                                    if(is_lms)   {physics.Fill_lmsCH_lmsIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
+                                    if(is_alpha) {physics.Fill_lmsCH_alphaIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
                                 }
                                 lms_nch++;
                             }
@@ -368,14 +394,22 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ev->ped_mean[nch] = wres.ped.mean;
                         ev->ped_rms[nch]  = wres.ped.rms;
                         ev->integral[nch] = computeIntegral(cd, wres.ped.mean);
+                        ev->gain_factor[nch] = physics.GetModuleGainFactor(mod_id);
 
                         if (write_peaks) {
                             ev->npeaks[nch] = wres.npeaks;
+                            int best = -1; float best_h = -1.f;
                             for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                 ev->peak_height[nch][p]   = wres.peaks[p].height;
                                 ev->peak_time[nch][p]     = wres.peaks[p].time;
                                 ev->peak_integral[nch][p] = wres.peaks[p].integral;
+                                if(wres.peaks[p].time > 100.f && wres.peaks[p].time < 200.f
+                                    && wres.peaks[p].height > best_h) {
+                                    best_h = wres.peaks[p].height; best = p;
+                                }
                             }
+                            //for gain factor
+                            if(is_lms)   {physics.Fill_modCH_lmsIntegral(mod_id, wres.peaks[best].integral);}
                         }
                         nch++;
                     }

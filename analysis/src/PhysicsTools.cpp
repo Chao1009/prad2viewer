@@ -72,6 +72,10 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         h_lmsCH_alphaIntegral_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_alphaIntegral", ch), Form("LMS%d Alpha Peak Integral;Integral (ADC*ns);Counts", ch), 1000, 0, 400000);
     }
+    module_gains_.resize(nmod);
+    for (int i = 0; i < nmod; ++i)
+        module_gains_[i].name = hycal_.module(i).name;
+
     h_modCH_lmsHeight_.resize(nmod);
     h_modCH_lmsIntegral_.resize(nmod);
     for (int i = 0; i < nmod; ++i) {
@@ -383,4 +387,69 @@ float PhysicsTools::GetPhiAngle(float x, float y)
     return phi;
 }
 
-} // namespace analysis
+//for gain factor monitoring
+
+// Helper: fit a TH1F with a Gaussian and return {mean, sigma, chi2/ndf}.
+// Returns {0,0,0} if histogram is null or has too few entries.
+static std::array<double, 3> fitGaus(TH1F *h)
+{
+    if (!h || h->GetEntries() < 10) return {0., 0., 0.};
+    double peak0 = h->GetBinCenter(h->GetMaximumBin());
+    double rms0  = h->GetRMS();
+    if (rms0 <= 0.) rms0 = peak0 * 0.1;
+    double lo = peak0 - 2. * rms0, hi = peak0 + 2. * rms0;
+    TF1 gaus("_fg_", "gaus", lo, hi);
+    gaus.SetParameters(h->GetMaximum(), peak0, rms0);
+    h->Fit(&gaus, "RQ0");
+    double chi2 = (gaus.GetNDF() > 0) ? gaus.GetChisquare() / gaus.GetNDF() : 0.;
+    return {gaus.GetParameter(1), std::abs(gaus.GetParameter(2)), chi2};
+}
+
+void PhysicsTools::ComputeModuleGains()
+{
+    // --- fit LMS and alpha reference channels (index 1..3) ---
+    double lms_ref[4]   = {}, alpha_ref[4] = {};
+    for (int i = 1; i <= 3; ++i) {
+        auto r = fitGaus(h_lmsCH_lmsIntegral_[i].get());
+        lms_ref[i] = r[0];
+        auto a = fitGaus(h_lmsCH_alphaIntegral_[i].get());
+        alpha_ref[i] = a[0];
+    }
+
+    // --- update module_gains_ in-place ---
+    int nmod = hycal_.module_count();
+    for (int i = 0; i < nmod; ++i) {
+        auto &mod = hycal_.module(i);
+        auto &res = module_gains_[i];
+        // reset numeric fields
+        res.lms_peak = res.lms_sigma = res.lms_chi2 = 0.f;
+        res.g[0] = res.g[1] = res.g[2] = res.g[3] = 0.f;
+
+        if (!mod.is_hycal()) continue;
+        if (mod.name.empty() || mod.name[0] != 'W') continue;
+
+        TH1F *h = (i < (int)h_modCH_lmsIntegral_.size())
+                  ? h_modCH_lmsIntegral_[i].get() : nullptr;
+        auto r = fitGaus(h);
+        if (r[0] <= 0.) continue;
+
+        res.lms_peak  = static_cast<float>(r[0]);
+        res.lms_sigma = static_cast<float>(r[1]);
+        res.lms_chi2  = static_cast<float>(r[2]);
+        for (int j = 1; j <= 3; ++j) {
+            res.g[j] = (lms_ref[j] > 0. && alpha_ref[j] > 0.)
+                       ? static_cast<float>(r[0] * alpha_ref[j] / lms_ref[j])
+                       : 1.f;
+        }
+    }
+
+    // --- reset histograms for next fill cycle ---
+    for (int i = 1; i <= 3; ++i) {
+        if (h_lmsCH_lmsIntegral_[i])   h_lmsCH_lmsIntegral_[i]->Reset();
+        if (h_lmsCH_alphaIntegral_[i]) h_lmsCH_alphaIntegral_[i]->Reset();
+    }
+    for (auto &h : h_modCH_lmsIntegral_)
+        if (h) h->Reset();
+}
+
+}

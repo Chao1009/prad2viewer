@@ -137,7 +137,7 @@ int main(int argc, char *argv[])
             if (idx >= num_files) break;
 
             std::string out = output_dir + "/" + makeOutputFile(evio_files[idx]);
-            bool ok = replay.Process(evio_files[idx], out, max_events, peaks, daq_config);
+            bool ok = replay.Process(evio_files[idx], out, db_dir, max_events, peaks, daq_config);
 
             std::lock_guard<std::mutex> lk(io_mtx);
             if (ok) {

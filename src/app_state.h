@@ -155,7 +155,13 @@ struct AppState {
     DetectorTransform hycal_transform;           // HyCal position + tilting
     float ea_angle_min=0.f, ea_angle_max=8.f, ea_angle_step=0.2f;   // degrees
     float ea_energy_min=0.f, ea_energy_max=3000.f, ea_energy_step=100.f; // MeV
-    float beam_energy = 2200.f;  // MeV (for elastic line overlay)
+    // Single-source beam energy: MBSY2C_energy from EPICS overrides; runinfo is fallback.
+    // Read in physics paths (cluster filling, plots); written by init() (runinfo) and
+    // processEpics() (EPICS). Atomic so processEpics can update without holding data_mtx.
+    std::atomic<float> beam_energy{2200.f};                  // MeV
+    float       beam_energy_runinfo = 0.f;                   // fallback (loaded from runinfo)
+    std::string beam_energy_epics_channel = "MBSY2C_energy"; // EPICS channel name
+    float       beam_energy_min_valid = 100.f;               // ignore stale/zero EPICS reads
     TriggerFilter physics_trigger;
 
     // Møller selection config
@@ -167,6 +173,14 @@ struct AppState {
     float moller_xy_y_min=-600.f, moller_xy_y_max=600.f, moller_xy_y_step=5.f;  // mm
     // Møller energy histogram
     float moller_e_min=0.f, moller_e_max=2500.f, moller_e_step=10.f; // MeV
+
+    // HyCal cluster-hit XY (single-cluster ep-elastic candidates) — cuts + hist
+    int   hxy_n_clusters      = 1;        // require Ncl == this
+    float hxy_energy_frac_min = 0.9f;     // require E_cl >= frac * beam_energy
+    int   hxy_nblocks_min     = 5;
+    int   hxy_nblocks_max     = 20;
+    float hxy_x_min=-600.f, hxy_x_max=600.f, hxy_x_step=5.f;  // mm
+    float hxy_y_min=-600.f, hxy_y_max=600.f, hxy_y_step=5.f;  // mm
 
     // EPICS config
     int   epics_max_history = 5000;
@@ -247,6 +261,8 @@ struct AppState {
     Histogram2D energy_angle_hist;
     Histogram2D moller_xy_hist;
     Histogram   moller_energy_hist;
+    Histogram2D hycal_xy_hist;       // single-cluster ep-elastic candidates (cuts in hxy_*)
+    int         hycal_xy_events = 0; // events passing hycal_cluster_hit cuts
     int         moller_events = 0;
     int       cluster_events_processed = 0;
 
@@ -347,6 +363,7 @@ struct AppState {
     nlohmann::json apiLmsRefChannels() const;
     nlohmann::json apiEnergyAngle() const;
     nlohmann::json apiMoller() const;
+    nlohmann::json apiHycalXY() const;
     nlohmann::json apiEpicsChannels() const;
     nlohmann::json apiEpicsChannel(const std::string &name) const;
     nlohmann::json apiEpicsBatch(const std::vector<std::string> &names) const;

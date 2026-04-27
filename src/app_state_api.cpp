@@ -71,7 +71,7 @@ json AppState::apiEnergyAngle() const
             {"energy_min", ea_energy_min}, {"energy_max", ea_energy_max}, {"energy_step", ea_energy_step},
             {"target", {target_x, target_y, target_z}},
             {"hycal_z", hycal_transform.z},
-            {"beam_energy", beam_energy},
+            {"beam_energy", beam_energy.load()},
             {"events", cluster_events_processed}};
 }
 
@@ -87,6 +87,22 @@ json AppState::apiMoller() const
             {"total_events", cluster_events_processed},
             {"cuts", {{"energy_tolerance", moller_energy_tol},
                       {"angle_min", moller_angle_min}, {"angle_max", moller_angle_max}}}};
+}
+
+json AppState::apiHycalXY() const
+{
+    std::lock_guard<std::mutex> lk(data_mtx);
+    return {{"xy_bins", hycal_xy_hist.bins},
+            {"xy_nx", hycal_xy_hist.nx}, {"xy_ny", hycal_xy_hist.ny},
+            {"xy_x_min", hxy_x_min}, {"xy_x_max", hxy_x_max}, {"xy_x_step", hxy_x_step},
+            {"xy_y_min", hxy_y_min}, {"xy_y_max", hxy_y_max}, {"xy_y_step", hxy_y_step},
+            {"events", hycal_xy_events},
+            {"total_events", cluster_events_processed},
+            {"beam_energy", beam_energy.load()},
+            {"cuts", {{"n_clusters", hxy_n_clusters},
+                      {"energy_frac_min", hxy_energy_frac_min},
+                      {"nblocks_min", hxy_nblocks_min},
+                      {"nblocks_max", hxy_nblocks_max}}}};
 }
 
 json AppState::apiOccupancy() const
@@ -222,6 +238,22 @@ void AppState::processEpics(const std::string &text, int32_t event_number, uint6
     epics.Feed(event_number, timestamp, text);
     epics.Trim(epics_max_history);
     epics_events++;
+
+    // Single-source beam energy: latest valid MBSY2C_energy reading overrides the
+    // runinfo fallback. Skip values below min_valid (zero/garbage during beam trips).
+    if (!beam_energy_epics_channel.empty()) {
+        int id = epics.GetChannelId(beam_energy_epics_channel);
+        if (id >= 0) {
+            int n = epics.GetSnapshotCount();
+            if (n > 0) {
+                const auto &snap = epics.GetSnapshot(n - 1);
+                if (id < (int)snap.values.size()) {
+                    float v = snap.values[id];
+                    if (v > beam_energy_min_valid) beam_energy.store(v);
+                }
+            }
+        }
+    }
 }
 
 void AppState::clearEpics()
@@ -366,7 +398,8 @@ void AppState::fillConfigJson(json &cfg) const
         {"events", lms_events.load()}, {"ref_channels", apiLmsRefChannels()},
     };
     cfg["runinfo"] = {
-        {"beam_energy", beam_energy},
+        {"beam_energy", beam_energy.load()},
+        {"beam_energy_runinfo", beam_energy_runinfo},
         {"calibration", {{"default_adc2mev", adc_to_mev}}},
         {"target", {target_x, target_y, target_z}},
         {"hycal", {
@@ -376,6 +409,10 @@ void AppState::fillConfigJson(json &cfg) const
     };
     cfg["physics"] = {
         {"trigger", physics_trigger.toJson()},
+        {"beam_energy", {
+            {"epics_channel", beam_energy_epics_channel},
+            {"min_valid", beam_energy_min_valid},
+        }},
         {"energy_angle_hist", {
             {"angle_min", ea_angle_min}, {"angle_max", ea_angle_max}, {"angle_step", ea_angle_step},
             {"energy_min", ea_energy_min}, {"energy_max", ea_energy_max}, {"energy_step", ea_energy_step},
@@ -383,6 +420,12 @@ void AppState::fillConfigJson(json &cfg) const
         {"moller", {
             {"energy_tolerance", moller_energy_tol},
             {"angle_min", moller_angle_min}, {"angle_max", moller_angle_max},
+        }},
+        {"hycal_cluster_hit", {
+            {"n_clusters", hxy_n_clusters},
+            {"energy_frac_min", hxy_energy_frac_min},
+            {"nblocks_min", hxy_nblocks_min},
+            {"nblocks_max", hxy_nblocks_max},
         }},
     };
     cfg["elog"] = {
@@ -406,6 +449,8 @@ AppState::ApiResult AppState::handleReadApi(const std::string &uri) const
         return {true, apiEnergyAngle().dump()};
     if (uri == "/api/physics/moller")
         return {true, apiMoller().dump()};
+    if (uri == "/api/physics/hycal_xy")
+        return {true, apiHycalXY().dump()};
     if (uri == "/api/cluster_hist")
         return {true, apiClusterHist().dump()};
     if (uri.rfind("/api/hist/", 0) == 0)

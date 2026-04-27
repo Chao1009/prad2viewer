@@ -331,7 +331,10 @@ void AppState::init(const std::string &db_dir,
             } else {
                 prad2::RunConfig rc = prad2::LoadRunConfig(ri_file, /*run_num=*/-1);
 
-                beam_energy = rc.Ebeam;
+                // Single-source beam energy: runinfo is the fallback. EPICS
+                // (MBSY2C_energy) overrides at runtime in processEpics().
+                beam_energy_runinfo = rc.Ebeam;
+                beam_energy.store(rc.Ebeam);
                 target_x = rc.target_x;
                 target_y = rc.target_y;
                 target_z = rc.target_z;
@@ -353,7 +356,7 @@ void AppState::init(const std::string &db_dir,
                                       << " (" << nmatched << " modules)\n";
                     }
                 }
-                std::cerr << "RunInfo   : beam=" << beam_energy
+                std::cerr << "RunInfo   : beam=" << beam_energy.load()
                           << "MeV default_adc2mev=" << adc_to_mev
                           << " target=(" << target_x << "," << target_y << "," << target_z
                           << ") HyCal=(" << hycal_transform.x << ","
@@ -421,6 +424,11 @@ void AppState::init(const std::string &db_dir,
         if (rcfg.contains("physics")) {
             auto &ph = rcfg["physics"];
             physics_trigger.parse(ph, trigger_bits_def);
+            if (ph.contains("beam_energy")) {
+                auto &be = ph["beam_energy"];
+                if (be.contains("epics_channel")) beam_energy_epics_channel = be["epics_channel"];
+                if (be.contains("min_valid"))     beam_energy_min_valid     = be["min_valid"];
+            }
             if (ph.contains("energy_angle_hist")) {
                 auto &ea = ph["energy_angle_hist"];
                 if (ea.contains("angle_min"))   ea_angle_min   = ea["angle_min"];
@@ -451,9 +459,29 @@ void AppState::init(const std::string &db_dir,
                     if (eh.contains("step")) moller_e_step = eh["step"];
                 }
             }
+            if (ph.contains("hycal_cluster_hit")) {
+                auto &hc = ph["hycal_cluster_hit"];
+                if (hc.contains("n_clusters"))      hxy_n_clusters      = hc["n_clusters"];
+                if (hc.contains("energy_frac_min")) hxy_energy_frac_min = hc["energy_frac_min"];
+                if (hc.contains("nblocks_min"))     hxy_nblocks_min     = hc["nblocks_min"];
+                if (hc.contains("nblocks_max"))     hxy_nblocks_max     = hc["nblocks_max"];
+                if (hc.contains("xy_hist")) {
+                    auto &xy = hc["xy_hist"];
+                    if (xy.contains("x_min"))  hxy_x_min  = xy["x_min"];
+                    if (xy.contains("x_max"))  hxy_x_max  = xy["x_max"];
+                    if (xy.contains("x_step")) hxy_x_step = xy["x_step"];
+                    if (xy.contains("y_min"))  hxy_y_min  = xy["y_min"];
+                    if (xy.contains("y_max"))  hxy_y_max  = xy["y_max"];
+                    if (xy.contains("y_step")) hxy_y_step = xy["y_step"];
+                }
+            }
             std::cerr << "Physics   : " << physics_trigger
                       << " Moller: tol=" << moller_energy_tol
-                      << " angle=[" << moller_angle_min << "," << moller_angle_max << "]\n";
+                      << " angle=[" << moller_angle_min << "," << moller_angle_max << "]"
+                      << " HyCalXY: Ncl=" << hxy_n_clusters
+                      << " E>=" << hxy_energy_frac_min << "*Eb"
+                      << " blocks=[" << hxy_nblocks_min << "," << hxy_nblocks_max << "]"
+                      << " beam_src='" << beam_energy_epics_channel << "'\n";
         }
 
         if (rcfg.contains("epics")) {
@@ -516,6 +544,9 @@ void AppState::init(const std::string &db_dir,
     int ml_ny = std::max(1, (int)std::ceil((moller_xy_y_max - moller_xy_y_min) / moller_xy_y_step));
     moller_xy_hist.init(ml_nx, ml_ny);
     moller_energy_hist.init(std::max(1, (int)std::ceil((moller_e_max - moller_e_min) / moller_e_step)));
+    int hxy_nx = std::max(1, (int)std::ceil((hxy_x_max - hxy_x_min) / hxy_x_step));
+    int hxy_ny = std::max(1, (int)std::ceil((hxy_y_max - hxy_y_min) / hxy_y_step));
+    hycal_xy_hist.init(hxy_nx, hxy_ny);
     gem_nclusters_hist.init(std::max(1, (gem_ncl_max - gem_ncl_min) / gem_ncl_step));
     gem_theta_hist.init(std::max(1, (int)std::ceil((gem_theta_max - gem_theta_min) / gem_theta_step)));
 

@@ -1,8 +1,8 @@
-// physics.js — Physics tab: energy vs angle + Møller XY + Møller energy
+// physics.js — Physics tab: HyCal cluster XY (left) + Møller XY (top right) + energy vs angle (bottom right)
 //
 // Depends on globals from viewer.js: PL, PC_EPICS, activeTab
 
-let physicsData=null, mollerData=null;
+let physicsData=null, mollerData=null, hycalXyData=null;
 
 function fetchEnergyAngle(){
     fetch('/api/physics/energy_angle').then(r=>r.json()).then(data=>{
@@ -15,13 +15,20 @@ function fetchMoller(){
     fetch('/api/physics/moller').then(r=>r.json()).then(data=>{
         mollerData=data;
         plotMollerXY();
-        plotMollerEnergy();
+    }).catch(()=>{});
+}
+
+function fetchHycalXY(){
+    fetch('/api/physics/hycal_xy').then(r=>r.json()).then(data=>{
+        hycalXyData=data;
+        plotHycalXY();
     }).catch(()=>{});
 }
 
 function fetchPhysics(){
     fetchEnergyAngle();
     fetchMoller();
+    fetchHycalXY();
 }
 
 // ep elastic scattering: E' = E / (1 + (E/Mp)*(1 - cos(theta)))
@@ -124,46 +131,57 @@ function plotMollerXY(){
     },PC_EPICS);
 }
 
-function plotMollerEnergy(){
-    const div='moller-energy-plot';
-    const d=mollerData;
-    if(!d||!d.energy_hist||!d.energy_hist.bins||!d.energy_hist.bins.length){
-        Plotly.react(div,[],{...PL,title:{text:'Møller Energy — No data',font:{size:12,color:THEME.textDim}}},PC_EPICS);
+function plotHycalXY(){
+    const div='hycal-xy-plot';
+    const d=hycalXyData;
+    if(!d||!d.xy_bins||!d.xy_bins.length||!d.xy_nx){
+        Plotly.react(div,[],{...PL,title:{text:'HyCal Cluster Hits — No data',font:{size:12,color:THEME.textDim}}},PC_EPICS);
         return;
     }
-    const h=d.energy_hist;
-    const x=[];for(let i=0;i<h.bins.length;i++) x.push(h.min+(i+0.5)*h.step);
+    const logZ=document.getElementById('physics-logz').checked;
+    const z=[];
+    for(let iy=0;iy<d.xy_ny;iy++){
+        const row=d.xy_bins.slice(iy*d.xy_nx,(iy+1)*d.xy_nx);
+        z.push(logZ?row.map(v=>v>0?Math.log10(v):null):row);
+    }
+    const x=[];for(let i=0;i<d.xy_nx;i++) x.push(d.xy_x_min+(i+0.5)*d.xy_x_step);
+    const y=[];for(let i=0;i<d.xy_ny;i++) y.push(d.xy_y_min+(i+0.5)*d.xy_y_step);
+
+    const c=d.cuts||{};
+    const fracPct=((c.energy_frac_min||0.9)*100).toFixed(0);
+    const cutTxt=`Ncl=${c.n_clusters||1}, E≥${fracPct}% Eb, blocks∈[${c.nblocks_min||0},${c.nblocks_max||0}]`;
 
     Plotly.react(div,[{
-        x:x, y:h.bins,
-        type:'bar',
-        marker:{color:THEME.accent},
-        hovertemplate:'E=%{x:.0f} MeV: %{y}<extra></extra>',
+        z:z, x:x, y:y,
+        type:'heatmap', colorscale:'Hot', reversescale:false,
+        hovertemplate:'x=%{x:.1f} y=%{y:.1f} mm: %{text}<extra></extra>',
+        text:z.map((row,iy)=>row.map((v,ix)=>String(d.xy_bins[iy*d.xy_nx+ix]))),
+        colorbar:{title:logZ?'log₁₀':'counts',titleside:'right',
+            titlefont:{size:10,color:THEME.textDim},tickfont:{size:9,color:THEME.textDim}},
     }],{...PL,
-        title:{text:`Møller Cluster Energy (${d.moller_events} evts)`,font:{size:11,color:THEME.text}},
-        xaxis:{...PL.xaxis,title:'Energy (MeV)'},
-        yaxis:{...PL.yaxis,title:'Counts'},
-        margin:{l:50,r:20,t:28,b:35},
-        bargap:0,
-        shapes:refShapes('moller_energy'),
+        title:{text:`HyCal Cluster Hits (${d.events} evts) ${cutTxt}`,font:{size:11,color:THEME.text}},
+        xaxis:{...PL.xaxis,title:'X (mm)',scaleanchor:'y',scaleratio:1},
+        yaxis:{...PL.yaxis,title:'Y (mm)'},
+        margin:{l:50,r:70,t:30,b:35},
+        shapes:refShapes('hycal_xy'),
     },PC_EPICS);
 }
 
 function clearPhysicsFrontend(){
-    physicsData=null; mollerData=null;
+    physicsData=null; mollerData=null; hycalXyData=null;
     Plotly.react('physics-plot',[],{...PL},PC_EPICS);
     Plotly.react('moller-xy-plot',[],{...PL},PC_EPICS);
-    Plotly.react('moller-energy-plot',[],{...PL},PC_EPICS);
+    Plotly.react('hycal-xy-plot',[],{...PL},PC_EPICS);
     document.getElementById('physics-stats').textContent='';
 }
 
 function resizePhysics(){
     try{Plotly.Plots.resize('physics-plot');}catch(e){}
     try{Plotly.Plots.resize('moller-xy-plot');}catch(e){}
-    try{Plotly.Plots.resize('moller-energy-plot');}catch(e){}
+    try{Plotly.Plots.resize('hycal-xy-plot');}catch(e){}
 }
 
 function initPhysics(data){
-    document.getElementById('physics-logz').onchange=()=>{plotEnergyAngle();plotMollerXY();plotMollerEnergy();};
+    document.getElementById('physics-logz').onchange=()=>{plotEnergyAngle();plotMollerXY();plotHycalXY();};
     document.getElementById('physics-elastic').onchange=plotEnergyAngle;
 }

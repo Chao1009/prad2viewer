@@ -258,18 +258,43 @@ registerReportSection({id:'cluster',title:'Clustering',order:3,
 // --- Physics ---
 registerReportSection({id:'physics',title:'Physics',order:6,
     generate:async()=>{
-        let data,ml;
+        let data,ml,hxy;
         try{ data=await fetch('/api/physics/energy_angle').then(r=>r.json()); }catch(e){}
         try{ ml=await fetch('/api/physics/moller').then(r=>r.json()); }catch(e){}
-        if((!data||!data.events)&&(!ml||!ml.total_events)) return null;
+        try{ hxy=await fetch('/api/physics/hycal_xy').then(r=>r.json()); }catch(e){}
+        if((!data||!data.events)&&(!ml||!ml.total_events)&&(!hxy||!hxy.total_events)) return null;
 
         let md='## Physics\n\n';
-        const evts=data?.events||ml?.total_events||0;
+        const evts=data?.events||ml?.total_events||hxy?.total_events||0;
         md+=`Events: ${evts}`;
         if(data?.beam_energy) md+=` | Beam: ${data.beam_energy} MeV`;
         if(data?.hycal_z) md+=` | HyCal z: ${data.hycal_z/1000}m`;
         if(ml) md+=` | Møller: ${ml.moller_events}`;
+        if(hxy) md+=` | HyCalXY: ${hxy.events}`;
         md+='\n\n';
+
+        // HyCal cluster hit XY (single-cluster ep candidates)
+        if(hxy&&hxy.xy_bins&&hxy.xy_bins.length&&hxy.xy_nx&&hxy.events>0){
+            const c=hxy.cuts||{};
+            const fracPct=((c.energy_frac_min||0.9)*100).toFixed(0);
+            md+=`### HyCal Cluster Hits\n\nCuts: Ncl=${c.n_clusters||1}, `
+               +`E ≥ ${fracPct}% of beam, blocks ∈ [${c.nblocks_min||0}, ${c.nblocks_max||0}]\n\n`;
+            try{
+                const img=await plotToImage(async div=>{
+                    const z=[];
+                    for(let iy=0;iy<hxy.xy_ny;iy++)
+                        z.push(hxy.xy_bins.slice(iy*hxy.xy_nx,(iy+1)*hxy.xy_nx).map(v=>v>0?Math.log10(v):null));
+                    const x=[];for(let i=0;i<hxy.xy_nx;i++) x.push(hxy.xy_x_min+(i+0.5)*hxy.xy_x_step);
+                    const y=[];for(let i=0;i<hxy.xy_ny;i++) y.push(hxy.xy_y_min+(i+0.5)*hxy.xy_y_step);
+                    await Plotly.newPlot(div,[{z,x,y,type:'heatmap',colorscale:'Hot',
+                        colorbar:{title:'log₁₀(counts)',titleside:'right'}}],
+                        {...RPL,xaxis:{...RPL.xaxis,title:'X (mm)',scaleanchor:'y',scaleratio:1},
+                         yaxis:{...RPL.yaxis,title:'Y (mm)'},margin:{l:55,r:80,t:10,b:40}});
+                },600,600);
+                addAttachment(img,'hycal_xy.png','HyCal Cluster Hits');
+                md+=`![HyCal Cluster Hits](hycal_xy.png)\n\n`;
+            }catch(e){}
+        }
 
         // energy vs angle heatmap + elastic line
         if(data&&data.bins&&data.bins.length&&data.nx){
@@ -321,23 +346,6 @@ registerReportSection({id:'physics',title:'Physics',order:6,
                 addAttachment(img,'moller_xy.png','Møller XY Position');
                 md+=`![Møller XY](moller_xy.png)\n\n`;
             }catch(e){}
-
-            // Møller energy histogram
-            const h=ml.energy_hist;
-            if(h&&h.bins&&h.bins.length){
-                try{
-                    const img=await plotToImage(async div=>{
-                        const x=[];for(let i=0;i<h.bins.length;i++) x.push(h.min+(i+0.5)*h.step);
-                        await Plotly.newPlot(div,[{x,y:h.bins,type:'bar',
-                            marker:{color:'#00b4d8'}}],
-                            {...RPL,xaxis:{...RPL.xaxis,title:'Energy (MeV)'},
-                             yaxis:{...RPL.yaxis,title:'Counts'},
-                             margin:{l:55,r:20,t:10,b:40},bargap:0});
-                    },800,400);
-                    addAttachment(img,'moller_energy.png','Møller Cluster Energy');
-                    md+=`![Møller Energy](moller_energy.png)\n\n`;
-                }catch(e){}
-            }
         }
         return md;
     }

@@ -552,7 +552,7 @@ function init(){
     registerPlot('lms-plot', 'lms', 'LMS History');
     registerPlot('physics-plot',       'physics', null, PC_EPICS);
     registerPlot('moller-xy-plot',     'physics', null, PC_EPICS);
-    registerPlot('moller-energy-plot', 'physics', null, PC_EPICS);
+    registerPlot('hycal-xy-plot',      'physics', null, PC_EPICS);
     for(let i=0;i<EPICS_NUM_SLOTS;i++)
         registerPlot('epics-plot-'+i, 'epics', null, PC_EPICS);
 

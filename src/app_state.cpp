@@ -393,13 +393,14 @@ void AppState::processEvent(fdec::EventData &event,
 
         bool physics_accept = physics_trigger(tb);
         if (physics_accept) {
+            float Eb = beam_energy.load();
             for (size_t i = 0; i < reco_hits.size(); ++i) {
                 energy_angle_hist.fill(cinfo[i].theta, reco_hits[i].energy,
                     ea_angle_min, ea_angle_step, ea_energy_min, ea_energy_step);
             }
-            if (reco_hits.size() == 2 && beam_energy > 0) {
+            if (reco_hits.size() == 2 && Eb > 0) {
                 float esum = reco_hits[0].energy + reco_hits[1].energy;
-                bool energy_ok = std::abs(esum - beam_energy) < moller_energy_tol * beam_energy;
+                bool energy_ok = std::abs(esum - Eb) < moller_energy_tol * Eb;
                 bool angle_ok = false;
                 for (int j = 0; j < 2; ++j)
                     if (cinfo[j].theta >= moller_angle_min && cinfo[j].theta <= moller_angle_max)
@@ -411,6 +412,17 @@ void AppState::processEvent(fdec::EventData &event,
                             moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
                         moller_energy_hist.fill(reco_hits[j].energy, moller_e_min, moller_e_step);
                     }
+                }
+            }
+            // HyCal cluster-hit XY: single-cluster ep-elastic candidates.
+            if ((int)reco_hits.size() == hxy_n_clusters && Eb > 0) {
+                const auto &cl = reco_hits[0];
+                bool nb_ok = cl.nblocks >= hxy_nblocks_min && cl.nblocks <= hxy_nblocks_max;
+                bool e_ok  = cl.energy  >= hxy_energy_frac_min * Eb;
+                if (nb_ok && e_ok) {
+                    hycal_xy_hist.fill(cinfo[0].lx, cinfo[0].ly,
+                        hxy_x_min, hxy_x_step, hxy_y_min, hxy_y_step);
+                    hycal_xy_events++;
                 }
             }
         }
@@ -469,9 +481,10 @@ void AppState::processReconEvent(const ReconEventData &recon)
             energy_angle_hist.fill(cinfo[i].theta, recon.clusters[i].energy,
                 ea_angle_min, ea_angle_step, ea_energy_min, ea_energy_step);
 
-        if (recon.clusters.size() == 2 && beam_energy > 0) {
+        float Eb = beam_energy.load();
+        if (recon.clusters.size() == 2 && Eb > 0) {
             float esum = recon.clusters[0].energy + recon.clusters[1].energy;
-            bool energy_ok = std::abs(esum - beam_energy) < moller_energy_tol * beam_energy;
+            bool energy_ok = std::abs(esum - Eb) < moller_energy_tol * Eb;
             bool angle_ok = false;
             for (int j = 0; j < 2; ++j)
                 if (cinfo[j].theta >= moller_angle_min && cinfo[j].theta <= moller_angle_max)
@@ -483,6 +496,17 @@ void AppState::processReconEvent(const ReconEventData &recon)
                         moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
                     moller_energy_hist.fill(recon.clusters[j].energy, moller_e_min, moller_e_step);
                 }
+            }
+        }
+        // HyCal cluster-hit XY: single-cluster ep-elastic candidates.
+        if ((int)recon.clusters.size() == hxy_n_clusters && Eb > 0) {
+            const auto &cl = recon.clusters[0];
+            bool nb_ok = cl.nblocks >= hxy_nblocks_min && cl.nblocks <= hxy_nblocks_max;
+            bool e_ok  = cl.energy  >= hxy_energy_frac_min * Eb;
+            if (nb_ok && e_ok) {
+                hycal_xy_hist.fill(cinfo[0].lx, cinfo[0].ly,
+                    hxy_x_min, hxy_x_step, hxy_y_min, hxy_y_step);
+                hycal_xy_events++;
             }
         }
     }
@@ -867,6 +891,8 @@ void AppState::clearHistograms()
     moller_xy_hist.clear();
     moller_energy_hist.clear();
     moller_events = 0;
+    hycal_xy_hist.clear();
+    hycal_xy_events = 0;
     cluster_events_processed = 0;
     for (auto &h : gem_occupancy) h.clear();
     gem_nclusters_hist.clear();

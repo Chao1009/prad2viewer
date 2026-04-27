@@ -148,6 +148,12 @@ function applyConfig(data){
         refreshHistMs=data.refresh_ms.histogram||2000;
         refreshLmsMs=data.refresh_ms.lms||2000;
     }
+    if(data.livetime){
+        livetimeEnabled=!!data.livetime.enabled;
+        livetimePollMs=Math.max(1000,(data.livetime.poll_sec||5)*1000);
+        livetimeHealthy=data.livetime.healthy ?? 90;
+        livetimeWarning=data.livetime.warning ?? 80;
+    }
     initReport(data);
     initEpics(data);
     initPhysics(data);

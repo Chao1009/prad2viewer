@@ -316,6 +316,20 @@ void AppState::init(const std::string &db_dir,
                       << " alpha=" << alpha_trigger << "\n";
         }
 
+        if (rcfg.contains("livetime")) {
+            auto &lt = rcfg["livetime"];
+            if (lt.contains("command"))  livetime_cmd      = lt["command"].get<std::string>();
+            if (lt.contains("poll_sec")) livetime_poll_sec = std::max(1, (int)lt["poll_sec"]);
+            if (lt.contains("healthy"))  livetime_healthy  = lt["healthy"];
+            if (lt.contains("warning"))  livetime_warning  = lt["warning"];
+            std::cerr << "Livetime  : "
+                      << (livetime_cmd.empty() ? "disabled"
+                                               : ("'" + livetime_cmd + "' every "
+                                                  + std::to_string(livetime_poll_sec) + "s"))
+                      << " healthy>=" << livetime_healthy
+                      << " warn>=" << livetime_warning << "\n";
+        }
+
         if (rcfg.contains("color_ranges")) {
             for (auto &[key, val] : rcfg["color_ranges"].items()) {
                 if (val.is_array() && val.size() == 2)

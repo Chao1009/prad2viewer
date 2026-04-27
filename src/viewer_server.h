@@ -215,11 +215,14 @@ private:
     void sleepMs(int ms);
 
     // DAQ livetime (percent).  <0 = not available.
-    // Intended to be written by the data-stream consumer when a TI scaler
-    // bank carrying trig0/tsBusy counters is decoded.  The previous
-    // popen("tcpClient trig0 tsBusy ...") poller was removed because it
-    // interrupted the DAQ.
+    // Two write paths are supported and either may stay disabled:
+    //  · Optional shell-command poll (e.g. "caget -t <channel>") — see
+    //    livetimePollThread() and AppState::livetime_cmd.  Avoids a build-time
+    //    EPICS dependency.  Disabled when livetime_cmd is empty.
+    //  · Direct write from a future data-stream consumer (TI scaler bank).
     std::atomic<double> livetime_{-1.0};
+    std::thread         livetime_thread_;
+    void                livetimePollThread();
 #endif
 
     void joinAll();      // join all background threads (safe to call multiple times)

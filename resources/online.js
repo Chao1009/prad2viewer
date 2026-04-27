@@ -44,8 +44,12 @@ function updateFollowStatus() {
     }
 }
 
-// LIVETIME — temporary: poll server for DAQ livetime
-const LIVETIME_POLL_MS=5000;
+// LIVETIME — poll server for DAQ livetime (server shells out to caget).
+// Thresholds + poll interval come from the server config in applyConfig().
+// livetimeEnabled is set from cfg.livetime.enabled (server-side command !=  "").
+let livetimePollMs=5000;
+let livetimeHealthy=90, livetimeWarning=80;
+let livetimeEnabled=false;
 let livetimeTimer=null;
 function pollLivetime(){
     fetch('/api/livetime').then(r=>r.json()).then(d=>{
@@ -54,7 +58,8 @@ function pollLivetime(){
         el.style.display='';
         if(d.livetime>=0){
             el.textContent='DAQ Livetime: '+d.livetime.toFixed(1)+'%';
-            el.style.color=d.livetime>=90?THEME.success:d.livetime>=80?THEME.warn:THEME.danger;
+            el.style.color=d.livetime>=livetimeHealthy?THEME.success
+                          :d.livetime>=livetimeWarning?THEME.warn:THEME.danger;
         } else {
             el.textContent='DAQ Livetime: N/A';
             el.style.color=THEME.textDim;
@@ -63,8 +68,9 @@ function pollLivetime(){
 }
 function startLivetimePolling(){
     if(livetimeTimer) return;
+    if(!livetimeEnabled) return;          // server has no command configured
     pollLivetime();
-    livetimeTimer=setInterval(pollLivetime,LIVETIME_POLL_MS);
+    livetimeTimer=setInterval(pollLivetime,livetimePollMs);
 }
 function stopLivetimePolling(){
     if(livetimeTimer){clearInterval(livetimeTimer);livetimeTimer=null;}

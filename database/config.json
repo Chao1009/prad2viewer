@@ -66,6 +66,12 @@
             "accept_trigger_bits": ["Alpha"]
         }
     },
+    "livetime": {
+        "command": "caget -t B_DAQ:PRAD:livetime",
+        "poll_sec": 3,
+        "healthy": 90,
+        "warning": 80
+    },
     "epics": {
         "max_history": 5000,
         "warn_threshold": 0.1,

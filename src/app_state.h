@@ -152,6 +152,17 @@ struct AppState {
     std::map<int, float> latest_lms_integral;     // module_index → latest LMS-trigger integral
     std::map<int, float> latest_alpha_integral;   // module_index → latest Alpha-trigger integral
 
+    // DAQ livetime polling — optional shell command (typical: "caget -t <channel>").
+    // Empty disables the poller; ViewerServer reads these after init() and only
+    // launches the poll thread when livetime_cmd is non-empty.  Avoids a build-
+    // time EPICS dependency by shelling out to whatever tool the host provides.
+    // healthy/warning are percent thresholds for the frontend display color
+    // (≥ healthy → green, ≥ warning → orange, otherwise red).
+    std::string livetime_cmd;
+    int         livetime_poll_sec   = 30;
+    float       livetime_healthy    = 90.f;
+    float       livetime_warning    = 80.f;
+
     // online refresh rates (ms), served to frontend
     int refresh_event_ms = 200;
     int refresh_ring_ms  = 500;

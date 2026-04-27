@@ -427,6 +427,12 @@ void AppState::fillConfigJson(json &cfg) const
         {"warn_threshold", lms_warn_thresh},
         {"events", lms_events.load()}, {"ref_channels", apiLmsRefChannels()},
     };
+    cfg["livetime"] = {
+        {"enabled", !livetime_cmd.empty()},
+        {"poll_sec", livetime_poll_sec},
+        {"healthy", livetime_healthy},
+        {"warning", livetime_warning},
+    };
     cfg["runinfo"] = {
         {"beam_energy", beam_energy.load()},
         {"beam_energy_runinfo", beam_energy_runinfo},

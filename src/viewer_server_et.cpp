@@ -5,6 +5,7 @@
 #include "EtChannel.h"
 #endif
 
+#include <cstdio>
 #include <cstring>
 
 using namespace evc;
@@ -329,6 +330,64 @@ void ViewerServer::etReaderThread()
                 sleepMs(retry_ms);
             }
         }
+    }
+}
+
+// Optional DAQ-livetime poller: shells out to the user-configured command
+// (typical: "caget -t <epics_channel>") and parses the first floating-point
+// number from stdout.  Empty command disables the thread entirely; this is
+// gated in run()/startAsync() so we never spawn a useless poller.
+//
+// Polls only while ET is active.  On bad output the value goes back to <0
+// (frontend hides the display) — the reading is consumed as a snapshot, not
+// integrated, so transient parse failures self-heal on the next poll.
+void ViewerServer::livetimePollThread()
+{
+    const std::string cmd = app_file_.livetime_cmd;
+    const int poll_sec = std::max(1, app_file_.livetime_poll_sec);
+    if (cmd.empty()) return;
+
+    int consecutive_failures = 0;
+    while (running_) {
+        while (running_ && !et_active_)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (!running_) break;
+
+        double val = -1.0;
+        FILE *p = popen(cmd.c_str(), "r");
+        if (p) {
+            char buf[512];
+            std::string out;
+            while (fgets(buf, sizeof(buf), p)) out += buf;
+            pclose(p);
+
+            // Extract the first floating-point number found in stdout.
+            // Works with `caget -t CHAN` (just "<num>"), bare `caget CHAN`
+            // ("<chan>  <num>"), or any tool that prints "Livetime = X%".
+            size_t i = 0;
+            while (i < out.size()) {
+                char c = out[i];
+                if (c == '-' || c == '+' || c == '.' || (c >= '0' && c <= '9')) {
+                    try {
+                        size_t consumed = 0;
+                        double v = std::stod(out.substr(i), &consumed);
+                        if (consumed > 0) { val = v; break; }
+                    } catch (...) {}
+                }
+                ++i;
+            }
+        }
+        livetime_.store(val);
+        if (val < 0) {
+            if (consecutive_failures++ == 0)
+                std::cerr << "Livetime  : poll command produced no number "
+                          << "(`" << cmd << "`) — leaving as 'not available'\n";
+        } else {
+            consecutive_failures = 0;
+        }
+
+        for (int i = 0; i < poll_sec * 10 && running_ && et_active_; ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 

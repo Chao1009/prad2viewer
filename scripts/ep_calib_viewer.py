@@ -1434,6 +1434,11 @@ class EpCalibViewerWindow(QMainWindow):
         # Reusable widget from hycal_geoview.  Click "Auto" for a one-shot
         # range fit; double-click to keep auto-fitting on every refresh.
         # Mode switches still trigger an explicit one-shot fit via auto_fit().
+        self._map = CalibMapWidget()
+        self._map.moduleClicked.connect(self._on_module_clicked)
+        self._map.moduleHovered.connect(self._on_module_hovered)
+        self._map.multiSelectionChanged.connect(self._on_multi_selection_changed)
+
         z_bar = QHBoxLayout()
         z_bar.setSpacing(6)
         self._range_ctrl = ColorRangeControl(
@@ -1454,10 +1459,6 @@ class EpCalibViewerWindow(QMainWindow):
         map_box = QGroupBox("HyCal Map  (scroll to zoom · drag to pan · click module)")
         ml = QVBoxLayout(map_box)
         ml.setContentsMargins(2, 14, 2, 2)
-        self._map = CalibMapWidget()
-        self._map.moduleClicked.connect(self._on_module_clicked)
-        self._map.moduleHovered.connect(self._on_module_hovered)
-        self._map.multiSelectionChanged.connect(self._on_multi_selection_changed)
         ml.addWidget(self._map)
 
         # ── batch multi-select bar ────────────────────────────────────────

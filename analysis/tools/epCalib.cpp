@@ -280,6 +280,7 @@ int main(int argc, char *argv[])
                 SetReadBranches(tree, ev);
 
                 int run_num = get_run_int(root_files[fi]);
+                gRunConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
                 auto gain_correction = prad2::ComputeGainCorrection(db_dir + 
                     "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
 

@@ -303,7 +303,11 @@ int main(int argc, char *argv[])
                         const auto *mod = res->hycal.module_by_id(ev.module_id[j]);
                         if (!mod || !mod->is_hycal()) continue;
                         if (ev.npeaks[j] <= 0) continue;
-                        float adc    = ev.peak_integral[j][0]*ev.gain_factor[j]; // gain correction for HyCal modules
+                        float adc    = ev.peak_integral[j][0];
+                        int mod_id = ev.module_id[j];
+                        // gain correction for HyCal modules
+                        if(mod_id>1000) adc *= gain_correction.w[mod_id-1000].avg;
+                        else adc *= gain_correction.g[mod_id].avg;
                         float energy = (mod->cal_factor > 0)
                             ? static_cast<float>(mod->energize(adc))
                             : adc * 0.1f;

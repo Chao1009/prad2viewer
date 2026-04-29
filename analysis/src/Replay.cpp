@@ -287,7 +287,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ssp_raw_snapshot.assign(p, p + n_e10c->data_words);
         }
 
-        int lms_count = 0; // Count LMS triggers to decide when to recompute gains
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
             event->clear();
             ssp_evt->clear();
@@ -305,12 +304,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             static constexpr uint32_t TBIT_alpha = (1u << 25);
             bool is_lms = (ev->trigger_bits & TBIT_lms) != 0;
             bool is_alpha = (ev->trigger_bits & TBIT_alpha) != 0;
-
-            if(is_lms) lms_count++;
-            if(lms_count > 1000) {
-                physics.ComputeModuleGains();
-                lms_count = 0;
-            }
 
             // decode HyCal FADC250 data
             int nch = 0;
@@ -375,9 +368,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                         }
                                     }
                                     if (best < 0) continue;
-                                    //for gain factor
-                                    if(is_lms)   {physics.Fill_lmsCH_lmsIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
-                                    if(is_alpha) {physics.Fill_lmsCH_alphaIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
                                 }
                                 lms_nch++;
                             }
@@ -412,8 +402,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                     best_h = wres.peaks[p].height; best = p;
                                 }
                             }
-                            //for gain factor
-                            if(is_lms)   {physics.Fill_modCH_lmsIntegral(mod_id, wres.peaks[best].integral);}
                         }
                         nch++;
                     }

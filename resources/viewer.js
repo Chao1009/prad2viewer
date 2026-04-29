@@ -508,7 +508,7 @@ function init(){
     registerPlot('cl-nblocks-hist','cluster', 'Blocks per Cluster');
     for (let d = 0; d < 4; d++)
         registerPlot('gem-resid-' + d, 'cluster', null);
-    registerPlot('gem-eff-zx', 'gem', null);
+    registerPlot('gem-eff-xy', 'gem', null);
     registerPlot('gem-eff-zy', 'gem', null);
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
     setupCopyBtn('btn-copy-nclust', ()=>currentNclustHist);

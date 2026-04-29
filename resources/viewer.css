@@ -473,11 +473,9 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .gem-eff-card.gray  .pct { color:var(--theme-text-dim); }
 .gem-eff-header {
     flex:none; height:26px; display:flex; align-items:center;
-    justify-content:space-between; padding:0 8px; font-size:11px; color:var(--text);
+    padding:0 8px; font-size:11px; color:var(--text);
 }
-.gem-eff-info { color:var(--dim); }
-.gem-eff-radio { display:flex; gap:8px; align-items:center; }
-.gem-eff-radio label { display:flex; gap:2px; align-items:center; cursor:pointer; }
+.gem-eff-info { color:var(--dim); display:flex; gap:6px; align-items:center; }
 .gem-eff-plots { flex:1; min-height:0; display:flex; gap:4px; padding:0 4px 4px; }
 .gem-eff-plot  { flex:1; min-height:0; position:relative; }
 

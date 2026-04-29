@@ -11,6 +11,7 @@
 #include "MatchingTools.h"
 #include "ConfigSetup.h"
 #include "InstallPaths.h"
+#include "gain_factor.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
@@ -93,6 +94,7 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
     ev.n_clusters = 0;
     ev.n_gem_hits = 0;
     ev.matchNum = 0;
+    std::fill(std::begin(ev.matchFlag), std::end(ev.matchFlag), 0);
     ev.veto_nch = 0;
     ev.lms_nch = 0;
     ev.ssp_raw.clear();
@@ -111,6 +113,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("hycal.ped_mean",  ev.ped_mean,   "hycal.ped_mean[hycal.nch]/F");
     tree->Branch("hycal.ped_rms",   ev.ped_rms,    "hycal.ped_rms[hycal.nch]/F");
     tree->Branch("hycal.integral",  ev.integral,   "hycal.integral[hycal.nch]/F");
+    tree->Branch("hycal.gain_factor", ev.gain_factor, "hycal.gain_factor[hycal.nch]/F");
     if (write_peaks) {
         tree->Branch("hycal.npeaks",       &ev.npeaks,       "hycal.npeaks[hycal.nch]/I");
         tree->Branch("hycal.peak_height",  ev.peak_height,  Form("hycal.peak_height[hycal.nch][%d]/F", fdec::MAX_PEAKS));
@@ -164,7 +167,7 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
     tree->Branch("total_energy", &ev.total_energy, "total_energy/F");
     // HyCal cluster branches
-    // detector coordinate system (crystal surface)
+    // lab coordinate system(beam center and target center)
     tree->Branch("n_clusters",   &ev.n_clusters,   "n_clusters/I");
     tree->Branch("cl_x",         ev.cl_x,          "cl_x[n_clusters]/F");
     tree->Branch("cl_y",         ev.cl_y,          "cl_y[n_clusters]/F");
@@ -175,14 +178,11 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("cl_flag",      ev.cl_flag,       "cl_flag[n_clusters]/i");
     // Matching results
     tree->Branch("matchFlag", ev.matchFlag,  "matchFlag[n_clusters]/i");
-    tree->Branch("matchHC_x", ev.matchHC_x,  "matchHC_x[n_clusters]/F");
-    tree->Branch("matchHC_y", ev.matchHC_y,  "matchHC_y[n_clusters]/F");
-    tree->Branch("matchHC_z", ev.matchHC_z,  "matchHC_z[n_clusters]/F");
-    tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][2]/F");
-    tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][2]/F");
-    tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][2]/F");
-    tree->Branch("match_num", &ev.matchNum,  "match_num/I");
+    tree->Branch("matchGEMx", ev.matchGEMx,  "matchGEMx[n_clusters][4]/F");
+    tree->Branch("matchGEMy", ev.matchGEMy,  "matchGEMy[n_clusters][4]/F");
+    tree->Branch("matchGEMz", ev.matchGEMz,  "matchGEMz[n_clusters][4]/F");
     //quick and simple matching results for quick check
+    tree->Branch("match_num", &ev.matchNum,  "match_num/I");
     tree->Branch("mHit_E", ev.mHit_E,  "mHit_E[match_num]/F");
     tree->Branch("mHit_x", ev.mHit_x,  "mHit_x[match_num]/F");
     tree->Branch("mHit_y", ev.mHit_y,  "mHit_y[match_num]/F");
@@ -193,17 +193,20 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("mHit_gid", ev.mHit_gid,  "mHit_gid[match_num][2]/F");
 
     // GEM part
-    //detector local coordinate (GEM plane)
+    //lab coordinate(beam center and target center) (GEM plane)
     tree->Branch("n_gem_hits",   &ev.n_gem_hits,   "n_gem_hits/I");
     tree->Branch("det_id",       ev.det_id,        "det_id[n_gem_hits]/b");
     tree->Branch("gem_x",        ev.gem_x,         "gem_x[n_gem_hits]/F");
     tree->Branch("gem_y",        ev.gem_y,         "gem_y[n_gem_hits]/F");
+    tree->Branch("gem_z",        ev.gem_z,         "gem_z[n_gem_hits]/F");
     tree->Branch("gem_x_charge", ev.gem_x_charge,  "gem_x_charge[n_gem_hits]/F");
     tree->Branch("gem_y_charge", ev.gem_y_charge,  "gem_y_charge[n_gem_hits]/F");
     tree->Branch("gem_x_peak",   ev.gem_x_peak,    "gem_x_peak[n_gem_hits]/F");
     tree->Branch("gem_y_peak",   ev.gem_y_peak,    "gem_y_peak[n_gem_hits]/F");
     tree->Branch("gem_x_size",   ev.gem_x_size,    "gem_x_size[n_gem_hits]/b");
     tree->Branch("gem_y_size",   ev.gem_y_size,    "gem_y_size[n_gem_hits]/b");
+    tree->Branch("gem_x_mTbin",  ev.gem_x_mTbin,    "gem_x_mTbin[n_gem_hits]/b");
+    tree->Branch("gem_y_mTbin",  ev.gem_y_mTbin,    "gem_y_mTbin[n_gem_hits]/b");
     //veto information
     tree->Branch("veto_nch",       &ev.veto_nch,       "veto_nch/I");
     tree->Branch("veto_id",        ev.veto_id,        "veto_id[veto_nch]/b");
@@ -220,7 +223,8 @@ void Replay::setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->Branch("ssp_raw", &ev.ssp_raw);
 }
 
-bool Replay::Process(const std::string &input_evio, const std::string &output_root,
+bool Replay::Process(const std::string &input_evio, const std::string &output_root, RunConfig &gRunConfig,
+                     const std::string &db_dir,
                      int max_events, bool write_peaks , const std::string &daq_config_file)
 {
     // build ROC tag → crate index mapping from DAQ config JSON
@@ -268,6 +272,9 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     fdec::WaveResult wres;
     int total = 0;
 
+    int run_num = get_run_int(input_evio);
+    auto gain_correction = prad2::ComputeGainCorrection(db_dir + "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
+
     while (ch.Read() == evc::status::success) {
         if (!ch.Scan()) continue;
         if (ch.GetEventType() != evc::EventType::Physics) continue;
@@ -280,6 +287,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ssp_raw_snapshot.assign(p, p + n_e10c->data_words);
         }
 
+        int lms_count = 0; // Count LMS triggers to decide when to recompute gains
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
             event->clear();
             ssp_evt->clear();
@@ -292,6 +300,17 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ev->trigger_bits      = event->info.trigger_bits;
             ev->timestamp    = event->info.timestamp;
             ev->ssp_raw      = ssp_raw_snapshot;
+
+            static constexpr uint32_t TBIT_lms = (1u << 24);
+            static constexpr uint32_t TBIT_alpha = (1u << 25);
+            bool is_lms = (ev->trigger_bits & TBIT_lms) != 0;
+            bool is_alpha = (ev->trigger_bits & TBIT_alpha) != 0;
+
+            if(is_lms) lms_count++;
+            if(lms_count > 1000) {
+                physics.ComputeModuleGains();
+                lms_count = 0;
+            }
 
             // decode HyCal FADC250 data
             int nch = 0;
@@ -343,12 +362,22 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                 ev->lms_ped_rms[lms_nch]  = wres.ped.rms;
                                 ev->lms_integral[lms_nch] = computeIntegral(cd, wres.ped.mean);
                                 if (write_peaks) {
+                                    int best = -1; float best_h = -1.f;
                                     ev->lms_npeaks[lms_nch] = wres.npeaks;
                                     for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                         ev->lms_peak_height[lms_nch][p]   = wres.peaks[p].height;
                                         ev->lms_peak_time[lms_nch][p]     = wres.peaks[p].time;
                                         ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                        if(wres.peaks[p].time > gRunConfig.hc_time_win_lo &&
+                                           wres.peaks[p].time < gRunConfig.hc_time_win_hi
+                                            && wres.peaks[p].height > best_h) {
+                                            best_h = wres.peaks[p].height; best = p;
+                                        }
                                     }
+                                    if (best < 0) continue;
+                                    //for gain factor
+                                    if(is_lms)   {physics.Fill_lmsCH_lmsIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
+                                    if(is_alpha) {physics.Fill_lmsCH_alphaIntegral(ev->lms_id[lms_nch], wres.peaks[best].integral);}
                                 }
                                 lms_nch++;
                             }
@@ -367,14 +396,24 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ev->ped_mean[nch] = wres.ped.mean;
                         ev->ped_rms[nch]  = wres.ped.rms;
                         ev->integral[nch] = computeIntegral(cd, wres.ped.mean);
-
+                        if(mod_id > 1000) ev->gain_factor[nch] = gain_correction.w[mod_id-1000].avg;
+                        else ev->gain_factor[nch] = gain_correction.g[mod_id].avg;
+                        
                         if (write_peaks) {
                             ev->npeaks[nch] = wres.npeaks;
+                            int best = -1; float best_h = -1.f;
                             for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                 ev->peak_height[nch][p]   = wres.peaks[p].height;
                                 ev->peak_time[nch][p]     = wres.peaks[p].time;
                                 ev->peak_integral[nch][p] = wres.peaks[p].integral;
+                                if(wres.peaks[p].time > gRunConfig.hc_time_win_lo &&
+                                   wres.peaks[p].time < gRunConfig.hc_time_win_hi
+                                    && wres.peaks[p].height > best_h) {
+                                    best_h = wres.peaks[p].height; best = p;
+                                }
                             }
+                            //for gain factor
+                            if(is_lms)   {physics.Fill_modCH_lmsIntegral(mod_id, wres.peaks[best].integral);}
                         }
                         nch++;
                     }
@@ -424,7 +463,8 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     return true;
 }
 
-bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &output_root,
+bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &output_root, RunConfig &gRunConfig,
+                                const std::string &db_dir,
                                 const std::string &daq_config_file, const std::string &gem_ped_file,
                                 const float zerosup_override, bool prad1)
 {
@@ -434,11 +474,6 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     // - After decoding, we run the HyCal clusterer to reconstruct clusters and hits.
     // - We also run the GemSystem reconstruction to get GEM hits.
     // - We fill a different TTree with reconstructed quantities instead of raw data.
-
-    std::string db_dir = prad2::resolve_data_dir(
-        "PRAD2_DATABASE_DIR",
-        {"../share/prad2evviewer/database"},
-        DATABASE_DIR);
 
     // build ROC tag → crate index mapping from DAQ config JSON
     std::unordered_map<int, int> roc_to_crate;
@@ -468,10 +503,6 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     hycal.Init(db_dir + "/hycal_modules.json", daq_map_file);
     
     if(prad1 == true) evc::load_pedestals(db_dir + "/prad1/adc1881m_pedestals.json", daq_cfg_);
-    
-    std::string run_str = get_run_str(input_evio);
-    int run_num = get_run_int(input_evio);
-    gRunConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
 
     std::string calib_file = db_dir + "/" + gRunConfig.energy_calib_file;
     int nmatched = hycal.LoadCalibration(calib_file);
@@ -494,10 +525,15 @@ if(!prad1){
     std::cerr << "GEM map  : " << gem_map_file
                 << " (" << gem_sys->GetNDetectors() << " detectors)\n";
 
-    if (!gem_ped_file.empty()) 
+    if (!gem_ped_file.empty()) {
         gem_sys->LoadPedestals(gem_ped_file);
-    else gem_sys->LoadPedestals(db_dir + "/" + gRunConfig.gem_pedestal_file);
-    std::cerr << "GEM peds : " << gem_ped_file << "\n";
+        std::cerr << "GEM peds : " << gem_ped_file << "\n";
+    }
+    else {
+        gem_sys->LoadPedestals(db_dir + "/" + gRunConfig.gem_pedestal_file);
+            std::cerr << "GEM peds : " << db_dir + "/" + gRunConfig.gem_pedestal_file << "\n";
+
+    }
 
     if (zerosup_override >= 0.f) {
         gem_sys->SetZeroSupThreshold(zerosup_override);
@@ -533,6 +569,9 @@ if(!prad1){
     fdec::WaveResult wres;
     
     int total = 0;
+
+    int run_num = get_run_int(input_evio);
+    auto gain_correction = prad2::ComputeGainCorrection(db_dir + "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
 
     while (ch.Read() == evc::status::success) {
         if (!ch.Scan()) continue;
@@ -572,6 +611,7 @@ if(!prad1){
             // decode FADC250 and reconstruct HyCal data
             int veto_nch = 0;
             int lms_nch = 0;
+            int nch = 0;
             for (int r = 0; r < event->nrocs; ++r) {
                 auto &roc = event->rocs[r];
                 if (!roc.present) continue;
@@ -595,6 +635,7 @@ if(!prad1){
                                     ev->veto_npeaks[veto_nch] = wres.npeaks;
                                     for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                         ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
+                                        ev->veto_peak_time[veto_nch][p] = wres.peaks[p].time;
                                     }
                                     veto_nch++;
                                 }
@@ -606,6 +647,7 @@ if(!prad1){
                                     ev->lms_npeaks[lms_nch] = wres.npeaks;
                                     for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                         ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
+                                        ev->lms_peak_time[lms_nch][p] = wres.peaks[p].time;
                                     }
                                     lms_nch++;
                                 }
@@ -628,7 +670,8 @@ if(!prad1){
                             int bestIdx = -1;
                             float bestHeight = -1.f;
                             for(int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p){
-                                if(wres.peaks[p].time > 100. && wres.peaks[p].time < 200.) {
+                                if(wres.peaks[p].time > gRunConfig.hc_time_win_lo &&
+                                   wres.peaks[p].time < gRunConfig.hc_time_win_hi) {
                                     if(wres.peaks[p].height > bestHeight) {
                                         bestHeight = wres.peaks[p].height;
                                         bestIdx = p;
@@ -638,18 +681,20 @@ if(!prad1){
                             if (bestIdx < 0) continue;
                             adc = wres.peaks[bestIdx].integral;
                         }
-                        // TODO: use real calibration constants from database.
-                        // Currently using a flat 0.1 MeV/ADC for all modules as placeholder.
-                        // PbWO4 and lead-glass have different gains — load from hycal_calibration.json.
-                        //hycal.SetCalibConstant(mod->id, 0.1);
+                        //gain correction for HyCal modules
+                        if(mod->id > 1000) adc *= gain_correction.w[mod->id-1000].avg;
+                        else adc *= gain_correction.g[mod->id].avg;
+
                         float energy = static_cast<float>(mod->energize(adc));
                         clusterer.AddHit(mod->index, energy);
                         ev->total_energy += energy;
+                        nch++;
                     }
                 }
             }
             ev->veto_nch = veto_nch;
             ev->lms_nch = lms_nch;
+            if(nch > 500) continue; // too many hits, likely noise, skip the event
 
             clusterer.FormClusters();
             std::vector<fdec::ClusterHit> hits;
@@ -662,8 +707,18 @@ if(!prad1){
                 ev->cl_z[i]       = fdec::shower_depth(hits[i].center_id, hits[i].energy);
                 ev->cl_energy[i]  = hits[i].energy;
                 ev->cl_nblocks[i] = hits[i].nblocks;
-                ev->cl_center[i]  = hits[i].center_id;
-                ev->cl_flag[i]    = hits[i].flag;
+                //transform the cluster positions to the lab coordinate
+                HCHit local_hit = {hits[i].x, hits[i].y, fdec::shower_depth(hits[i].center_id, hits[i].energy), 
+                    hits[i].energy, static_cast<uint16_t>(hits[i].center_id), hits[i].flag};
+                RotateDetData(local_hit, gRunConfig);
+                TransformDetData(local_hit, gRunConfig);
+                GetProjection(local_hit, gRunConfig.hycal_z);
+                ev->cl_x[i] = local_hit.x;
+                ev->cl_y[i] = local_hit.y;
+                ev->cl_z[i] = local_hit.z;
+                ev->cl_energy[i] = local_hit.energy;
+                ev->cl_center[i] = local_hit.center_id;
+                ev->cl_flag[i] = local_hit.flag;
             }
 
             //decode GEM data and reconstruct GEM hits
@@ -683,14 +738,21 @@ if(!prad1){
             for (int i = 0; i < ev->n_gem_hits; i++) {
                 auto &h = all_hits[i];
                 ev->det_id[i] = h.det_id;
-                ev->gem_x[i] = h.x;
-                ev->gem_y[i] = h.y;
                 ev->gem_x_charge[i] = h.x_charge;
                 ev->gem_y_charge[i] = h.y_charge;
                 ev->gem_x_peak[i] = h.x_peak;
                 ev->gem_y_peak[i] = h.y_peak;
                 ev->gem_x_size[i] = h.x_size;
                 ev->gem_y_size[i] = h.y_size;
+                ev->gem_x_mTbin[i] = h.x_max_timebin;
+                ev->gem_y_mTbin[i] = h.y_max_timebin;
+                //transform the GEM hit positions to the lab coordinate
+                GEMHit local_hit = {h.x, h.y, 0.f, static_cast<uint8_t>(h.det_id)};
+                RotateDetData(local_hit, gRunConfig);
+                TransformDetData(local_hit, gRunConfig);
+                ev->gem_x[i] = local_hit.x;
+                ev->gem_y[i] = local_hit.y;
+                ev->gem_z[i] = local_hit.z;
             }
 
             // Perform matching between HyCal clusters and GEM hits
@@ -700,49 +762,31 @@ if(!prad1){
             for (int i = 0; i < ev->n_clusters; ++i)
                 hc_hits.push_back({ev->cl_x[i], ev->cl_y[i], ev->cl_z[i], ev->cl_energy[i], ev->cl_center[i], ev->cl_flag[i]});
             for (int i = 0; i < ev->n_gem_hits; ++i)
-                gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], 0.f, ev->det_id[i]});
-            //transform the coordinates of detector data
+                gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], ev->gem_z[i], ev->det_id[i]});
             
-            TransformDetData(hc_hits, gRunConfig);
-            RotateDetData(hc_hits, gRunConfig);
-            GetProjection(hc_hits, gRunConfig.hycal_z);
-            for(int i = 0; i < 4; ++i) {
-                RotateDetData(gem_hits[i], gRunConfig);
-                TransformDetData(gem_hits[i], gRunConfig);
-            }
+            // already transform to the coordinates
 
             matching.SetMatchRange(gRunConfig.matching_radius); // matching radius in mm, 15mm default
             matching.SetSquareSelection(gRunConfig.matching_use_square); // square/circular cut
             std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
-
-            //save the transformed hycal cluster positions in matchHC_x/y/z (no matter is matched or not)
-            // and the matched GEM hit positions in cl_matchGEMx/y/z (only for matched clusters, otherwise set to -999)
-            for (int i = 0; i < ev->n_clusters; ++i) {
-                ev->matchHC_x[i] = hc_hits[i].x;
-                ev->matchHC_y[i] = hc_hits[i].y;
-                ev->matchHC_z[i] = hc_hits[i].z;
-                for(int j = 0; j < 2; j++) {
-                    ev->matchGEMx[i][j] = -999.f;
-                    ev->matchGEMy[i][j] = -999.f;
-                    ev->matchGEMz[i][j] = -999.f;
+            std::vector<MatchHit_perChamber> matched_hits_chamber = matching.MatchPerChamber(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]); 
+            
+            for(int i = 0; i < matched_hits_chamber.size(); i++){
+                auto &m = matched_hits_chamber[i];
+                int cl_idx = m.hycal_idx;
+                if( cl_idx != i) std::cerr << "Warning: cluster index mismatch in matched_hits_chamber: " << cl_idx << " vs " << i << "\n";
+                for(int j = 0; j < 4; j++){
+                    ev->matchGEMx[i][j] = m.gem_hits[j][0];
+                    ev->matchGEMy[i][j] = m.gem_hits[j][1];
+                    ev->matchGEMz[i][j] = m.gem_hits[j][2];
                 }
-                //reset matchFlag for all clusters
-                ev->matchFlag[i] = 0; // default no match
+                ev->matchFlag[i] = 0;
+                ev->matchFlag[i] = m.mflag;
             }
+
             ev->matchNum = std::min((int)matched_hits.size(), prad2::kMaxClusters);
             for (int i = 0; i < ev->matchNum; i++){
-                //set matchFlag for hycal clusters
-                int cl_idx = matched_hits[i].hycal_idx;
-                ev->matchFlag[cl_idx] = matched_hits[i].mflag;
-                ev->matchHC_x[cl_idx] = matched_hits[i].hycal_hit.x;
-                ev->matchHC_y[cl_idx] = matched_hits[i].hycal_hit.y;
-                ev->matchHC_z[cl_idx] = matched_hits[i].hycal_hit.z;
-                for(int j = 0; j < 2; j++) {
-                    ev->matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
-                    ev->matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;
-                    ev->matchGEMz[cl_idx][j] = matched_hits[i].gem[j].z;
-                }
-                // also save the matched GEM hit info in mHit_ arrays for quick check
+                // save the matched GEM hit (must 2 matchings) info in mHit_ arrays for quick check
                 ev->mHit_E[i] = matched_hits[i].hycal_hit.energy;
                 ev->mHit_x[i] = matched_hits[i].hycal_hit.x;
                 ev->mHit_y[i] = matched_hits[i].hycal_hit.y;

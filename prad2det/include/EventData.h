@@ -46,6 +46,7 @@ struct RawEventData {
     float   ped_mean[kMaxChannels] = {};
     float   ped_rms[kMaxChannels]  = {};
     float   integral[kMaxChannels] = {};
+    float   gain_factor[kMaxChannels] = {};
 
     //Veto per-channel data
     int          veto_nch = 0;
@@ -115,12 +116,9 @@ struct ReconEventData {
     uint32_t cl_flag[kMaxClusters]    = {};
     // Matching results
     uint32_t matchFlag[kMaxClusters] = {};
-    float    matchHC_x[kMaxClusters] = {};
-    float    matchHC_y[kMaxClusters] = {};
-    float    matchHC_z[kMaxClusters] = {};
-    float    matchGEMx[kMaxClusters][2] = {};
-    float    matchGEMy[kMaxClusters][2] = {};
-    float    matchGEMz[kMaxClusters][2] = {};
+    float    matchGEMx[kMaxClusters][4] = {};
+    float    matchGEMy[kMaxClusters][4] = {};
+    float    matchGEMz[kMaxClusters][4] = {};
     int      matchNum = 0; // number of clusters with matches (for quick access, can be derived from matchFlag)
     //for quick simple access to each matched hit on HC and GEM planes
     // HC_Energy, HC_x/y/z, GEM_x/y/z (in mm, beam center and target center coordinate)
@@ -138,12 +136,15 @@ struct ReconEventData {
     uint8_t det_id[kMaxGemHits]       = {};
     float   gem_x[kMaxGemHits]        = {};
     float   gem_y[kMaxGemHits]        = {};
+    float   gem_z[kMaxGemHits]        = {};
     float   gem_x_charge[kMaxGemHits] = {};
     float   gem_y_charge[kMaxGemHits] = {};
     float   gem_x_peak[kMaxGemHits]   = {};
     float   gem_y_peak[kMaxGemHits]   = {};
     uint8_t gem_x_size[kMaxGemHits]   = {};
     uint8_t gem_y_size[kMaxGemHits]   = {};
+    uint8_t gem_x_mTbin[kMaxGemHits]   = {};
+    uint8_t gem_y_mTbin[kMaxGemHits]   = {};
 
     //veto information
     int      veto_nch = 0;

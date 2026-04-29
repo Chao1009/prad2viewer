@@ -31,7 +31,7 @@ target_include_directories(prad2ana
 
 target_link_libraries(prad2ana PUBLIC
     prad2dec prad2det nlohmann_json::nlohmann_json
-    ROOT::Core ROOT::Tree ROOT::RIO ROOT::Hist ROOT::Graf ROOT::Gpad)
+    ROOT::Core ROOT::Tree ROOT::RIO ROOT::Hist ROOT::Graf ROOT::Gpad ROOT::Spectrum)
 
 set(ANA_DEPS prad2ana)   # tools just link the lib; transitives flow through
 

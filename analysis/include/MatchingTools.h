@@ -50,7 +50,21 @@ class MatchHit
 
         // --- added for matching logic ----------------------------------------
         analysis::GEMHit gem[2];       // best-matched upstream and downstream GEM hits
-        uint32_t   mflag = 0;     // matching flags (see MatchFlag enum)
+        uint32_t   mflag = 0;     //E.g. 0101 matching flags (see MatchFlag enum)
+        uint16_t    hycal_idx = 0; // index into original hycal vector
+};
+
+class MatchHit_perChamber
+{
+    public:
+        analysis::HCHit hycal_hit;
+
+        MatchHit_perChamber(const analysis::HCHit &hycal_hit)
+            : hycal_hit(hycal_hit){}
+
+        // --- added for matching logic ----------------------------------------
+        float gem_hits[4][3] = {}; // store the best matches for each GEM chamber, format: [det_id][x/y/z]
+        uint32_t   mflag = 0;     // matching flag
         uint16_t    hycal_idx = 0; // index into original hycal vector
 };
 
@@ -60,6 +74,12 @@ public:
     MatchingTools() = default;
 
     std::vector<MatchHit> Match(std::vector<analysis::HCHit> &hycalHits,
+                            const std::vector<analysis::GEMHit> &gem1_hits,
+                            const std::vector<analysis::GEMHit> &gem2_hits,
+                            const std::vector<analysis::GEMHit> &gem3_hits,
+                            const std::vector<analysis::GEMHit> &gem4_hits) const;
+
+    std::vector<MatchHit_perChamber> MatchPerChamber(std::vector<analysis::HCHit> &hycalHits,
                             const std::vector<analysis::GEMHit> &gem1_hits,
                             const std::vector<analysis::GEMHit> &gem2_hits,
                             const std::vector<analysis::GEMHit> &gem3_hits,

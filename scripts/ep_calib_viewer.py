@@ -23,6 +23,7 @@ import json
 import math
 import re
 import sys
+from collections import OrderedDict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -78,7 +79,7 @@ MODULES_JSON = next((p for p in _DB_CANDIDATES if p.is_file()), None)
 class ModuleMetrics:
     """Per-module computed metrics for one (run, iteration) pair."""
     __slots__ = ("name", "stats", "peak", "sigma", "chi2",
-                 "factor", "base_energy")
+                 "factor", "base_energy", "old_factor")
 
     def __init__(self, name: str):
         self.name        = name
@@ -86,8 +87,9 @@ class ModuleMetrics:
         self.peak        = 0.0    # measured peak (MeV)
         self.sigma       = 0.0    # Gaussian sigma (MeV)
         self.chi2        = 0.0    # chi2/ndf of Gaussian fit
-        self.factor      = 1.0    # calibration factor from JSON
+        self.factor      = 1.0    # calibration factor from JSON (after this iteration)
         self.base_energy = 0.0    # expected peak from JSON (MeV)
+        self.old_factor  = 0.0    # factor before this iteration (from .dat oldFactor column)
 
 
 class IterData:
@@ -97,7 +99,8 @@ class IterData:
         self.root_path:      Optional[Path]           = None
         self.factors:        Dict[str, dict]          = {}   # raw JSON entries
         self.expected_peaks: Dict[str, float]         = {}   # from .dat ExpectedPeak
-        self._hist_cache:    Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
+        self.old_factors:    Dict[str, float]         = {}   # from .dat oldFactor
+        self.modified_modules: set = set()            # modules manually edited this session
         self._global_hists:  dict = {}   # preloaded by worker: ratio_all etc.
 
     @property
@@ -152,6 +155,7 @@ def scan_calib_dir(base: Path) -> Dict[str, Dict[int, IterData]]:
             df = run_dir / f"fitting_parameters_iter{it}.dat"
             if df.is_file():
                 data.expected_peaks = _parse_dat_expected_peaks(df)
+                data.old_factors    = _parse_dat_old_factors(df)
             iters[it] = data
         if iters:
             result[run_dir.name] = iters
@@ -169,6 +173,24 @@ def _parse_dat_expected_peaks(dat_path: Path) -> Dict[str, float]:
                 continue
             try:
                 result[tokens[0]] = float(tokens[1])
+            except ValueError:
+                pass
+    except Exception:
+        pass
+    return result
+
+
+def _parse_dat_old_factors(dat_path: Path) -> Dict[str, float]:
+    """Parse fitting_parameters_iter{N}.dat and return {module: oldFactor} (column 3)."""
+    result: Dict[str, float] = {}
+    try:
+        for line in dat_path.read_text().splitlines():
+            tokens = line.split()
+            # columns: Module ExpectedPeak MeasuredPeak oldFactor Ratio Sigma Chi2/ndf
+            if len(tokens) < 4 or tokens[0] == "Module":
+                continue
+            try:
+                result[tokens[0]] = float(tokens[3])
             except ValueError:
                 pass
     except Exception:
@@ -235,7 +257,6 @@ def compute_metrics(data: IterData) -> None:
                 # hname like "h_W1" -> module name "W1"
                 mod_name = hname[len("h_"):]
                 counts, edges = f[raw_key].to_numpy()
-                data._hist_cache[mod_name] = (counts, edges)
                 mm = data.metrics.setdefault(mod_name, ModuleMetrics(mod_name))
                 mm.stats = float(counts.sum())
                 mm.peak, mm.sigma, mm.chi2 = _fit_histogram(counts, edges)
@@ -250,6 +271,11 @@ def compute_metrics(data: IterData) -> None:
             mm.base_energy = data.expected_peaks[name]
         else:
             mm.base_energy = float(entry.get("base_energy") or 0.0)
+        # oldFactor from .dat (the factor before this iteration)
+        if name in data.old_factors:
+            mm.old_factor = data.old_factors[name]
+        else:
+            mm.old_factor = 0.0  # not available (e.g. no .dat file)
 
     # --- compute delta_E = (peak - base_energy) / base_energy ---
     # handled on-demand in _refresh_map()
@@ -268,9 +294,56 @@ class CalibMapWidget(HyCalMapWidget):
     MODE_STATS   = "Statistics"
     MODE_FACTOR  = "Calib Factor"
 
+    multiSelectionChanged = pyqtSignal(set)  # emitted when selected set changes
+
     def __init__(self, parent=None):
         super().__init__(parent, enable_zoom_pan=True, min_size=(460, 460))
         self._label = ""
+        self._marked_modules: set = set()    # red ✕ (manually edited)
+        self._selected_modules: set = set()  # blue ○ (multi-select pending)
+        self._multi_select_mode: bool = False
+
+    # ── marked (red ✕) ──────────────────────────────────────────────────────
+
+    def set_marked_modules(self, names: set) -> None:
+        self._marked_modules = set(names)
+        self.update()
+
+    # ── multi-select (blue ○) ────────────────────────────────────────────────
+
+    def set_multi_select_mode(self, enabled: bool) -> None:
+        self._multi_select_mode = enabled
+        if not enabled:
+            self._selected_modules.clear()
+            self.multiSelectionChanged.emit(set())
+        self.update()
+
+    def clear_selection(self) -> None:
+        self._selected_modules.clear()
+        self.multiSelectionChanged.emit(set())
+        self.update()
+
+    def get_selected_modules(self) -> set:
+        return set(self._selected_modules)
+
+    def _handle_click(self, pos):
+        if self._check_inline_range_edit_click(pos):
+            return
+        if self._cb_rect and self._cb_rect.contains(pos):
+            self.paletteClicked.emit()
+            return
+        name = self._hit(pos)
+        if self._multi_select_mode and name:
+            if name in self._selected_modules:
+                self._selected_modules.discard(name)
+            else:
+                self._selected_modules.add(name)
+            self.multiSelectionChanged.emit(set(self._selected_modules))
+            self.update()
+        else:
+            self.moduleClicked.emit(name or "")
+
+    # ── tooltip ─────────────────────────────────────────────────────────────
 
     def set_map_label(self, label: str):
         self._label = label
@@ -281,7 +354,51 @@ class CalibMapWidget(HyCalMapWidget):
     def _tooltip_text(self, name: str) -> str:
         v = self._values.get(name)
         base = name if v is None else f"{name}: {self._fmt_value(v)}"
+        tags = []
+        if name in self._marked_modules:
+            tags.append("✕ edited")
+        if name in self._selected_modules:
+            tags.append("◯ selected")
+        if tags:
+            base += f"  [{', '.join(tags)}]"
         return base
+
+    # ── overlays ─────────────────────────────────────────────────────────────
+
+    def _paint_overlays(self, p, w, h):
+        super()._paint_overlays(p, w, h)
+        from PyQt6.QtGui import QPen, QColor
+        from PyQt6.QtCore import Qt
+        # red ✕ for manually edited modules
+        if self._marked_modules:
+            pen = QPen(QColor("#ff3b30"), 1.5)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for name in self._marked_modules:
+                rect = self._rects.get(name)
+                if rect is None:
+                    continue
+                m = max(rect.width(), rect.height()) * 0.18
+                x0, y0 = rect.x() + m, rect.y() + m
+                x1, y1 = rect.right() - m, rect.bottom() - m
+                p.drawLine(int(x0), int(y0), int(x1), int(y1))
+                p.drawLine(int(x1), int(y0), int(x0), int(y1))
+        # blue ○ for multi-selected modules
+        if self._selected_modules:
+            pen = QPen(QColor("#3b9eff"), 2.0)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            p.setPen(pen)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for name in self._selected_modules:
+                rect = self._rects.get(name)
+                if rect is None:
+                    continue
+                m = max(rect.width(), rect.height()) * 0.08
+                p.drawEllipse(
+                    int(rect.x() + m), int(rect.y() + m),
+                    int(rect.width() - 2 * m), int(rect.height() - 2 * m)
+                )
 
 
 # =============================================================================
@@ -329,6 +446,7 @@ class ModuleDetailPanel(QWidget):
         self._mm:              Optional[ModuleMetrics] = None
         self._iter_data:       Optional[IterData]      = None
         self._cur_module_name: str   = ""
+        self._hist_cache: "OrderedDict[str, Tuple[np.ndarray, np.ndarray]]" = OrderedDict()
         self._refit_peak:      float = 0.0
         self._refit_sigma:     float = 0.0
         self._refit_chi2:      float = 0.0
@@ -408,6 +526,40 @@ class ModuleDetailPanel(QWidget):
         rf_lay.addWidget(self._refit_status)
 
         lay.addWidget(rf_box)
+
+        # ── Set Factor directly ─────────────────────────────────────────
+        sf_box = QGroupBox("Set Factor Directly")
+        sf_lay = QHBoxLayout(sf_box)
+        sf_lay.setContentsMargins(6, 12, 6, 4)
+        sf_lay.setSpacing(6)
+        sf_lay.addWidget(QLabel("Preset:"))
+        for preset in (0.122, 0.15):
+            btn = QPushButton(f"{preset}")
+            btn.setFixedWidth(60)
+            btn.setToolTip(f"Set factor to {preset} and save JSON")
+            btn.clicked.connect(lambda _, v=preset: self._do_set_factor(v))
+            sf_lay.addWidget(btn)
+        sf_lay.addSpacing(16)
+        sf_lay.addWidget(QLabel("Custom:"))
+        self._sf_custom = QLineEdit()
+        self._sf_custom.setFixedWidth(80)
+        self._sf_custom.setPlaceholderText("factor")
+        sf_lay.addWidget(self._sf_custom)
+        self._sf_apply_btn = QPushButton("Set && Save")
+        self._sf_apply_btn.setToolTip("Apply the custom factor value and save JSON")
+        self._sf_apply_btn.clicked.connect(self._do_set_factor_custom)
+        sf_lay.addWidget(self._sf_apply_btn)
+        sf_lay.addSpacing(16)
+        self._restore_btn = QPushButton("↩ Restore Old Factor")
+        self._restore_btn.setToolTip("Write old_factor (from .dat) back to JSON and keep the mark")
+        self._restore_btn.clicked.connect(self._do_restore_old_factor)
+        sf_lay.addWidget(self._restore_btn)
+        self._clear_mark_btn = QPushButton("✕ Clear Mark")
+        self._clear_mark_btn.setToolTip("Remove the red-cross mark from this module (does not change factor)")
+        self._clear_mark_btn.clicked.connect(self._do_clear_mark)
+        sf_lay.addWidget(self._clear_mark_btn)
+        sf_lay.addStretch()
+        lay.addWidget(sf_box)
 
     def set_root_path(self, path: Optional[Path]):
         self._root_path = path
@@ -494,11 +646,14 @@ class ModuleDetailPanel(QWidget):
                                 "Energy (MeV)", "Counts")
         self._canvas.redraw()
 
+    _HIST_CACHE_MAX = 30
+
     def _read_module_hist(self, name: str
                           ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        # Fast path: return in-memory cache populated during compute_metrics
-        if self._iter_data is not None and name in self._iter_data._hist_cache:
-            return self._iter_data._hist_cache[name]
+        # Fast path: bounded LRU cache (cleared when iteration changes)
+        if name in self._hist_cache:
+            self._hist_cache.move_to_end(name)
+            return self._hist_cache[name]
         if not HAS_UPROOT or self._root_path is None:
             return None
         key = f"module_energy/h_{name}"
@@ -508,8 +663,9 @@ class ModuleDetailPanel(QWidget):
                 if key not in avail:
                     return None
                 result = f[key].to_numpy()
-                if self._iter_data is not None:
-                    self._iter_data._hist_cache[name] = result
+                self._hist_cache[name] = result
+                if len(self._hist_cache) > self._HIST_CACHE_MAX:
+                    self._hist_cache.popitem(last=False)
                 return result
         except Exception:
             return None
@@ -519,6 +675,118 @@ class ModuleDetailPanel(QWidget):
     def set_iter_data(self, data: Optional["IterData"]) -> None:
         """Store reference to current IterData (needed for JSON write-back)."""
         self._iter_data = data
+        self._hist_cache.clear()
+
+    def _do_set_factor(self, value: float) -> None:
+        """Directly set factor to *value* and write to JSON."""
+        name = self._cur_module_name
+        if not name or self._iter_data is None:
+            self._refit_status.setText("No module selected")
+            return
+        mm = self._iter_data.metrics.get(name)
+        if mm is None:
+            self._refit_status.setText(f"Module {name!r} not in metrics")
+            return
+
+        old_factor = mm.factor
+        mm.factor  = value
+
+        entry = self._iter_data.factors.get(name)
+        if entry is not None:
+            entry["factor"] = value
+
+        jpath = self._iter_data.json_path
+        if jpath is not None:
+            try:
+                entries = list(self._iter_data.factors.values())
+                with open(jpath, "w") as fj:
+                    json.dump(entries, fj, indent=2)
+                note = f"  →  saved {jpath.name}"
+            except Exception as exc:
+                self._refit_status.setText(f"Save failed: {exc}")
+                return
+        else:
+            note = "  (JSON path not found — not saved)"
+
+        self._iter_data.modified_modules.add(name)
+        self._mm = mm
+        self._info_lbl.setText(
+            f"Factor: {mm.factor:.5f}  (was {old_factor:.5f})   "
+            f"Base energy: {mm.base_energy:.1f} MeV\n"
+            f"Events: {mm.stats:.0f}   "
+            f"Peak: {mm.peak:.1f} MeV   σ: {mm.sigma:.1f} MeV   "
+            f"χ²/ndf: {mm.chi2:.3f}"
+        )
+        self._refit_status.setText(f"Factor set to {value:.5f}  (was {old_factor:.5f}){note}")
+        self.refitApplied.emit(name)
+
+    def _do_set_factor_custom(self) -> None:
+        """Read the custom factor QLineEdit and call _do_set_factor."""
+        txt = self._sf_custom.text().strip()
+        try:
+            value = float(txt)
+        except ValueError:
+            self._refit_status.setText("Invalid factor value — enter a number")
+            return
+        if value <= 0:
+            self._refit_status.setText("Factor must be positive")
+            return
+        self._do_set_factor(value)
+
+    def _do_restore_old_factor(self) -> None:
+        """Restore old_factor from .dat to JSON and remove the mark."""
+        name = self._cur_module_name
+        if not name or self._iter_data is None:
+            self._refit_status.setText("No module selected")
+            return
+        mm = self._iter_data.metrics.get(name)
+        if mm is None:
+            self._refit_status.setText(f"Module {name!r} not in metrics")
+            return
+        if mm.old_factor <= 0.0:
+            self._refit_status.setText("old_factor not available (.dat not loaded)")
+            return
+
+        old_cur = mm.factor
+        mm.factor = mm.old_factor
+
+        entry = self._iter_data.factors.get(name)
+        if entry is not None:
+            entry["factor"] = mm.old_factor
+
+        jpath = self._iter_data.json_path
+        if jpath is not None:
+            try:
+                entries = list(self._iter_data.factors.values())
+                with open(jpath, "w") as fj:
+                    json.dump(entries, fj, indent=2)
+                note = f"  →  saved {jpath.name}"
+            except Exception as exc:
+                self._refit_status.setText(f"Save failed: {exc}")
+                return
+        else:
+            note = "  (JSON path not found — not saved)"
+
+        self._iter_data.modified_modules.add(name)
+        self._mm = mm
+        self._info_lbl.setText(
+            f"Factor: {mm.factor:.5f}  (restored from {old_cur:.5f})   "
+            f"Base energy: {mm.base_energy:.1f} MeV\n"
+            f"Events: {mm.stats:.0f}   "
+            f"Peak: {mm.peak:.1f} MeV   σ: {mm.sigma:.1f} MeV   "
+            f"χ²/ndf: {mm.chi2:.3f}"
+        )
+        self._refit_status.setText(f"Restored old_factor={mm.old_factor:.5f}{note}")
+        self.refitApplied.emit(name)
+
+    def _do_clear_mark(self) -> None:
+        """Remove red-cross mark without changing factor."""
+        name = self._cur_module_name
+        if not name or self._iter_data is None:
+            return
+        self._iter_data.modified_modules.discard(name)
+        self._refit_status.setText(f"Mark cleared for {name}")
+        self.refitApplied.emit(name)
 
     def _do_use_mean(self) -> None:
         """Use histogram weighted mean as peak value; chi2/ndf is fixed at 1.0."""
@@ -566,8 +834,13 @@ class ModuleDetailPanel(QWidget):
         sig0 = math.sqrt(max(var, bw ** 2 / 12.0))
 
         old_peak   = self._mm.peak   if (self._mm and self._mm.peak > 0.0) else 0.0
-        old_factor = self._mm.factor if self._mm else 1.0
-        new_factor = old_factor * mu0 / old_peak if old_peak > 0.0 else 0.0
+        # Use oldFactor from .dat (factor before this iteration);
+        # fall back to current JSON factor if .dat was not available.
+        old_factor = (self._mm.old_factor if (self._mm and self._mm.old_factor > 0.0)
+                      else (self._mm.factor if self._mm else 1.0))
+        base_energy = self._mm.base_energy if (self._mm and self._mm.base_energy > 0.0) else 0.0
+        # Formula: new_factor = old_factor * expected_peak / refit_peak
+        new_factor = old_factor * base_energy / mu0 if (mu0 > 0.0 and base_energy > 0.0) else 0.0
 
         self._refit_peak       = mu0
         self._refit_sigma      = sig0
@@ -585,7 +858,7 @@ class ModuleDetailPanel(QWidget):
             f"σ = {sig0:.2f} MeV     χ²/ndf = 1.000  (fixed){range_note}"
         )
         if new_factor > 0.0:
-            msg += f"\nNew factor: {new_factor:.5f}   (was {old_factor:.5f})"
+            msg += f"\nNew factor: {new_factor:.5f}   (oldFactor={old_factor:.5f},  expected={base_energy:.1f} MeV)"
         self._refit_status.setText(msg)
         self._apply_btn.setEnabled(new_factor > 0.0)
         self._redraw_refit_overlay(name, counts, edges, mu0, sig0)
@@ -647,10 +920,14 @@ class ModuleDetailPanel(QWidget):
             self._refit_sigma = float(abs(sig_f))
             self._refit_chi2  = chi2_ndf
 
-            old_peak   = self._mm.peak   if (self._mm and self._mm.peak > 0.0) else 0.0
-            old_factor = self._mm.factor if self._mm else 1.0
+            # Use oldFactor from .dat (factor before this iteration);
+            # fall back to current JSON factor if .dat was not available.
+            old_factor  = (self._mm.old_factor if (self._mm and self._mm.old_factor > 0.0)
+                           else (self._mm.factor if self._mm else 1.0))
+            base_energy = self._mm.base_energy if (self._mm and self._mm.base_energy > 0.0) else 0.0
+            # Formula: new_factor = old_factor * expected_peak / refit_peak
             self._refit_new_factor = (
-                old_factor * mu_f / old_peak if old_peak > 0.0 else 0.0
+                old_factor * base_energy / mu_f if (mu_f > 0.0 and base_energy > 0.0) else 0.0
             )
 
             msg = (
@@ -660,7 +937,7 @@ class ModuleDetailPanel(QWidget):
             if self._refit_new_factor > 0.0:
                 msg += (
                     f"\nNew factor: {self._refit_new_factor:.5f}"
-                    f"   (was {old_factor:.5f})"
+                    f"   (oldFactor={old_factor:.5f},  expected={base_energy:.1f} MeV)"
                 )
             self._refit_status.setText(msg)
             self._apply_btn.setEnabled(self._refit_new_factor > 0.0)
@@ -811,6 +1088,8 @@ class ModuleDetailPanel(QWidget):
         self._refit_status.setText(
             first_line + f"\nApplied.{save_note}{dat_note}")
         self._apply_btn.setEnabled(False)
+        if self._iter_data is not None:
+            self._iter_data.modified_modules.add(name)
         self.refitApplied.emit(name)
 
 
@@ -1048,6 +1327,7 @@ class EpCalibViewerWindow(QMainWindow):
         self._cur_data:  Optional[IterData] = None
         self._map_mode = CalibMapWidget.MODE_DELTA_E
         self._worker:    Optional[_MetricsWorker] = None
+        self._abandoned_workers: List[_MetricsWorker] = []
 
         self._build_ui()
         self.setWindowTitle("epCalib Viewer")
@@ -1154,6 +1434,11 @@ class EpCalibViewerWindow(QMainWindow):
         # Reusable widget from hycal_geoview.  Click "Auto" for a one-shot
         # range fit; double-click to keep auto-fitting on every refresh.
         # Mode switches still trigger an explicit one-shot fit via auto_fit().
+        self._map = CalibMapWidget()
+        self._map.moduleClicked.connect(self._on_module_clicked)
+        self._map.moduleHovered.connect(self._on_module_hovered)
+        self._map.multiSelectionChanged.connect(self._on_multi_selection_changed)
+
         z_bar = QHBoxLayout()
         z_bar.setSpacing(6)
         self._range_ctrl = ColorRangeControl(
@@ -1174,10 +1459,49 @@ class EpCalibViewerWindow(QMainWindow):
         map_box = QGroupBox("HyCal Map  (scroll to zoom · drag to pan · click module)")
         ml = QVBoxLayout(map_box)
         ml.setContentsMargins(2, 14, 2, 2)
-        self._map = CalibMapWidget()
-        self._map.moduleClicked.connect(self._on_module_clicked)
-        self._map.moduleHovered.connect(self._on_module_hovered)
         ml.addWidget(self._map)
+
+        # ── batch multi-select bar ────────────────────────────────────────
+        batch_bar = QHBoxLayout()
+        batch_bar.setSpacing(6)
+        self._multiselect_btn = QPushButton("◯ Multi-Select")
+        self._multiselect_btn.setCheckable(True)
+        self._multiselect_btn.setToolTip(
+            "Toggle multi-select mode\n"
+            "Click modules to add/remove from selection (blue circle)\n"
+            "Then set a factor for all selected modules at once")
+        self._multiselect_btn.toggled.connect(self._map.set_multi_select_mode)
+        batch_bar.addWidget(self._multiselect_btn)
+        self._sel_count_lbl = QLabel("0 selected")
+        self._sel_count_lbl.setStyleSheet(
+            f"color: {THEME.TEXT_DIM}; font-size: 11px; min-width: 72px;")
+        batch_bar.addWidget(self._sel_count_lbl)
+        batch_bar.addSpacing(8)
+        batch_bar.addWidget(QLabel("Factor:"))
+        self._batch_factor_edit = QLineEdit()
+        self._batch_factor_edit.setFixedWidth(80)
+        self._batch_factor_edit.setPlaceholderText("value")
+        batch_bar.addWidget(self._batch_factor_edit)
+        for _preset in (0.122, 0.15):
+            _btn = QPushButton(f"{_preset}")
+            _btn.setFixedWidth(54)
+            _btn.setToolTip(f"Fill factor field with {_preset}")
+            _btn.clicked.connect(
+                lambda _, v=_preset: self._batch_factor_edit.setText(str(v)))
+            batch_bar.addWidget(_btn)
+        self._batch_apply_btn = QPushButton("Apply to All Selected")
+        self._batch_apply_btn.setEnabled(False)
+        self._batch_apply_btn.setToolTip(
+            "Write the given factor to all selected modules and save JSON")
+        self._batch_apply_btn.clicked.connect(self._do_batch_set_factor)
+        batch_bar.addWidget(self._batch_apply_btn)
+        self._batch_clear_btn = QPushButton("Clear Selection")
+        self._batch_clear_btn.setEnabled(False)
+        self._batch_clear_btn.clicked.connect(self._do_batch_clear_selection)
+        batch_bar.addWidget(self._batch_clear_btn)
+        batch_bar.addStretch()
+        ml.addLayout(batch_bar)
+
         splitter.addWidget(map_box)
 
         # right panel
@@ -1282,16 +1606,25 @@ class EpCalibViewerWindow(QMainWindow):
         if data.metrics and data._global_hists:
             self._stats.set_preloaded(data.root_path, data._global_hists)
             self._refresh_map()
+            self._map.set_marked_modules(data.modified_modules)
             return
         if data.metrics and not data._global_hists:
             # metrics done but global hists not yet - rare; use blocking path
             self._stats.set_root_path(data.root_path)
             self._refresh_map()
+            self._map.set_marked_modules(data.modified_modules)
             return
-        # stop any previous worker still running
+        # Disconnect previous worker (if still running) without blocking the UI.
+        # Keep a reference in _abandoned_workers so the QThread object stays alive
+        # until it finishes naturally.
         if self._worker is not None and self._worker.isRunning():
-            self._worker.quit()
-            self._worker.wait()
+            try:
+                self._worker.finished.disconnect(self._on_metrics_ready)
+            except TypeError:
+                pass
+            self._abandoned_workers.append(self._worker)
+        # Prune any already-finished abandoned workers
+        self._abandoned_workers = [w for w in self._abandoned_workers if w.isRunning()]
         self.statusBar().showMessage(
             f"Loading run {run} iter {it} …")
         self._worker = _MetricsWorker(data, self)
@@ -1304,6 +1637,7 @@ class EpCalibViewerWindow(QMainWindow):
         if data is self._cur_data:
             self._stats.set_preloaded(data.root_path, data._global_hists)
             self._refresh_map()
+            self._map.set_marked_modules(data.modified_modules)
         self._worker = None
 
     # ── map mode ──────────────────────────────────────────────────────────────
@@ -1396,8 +1730,74 @@ class EpCalibViewerWindow(QMainWindow):
             self._hover_lbl.setText(name)
 
     def _on_refit_applied(self, _name: str) -> None:
-        """Called after a manual refit is saved; refresh map colors."""
+        """Called after a manual refit is saved; refresh map colors and marks."""
         self._refresh_map()
+        if self._cur_data is not None:
+            self._map.set_marked_modules(self._cur_data.modified_modules)
+
+    def _on_multi_selection_changed(self, selected: set) -> None:
+        n = len(selected)
+        self._sel_count_lbl.setText(f"{n} selected")
+        self._batch_apply_btn.setEnabled(n > 0)
+        self._batch_clear_btn.setEnabled(n > 0)
+
+    def _do_batch_clear_selection(self) -> None:
+        self._map.clear_selection()
+
+    def _do_batch_set_factor(self) -> None:
+        """Apply the batch factor to all multi-selected modules and save JSON."""
+        txt = self._batch_factor_edit.text().strip()
+        try:
+            value = float(txt)
+        except ValueError:
+            self.statusBar().showMessage(
+                "Batch apply: invalid factor value — enter a number", 4000)
+            return
+        if value <= 0:
+            self.statusBar().showMessage(
+                "Batch apply: factor must be positive", 4000)
+            return
+        data = self._cur_data
+        if data is None:
+            return
+        selected = self._map.get_selected_modules()
+        if not selected:
+            return
+
+        updated: List[str] = []
+        for name in selected:
+            mm = data.metrics.get(name)
+            if mm is None:
+                continue
+            mm.factor = value
+            entry = data.factors.get(name)
+            if entry is not None:
+                entry["factor"] = value
+            data.modified_modules.add(name)
+            updated.append(name)
+
+        jpath = data.json_path
+        if jpath is not None:
+            try:
+                entries = list(data.factors.values())
+                with open(jpath, "w") as fj:
+                    json.dump(entries, fj, indent=2)
+                note = f"saved {jpath.name}"
+            except Exception as exc:
+                self.statusBar().showMessage(
+                    f"Batch apply: save failed: {exc}", 6000)
+                return
+        else:
+            note = "JSON path not found — not saved"
+
+        self.statusBar().showMessage(
+            f"Set factor={value:.5f} for {len(updated)} module(s).  {note}", 6000)
+
+        # turn off multi-select mode, clear selection, refresh display
+        self._multiselect_btn.setChecked(False)
+        self._map.clear_selection()
+        self._refresh_map()
+        self._map.set_marked_modules(data.modified_modules)
 
 
 # =============================================================================

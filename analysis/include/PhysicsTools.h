@@ -101,6 +101,30 @@ public:
     std::array<float, 3> FitPeakResolution(int module_id) const;
     void Resolution2Database(int run_id);
 
+    // --- gain factor analysis ------------------------------------------------
+    // One result row per module.
+    struct GainResult {
+        std::string name;          // module name
+        float lms_peak   = 0.f;   // fitted LMS peak for this module
+        float lms_sigma  = 0.f;
+        float lms_chi2   = 0.f;
+        float g[4]       = {};    // g[1..3] = mod_lms * alpha_ref[j] / lms_ref[j]
+    };
+    // Fit LMS/alpha reference channels and all W-modules;
+    // updates module_gains_ in-place and resets the source histograms.
+    void ComputeModuleGains();
+
+    // Result array indexed by module index (size = module_count).
+    std::vector<GainResult> module_gains_;
+
+    float GetModuleGainFactor(int module_id) const {
+        int module_index = hycal_.id_to_index(module_id);
+        if (module_index < 0 || module_index >= (int)module_gains_.size())
+            return 1.f;
+        return (module_gains_[module_index].g[1] + module_gains_[module_index].g[2]
+            + module_gains_[module_index].g[3]) / 3.f;
+    }
+
     // --- kinematics ----------------------------------------------------------
     // Expected energy for elastic e-p or e-e scattering.
     //   theta: scattering angle in degrees

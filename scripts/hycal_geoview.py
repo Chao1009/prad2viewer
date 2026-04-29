@@ -765,9 +765,9 @@ class HyCalMapWidget(QWidget):
     def _paint_colorbar(self, p: QPainter, w: int, h: int):
         stops = self.palette_stops()
         cb_w = min(self.CB_MAX_WIDTH, w - 80)
-        cb_h = 14
+        cb_h = 20
         cb_x = (w - cb_w) / 2
-        cb_y = h - 40
+        cb_y = h - 50
         self._cb_rect = QRectF(cb_x, cb_y, cb_w, cb_h)
 
         grad = QLinearGradient(cb_x, 0, cb_x + cb_w, 0)
@@ -779,23 +779,100 @@ class HyCalMapWidget(QWidget):
         p.drawRect(self._cb_rect)
 
         p.setPen(self.CB_TEXT)
-        p.setFont(QFont("Consolas", 9))
-        label_y = cb_y + cb_h + 2
-        label_h = 14
-        min_str = self._fmt_value(self._vmin)
-        max_str = self._fmt_value(self._vmax)
-        p.drawText(QRectF(cb_x, label_y, 120, label_h),
+        font = QFont("Consolas", 11)
+        p.setFont(font)
+        fm = QFontMetricsF(font)
+        tick_h   = 5          # tick mark length (px)
+        label_y  = cb_y + cb_h + tick_h + 1
+        label_h  = fm.height() + 2
+        min_str  = self._fmt_value(self._vmin)
+        max_str  = self._fmt_value(self._vmax)
+
+        # ── intermediate ticks ────────────────────────────────────────
+        # Candidate positions evenly spaced in linear/log, rounded to int.
+        # Duplicates, values equal to endpoints, and ticks whose labels
+        # would overlap with a neighbour or with the endpoint labels are
+        # all discarded.
+        import math as _math
+        N_CANDS = 9     # generate more candidates than we may show
+        vmin, vmax = self._vmin, self._vmax
+        if self._log_scale and vmin > 0 and vmax > vmin:
+            raw_vals = [10 ** (
+                _math.log10(vmin) + (i + 1) / (N_CANDS + 1) *
+                (_math.log10(vmax) - _math.log10(vmin))
+            ) for i in range(N_CANDS)]
+        else:
+            span = vmax - vmin if vmax > vmin else 1.0
+            raw_vals = [vmin + (i + 1) / (N_CANDS + 1) * span
+                        for i in range(N_CANDS)]
+
+        # Round to integer and deduplicate while preserving order
+        seen = set()
+        int_vals = []
+        for rv in raw_vals:
+            iv = int(round(rv))
+            if iv in seen or iv <= int(round(vmin)) or iv >= int(round(vmax)):
+                continue
+            seen.add(iv)
+            int_vals.append(iv)
+
+        # Convert values → pixel positions, then drop ticks whose label
+        # would overlap a neighbour (min pixel gap = label_min_gap).
+        def val_to_x(v):
+            if self._log_scale and vmin > 0 and vmax > vmin:
+                t = (_math.log10(max(v, 1e-9)) - _math.log10(max(vmin, 1e-9))) / \
+                    (_math.log10(max(vmax, 1e-9)) - _math.log10(max(vmin, 1e-9)))
+            else:
+                t = (v - vmin) / (vmax - vmin) if vmax > vmin else 0.5
+            return cb_x + t * cb_w
+
+        label_min_gap = 8   # minimum pixel gap between label edges
+        accepted = []   # list of (iv, tx, lbl_w)
+        for iv in int_vals:
+            lbl  = str(iv)
+            lw   = fm.horizontalAdvance(lbl) + 4
+            tx   = val_to_x(iv)
+            # check against already-accepted ticks and endpoint labels
+            ok = True
+            # endpoint label widths (approx)
+            end_w = 130
+            if tx - lw / 2 < cb_x + end_w + label_min_gap:
+                ok = False
+            elif tx + lw / 2 > cb_x + cb_w - end_w - label_min_gap:
+                ok = False
+            else:
+                for _, ptx, plw in accepted:
+                    if abs(tx - ptx) < (lw + plw) / 2 + label_min_gap:
+                        ok = False
+                        break
+            if ok:
+                accepted.append((iv, tx, lw))
+
+        p.setPen(QPen(self.CB_TEXT, 1.0))
+        for iv, tx, lbl_w in accepted:
+            p.drawLine(QPointF(tx, cb_y + cb_h),
+                       QPointF(tx, cb_y + cb_h + tick_h))
+            lbl = str(iv)
+            p.drawText(QRectF(tx - lbl_w / 2, label_y, lbl_w, label_h),
+                       Qt.AlignmentFlag.AlignCenter, lbl)
+
+        # ── min / max / center text ───────────────────────────────────
+        p.setPen(self.CB_TEXT)
+        p.drawText(QRectF(cb_x, label_y, 130, label_h),
                    Qt.AlignmentFlag.AlignLeft, min_str)
-        p.drawText(QRectF(cb_x + cb_w - 120, label_y, 120, label_h),
+        p.drawText(QRectF(cb_x + cb_w - 130, label_y, 130, label_h),
                    Qt.AlignmentFlag.AlignRight, max_str)
-        p.drawText(QRectF(cb_x, label_y, cb_w, label_h),
+        # center text (palette name) sits above the bar
+        center_font = QFont("Consolas", 10)
+        p.setFont(center_font)
+        p.drawText(QRectF(cb_x, cb_y - fm.height() - 2, cb_w, fm.height() + 2),
                    Qt.AlignmentFlag.AlignCenter, self._colorbar_center_text())
+        p.setFont(font)  # restore
 
         if self._enable_inline_range_edit:
             # Faint pencil glyph next to each editable label hints
             # "click to edit".  Hit rects cover both the value text and
             # the pencil so the user can click anywhere on either.
-            fm = QFontMetricsF(p.font())
             pencil = "✎"   # LOWER RIGHT PENCIL
             pencil_w = fm.horizontalAdvance(pencil) + 4
             min_w = fm.horizontalAdvance(min_str) + 4

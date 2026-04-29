@@ -396,6 +396,7 @@ const uint8_t *EvChannel::GetCompositePayload(const EvNode &n, size_t &nbytes) c
     nbytes = 0;
     if (n.type != DATA_COMPOSITE || n.child_count < 2) return nullptr;
     auto &inner = nodes[n.child_first + 1];
+    if (inner.data_begin + inner.data_words > buffer.size()) return nullptr;
     nbytes = inner.data_words * sizeof(uint32_t);
     return reinterpret_cast<const uint8_t*>(&buffer[inner.data_begin]);
 }
@@ -600,6 +601,7 @@ void EvChannel::decodeFadcInto(fdec::EventData &evt) const
                 roc_idx++;
             }
             else if (mod == "fadc250_raw" && n.type == DATA_UINT32) {
+                if (n.data_begin + n.data_words > buffer.size()) continue;
                 fdec::RocData &rd = evt.rocs[roc_idx];
                 rd.present = true;
                 rd.tag = roc_tag;
@@ -610,6 +612,7 @@ void EvChannel::decodeFadcInto(fdec::EventData &evt) const
             else if (mod == "adc1881m" && config.adc_format == "adc1881m"
                      && n.type == DATA_UINT32)
             {
+                if (n.data_begin + n.data_words > buffer.size()) continue;
                 int crate_id = -1;
                 for (auto &re : config.roc_tags)
                     if (re.tag == roc_tag) { crate_id = re.crate; break; }

@@ -63,6 +63,9 @@ struct RunConfig {
     float hc_time_win_hi = 200.f;  // ns
     float matching_radius     = 15.f;
     bool  matching_use_square = true;
+    // For gain correction: which run to use as reference for computing the correction factors.  If negative, use the latest run with gain factors available.
+    std::string gain_data_dir = "gain_factor";
+    int gain_ref_run = 23915;
 };
 
 // Returns a RunConfig populated from the best-matching entry in `path`.
@@ -177,6 +180,11 @@ inline RunConfig LoadRunConfig(const std::string &path, int run_num)
         if (m.contains("radius"))         result.matching_radius     = m["radius"].get<float>();
         if (m.contains("use_square_cut")) result.matching_use_square = m["use_square_cut"].get<bool>();
     }
+    if (c.contains("gain_factor") && c["gain_factor"].is_object()) {
+        const auto &gf = c["gain_factor"];
+        if (gf.contains("data_dir")) result.gain_data_dir = gf["data_dir"].get<std::string>();
+        if (gf.contains("ref_run"))  result.gain_ref_run  = gf["ref_run"].get<int>();
+    }
     std::cerr << "RunInfo   : loaded run_number=" << best_run
               << " from " << path << "\n";
     return result;
@@ -232,12 +240,20 @@ inline bool WriteRunConfig(const std::string &path, int run_num,
     entry["time_cuts"]["hc_time_window"] = nlohmann::json::array({geo.hc_time_win_lo, geo.hc_time_win_hi});
     entry["matching"]["radius"]          = geo.matching_radius;
     entry["matching"]["use_square_cut"]  = geo.matching_use_square;
+    if (!geo.gain_data_dir.empty() || geo.gain_ref_run >= 0) {
+        if (!geo.gain_data_dir.empty()) entry["gain_factor"]["data_dir"] = geo.gain_data_dir;
+        if (geo.gain_ref_run >= 0)      entry["gain_factor"]["ref_run"]  = geo.gain_ref_run;
+    }
 
     auto &arr = cfg["configurations"];
     bool replaced = false;
     for (auto &e : arr) {
         if (e.contains("run_number") && e["run_number"].get<int>() == run_num) {
-            e = entry;
+            // Merge entry into e field-by-field: existing keys are updated
+            // in-place (preserving their original position); new keys are
+            // appended at the end.
+            for (auto it = entry.begin(); it != entry.end(); ++it)
+                e[it.key()] = it.value();
             replaced = true;
             break;
         }

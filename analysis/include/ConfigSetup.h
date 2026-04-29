@@ -50,17 +50,32 @@ inline RunConfig gRunConfig;
 //     TransformDetData(hc_hits, geo1);
 
 // -- single-hit primitives (used internally by the vector overloads) ---------
-inline void TransformDetData(HCHit &h, float beamX, float beamY, float ZfromTarget)
+inline void TransformDetData(HCHit &h, float detX, float detY, float ZfromTarget)
 {
-    h.x -= beamX;
-    h.y -= beamY;
+    h.x += detX;
+    h.y += detY;
     h.z += ZfromTarget;
 }
-inline void TransformDetData(GEMHit &h, float beamX, float beamY, float ZfromTarget)
+inline void TransformDetData(HCHit &h, const RunConfig &geo = gRunConfig)
 {
-    h.x -= beamX;
-    h.y -= beamY;
+    h.x += geo.hycal_x;
+    h.y += geo.hycal_y;
+    h.z += geo.hycal_z;
+}
+inline void TransformDetData(GEMHit &h, float detX, float detY, float ZfromTarget)
+{
+    h.x += detX;
+    h.y += detY;
     h.z += ZfromTarget;
+}
+inline void TransformDetData(GEMHit &h, const RunConfig &geo = gRunConfig)
+{
+    int det_id = h.det_id;
+    if (det_id >= 0 && det_id < 4) {
+        h.x += geo.gem_x[det_id];
+        h.y += geo.gem_y[det_id];
+        h.z += geo.gem_z[det_id];
+    }
 }
 
 // Apply successive rotations Rz → Ry → Rx (extrinsic, small-angle convention).
@@ -90,6 +105,10 @@ inline void RotateDetData(HCHit &h, float x_deg, float y_deg, float z_deg)
     }
     h.x = x; h.y = y; h.z = z;
 }
+inline void RotateDetData(HCHit &h, const RunConfig &geo = gRunConfig)
+{
+    RotateDetData(h, geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z);
+}
 
 inline void RotateDetData(GEMHit &h, float x_deg, float y_deg, float z_deg)
 {
@@ -115,6 +134,13 @@ inline void RotateDetData(GEMHit &h, float x_deg, float y_deg, float z_deg)
         y = ny; z = nz;
     }
     h.x = x; h.y = y; h.z = z;
+}
+inline void RotateDetData(GEMHit &h, const RunConfig &geo = gRunConfig)
+{
+    int det_id = h.det_id;
+    if (det_id >= 0 && det_id < 4) {
+        RotateDetData(h, geo.gem_tilt_x[det_id], geo.gem_tilt_y[det_id], geo.gem_tilt_z[det_id]);
+    }
 }
 
 // -- HCHit vector ------------------------------------------------------------
@@ -152,9 +178,9 @@ inline void RotateDetData(std::vector<GEMHit> &gem_hits,
 }
 
 // -- HCHit vector ------------------------------------------------------------
-inline void TransformDetData(std::vector<HCHit> &hc_hits, float beamX, float beamY, float ZfromTarget)
+inline void TransformDetData(std::vector<HCHit> &hc_hits, float detX, float detY, float ZfromTarget)
 {
-    for (auto &h : hc_hits) TransformDetData(h, beamX, beamY, ZfromTarget);
+    for (auto &h : hc_hits) TransformDetData(h, detX, detY, ZfromTarget);
 }
 
 inline void TransformDetData(std::vector<HCHit> &hc_hits, const RunConfig &geo = gRunConfig)
@@ -163,9 +189,9 @@ inline void TransformDetData(std::vector<HCHit> &hc_hits, const RunConfig &geo =
 }
 
 // -- GEMHit vector -----------------------------------------------------------
-inline void TransformDetData(std::vector<GEMHit> &gem_hits, float beamX, float beamY, float ZfromTarget)
+inline void TransformDetData(std::vector<GEMHit> &gem_hits, float detX, float detY, float ZfromTarget)
 {
-    for (auto &h : gem_hits) TransformDetData(h, beamX, beamY, ZfromTarget);
+    for (auto &h : gem_hits) TransformDetData(h, detX, detY, ZfromTarget);
 }
 
 // Each GEM hit is transformed using its own detector id.
@@ -182,14 +208,14 @@ inline void TransformDetData(std::vector<GEMHit> &gem_hits, const RunConfig &geo
 }
 
 // -- MollerData --------------------------------------------------------------
-inline void TransformDetData(MollerData &mollers, float beamX, float beamY, float ZfromTarget)
+inline void TransformDetData(MollerData &mollers, float detX, float detY, float ZfromTarget)
 {
     for (auto &moller : mollers) {
-        moller.first.x  -= beamX;
-        moller.first.y  -= beamY;
+        moller.first.x  += detX;
+        moller.first.y  += detY;
         moller.first.z  += ZfromTarget;
-        moller.second.x -= beamX;
-        moller.second.y -= beamY;
+        moller.second.x += detX;
+        moller.second.y += detY;
         moller.second.z += ZfromTarget;
     }
 }

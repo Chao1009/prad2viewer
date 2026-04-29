@@ -247,4 +247,66 @@ std::vector<MatchHit> MatchingTools::Match(
     return result;
 }
 
+// ============================================================================
+// MatchPerChamber — for each HyCal hit, independently find the best matching
+// GEM hit in each of the 4 chambers. No "used" exclusion across clusters.
+// gem_hits[d] = {x, y, z} of best match; -999 if no match in chamber d.
+// mflag bit d is set if chamber d has a match (bit 0 = GEM1, ..., bit 3 = GEM4).
+// ============================================================================
+
+std::vector<MatchHit_perChamber> MatchingTools::MatchPerChamber(
+    std::vector<analysis::HCHit> &hycalHits,
+    const std::vector<analysis::GEMHit> &gem1,
+    const std::vector<analysis::GEMHit> &gem2,
+    const std::vector<analysis::GEMHit> &gem3,
+    const std::vector<analysis::GEMHit> &gem4) const
+{
+    const std::vector<const std::vector<analysis::GEMHit> *> planes = {&gem1, &gem2, &gem3, &gem4};
+    constexpr float kNoMatch = -999.f;
+
+    std::vector<MatchHit_perChamber> result;
+    result.reserve(hycalHits.size());
+
+    for (size_t i = 0; i < hycalHits.size(); ++i) {
+        const auto &hit = hycalHits[i];
+        MatchHit_perChamber mhit(hit);
+        mhit.hycal_idx = static_cast<uint16_t>(i);
+
+        // initialise all chambers to no-match
+        for (int d = 0; d < 4; ++d) {
+            mhit.gem_hits[d][0] = kNoMatch;
+            mhit.gem_hits[d][1] = kNoMatch;
+            mhit.gem_hits[d][2] = kNoMatch;
+        }
+
+        for (int d = 0; d < 4; ++d) {
+            float best_dist = 1e9f;
+            const analysis::GEMHit *best = nullptr;
+
+            for (const auto &g : *planes[d]) {
+                if (!PreMatch(hit, g)) continue;
+                float dist = ProjectionDistance(hit, g);
+                if (dist < best_dist) {
+                    best_dist = dist;
+                    best = &g;
+                }
+            }
+
+            if (best) {
+                mhit.gem_hits[d][0] = best->x;
+                mhit.gem_hits[d][1] = best->y;
+                mhit.gem_hits[d][2] = best->z;
+                if(d==0) fdec::set_bit(mhit.mflag, kGEM1Match);
+                if(d==1) fdec::set_bit(mhit.mflag, kGEM2Match);
+                if(d==2) fdec::set_bit(mhit.mflag, kGEM3Match);
+                if(d==3) fdec::set_bit(mhit.mflag, kGEM4Match);
+            }
+        }
+
+        result.push_back(mhit);
+    }
+
+    return result;
+}
+
 } // namespace analysis

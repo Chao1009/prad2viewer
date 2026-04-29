@@ -1,7 +1,8 @@
 // epCalib.cpp: multi-threaded version of epCalib.cpp
-// Each thread processes a subset of input files: reads rawdata.root (peak mode),
-// runs HyCal clustering, and fills per-module energy histograms independently.
-// After all threads finish, histograms are merged and the calibration fitting
+// Files are processed in rounds; each round assigns one file per thread.
+// Each thread opens its own TFile, runs HyCal clustering, and fills per-module
+// energy histograms independently (reused across rounds).
+// After all rounds finish, histograms are merged and the calibration fitting
 // is performed single-threaded.
 //=============================================================================
 //
@@ -26,12 +27,13 @@
 #include "EventData.h"
 #include "InstallPaths.h"
 #include "load_daq_config.h"
+#include "RunInfoConfig.h"
+#include "gain_factor.h"
 
 #include <TFile.h>
 #include <TTree.h>
 #include <TLatex.h>
 #include <TCanvas.h>
-#include <TChain.h>
 #include <TROOT.h>
 #include <TClass.h>
 
@@ -44,7 +46,6 @@
 #include <filesystem>
 #include <vector>
 #include <thread>
-#include <atomic>
 #include <mutex>
 #include <memory>
 #include <algorithm>
@@ -56,24 +57,20 @@
 namespace fs = std::filesystem;
 
 using EventVars = prad2::RawEventData;
+using namespace analysis;
 
 // ── Branch setup ─────────────────────────────────────────────────────────────
 static void SetReadBranches(TTree *tree, EventVars &ev)
 {
     tree->SetBranchAddress("event_num",         &ev.event_num);
     tree->SetBranchAddress("trigger_bits",      &ev.trigger_bits);
-    tree->SetBranchAddress("timestamp",         &ev.timestamp);
     tree->SetBranchAddress("hycal.nch",         &ev.nch);
     tree->SetBranchAddress("hycal.module_id",   ev.module_id);
-    tree->SetBranchAddress("hycal.nsamples",    ev.nsamples);
-    tree->SetBranchAddress("hycal.samples",     ev.samples);
-    tree->SetBranchAddress("hycal.ped_mean",    ev.ped_mean);
-    tree->SetBranchAddress("hycal.ped_rms",     ev.ped_rms);
-    tree->SetBranchAddress("hycal.integral",    ev.integral);
     tree->SetBranchAddress("hycal.npeaks",      &ev.npeaks);
-    tree->SetBranchAddress("hycal.peak_height", ev.peak_height);
     tree->SetBranchAddress("hycal.peak_time",   ev.peak_time);
     tree->SetBranchAddress("hycal.peak_integral", ev.peak_integral);
+    tree->SetBranchAddress("hycal.gain_factor", ev.gain_factor);
+    tree->SetBranchAddress("hycal.peak_height", ev.peak_height);
 }
 
 // ── Per-thread accumulated results ──────────────────────────────────────────
@@ -187,40 +184,24 @@ int main(int argc, char *argv[])
     if (daq_config_file.empty())
         daq_config_file = db_dir + "/daq_config.json";
 
-    // ── Thread count / file distribution ─────────────────────────────────────
-    int n_files = static_cast<int>(root_files.size());
-    num_threads = std::max(1, std::min(num_threads, n_files));
+    // ── Thread count ─────────────────────────────────────────────────────────
+    int n_files    = static_cast<int>(root_files.size());
+    num_threads    = std::max(1, std::min(num_threads, n_files));
+    int num_rounds = (n_files + num_threads - 1) / num_threads;
     std::cout << "Processing " << n_files << " file(s) with "
-              << num_threads << " thread(s)\n";
+              << num_threads << " thread(s), " << num_rounds << " round(s)\n";
 
-    // Distribute files round-robin across threads
-    std::vector<std::vector<std::string>> thread_files(num_threads);
-    for (int i = 0; i < n_files; ++i)
-        thread_files[i % num_threads].push_back(root_files[i]);
-
-    // Per-thread event cap (approximate when max_events > 0)
-    int max_per_thread = (max_events > 0)
-        ? std::max(1, max_events / num_threads)
-        : -1;
-
-    // ── Launch worker threads ─────────────────────────────────────────────────
+    // ── Initialize per-thread results (once, reused across rounds) ───────────
     std::vector<std::unique_ptr<ThreadResult>> results(num_threads);
-    std::atomic<int> completed{0};
-    std::mutex       io_mtx;
+    std::mutex io_mtx;
 
-    auto worker = [&](int tid) {
+    for (int tid = 0; tid < num_threads; ++tid) {
         auto res = std::make_unique<ThreadResult>();
-
-        // Each thread initializes its own HyCalSystem
         res->hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/daq_map.json");
         int nmatched = res->hycal.LoadCalibration(input_calib_file);
-        {
-            std::lock_guard<std::mutex> lk(io_mtx);
-            std::cerr << "[thread " << tid << "] calibration: "
-                      << input_calib_file << " (" << nmatched << " modules)\n";
-        }
+        std::cerr << "[thread " << tid << "] calibration: "
+                  << input_calib_file << " (" << nmatched << " modules)\n";
 
-        // Build per-module energy histograms (one per module, indexed by module index)
         int nmod_t = res->hycal.module_count();
         res->module_hists.resize(nmod_t);
         for (int i = 0; i < nmod_t; ++i) {
@@ -236,100 +217,154 @@ int main(int argc, char *argv[])
             "Energy vs Theta;Theta (deg);Energy (MeV)",
             80, 0, 8, 2000, 0, 4000);
         res->h2_energy_theta->SetDirectory(nullptr);
-
-        // Thread-local global histograms
         res->hit_pos = std::make_unique<TH2F>(
             Form("hit_pos_%d", tid),
             "One Cluster Event Hit positions;hycal X (mm);hycal Y (mm)",
             250, -500, 500, 250, -500, 500);
         res->hit_pos->SetDirectory(nullptr);
-
         res->h_E_1cl = std::make_unique<TH1F>(
             Form("one_cluster_energy_%d", tid),
             "Single-cluster Event energy;E (MeV);Counts",
             1000, 0, 5000);
         res->h_E_1cl->SetDirectory(nullptr);
-
-        // Build TChain for this thread's file subset
-        TChain chain("events");
-        for (const auto &f : thread_files[tid])
-            chain.Add(f.c_str());
-
-        long long nentries = chain.GetEntries();
-        if (max_per_thread > 0)
-            nentries = std::min(nentries, (long long)max_per_thread);
-
-        // Set up branch addresses
-        EventVars ev;
-        SetReadBranches(&chain, ev);
-
-        fdec::HyCalCluster clusterer(res->hycal);
-        fdec::ClusterConfig cl_cfg;
-        clusterer.SetConfig(cl_cfg);
-
-        static constexpr uint32_t TBIT_sum = (1u << 8);
-        static constexpr uint32_t TBIT_lms = (1u << 24);
-
-        for (long long i = 0; i < nentries; ++i) {
-            chain.GetEntry(i);
-
-            if (i % 5000 == 0) {
-                std::lock_guard<std::mutex> lk(io_mtx);
-                std::cout << "[thread " << tid << "] event " << i + 1
-                          << "/" << nentries << "\r" << std::flush;
-            }
-
-            if (!(ev.trigger_bits & TBIT_sum)) continue;
-            if (  ev.trigger_bits & TBIT_lms ) continue;
-
-            clusterer.Clear();
-            for (int j = 0; j < ev.nch; ++j) {
-                const auto *mod = res->hycal.module_by_id(ev.module_id[j]);
-                if (!mod || !mod->is_hycal()) continue;
-                if (ev.npeaks[j] <= 0) continue;
-                float adc    = ev.peak_integral[j][0];
-                float energy = (mod->cal_factor > 0)
-                    ? static_cast<float>(mod->energize(adc))
-                    : adc * 0.1f;
-                clusterer.AddHit(mod->index, energy);
-            }
-
-            clusterer.FormClusters();
-            std::vector<fdec::ClusterHit> hits;
-            clusterer.ReconstructHits(hits);
-
-            if (hits.size() == 1) {
-                int midx = res->hycal.id_to_index(hits[0].center_id);
-                if (midx >= 0 && midx < (int)res->module_hists.size())
-                    res->module_hists[midx]->Fill(hits[0].energy);
-                res->hit_pos->Fill(hits[0].x, hits[0].y);
-                res->h_E_1cl->Fill(hits[0].energy);
-                float theta = std::atan(std::sqrt(hits[0].x * hits[0].x +
-                                                  hits[0].y * hits[0].y) / hycal_z)
-                              * 180.f / 3.14159265f;
-                res->h2_energy_theta->Fill(theta, hits[0].energy);
-            }
-        }
-
-        res->events_processed = nentries;
-        {
-            std::lock_guard<std::mutex> lk(io_mtx);
-            std::cout << "\n[thread " << tid << "] done, "
-                      << nentries << " events\n";
-        }
         results[tid] = std::move(res);
-        completed.fetch_add(1);
-    };
+    }
 
-    std::vector<std::thread> threads;
-    threads.reserve(num_threads);
-    for (int i = 0; i < num_threads; ++i)
-        threads.emplace_back(worker, i);
-    for (auto &t : threads)
-        t.join();
+    // ── Process files in rounds: num_threads files per round, 1 file/thread ──
+    static constexpr uint32_t TBIT_sum = (1u << 8);
+    static constexpr uint32_t TBIT_lms = (1u << 24);
+
+    for (int round = 0; round < num_rounds; ++round) {
+        int round_start        = round * num_threads;
+        int round_end          = std::min(round_start + num_threads, n_files);
+        int threads_this_round = round_end - round_start;
+
+        std::cout << "\nRound " << (round + 1) << "/" << num_rounds
+                  << ": files [" << round_start << ", " << round_end - 1 << "]\n";
+
+        std::vector<std::thread> threads;
+        threads.reserve(threads_this_round);
+
+        for (int t = 0; t < threads_this_round; ++t) {
+            threads.emplace_back([&, t, round]() {
+                int fi = round * num_threads + t;
+                ThreadResult *res = results[t].get();
+
+                // Open a single file (no TChain)
+                TFile *rfile = TFile::Open(root_files[fi].c_str(), "READ");
+                if (!rfile || rfile->IsZombie()) {
+                    std::lock_guard<std::mutex> lk(io_mtx);
+                    std::cerr << "[thread " << t << "] cannot open "
+                              << root_files[fi] << "\n";
+                    if (rfile) { rfile->Close(); delete rfile; }
+                    return;
+                }
+                TTree *tree = dynamic_cast<TTree *>(rfile->Get("events"));
+                if (!tree) {
+                    std::lock_guard<std::mutex> lk(io_mtx);
+                    std::cerr << "[thread " << t << "] no 'events' tree in "
+                              << root_files[fi] << "\n";
+                    rfile->Close(); delete rfile;
+                    return;
+                }
+
+                long long nentries = tree->GetEntries();
+                if (max_events > 0) {
+                    // Per-file cap: distribute max_events evenly across all files.
+                    // Use ceiling division so small max_events still processes >= 1 event/file.
+                    long long cap = ((long long)max_events + n_files - 1) / n_files;
+                    nentries = std::min(nentries, cap);
+                }
+
+                EventVars ev;
+                SetReadBranches(tree, ev);
+
+                int run_num = get_run_int(root_files[fi]);
+                gRunConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
+                auto gain_correction = prad2::ComputeGainCorrection(db_dir + 
+                    "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
+
+                fdec::HyCalCluster clusterer(res->hycal);
+                fdec::ClusterConfig cl_cfg;
+                clusterer.SetConfig(cl_cfg);
+
+                for (long long i = 0; i < nentries; ++i) {
+                    tree->GetEntry(i);
+
+                    if (i % 5000 == 0) {
+                        std::lock_guard<std::mutex> lk(io_mtx);
+                        std::cout << "[thread " << t << "] file[" << fi << "] event "
+                                  << i + 1 << "/" << nentries << "\r" << std::flush;
+                    }
+
+                    if (!(ev.trigger_bits & TBIT_sum)) continue;
+                    if (  ev.trigger_bits & TBIT_lms ) continue;
+
+                    if (ev.nch > 500) continue;
+
+                    clusterer.Clear();
+                    for (int j = 0; j < ev.nch; ++j) {
+                        const auto *mod = res->hycal.module_by_id(ev.module_id[j]);
+                        if (!mod || !mod->is_hycal()) continue;
+                        if (ev.npeaks[j] <= 0) continue;
+
+                        int bestIdx = -1;
+                        float bestHeight = -1.f;
+                        for(int p = 0; p < ev.npeaks[j]; ++p){
+                            if(ev.peak_time[j][p] > gRunConfig.hc_time_win_lo &&
+                                ev.peak_time[j][p] < gRunConfig.hc_time_win_hi) {
+                                if(ev.peak_integral[j][p] > bestHeight) {
+                                    bestHeight = ev.peak_integral[j][p];
+                                    bestIdx = p;
+                                }
+                            }
+                        }
+                        if (bestIdx < 0) continue;
+                        float adc    = ev.peak_integral[j][bestIdx];
+                        int mod_id = ev.module_id[j];
+                        // gain correction for HyCal modules
+                        if(mod_id>1000) adc *= gain_correction.w[mod_id-1000].avg;
+                        else adc *= gain_correction.g[mod_id].avg;
+                        float energy = (mod->cal_factor > 0)
+                            ? static_cast<float>(mod->energize(adc))
+                            : adc * 0.f;
+                        clusterer.AddHit(mod->index, energy);
+                    }
+
+                    clusterer.FormClusters();
+                    std::vector<fdec::ClusterHit> hits;
+                    clusterer.ReconstructHits(hits);
+
+                    if (hits.size() == 1 && hits[0].nblocks > 5) {
+                        int midx = res->hycal.id_to_index(hits[0].center_id);
+                        if (midx >= 0 && midx < (int)res->module_hists.size())
+                            res->module_hists[midx]->Fill(hits[0].energy);
+                        res->hit_pos->Fill(hits[0].x, hits[0].y);
+                        res->h_E_1cl->Fill(hits[0].energy);
+                        float theta = std::atan(std::sqrt(hits[0].x * hits[0].x +
+                                                          hits[0].y * hits[0].y) / hycal_z)
+                                      * 180.f / 3.14159265f;
+                        res->h2_energy_theta->Fill(theta, hits[0].energy);
+                    }
+                }
+
+                res->events_processed += nentries;
+                rfile->Close(); delete rfile;
+                {
+                    std::lock_guard<std::mutex> lk(io_mtx);
+                    std::cout << "\n[thread " << t << "] done: " << root_files[fi]
+                              << " (" << nentries << " events)\n";
+                }
+            });
+        }
+
+        for (auto &th : threads)
+            th.join();
+        std::cout << "Round " << (round + 1) << " complete.\n";
+    }
 
     // ── Merge histograms (single-threaded) ────────────────────────────────────
-    std::cout << "\nAll threads finished. Merging histograms...\n";
+    std::cout << "\nAll rounds finished. Merging histograms...\n";
 
     // Initialize main HyCalSystem for the fitting stage
     fdec::HyCalSystem hycal;
@@ -405,6 +440,7 @@ int main(int argc, char *argv[])
     dat_out << std::setw(8)  << "Module"
             << std::setw(16) << "ExpectedPeak"
             << std::setw(16) << "MeasuredPeak"
+            << std::setw(16) << "oldFactor"
             << std::setw(16) << "Ratio"
             << std::setw(16) << "Sigma"
             << std::setw(16) << "Chi2/ndf" << "\n";
@@ -431,10 +467,13 @@ int main(int argc, char *argv[])
                                     / hycal_z) * 180.f / 3.14159265f;
         float expected_peak = physics.ExpectedEnergy(theta_deg, Ebeam, "ep");
         float ratio         = expected_peak / peak;
+        if(ratio < 0.5) ratio = 0.5; 
+        if(ratio > 2.0) ratio = 2.0;
         ratio_module_all->Fill(ratio);
 
         double current_factor = hycal.GetCalibConstant(mod_id);
-        hycal.SetCalibConstant(mod_id, current_factor * ratio);
+        double new_factor = current_factor * ratio;
+        hycal.SetCalibConstant(mod_id, new_factor);
         hycal.SetCalibBaseEnergy(mod_id, expected_peak);
 
         module_ratio->Fill(hycal.module(m).x, hycal.module(m).y,
@@ -447,6 +486,7 @@ int main(int argc, char *argv[])
         dat_out << std::setw(8)  << name
                 << std::setw(16) << expected_peak
                 << std::setw(16) << peak
+                << std::setw(16) << current_factor
                 << std::setw(16) << ratio
                 << std::setw(16) << sigma
                 << std::setw(16) << chi2 << "\n";

@@ -602,7 +602,7 @@ int gem_hycal_matching(const char *evio_path,
                         float best_h = -1.f;
                         for (int p = 0; p < wres.npeaks; ++p) {
                             const auto &pk = wres.peaks[p];
-                            if (pk.time > 100.f && pk.time < 200.f
+                            if (pk.time > geo.hc_time_win_lo && pk.time < geo.hc_time_win_hi
                                 && pk.height > best_h) {
                                 best_h = pk.height; best = p;
                             }

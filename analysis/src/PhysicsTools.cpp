@@ -5,6 +5,7 @@
 #include "PhysicsTools.h"
 #include "InstallPaths.h"
 #include <TF1.h>
+#include <TSpectrum.h>
 #include <TMath.h>
 #include <cmath>
 #include <cstdlib>
@@ -38,7 +39,7 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         nmod, 0, nmod, 2000, 0, 4000);
     h2_energy_theta_ = std::make_unique<TH2F>(
         "h2_energy_theta", "Energy vs Theta;Theta (deg);Energy (MeV)",
-        80, 0, 8, 2000, 0, 4000);
+        160, 0, 8, 4000, 0, 4000);
     h2_Nevents_moduleMap_ = std::make_unique<TH2F>(
         "h2_Nevents_moduleMap", "Number of Events per Module;Column;Row",
         34, 0.5, 34.5, 34, -34.5, -0.5);
@@ -71,6 +72,10 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         h_lmsCH_alphaIntegral_[ch] = std::make_unique<TH1F>(
             Form("h_lmsCH%d_alphaIntegral", ch), Form("LMS%d Alpha Peak Integral;Integral (ADC*ns);Counts", ch), 1000, 0, 400000);
     }
+    module_gains_.resize(nmod);
+    for (int i = 0; i < nmod; ++i)
+        module_gains_[i].name = hycal_.module(i).name;
+
     h_modCH_lmsHeight_.resize(nmod);
     h_modCH_lmsIntegral_.resize(nmod);
     for (int i = 0; i < nmod; ++i) {
@@ -94,6 +99,24 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
 }
 
 PhysicsTools::~PhysicsTools() = default;
+
+// Crystal Ball: p[0]=amp, p[1]=mean, p[2]=sigma, p[3]=alpha, p[4]=n
+static double crystalBallFunc(double *x, double *p)
+{
+    double amp   = p[0];
+    double mu    = p[1];
+    double sigma = p[2];
+    double alpha = p[3];
+    double n     = p[4];
+    double t = (x[0] - mu) / sigma;
+    if (t > -std::abs(alpha)) {
+        return amp * std::exp(-0.5 * t * t);
+    } else {
+        double a = std::pow(n / std::abs(alpha), n) * std::exp(-0.5 * alpha * alpha);
+        double b = n / std::abs(alpha) - std::abs(alpha);
+        return amp * a * std::pow(b - t, -n);
+    }
+}
 
 void PhysicsTools::FillModuleEnergy(int module_id, float energy)
 {   
@@ -197,19 +220,39 @@ std::array<float, 3> PhysicsTools::FitPeakResolution(int module_id) const
     TH1F *h = module_hists_[module_index].get();
     if (!h || h->GetEntries() < 1) return {0.f, 0.f, 100.f};
 
-    // find peak bin, fit Gaussian around it
-    double peak0 = h->GetBinCenter(h->GetMaximumBin());
-    double rms0  = h->GetRMS();
-    double lo = peak0 - 2.0 * rms0, hi = peak0 + 2.0 * rms0;
+    // --- peak search via TSpectrum ---
+    TSpectrum spec(10);
+    // sigma=2 bins, threshold=5% of maximum; suppress background and drawing
+    int nfound = spec.Search(h, 2, "nobackground nodraw", 0.05);
 
-    TF1 gaus("gfit", "gaus", lo, hi);
-    gaus.SetParameters(h->GetMaximum(), peak0, rms0);
-    h->Fit(&gaus, "RQ");
+    double peak0;
+    if (nfound > 0) {
+        // pick the rightmost (highest-energy) peak
+        const double *xpeaks = spec.GetPositionX();
+        peak0 = xpeaks[0];
+        for (int i = 1; i < nfound; ++i)
+            if (xpeaks[i] > peak0) peak0 = xpeaks[i];
+    } else {
+        // fallback: maximum bin
+        peak0 = h->GetBinCenter(h->GetMaximumBin());
+    }
 
-    float mean  = gaus.GetParameter(1);
-    //if( mean < 0 ) mean = 0.f;
-    float sigma = gaus.GetParameter(2);
-    float chi2 = (gaus.GetNDF() > 0) ? gaus.GetChisquare() / gaus.GetNDF() : 0.f;
+    // --- Gaussian fit around the selected peak ---
+    double rms0 = 40.;
+    double lo = peak0 - 1.5 * rms0, hi = peak0 + 1.5 * rms0;
+
+    // Crystal Ball: Gaussian core + power-law low-energy tail
+    // p[0]=amplitude, p[1]=mean, p[2]=sigma, p[3]=alpha, p[4]=n
+    TF1 cb("cb_fit", crystalBallFunc, lo, hi, 5);
+    cb.SetParameters(h->GetBinContent(h->FindBin(peak0)), peak0, rms0, 1.5, 3.0);
+    cb.SetParLimits(2, 1.,  200.);   // sigma > 0
+    cb.SetParLimits(3, 0.1,   5.);   // alpha > 0
+    cb.SetParLimits(4, 1.1,  20.);   // n > 1
+    h->Fit(&cb, "RQL");
+
+    float mean  = cb.GetParameter(1);
+    float sigma = std::abs(cb.GetParameter(2));
+    float chi2  = (cb.GetNDF() > 0) ? cb.GetChisquare() / cb.GetNDF() : 0.f;
     return {mean, sigma, chi2};
 }
 
@@ -344,4 +387,69 @@ float PhysicsTools::GetPhiAngle(float x, float y)
     return phi;
 }
 
-} // namespace analysis
+//for gain factor monitoring
+
+// Helper: fit a TH1F with a Gaussian and return {mean, sigma, chi2/ndf}.
+// Returns {0,0,0} if histogram is null or has too few entries.
+static std::array<double, 3> fitGaus(TH1F *h)
+{
+    if (!h || h->GetEntries() < 10) return {0., 0., 0.};
+    double peak0 = h->GetBinCenter(h->GetMaximumBin());
+    double rms0  = h->GetRMS();
+    if (rms0 <= 0.) rms0 = peak0 * 0.1;
+    double lo = peak0 - 2. * rms0, hi = peak0 + 2. * rms0;
+    TF1 gaus("_fg_", "gaus", lo, hi);
+    gaus.SetParameters(h->GetMaximum(), peak0, rms0);
+    h->Fit(&gaus, "RQ0");
+    double chi2 = (gaus.GetNDF() > 0) ? gaus.GetChisquare() / gaus.GetNDF() : 0.;
+    return {gaus.GetParameter(1), std::abs(gaus.GetParameter(2)), chi2};
+}
+
+void PhysicsTools::ComputeModuleGains()
+{
+    // --- fit LMS and alpha reference channels (index 1..3) ---
+    double lms_ref[4]   = {}, alpha_ref[4] = {};
+    for (int i = 1; i <= 3; ++i) {
+        auto r = fitGaus(h_lmsCH_lmsIntegral_[i].get());
+        lms_ref[i] = r[0];
+        auto a = fitGaus(h_lmsCH_alphaIntegral_[i].get());
+        alpha_ref[i] = a[0];
+    }
+
+    // --- update module_gains_ in-place ---
+    int nmod = hycal_.module_count();
+    for (int i = 0; i < nmod; ++i) {
+        auto &mod = hycal_.module(i);
+        auto &res = module_gains_[i];
+        // reset numeric fields
+        res.lms_peak = res.lms_sigma = res.lms_chi2 = 0.f;
+        res.g[0] = res.g[1] = res.g[2] = res.g[3] = 0.f;
+
+        if (!mod.is_hycal()) continue;
+        if (mod.name.empty() || mod.name[0] != 'W') continue;
+
+        TH1F *h = (i < (int)h_modCH_lmsIntegral_.size())
+                  ? h_modCH_lmsIntegral_[i].get() : nullptr;
+        auto r = fitGaus(h);
+        if (r[0] <= 0.) continue;
+
+        res.lms_peak  = static_cast<float>(r[0]);
+        res.lms_sigma = static_cast<float>(r[1]);
+        res.lms_chi2  = static_cast<float>(r[2]);
+        for (int j = 1; j <= 3; ++j) {
+            res.g[j] = (lms_ref[j] > 0. && alpha_ref[j] > 0.)
+                       ? static_cast<float>(r[0] * alpha_ref[j] / lms_ref[j])
+                       : 1.f;
+        }
+    }
+
+    // --- reset histograms for next fill cycle ---
+    for (int i = 1; i <= 3; ++i) {
+        if (h_lmsCH_lmsIntegral_[i])   h_lmsCH_lmsIntegral_[i]->Reset();
+        if (h_lmsCH_alphaIntegral_[i]) h_lmsCH_alphaIntegral_[i]->Reset();
+    }
+    for (auto &h : h_modCH_lmsIntegral_)
+        if (h) h->Reset();
+}
+
+}

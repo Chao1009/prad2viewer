@@ -21,6 +21,7 @@
 #include <TTree.h>
 #include <TH1F.h>
 #include <TH2F.h>
+#include <TLatex.h>
 #include <TString.h>
 #include <TSystem.h>
 #include <TChain.h>
@@ -42,6 +43,9 @@
 using namespace analysis;
 namespace fs = std::filesystem;
 
+// Forward declaration
+float fitAndDraw(TH1F* hist, const std::string& out_path, float fit_range);
+
 // Aliases for the shared replay data structures
 using EventVars_Recon = prad2::ReconEventData;
 // ── Tree branch struct ───────────────────────────────────────────────────
@@ -62,13 +66,10 @@ void setupReconBranches(TTree *tree, EventVars_Recon &ev)
     tree->SetBranchAddress("cl_flag",      ev.cl_flag);
     // Matching results
     tree->SetBranchAddress("matchFlag",    ev.matchFlag);
-    tree->SetBranchAddress("matchHC_x",    ev.matchHC_x);
-    tree->SetBranchAddress("matchHC_y",    ev.matchHC_y);
-    tree->SetBranchAddress("matchHC_z",    ev.matchHC_z);
     tree->SetBranchAddress("matchGEMx",    ev.matchGEMx);
     tree->SetBranchAddress("matchGEMy",    ev.matchGEMy);
     tree->SetBranchAddress("matchGEMz",    ev.matchGEMz);
-    tree->SetBranchAddress("matchNum",     &ev.matchNum);
+    tree->SetBranchAddress("match_num",     &ev.matchNum);
     //quick and simple matching results for quick check
     tree->SetBranchAddress("mHit_E", ev.mHit_E);
     tree->SetBranchAddress("mHit_x", ev.mHit_x);
@@ -98,7 +99,7 @@ static std::vector<std::string> collectRootFiles(const std::string &path);
 int main(int argc, char *argv[])
 {
     std::string output;
-    float Ebeam = 1100.f;
+    float Ebeam = 2108.f;
     int run_id = 12345;
 
     // --- geometry constants (can be made configurable) ---
@@ -172,6 +173,8 @@ int main(int argc, char *argv[])
         "All clusters;E (MeV);Counts", 1000, 0, 4000);
     TH1F *h_tot = new TH1F("total_energy",
         "Total energy per event;E (MeV);Counts", 1000, 0, 4000);
+    TH2F *h2_energy_theta_ep_ee = new TH2F("energy_vs_theta",
+        "Energy vs Theta(1 cluster);Theta (deg);Energy (MeV)", 160, 0, 8, 4000, 0, 4000);
 
     MollerData hycal_mollers;
 
@@ -198,20 +201,28 @@ int main(int argc, char *argv[])
         if (ev.n_clusters == 1) {
             physics.FillModuleEnergy(ev.cl_center[0], ev.cl_energy[0]);
             h_1cl->Fill(ev.cl_energy[0]);
+            h2_energy_theta_ep_ee->Fill(std::atan(std::sqrt(ev.cl_x[0]*ev.cl_x[0] + ev.cl_y[0]*ev.cl_y[0]) / ev.cl_z[0]) * 180.f / M_PI,
+                                      ev.cl_energy[0]);
         }
 
         if (ev.n_clusters == 2) {
             h_2cl->Fill(ev.cl_energy[0]);
             h_2cl->Fill(ev.cl_energy[1]);
 
+            //h2_energy_theta_ep_ee->Fill(std::atan(std::sqrt(ev.cl_x[0]*ev.cl_x[0] + ev.cl_y[0]*ev.cl_y[0]) / ev.cl_z[0]) * 180.f / M_PI,
+             //                         ev.cl_energy[0]);
+            //h2_energy_theta_ep_ee->Fill(std::atan(std::sqrt(ev.cl_x[1]*ev.cl_x[1] + ev.cl_y[1]*ev.cl_y[1]) / ev.cl_z[1]) * 180.f / M_PI,
+              //                        ev.cl_energy[1]);
+
             float Epair = ev.cl_energy[0] + ev.cl_energy[1];
             float sigma = Ebeam * 0.025f / std::sqrt(Ebeam / 1000.f);
-            if (std::abs(Epair - Ebeam) < 3. * sigma) {
+            if (std::abs(Epair - Ebeam) < 4. * sigma) {
                 MollerEvent mp(
                     {ev.cl_x[0], ev.cl_y[0], ev.cl_z[0], ev.cl_energy[0]},
                     {ev.cl_x[1], ev.cl_y[1], ev.cl_z[1], ev.cl_energy[1]});
-                hycal_mollers.push_back(mp);
                 physics.FillMollerPhiDiff(physics.GetMollerPhiDiff(mp));
+                if(fabs(physics.GetMollerPhiDiff(mp)) > 5.f ) continue;
+                hycal_mollers.push_back(mp);
                 physics.Fill2armMollerPosHist(mp.first.x, mp.first.y);
                 physics.Fill2armMollerPosHist(mp.second.x, mp.second.y);
             }
@@ -227,6 +238,10 @@ int main(int argc, char *argv[])
         }
     }
 
+    float hycal_vertex_z = fitAndDraw(physics.GetMollerZHist(), "Poscalib_result/hycal_vertex_z", 100.);
+    float hycal_center_x = fitAndDraw(physics.GetMollerXHist(), "Poscalib_result/hycal_center_x", 2.);
+    float hycal_center_y = fitAndDraw(physics.GetMollerYHist(), "Poscalib_result/hycal_center_y", 2.);
+
     // --- write output ---
     outfile.cd();
     hit_pos->Write();
@@ -235,6 +250,7 @@ int main(int argc, char *argv[])
     if (physics.GetEnergyVsModuleHist()) physics.GetEnergyVsModuleHist()->Write();
     if (physics.GetEnergyVsThetaHist())  physics.GetEnergyVsThetaHist()->Write();
     h_1cl->Write(); h_2cl->Write(); h_all->Write(); h_tot->Write();
+    h2_energy_theta_ep_ee->Write();
 
     outfile.cd();
     outfile.mkdir("physics_yields"); outfile.cd("physics_yields");
@@ -288,4 +304,20 @@ static std::vector<std::string> collectRootFiles(const std::string &path)
         files.push_back(path);
     }
     return files;
+}
+
+float fitAndDraw(TH1F* hist, const std::string& out_path, const float fit_range){
+    TCanvas *c = new TCanvas("", "", 800, 600);
+    float mean = hist->GetBinCenter(hist->GetMaximumBin());
+    hist->Fit("gaus", "rq", "", mean-fit_range, mean+fit_range);
+    hist->Draw();
+    TLatex *latex = new TLatex();
+    latex->SetNDC();
+    latex->SetTextSize(0.04);
+    latex->DrawLatex(0.15, 0.85, Form("%.2f mm +- %.2f mm", hist->GetFunction("gaus")->GetParameter(1), hist->GetFunction("gaus")->GetParError(1)));
+    fs::create_directories(fs::path(out_path).parent_path());
+    c->SaveAs((out_path + ".png").c_str());
+    delete c;
+
+    return hist->GetFunction("gaus")->GetParameter(1);
 }

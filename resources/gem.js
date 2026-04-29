@@ -12,7 +12,6 @@
 const GEM_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
 
 let gemEffData = null;        // last /api/gem/efficiency response
-let gemEffSelectedTest = 1;   // which test detector to render in the ZX/ZY view
 
 // Theme-aware layout factories (read from the active THEME at call time).
 function PL_GEM_OCC() {
@@ -192,45 +191,54 @@ function renderGemEffSnapshot() {
     if (!gemEffData) { plotGemEffEmpty(); return; }
     const snap = gemEffData.snapshot;
     if (!snap) {
-        if (info) info.textContent = 'Waiting for matched event…';
+        if (info) info.innerHTML = 'Waiting for matched event…';
         plotGemEffEmpty();
         return;
     }
     const tests = snap.tests || [];
-    const t = tests[gemEffSelectedTest];
     if (info) {
-        let chi2 = '—';
-        if (t && t.tested) chi2 = (+t.chi2_per_dof).toFixed(2);
+        // χ²/dof range across all tested detectors (single value if only one).
+        const chi2s = tests.filter(t => t && t.tested).map(t => +t.chi2_per_dof);
+        let chi2Str = '—';
+        if (chi2s.length === 1) chi2Str = chi2s[0].toFixed(2);
+        else if (chi2s.length > 1) {
+            const lo = Math.min(...chi2s), hi = Math.max(...chi2s);
+            chi2Str = lo.toFixed(2) === hi.toFixed(2)
+                ? lo.toFixed(2)
+                : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
+        }
+        // Per-detector flags, colored to match the line/star in the plot.
         const flags = tests.map((tt, i) => {
             if (!tt || !tt.tested) return '';
-            return `G${i}${tt.found ? '✓' : '✗'}`;
+            const c = GEM_COLORS[i] || THEME.text;
+            return `<span style="color:${c}">GEM${i}${tt.found ? '✓' : '✗'}</span>`;
         }).filter(Boolean).join(' ');
-        info.textContent = `Event #${snap.event_id}   χ²/dof=${chi2}   ${flags}`;
+        info.innerHTML = `Event #${snap.event_id} &nbsp; χ²/dof=${chi2Str} &nbsp; ${flags}`;
     }
-    plotGemEffSnapshot(t);
+    plotGemEffSnapshot(tests);
 }
 
 function plotGemEffEmpty() {
-    ['gem-eff-zx', 'gem-eff-zy'].forEach(id => {
+    ['gem-eff-xy', 'gem-eff-zy'].forEach(id => {
         if (document.getElementById(id))
             Plotly.react(id, [], PL_GEM_EFF(), { responsive: true, displayModeBar: false });
     });
 }
 
-function plotGemEffSnapshot(t) {
+function plotGemEffSnapshot(tests) {
     if (!gemEffData || !gemEffData.snapshot) { plotGemEffEmpty(); return; }
     const snap = gemEffData.snapshot;
     const hycalZ = gemEffData.hycal_z || 5800;
-    const testIdx = gemEffSelectedTest;
-    const tracesZX = [], tracesZY = [];
+    const gemDets = gemEffData.detectors || [];
+    const tracesXY = [], tracesZY = [];
 
     // HyCal anchor — square marker
-    tracesZX.push({
-        x: [snap.hycal_lab[2]], y: [snap.hycal_lab[0]],
+    tracesXY.push({
+        x: [snap.hycal_lab[0]], y: [snap.hycal_lab[1]],
         mode: 'markers', type: 'scatter', name: 'HyCal',
         marker: { symbol: 'square', color: THEME.text, size: 11,
                   line: { color: THEME.selectBorder, width: 1 } },
-        hovertemplate: 'HyCal<br>z=%{x:.0f}<br>x=%{y:.1f}<extra></extra>',
+        hovertemplate: 'HyCal<br>x=%{x:.1f}<br>y=%{y:.1f}<extra></extra>',
     });
     tracesZY.push({
         x: [snap.hycal_lab[2]], y: [snap.hycal_lab[1]],
@@ -240,103 +248,137 @@ function plotGemEffSnapshot(t) {
         hovertemplate: 'HyCal<br>z=%{x:.0f}<br>y=%{y:.1f}<extra></extra>',
     });
 
-    if (t && t.tested) {
-        // Fit hits — filled circles, per-detector colors
+    // Dedupe GEM hits across tests by detector — each test stores the same
+    // candidate hit on a given detector (seed scan is deterministic), so we
+    // only need to plot one filled marker per detector.
+    const hitByDet = {};
+    tests.forEach(t => {
+        if (!t || !t.tested) return;
         (t.fit_hits || []).forEach(h => {
-            const c = GEM_COLORS[h.det] || THEME.text;
-            tracesZX.push({
-                x: [h.lz], y: [h.lx], mode: 'markers', type: 'scatter',
-                name: 'GEM' + h.det,
-                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>',
-            });
-            tracesZY.push({
-                x: [h.lz], y: [h.ly], mode: 'markers', type: 'scatter',
-                name: 'GEM' + h.det,
-                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>',
-            });
+            if (!(h.det in hitByDet)) hitByDet[h.det] = h;
         });
-
-        // Fit line — span from z=0 to HyCal z, dashed
-        const zSpan = [0, hycalZ];
-        tracesZX.push({
-            x: zSpan, y: zSpan.map(z => t.fit.ax + t.fit.bx * z),
-            mode: 'lines', type: 'scatter',
-            line: { color: THEME.text, width: 1.2, dash: 'dot' },
-            hoverinfo: 'skip',
+    });
+    Object.values(hitByDet).forEach(h => {
+        const c = GEM_COLORS[h.det] || THEME.text;
+        tracesXY.push({
+            x: [h.lx], y: [h.ly], mode: 'markers', type: 'scatter',
+            name: 'GEM' + h.det,
+            marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+            hovertemplate: 'GEM' + h.det + '<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>',
         });
         tracesZY.push({
-            x: zSpan, y: zSpan.map(z => t.fit.ay + t.fit.by * z),
-            mode: 'lines', type: 'scatter',
-            line: { color: THEME.text, width: 1.2, dash: 'dot' },
-            hoverinfo: 'skip',
+            x: [h.lz], y: [h.ly], mode: 'markers', type: 'scatter',
+            name: 'GEM' + h.det,
+            marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+            hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>',
         });
+    });
 
-        // Predicted point on test detector — star marker
-        const pColor = GEM_COLORS[testIdx] || THEME.text;
-        tracesZX.push({
-            x: [t.predicted_lab[2]], y: [t.predicted_lab[0]],
-            mode: 'markers', type: 'scatter',
-            marker: { symbol: 'star', color: pColor, size: 14,
-                      line: { color: THEME.selectBorder, width: 1.5 } },
-            hovertemplate: `Pred GEM${testIdx}<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>`,
+    // Per-test overlays — fit line + prediction (+ found marker) per tested
+    // detector R, colored to match GEM-R.  In XY the line is the projection
+    // of the 3D fit (parametric in z) onto the front plane: we draw it from
+    // z=0 to z=HyCalZ, which traces a straight 2D segment.
+    const z0 = 0, z1 = hycalZ;
+    tests.forEach((t, R) => {
+        if (!t || !t.tested) return;
+        const c = GEM_COLORS[R] || THEME.text;
+        tracesXY.push({
+            x: [t.fit.ax + t.fit.bx * z0, t.fit.ax + t.fit.bx * z1],
+            y: [t.fit.ay + t.fit.by * z0, t.fit.ay + t.fit.by * z1],
+            mode: 'lines', type: 'scatter',
+            name: `Fit (test G${R})`,
+            line: { color: c, width: 1, dash: 'dot' },
+            opacity: 0.7, hoverinfo: 'skip',
+        });
+        tracesZY.push({
+            x: [z0, z1],
+            y: [t.fit.ay + t.fit.by * z0, t.fit.ay + t.fit.by * z1],
+            mode: 'lines', type: 'scatter',
+            name: `Fit (test G${R})`,
+            line: { color: c, width: 1, dash: 'dot' },
+            opacity: 0.7, hoverinfo: 'skip',
+        });
+        tracesXY.push({
+            x: [t.predicted_lab[0]], y: [t.predicted_lab[1]],
+            mode: 'markers', type: 'scatter', name: `Pred G${R}`,
+            marker: { symbol: 'star', color: c, size: 12,
+                      line: { color: THEME.selectBorder, width: 1 } },
+            hovertemplate: `Pred GEM${R}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>`,
         });
         tracesZY.push({
             x: [t.predicted_lab[2]], y: [t.predicted_lab[1]],
-            mode: 'markers', type: 'scatter',
-            marker: { symbol: 'star', color: pColor, size: 14,
-                      line: { color: THEME.selectBorder, width: 1.5 } },
-            hovertemplate: `Pred GEM${testIdx}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
+            mode: 'markers', type: 'scatter', name: `Pred G${R}`,
+            marker: { symbol: 'star', color: c, size: 12,
+                      line: { color: THEME.selectBorder, width: 1 } },
+            hovertemplate: `Pred GEM${R}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
         });
-
-        // Found hit (if any) — open circle outline
         if (t.found) {
-            tracesZX.push({
-                x: [t.found_lab[2]], y: [t.found_lab[0]],
-                mode: 'markers', type: 'scatter',
-                marker: { symbol: 'circle-open', color: pColor, size: 16, line: { width: 2 } },
-                hovertemplate: `Found GEM${testIdx}<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>`,
+            tracesXY.push({
+                x: [t.found_lab[0]], y: [t.found_lab[1]],
+                mode: 'markers', type: 'scatter', name: `Found G${R}`,
+                marker: { symbol: 'circle-open', color: c, size: 14, line: { width: 2 } },
+                hovertemplate: `Found GEM${R}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>`,
             });
             tracesZY.push({
                 x: [t.found_lab[2]], y: [t.found_lab[1]],
-                mode: 'markers', type: 'scatter',
-                marker: { symbol: 'circle-open', color: pColor, size: 16, line: { width: 2 } },
-                hovertemplate: `Found GEM${testIdx}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
+                mode: 'markers', type: 'scatter', name: `Found G${R}`,
+                marker: { symbol: 'circle-open', color: c, size: 14, line: { width: 2 } },
+                hovertemplate: `Found GEM${R}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
             });
         }
+    });
+
+    // Reference shapes:
+    //   XY — dashed rectangles for each GEM's active area (per-detector
+    //        colors).  Tilts are typically tiny so we draw the lab-frame
+    //        bounding rectangle from (center ± size/2); refine if anyone
+    //        ever runs with a non-trivial GEM tilt.
+    //   ZY — vertical dashed lines at each GEM z and HyCal z.
+    const shapesXY = [];
+    const shapesZY = [];
+    gemDets.forEach(d => {
+        const pos = d.position || [0, 0, 0];
+        const c = GEM_COLORS[d.id] || THEME.text;
+        const xs = d.x_size, ys = d.y_size;
+        if (xs && ys) {
+            shapesXY.push({
+                type: 'rect', xref: 'x', yref: 'y',
+                x0: pos[0] - xs / 2, x1: pos[0] + xs / 2,
+                y0: pos[1] - ys / 2, y1: pos[1] + ys / 2,
+                line: { color: c, width: 1, dash: 'dash' },
+                fillcolor: 'rgba(0,0,0,0)',
+            });
+        }
+        if (pos[2]) {
+            shapesZY.push({
+                type: 'line', xref: 'x', yref: 'paper',
+                x0: pos[2], x1: pos[2], y0: 0, y1: 1,
+                line: { color: c, width: 1, dash: 'dash' },
+            });
+        }
+    });
+    if (hycalZ) {
+        shapesZY.push({
+            type: 'line', xref: 'x', yref: 'paper',
+            x0: hycalZ, x1: hycalZ, y0: 0, y1: 1,
+            line: { color: THEME.text, width: 1, dash: 'dash' },
+        });
     }
 
-    Plotly.react('gem-eff-zx', tracesZX, Object.assign({}, PL_GEM_EFF(), {
-        title: { text: 'Top view (Z–X)', font: { size: 10, color: THEME.text } },
-        xaxis: { title: 'z (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
-        yaxis: { title: 'x (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+    Plotly.react('gem-eff-xy', tracesXY, Object.assign({}, PL_GEM_EFF(), {
+        title: { text: 'Front view (X–Y)', font: { size: 10, color: THEME.text } },
+        xaxis: { title: 'x (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border,
+                 scaleanchor: 'y', scaleratio: 1 },
+        yaxis: { title: 'y (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+        shapes: shapesXY,
     }), { responsive: true, displayModeBar: false });
     Plotly.react('gem-eff-zy', tracesZY, Object.assign({}, PL_GEM_EFF(), {
         title: { text: 'Side view (Z–Y)', font: { size: 10, color: THEME.text } },
         xaxis: { title: 'z (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
         yaxis: { title: 'y (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+        shapes: shapesZY,
     }), { responsive: true, displayModeBar: false });
 }
-
-// --- detector selector wiring ----------------------------------------------
-
-function initGemEffSelector() {
-    const radios = document.querySelectorAll('input[name="gem-eff-test"]');
-    radios.forEach(r => {
-        r.addEventListener('change', () => {
-            if (r.checked) {
-                gemEffSelectedTest = parseInt(r.value, 10);
-                renderGemEffSnapshot();
-            }
-        });
-    });
-}
-// Wire selector once the DOM is ready (script is loaded after the markup).
-if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', initGemEffSelector);
-else
-    initGemEffSelector();
 
 // --- resize -----------------------------------------------------------------
 
@@ -344,7 +386,7 @@ function resizeGem() {
     GEM_OCC_IDS.forEach(id => {
         try { Plotly.Plots.resize(id); } catch (e) {}
     });
-    ['gem-eff-zx', 'gem-eff-zy'].forEach(id => {
+    ['gem-eff-xy', 'gem-eff-zy'].forEach(id => {
         try { Plotly.Plots.resize(id); } catch (e) {}
     });
 }

@@ -332,12 +332,22 @@ class HyCalGainMapWidget(HyCalMapWidget):
 
     CB_MAX_WIDTH = 300
 
+    # Module types to overlay with a small in-cell name label so the
+    # tiny LMS reference cells off to the side are identifiable.
+    _LABEL_TYPES = {"LMS"}
+
     def __init__(self, parent=None):
         super().__init__(parent, shrink=0.90, margin_top=8,
-                         enable_zoom_pan=True)
+                         enable_zoom_pan=True, include_lms=True)
         self._palette_override = None
         self._legend_mode: Optional[str] = None
         self._selected: Optional[str] = None
+        self._label_names: set = set()    # populated in set_modules()
+
+    def set_modules(self, modules):
+        super().set_modules(modules)
+        self._label_names = {m.name for m in self._modules
+                             if m.mod_type in self._LABEL_TYPES}
 
     # -- public API additions --
 
@@ -395,6 +405,16 @@ class HyCalGainMapWidget(HyCalMapWidget):
                        Qt.AlignmentFlag.AlignCenter, "No data loaded")
 
     def _paint_overlays(self, p, w, h):
+        # Tiny LMS-cell name labels so the three reference modules off to
+        # the side are identifiable at a glance.
+        if self._label_names:
+            p.setPen(QColor(THEME.TEXT))
+            p.setFont(QFont("Monospace", 7, QFont.Weight.Bold))
+            for name in self._label_names:
+                r = self._rects.get(name)
+                if r is not None:
+                    p.drawText(r, Qt.AlignmentFlag.AlignCenter, name)
+
         if self._selected and self._selected in self._rects:
             p.setPen(QPen(QColor(THEME.SELECT_BORDER), 2.5))
             p.setBrush(Qt.BrushStyle.NoBrush)
@@ -790,12 +810,41 @@ class RootHistWidget(QWidget):
     _X_DEFAULT_LO = 0.0
     _X_DEFAULT_HI = 1000.0
 
+    # Overlay histogram colours (used for the LMS reference cells, where
+    # we render both the LMS distribution and the corresponding alpha
+    # peak in the same plot).
+    OVERLAY_BAR_COLOR  = "#3a86ff"   # blue — alpha histogram bars
+    OVERLAY_FIT_COLOR  = "#ffeb3b"   # yellow — alpha gaussian fit
+
+    # Distinct, well-separated bar colours for stack mode.  Cycles when more
+    # than len() runs are stacked.  Alpha is applied at draw time.
+    STACK_COLORS = [
+        "#ef5350",   # red
+        "#42a5f5",   # blue
+        "#66bb6a",   # green
+        "#ffa726",   # orange
+        "#ab47bc",   # purple
+        "#26c6da",   # cyan
+        "#ffca28",   # amber
+        "#ec407a",   # pink
+        "#7e57c2",   # deep purple
+        "#26a69a",   # teal
+    ]
+    STACK_ALPHA = 0.45
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._values: List[float] = []
         self._edges: List[float] = []
         self._title: str = ""
         self._gauss: Optional[Tuple[float, float, float, float, float]] = None  # amp,mean,sigma,xmin,xmax
+        # Optional overlay histogram (e.g., alpha peak for LMS modules).
+        self._ovl_values: List[float] = []
+        self._ovl_edges: List[float] = []
+        self._ovl_gauss: Optional[Tuple[float, float, float, float, float]] = None
+        # Stack mode: keep multiple histograms visible at once.
+        self._stack_mode: bool = False
+        self._stack_entries: List[Tuple[List[float], List[float], str]] = []
         self._x_lo = self._X_DEFAULT_LO
         self._x_hi = self._X_DEFAULT_HI
         self._drag_start: Optional[float] = None  # data-x where drag began
@@ -804,15 +853,53 @@ class RootHistWidget(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
 
+        # Top-right "Stack" toggle.
+        self._stack_btn = QPushButton("Stack: off", self)
+        self._stack_btn.setFixedSize(86, 22)
+        _f = QFont("Consolas", 9); _f.setBold(True)
+        self._stack_btn.setFont(_f)
+        self._stack_btn.setToolTip(
+            "Stack mode:\n"
+            "  off — clicking a run replaces the histogram (default)\n"
+            "  on  — clicking different runs accumulates histograms\n"
+            "        with distinct colours; fits are hidden")
+        self._stack_btn.setStyleSheet(themed(
+            "QPushButton{background:rgba(29,29,31,220);color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:4px;}"
+            "QPushButton:hover{background:#28282a;color:#e6edf3;}"))
+        self._stack_btn.clicked.connect(self._toggle_stack)
+
     # ------------------------------------------------------------------
     def set_histogram(self, values, edges, title: str = "",
-                      gauss: Optional[Tuple[float, float, float, float, float]] = None):
-        self._values = list(values)
-        self._edges = list(edges)
-        self._title = title
-        self._gauss = gauss
-        self._x_lo = self._X_DEFAULT_LO
-        self._x_hi = self._X_DEFAULT_HI
+                      gauss: Optional[Tuple[float, float, float, float, float]] = None,
+                      overlay_values=None, overlay_edges=None,
+                      overlay_gauss: Optional[Tuple[float, float, float, float, float]] = None):
+        vals_list = list(values)
+        edges_list = list(edges)
+        if self._stack_mode:
+            # Append to the stack.  Only the primary histogram is kept —
+            # alpha overlays and fits are deliberately hidden in this mode
+            # so multiple distributions stay readable.
+            self._stack_entries.append((vals_list, edges_list, title))
+            if len(self._stack_entries) == 1:
+                self._x_lo = self._X_DEFAULT_LO
+                self._x_hi = self._X_DEFAULT_HI
+            self._title = (f"Stack: {len(self._stack_entries)} run(s) — "
+                           f"latest: {title}")
+            self._gauss = None
+            self._ovl_values = []
+            self._ovl_edges = []
+            self._ovl_gauss = None
+        else:
+            self._values = vals_list
+            self._edges = edges_list
+            self._title = title
+            self._gauss = gauss
+            self._ovl_values = list(overlay_values) if overlay_values is not None else []
+            self._ovl_edges = list(overlay_edges) if overlay_edges is not None else []
+            self._ovl_gauss = overlay_gauss
+            self._x_lo = self._X_DEFAULT_LO
+            self._x_hi = self._X_DEFAULT_HI
         self._drag_start = self._drag_cur = None
         self.update()
 
@@ -821,10 +908,42 @@ class RootHistWidget(QWidget):
         self._edges = []
         self._title = ""
         self._gauss = None
+        self._ovl_values = []
+        self._ovl_edges = []
+        self._ovl_gauss = None
+        self._stack_entries = []
         self._x_lo = self._X_DEFAULT_LO
         self._x_hi = self._X_DEFAULT_HI
         self._drag_start = self._drag_cur = None
         self.update()
+
+    def _toggle_stack(self):
+        self._stack_mode = not self._stack_mode
+        self._stack_btn.setText("Stack: on" if self._stack_mode else "Stack: off")
+        if self._stack_mode:
+            # When entering stack mode, seed the stack with whatever single
+            # histogram is currently showing (so the user doesn't have to
+            # re-click the first run).
+            if self._values and self._edges:
+                self._stack_entries = [(list(self._values),
+                                        list(self._edges),
+                                        self._title)]
+                self._title = (f"Stack: {len(self._stack_entries)} run(s) — "
+                               f"latest: {self._title}")
+                self._gauss = None
+                self._ovl_values = []
+                self._ovl_edges = []
+                self._ovl_gauss = None
+        else:
+            # Leaving stack mode — drop the stack; the next set_histogram
+            # call will repopulate the single-hist view.
+            self._stack_entries = []
+        self.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        # Anchor the Stack button to the top-right corner of the canvas.
+        self._stack_btn.move(self.width() - self._stack_btn.width() - 6, 4)
 
     # ------------------------------------------------------------------
     def _plot_rect(self):
@@ -869,9 +988,23 @@ class RootHistWidget(QWidget):
             "QMenu{background:#161b22;color:#c9d1d9;border:1px solid #30363d;}"
             "QMenu::item:selected{background:#1f6feb;}"))
         menu.addAction("Unzoom").triggered.connect(self._unzoom)
+        if self._stack_mode and self._stack_entries:
+            menu.addAction("Clear stack").triggered.connect(self._clear_stack)
         menu.exec(event.globalPos())
 
+    def _clear_stack(self):
+        self._stack_entries = []
+        self._title = "Stack: 0 run(s)"
+        self.update()
+
     def _unzoom(self):
+        if self._stack_mode and self._stack_entries:
+            edgs = self._stack_entries[0][1]
+            if edgs:
+                self._x_lo = edgs[0]
+                self._x_hi = edgs[-1]
+                self.update()
+                return
         if self._edges:
             self._x_lo = self._edges[0]
             self._x_hi = self._edges[-1]
@@ -879,6 +1012,49 @@ class RootHistWidget(QWidget):
             self._x_lo = self._X_DEFAULT_LO
             self._x_hi = self._X_DEFAULT_HI
         self.update()
+
+    def _draw_stack_legend(self, p, px, py, pw):
+        if not self._stack_entries:
+            return
+        p.setFont(QFont("Consolas", 8))
+        fm = p.fontMetrics()
+        swatch = 10
+        gap    = 4
+        line_h = max(swatch, fm.height()) + 2
+        # Truncate long titles so the legend never overruns the plot.
+        max_label_w = pw // 2
+        rows = []
+        for idx, (_v, _e, title) in enumerate(self._stack_entries):
+            label = title or f"#{idx+1}"
+            while fm.horizontalAdvance(label) > max_label_w and len(label) > 4:
+                label = label[:-2] + "…"
+            rows.append((idx, label, fm.horizontalAdvance(label)))
+        if not rows:
+            return
+        legend_w = swatch + gap + max(w for _, _, w in rows) + 8
+        legend_h = len(rows) * line_h + 6
+        # Anchor below the Stack button (which is at y=4, height ~22).
+        lx = px + pw - legend_w - 6
+        ly = py + 30
+        # Background.
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(10, 14, 20, 200))
+        p.drawRoundedRect(QRectF(lx, ly, legend_w, legend_h), 4, 4)
+        # Entries.
+        n_colors = len(self.STACK_COLORS)
+        for row_idx, (entry_idx, label, _lw) in enumerate(rows):
+            sy = ly + 3 + row_idx * line_h
+            col = QColor(self.STACK_COLORS[entry_idx % n_colors])
+            col.setAlphaF(self.STACK_ALPHA)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(col)
+            p.drawRect(QRectF(lx + 4, sy + (line_h - swatch) // 2 - 1,
+                              swatch, swatch))
+            p.setPen(QColor(THEME.TEXT))
+            p.drawText(QRectF(lx + 4 + swatch + gap, sy,
+                              legend_w - swatch - gap - 8, line_h),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                       label)
 
     # ------------------------------------------------------------------
     def paintEvent(self, event):
@@ -894,7 +1070,10 @@ class RootHistWidget(QWidget):
                        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                        self._title)
 
-        if not self._values or not self._edges or len(self._edges) < 2:
+        # In stack mode treat any non-empty stack as "have data".
+        have_data = (self._values and self._edges and len(self._edges) >= 2)
+        have_stack = bool(self._stack_entries)
+        if not have_data and not have_stack:
             p.setPen(QColor(THEME.TEXT_MUTED))
             p.setFont(QFont("Consolas", 10))
             p.drawText(QRectF(0, 0, w, h), Qt.AlignmentFlag.AlignCenter, "No histogram")
@@ -909,13 +1088,22 @@ class RootHistWidget(QWidget):
         x_lo = self._x_lo
         x_hi = self._x_hi if self._x_hi > self._x_lo else self._x_lo + 1
 
-        # y scale from visible bins only
-        vis_max = max(
-            (v for i, v in enumerate(self._values)
-             if i + 1 < len(self._edges)
-             and self._edges[i + 1] > x_lo
-             and self._edges[i] < x_hi),
-            default=0.0)
+        def _vis_max(values, edges):
+            return max(
+                (v for i, v in enumerate(values)
+                 if i + 1 < len(edges)
+                 and edges[i + 1] > x_lo
+                 and edges[i] < x_hi),
+                default=0.0)
+
+        # y scale from visible bins only — must fit primary, overlay, and
+        # every stacked entry.
+        if self._stack_mode and have_stack:
+            vis_max = max((_vis_max(v, e) for v, e, _ in self._stack_entries),
+                          default=0.0)
+        else:
+            vis_max = max(_vis_max(self._values, self._edges),
+                          _vis_max(self._ovl_values, self._ovl_edges))
         y_hi = vis_max * 1.1 if vis_max > 0 else 1.0
 
         def to_sx(v):
@@ -931,39 +1119,65 @@ class RootHistWidget(QWidget):
             sy = py + ph * i / n_yticks
             p.drawLine(QPointF(px, sy), QPointF(px + pw, sy))
 
-        # bars
-        p.setPen(Qt.PenStyle.NoPen)
-        for i, v in enumerate(self._values):
-            if i + 1 >= len(self._edges):
-                break
-            b_lo, b_hi = self._edges[i], self._edges[i + 1]
-            if b_hi <= x_lo or b_lo >= x_hi:
-                continue
-            sx1 = max(to_sx(b_lo), px)
-            sx2 = min(to_sx(b_hi), px + pw)
-            bar_top = to_sy(v)
-            bar_h = (py + ph) - bar_top
-            if bar_h > 0 and sx2 > sx1:
-                p.fillRect(QRectF(sx1, bar_top, sx2 - sx1 - 1, bar_h), QColor(THEME.HIGHLIGHT))
+        def _draw_bars(values, edges, color):
+            p.setPen(Qt.PenStyle.NoPen)
+            for i, v in enumerate(values):
+                if i + 1 >= len(edges):
+                    break
+                b_lo, b_hi = edges[i], edges[i + 1]
+                if b_hi <= x_lo or b_lo >= x_hi:
+                    continue
+                sx1 = max(to_sx(b_lo), px)
+                sx2 = min(to_sx(b_hi), px + pw)
+                bar_top = to_sy(v)
+                bar_h = (py + ph) - bar_top
+                if bar_h > 0 and sx2 > sx1:
+                    p.fillRect(QRectF(sx1, bar_top, sx2 - sx1 - 1, bar_h), color)
 
-        # Gaussian fit curve
-        if self._gauss is not None:
-            amp, mean, sigma, g_xmin, g_xmax = self._gauss
-            if sigma > 0:
+        if self._stack_mode and have_stack:
+            # Each stacked run gets its own colour from STACK_COLORS, with
+            # a semi-transparent alpha so overlapping bars remain visible.
+            n_colors = len(self.STACK_COLORS)
+            for idx, (vals, edgs, _stack_title) in enumerate(self._stack_entries):
+                col = QColor(self.STACK_COLORS[idx % n_colors])
+                col.setAlphaF(self.STACK_ALPHA)
+                _draw_bars(vals, edgs, col)
+            # Stack legend — coloured swatches with run titles, top-right
+            # of the plot area, just below the Stack button.
+            self._draw_stack_legend(p, px, py, pw)
+        else:
+            # Overlay histogram (alpha peak for LMS modules) — drawn first
+            # so the primary LMS bars sit visually on top.
+            if self._ovl_values and self._ovl_edges and len(self._ovl_edges) >= 2:
+                ovl_color = QColor(self.OVERLAY_BAR_COLOR)
+                ovl_color.setAlphaF(0.55)
+                _draw_bars(self._ovl_values, self._ovl_edges, ovl_color)
+            # Primary histogram (LMS or generic module) — full opacity.
+            _draw_bars(self._values, self._edges, QColor(THEME.HIGHLIGHT))
+
+            def _draw_gauss(g, color):
+                if g is None:
+                    return
+                amp, mean, sigma, g_xmin, g_xmax = g
+                if sigma <= 0:
+                    return
                 draw_lo = max(g_xmin, x_lo)
                 draw_hi = min(g_xmax, x_hi)
-                if draw_hi > draw_lo:
-                    n_pts = max(int((draw_hi - draw_lo) / (x_hi - x_lo) * pw), 2)
-                    pts = []
-                    for k in range(n_pts + 1):
-                        gx = draw_lo + k / n_pts * (draw_hi - draw_lo)
-                        gy = amp * math.exp(-0.5 * ((gx - mean) / sigma) ** 2)
-                        sx = to_sx(gx)
-                        sy = to_sy(gy)
-                        pts.append(QPointF(sx, sy))
-                    p.setPen(QPen(QColor("#00bcd4"), 2))
-                    for k in range(len(pts) - 1):
-                        p.drawLine(pts[k], pts[k + 1])
+                if draw_hi <= draw_lo:
+                    return
+                n_pts = max(int((draw_hi - draw_lo) / (x_hi - x_lo) * pw), 2)
+                pts = []
+                for k in range(n_pts + 1):
+                    gx = draw_lo + k / n_pts * (draw_hi - draw_lo)
+                    gy = amp * math.exp(-0.5 * ((gx - mean) / sigma) ** 2)
+                    pts.append(QPointF(to_sx(gx), to_sy(gy)))
+                p.setPen(QPen(color, 2))
+                for k in range(len(pts) - 1):
+                    p.drawLine(pts[k], pts[k + 1])
+
+            # LMS gaussian fit (cyan) and alpha gaussian fit (yellow).
+            _draw_gauss(self._gauss,     QColor("#00bcd4"))
+            _draw_gauss(self._ovl_gauss, QColor(self.OVERLAY_FIT_COLOR))
 
         # drag selection overlay
         if self._drag_start is not None and self._drag_cur is not None:
@@ -2126,7 +2340,7 @@ class GainMonitorWindow(QMainWindow):
         top.addWidget(self._slabel("every"))
         self._auto_refresh_interval = QSpinBox()
         self._auto_refresh_interval.setRange(5, 3600)
-        self._auto_refresh_interval.setValue(30)
+        self._auto_refresh_interval.setValue(10)
         self._auto_refresh_interval.setSuffix(" s")
         self._auto_refresh_interval.setFixedWidth(72)
         self._auto_refresh_interval.setFont(QFont("Consolas", 10))
@@ -2137,21 +2351,52 @@ class GainMonitorWindow(QMainWindow):
         self._auto_refresh_interval.valueChanged.connect(self._on_refresh_interval_changed)
         top.addWidget(self._auto_refresh_interval)
 
+        # Floating "Summary table" toggle — the report table is hidden by
+        # default and lives in its own window when shown.
+        self._summary_btn = QPushButton("Summary table")
+        self._summary_btn.setCheckable(True)
+        self._summary_btn.setChecked(False)
+        self._summary_btn.setFont(QFont("Consolas", 10))
+        self._summary_btn.setFixedHeight(28)
+        self._summary_btn.setStyleSheet(themed(
+            "QPushButton{background:#21262d;color:#c9d1d9;"
+            "border:1px solid #30363d;padding:4px 12px;border-radius:4px;}"
+            "QPushButton:checked{background:#1f6feb;color:#ffffff;"
+            "border:1px solid #1f6feb;}"
+            "QPushButton:hover{background:#28282a;}"))
+        self._summary_btn.toggled.connect(self._on_summary_toggle)
+        top.addWidget(self._summary_btn)
+
         self._status_lbl = QLabel("No data loaded")
         self._status_lbl.setFont(QFont("Consolas", 11))
         self._status_lbl.setStyleSheet(themed("color:#8b949e;"))
         top.addWidget(self._status_lbl)
         root.addLayout(top)
 
-        # -- body splitter (horizontal: table | map | charts+reserved) --
+        # -- body splitter (horizontal: map | charts+reserved) --
         body = QSplitter(Qt.Orientation.Horizontal)
         self._body = body
 
-        # ---- left panel: report table ----
+        # The report table no longer takes a slot in the body splitter.
+        # Build it once and host it inside a hidden top-level QDialog so
+        # the user can pop it open as a floating window via the toolbar
+        # toggle.  All existing signal hookups still work.
         self._irregular_table = IrregularTableWidget()
         self._irregular_table.runClicked.connect(self._on_jump_to_run)
         self._irregular_table.moduleClicked.connect(self._on_module_clicked)
-        body.addWidget(self._irregular_table)
+
+        self._summary_window = QDialog(self,
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowMinMaxButtonsHint
+            | Qt.WindowType.WindowCloseButtonHint)
+        self._summary_window.setWindowTitle("Summary Table")
+        self._summary_window.resize(420, 600)
+        _sw_layout = QVBoxLayout(self._summary_window)
+        _sw_layout.setContentsMargins(6, 6, 6, 6)
+        _sw_layout.addWidget(self._irregular_table)
+        # When the user clicks the window's close button, sync the toolbar
+        # toggle so its visual state matches reality.
+        self._summary_window.installEventFilter(self)
 
         # ---- middle panel: HyCal map ----
         left = QWidget()
@@ -2397,10 +2642,12 @@ class GainMonitorWindow(QMainWindow):
         right.setStretchFactor(1, 2)
 
         body.addWidget(right)
-        body.setStretchFactor(0, 1)  # table
-        body.setStretchFactor(1, 1)  # HyCal map
-        body.setStretchFactor(2, 5)  # charts + reserved
-        QTimer.singleShot(0, lambda: self._body.setSizes([200, 350, 1050]))
+        # Body now has just two panels — the report table is a floating
+        # window — so the HyCal map gets a much larger initial slice and
+        # the charts/histogram column grows correspondingly.
+        body.setStretchFactor(0, 2)  # HyCal map
+        body.setStretchFactor(1, 5)  # charts + reserved
+        QTimer.singleShot(0, lambda: self._body.setSizes([500, 1100]))
 
         root.addWidget(body, stretch=1)
 
@@ -2438,6 +2685,25 @@ class GainMonitorWindow(QMainWindow):
     def _on_refresh(self):
         if self._current_folder:
             self._load_folder(self._current_folder)
+
+    def _on_summary_toggle(self, checked: bool):
+        if checked:
+            self._summary_window.show()
+            self._summary_window.raise_()
+            self._summary_window.activateWindow()
+        else:
+            self._summary_window.hide()
+
+    def eventFilter(self, obj, event):
+        # Sync the toolbar toggle when the user closes the floating
+        # summary window via its window-frame X button.
+        if (obj is getattr(self, "_summary_window", None)
+                and event.type() == event.Type.Close):
+            if self._summary_btn.isChecked():
+                self._summary_btn.blockSignals(True)
+                self._summary_btn.setChecked(False)
+                self._summary_btn.blockSignals(False)
+        return super().eventFilter(obj, event)
 
     def _on_auto_refresh_toggled(self, checked: bool):
         self._auto_refresh_btn.setText("Auto-Refresh: ON" if checked else "Auto-Refresh: OFF")
@@ -2827,45 +3093,69 @@ class GainMonitorWindow(QMainWindow):
             return
         if run_number is None:
             run_number = self._runs[self._current_run_idx].run_number
-        key = (run_number, module_name)
+        # The histogram is driven by which module the user clicked on the
+        # map — clicking LMS1/LMS2/LMS3 shows that exact reference PMT.
+        hist_module = module_name
+        key = (run_number, hist_module)
         if key in self._hist_cache:
             self._hist_cache.move_to_end(key)
-            values, edges, gauss = self._hist_cache[key]
+            values, edges, gauss, ovl_values, ovl_edges, ovl_gauss = self._hist_cache[key]
         else:
             root_path = os.path.join(self._current_folder,
                                      f"prad_{run_number:06d}_LMS_fitted.root")
             if not os.path.exists(root_path):
                 self._hist_widget.clear()
                 return
-            try:
-                with uproot.open(root_path) as rf:
-                    hist_key = f"{module_name}_LMS"
-                    if hist_key not in rf:
-                        self._hist_widget.clear()
-                        return
-                    h = rf[hist_key]
-                    values = h.values()
-                    edges = h.axis().edges()
-                    gauss = None
+
+            def _read_hist(rf, hkey):
+                """Return (values, edges, gauss) for hkey or (None, None, None)."""
+                if hkey not in rf:
+                    return None, None, None
+                h = rf[hkey]
+                vals = h.values()
+                edg  = h.axis().edges()
+                g    = None
+                try:
                     fns = h.member("fFunctions")
                     for fn in fns:
                         if fn.classname == "TF1":
                             params = fn.member("fFormula").member("fClingParameters")
                             if len(params) >= 3:
-                                gauss = (float(params[0]), float(params[1]),
-                                         float(params[2]),
-                                         float(fn.member("fXmin")),
-                                         float(fn.member("fXmax")))
+                                g = (float(params[0]), float(params[1]),
+                                     float(params[2]),
+                                     float(fn.member("fXmin")),
+                                     float(fn.member("fXmax")))
                             break
+                except Exception:
+                    pass
+                return vals, edg, g
+
+            try:
+                with uproot.open(root_path) as rf:
+                    values, edges, gauss = _read_hist(rf, f"{hist_module}_LMS")
+                    if values is None:
+                        self._hist_widget.clear()
+                        return
+                    # For the three reference PMTs, also load the alpha-peak
+                    # histogram + fit so they overlay on the same plot.
+                    if hist_module in LMS_NAMES:
+                        ovl_values, ovl_edges, ovl_gauss = _read_hist(
+                            rf, f"{hist_module}_Alpha")
+                    else:
+                        ovl_values, ovl_edges, ovl_gauss = None, None, None
             except Exception:
                 self._hist_widget.clear()
                 return
-            self._hist_cache[key] = (values, edges, gauss)
+            self._hist_cache[key] = (values, edges, gauss,
+                                     ovl_values, ovl_edges, ovl_gauss)
             if len(self._hist_cache) > _HIST_CACHE_MAX:
                 self._hist_cache.popitem(last=False)
         self._hist_widget.set_histogram(values, edges,
-                                        f"{module_name}  run {run_number}",
-                                        gauss=gauss)
+                                        f"{hist_module}  run {run_number}",
+                                        gauss=gauss,
+                                        overlay_values=ovl_values,
+                                        overlay_edges=ovl_edges,
+                                        overlay_gauss=ovl_gauss)
 
     # ---- update views ----
 
@@ -3057,7 +3347,13 @@ class GainMonitorWindow(QMainWindow):
 
         ref_idx = self._current_ref_idx
 
-        if self._selected_module:
+        # Reference-channel cells (LMS1/2/3) are stored in rd.lms, not
+        # rd.modules — so the per-module-gain branch can't render them.
+        # When the user clicks one of those, fall through to the default
+        # lms/alpha ratio plot (which is the meaningful trend for the
+        # reference channels themselves).
+        is_ref_module = (self._selected_module in LMS_NAMES)
+        if self._selected_module and not is_ref_module:
             mname = self._selected_module
             # single pass: all 3 channels share the same valid-run check
             chart_data: List[Tuple[List, List, List]] = [([], [], []) for _ in range(3)]

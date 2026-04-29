@@ -444,17 +444,33 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
     padding:4px 6px;
 }
 .gem-eff-card {
+    position:relative; overflow:hidden;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     padding:4px; border:1px solid var(--border); border-radius:3px;
     background:var(--canvas);
 }
+/* Translucent left-anchored fill — width = efficiency %, color = tier.
+   Sits behind the text (z-index:0) so the percentage stays readable. */
+.gem-eff-card::before {
+    content:''; position:absolute; left:0; top:0; bottom:0;
+    width: var(--fill-pct, 0%);
+    background: var(--fill-color, transparent);
+    opacity: 0.22;
+    transition: width 0.3s ease;
+    pointer-events:none; z-index:0;
+}
+.gem-eff-card > * { position:relative; z-index:1; }
 .gem-eff-card .name { font-size:11px; font-weight:600; }
 .gem-eff-card .pct  { font-size:18px; font-weight:bold; line-height:1.1; }
 .gem-eff-card .cnt  { font-size:10px; color:var(--dim); }
-.gem-eff-card.green  .pct { color:#51cf66; }
-.gem-eff-card.amber  .pct { color:#ffa500; }
-.gem-eff-card.red    .pct { color:#ff6b6b; }
-.gem-eff-card.gray   .pct { color:var(--dim); }
+.gem-eff-card.green { --fill-color:var(--theme-success); }
+.gem-eff-card.amber { --fill-color:var(--theme-warn); }
+.gem-eff-card.red   { --fill-color:var(--theme-danger); }
+.gem-eff-card.gray  { --fill-color:var(--theme-text-dim); }
+.gem-eff-card.green .pct { color:var(--theme-success); }
+.gem-eff-card.amber .pct { color:var(--theme-warn); }
+.gem-eff-card.red   .pct { color:var(--theme-danger); }
+.gem-eff-card.gray  .pct { color:var(--theme-text-dim); }
 .gem-eff-header {
     flex:none; height:26px; display:flex; align-items:center;
     justify-content:space-between; padding:0 8px; font-size:11px; color:var(--text);

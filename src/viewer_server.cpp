@@ -702,7 +702,31 @@ json ViewerServer::decodeEvent(int ev1)
     fdec::WaveAnalyzer ana;
     ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     fdec::WaveResult wres;
-    return app_file_.encodeEventJson(event, ev1, ana, wres);
+    json result = app_file_.encodeEventJson(event, ev1, ana, wres);
+
+    // Tag the event type so the frontend can label non-Physics samples
+    // (Sync / EPICS / control) in the status bar instead of showing them as
+    // "0 channels, no trigger".  Default is "physics".
+    {
+        std::lock_guard<std::mutex> lk(data_source_mtx_);
+        if (data_source_) {
+            using ET = evc::EventType;
+            ET et = data_source_->eventTypeAt(ev1 - 1);
+            const char *kind = "physics";
+            switch (et) {
+                case ET::Physics:  kind = "physics";  break;
+                case ET::Sync:     kind = "sync";     break;
+                case ET::Epics:    kind = "epics";    break;
+                case ET::Prestart: kind = "prestart"; break;
+                case ET::Go:       kind = "go";       break;
+                case ET::End:      kind = "end";      break;
+                case ET::Control:  kind = "control";  break;
+                case ET::Unknown:  kind = "unknown";  break;
+            }
+            result["event_kind"] = kind;
+        }
+    }
+    return result;
 }
 
 json ViewerServer::computeClusters(int ev1)

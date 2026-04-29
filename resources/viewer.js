@@ -4,6 +4,7 @@
 // =========================================================================
 let modules=[], totalEvents=0, currentEvent=1;
 let currentEventNumber=0, currentTriggerBits=0;  // DAQ event number + trigger from last loaded event
+let currentEventKind='physics';                  // 'physics' | 'sync' | 'epics' | 'prestart' | ...
 let triggerBitsDef=[];  // [{bit, mask, name, label}, ...]
 let triggerTypeDef=[];  // [{type, tag, name, label, primary_bit}, ...]
 // per-tab trigger filter masks: { tabName: {accept: mask, reject: mask} }
@@ -152,22 +153,47 @@ function decodeTriggerBits(bits){
     return s;
 }
 
+// Human-readable label for non-physics event types.  Sync/Epics/control
+// samples are kept in the index so the EPICS tab + control bookkeeping see
+// them, but they decode to empty FADC data — show the kind instead of "0
+// channels, no trigger".
+function eventKindLabel(kind){
+    switch(kind){
+        case 'sync':     return 'Sync event (TI sync, no FADC readout)';
+        case 'epics':    return 'EPICS slow-control event';
+        case 'prestart': return 'Prestart (run start marker)';
+        case 'go':       return 'Go (run go marker)';
+        case 'end':      return 'End (run end marker)';
+        case 'control':  return 'Control event';
+        case 'unknown':  return 'Unknown event type';
+        default:         return '';
+    }
+}
+
 function updateStatusBar(){
     const modeTag = mode === 'online' ? ' [LIVE]' : '';
     const trig = decodeTriggerBits(currentTriggerBits);
     const label = sampleLabel();
+    const sb = document.getElementById('status-bar');
+
+    if(currentEventKind && currentEventKind !== 'physics'){
+        // Non-physics sample — replace the per-tab readout summary with the
+        // event kind so the user knows it's not a missed/empty readout.
+        sb.textContent = `${label}: ${eventKindLabel(currentEventKind)}${modeTag}`;
+        return;
+    }
 
     if(activeTab==='cluster'){
         const nc=clusterData?clusterData.clusters?clusterData.clusters.length:0:0;
         const nh=clusterData?clusterData.hits?Object.keys(clusterData.hits).length:0:0;
-        document.getElementById('status-bar').textContent=`${label}: ${nc} clusters, ${nh} hit modules${trig}${modeTag}`;
+        sb.textContent=`${label}: ${nc} clusters, ${nh} hit modules${trig}${modeTag}`;
     } else if(activeTab==='lms'){
         const lmsN=lmsSummaryData?lmsSummaryData.events||0:0;
-        document.getElementById('status-bar').textContent=`${label} | LMS: ${lmsN} events${modeTag}`;
+        sb.textContent=`${label} | LMS: ${lmsN} events${modeTag}`;
     } else {
         const nch = Object.keys(eventChannels).length;
         const npk = Object.values(eventChannels).reduce((s,c) => s + (c.pk||[]).length, 0);
-        document.getElementById('status-bar').textContent=`${label}: ${nch} channels, ${npk} peaks${trig}${modeTag}`;
+        sb.textContent=`${label}: ${nch} channels, ${npk} peaks${trig}${modeTag}`;
     }
 }
 
@@ -294,6 +320,7 @@ function loadEventData(reqId, data) {
     currentEvent = data.event;
     currentEventNumber = data.event_number || 0;
     currentTriggerBits = data.trigger_bits || 0;
+    currentEventKind = data.event_kind || 'physics';
     eventChannels = data.channels || {};
     if(mode==='online') sampleCount++;
     updateStatusBar();

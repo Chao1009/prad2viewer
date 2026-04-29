@@ -23,6 +23,13 @@ public:
     std::string decodeEvent(int index, fdec::EventData &evt,
                              ssp::SspEventData *ssp = nullptr) override;
 
+    evc::EventType eventTypeAt(int index) const override
+    {
+        if (index < 0 || index >= (int)index_.size())
+            return evc::EventType::Unknown;
+        return index_[index].type;
+    }
+
     void iterateAll(EventCallback ev_cb, ReconCallback recon_cb,
                     ControlCallback ctrl_cb, EpicsCallback epics_cb,
                     DscCallback dsc_cb, int dsc_bank_tag) override;
@@ -31,9 +38,11 @@ private:
     evc::DaqConfig cfg_;
     std::string filepath_;
 
-    // 0-based evio event index (for EvChannel::ReadEventByIndex) plus the
-    // sub-event index within that event's built-trigger block.
-    struct EvioIndex { int evio_event, sub_event; };
+    // 0-based evio event index (for EvChannel::ReadEventByIndex), the
+    // sub-event index within that event's built-trigger block, and the
+    // classified event type so we can label non-Physics samples in the
+    // viewer without re-scanning.
+    struct EvioIndex { int evio_event, sub_event; evc::EventType type; };
     std::vector<EvioIndex> index_;
 
     // Persistent reader.  Opened during open() via EvChannel::OpenAuto so

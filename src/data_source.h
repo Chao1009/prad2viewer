@@ -8,6 +8,7 @@
 
 #include "Fadc250Data.h"
 #include "SspData.h"
+#include "DaqConfig.h"   // evc::EventType (small POD enum, cheap to include)
 
 #include <functional>
 #include <memory>
@@ -15,8 +16,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations (avoid pulling in EvChannel.h for non-EVIO sources)
-namespace evc { struct DaqConfig; }
 namespace fdec { class HyCalSystem; }
 
 // ── Capabilities ─────────────────────────────────────────────────────────
@@ -78,6 +77,17 @@ public:
     // Returns empty string on success, error message on failure.
     virtual std::string decodeEvent(int index, fdec::EventData &evt,
                                      ssp::SspEventData *ssp = nullptr) = 0;
+
+    // Classified event type for the given 0-based index (Physics / Sync /
+    // Epics / control / Unknown).  Used by the viewer to label non-Physics
+    // samples in the status bar — those events are kept in the index so the
+    // EPICS/control bookkeeping sees them, but they decode to empty FADC.
+    // Default returns Physics for sources that don't track the distinction
+    // (e.g. ROOT recon files where every entry is a real readout).
+    virtual evc::EventType eventTypeAt(int /*index*/) const
+    {
+        return evc::EventType::Physics;
+    }
 
     // Decode pre-computed cluster/GEM data (recon sources only).
     // Returns false if not supported or index out of range.

@@ -32,26 +32,29 @@ std::string EvioDataSource::open(const std::string &path)
     reader_pos_ = -1;
     last_decoded_index_ = -1;
 
+    // Index every non-monitoring event so the EPICS tab + control-event
+    // bookkeeping see them.  The viewer's HTTP layer tags non-Physics samples
+    // in the JSON response (`event_kind`) so the status bar can label them
+    // instead of showing "0 channels, no trigger".
     if (reader_.IsRandomAccess()) {
         int n_evio = reader_.GetRandomAccessEventCount();
         for (int ei = 0; ei < n_evio; ++ei) {
             if (reader_.ReadEventByIndex(ei) != status::success) continue;
             if (!reader_.Scan()) continue;
             if (cfg_.is_monitoring(reader_.GetEvHeader().tag)) continue;
+            EventType et = reader_.GetEventType();
             for (int si = 0; si < reader_.GetNEvents(); ++si)
-                index_.push_back({ei, si});
+                index_.push_back({ei, si, et});
         }
     } else {
-        // Sequential indexing: Read() + Scan() each evio event, record
-        // physics sub-events.  reader_pos_ tracks the live read cursor so
-        // decodeEvent() can walk forward from it without an extra reopen.
         int ei = 0;
         while (reader_.Read() == status::success) {
             reader_pos_ = ei;
             bool scanned = reader_.Scan();
             if (scanned && !cfg_.is_monitoring(reader_.GetEvHeader().tag)) {
+                EventType et = reader_.GetEventType();
                 for (int si = 0; si < reader_.GetNEvents(); ++si)
-                    index_.push_back({ei, si});
+                    index_.push_back({ei, si, et});
             }
             ++ei;
         }

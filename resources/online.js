@@ -56,14 +56,21 @@ function pollLivetime(){
         const el=document.getElementById('livetime-display');
         if(!el) return;
         el.style.display='';
-        if(d.livetime>=0){
-            el.textContent='DAQ Livetime: '+d.livetime.toFixed(1)+'%';
-            el.style.color=d.livetime>=livetimeHealthy?THEME.success
-                          :d.livetime>=livetimeWarning?THEME.warn:THEME.danger;
-        } else {
+        const ts=(d.livetime>=0)?d.livetime:null;
+        const meas=(d.measured>=0)?d.measured:null;
+        if(ts==null && meas==null){
             el.textContent='DAQ Livetime: N/A';
             el.style.color=THEME.textDim;
+            return;
         }
+        const parts=[];
+        if(ts!=null)   parts.push(ts.toFixed(1)+'% (TS)');
+        if(meas!=null) parts.push(meas.toFixed(1)+'% (Meas.)');
+        el.textContent='DAQ Livetime: '+parts.join(' / ');
+        // Color by the worse of the two so a sick channel still flags red.
+        const worst=Math.min(ts??meas, meas??ts);
+        el.style.color=worst>=livetimeHealthy?THEME.success
+                      :worst>=livetimeWarning?THEME.warn:THEME.danger;
     }).catch(()=>{});
 }
 function startLivetimePolling(){

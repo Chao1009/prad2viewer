@@ -77,6 +77,14 @@
 
     "ti_master_tag": "0x27",
 
+    "dsc_scaler": {
+        "_comment": "DSC2 scaler bank — used for measured DAQ livetime (1 - gated/ungated). Disabled until slot/channel are confirmed: leave bank_tag<0 or slot<0. When enabled, source ∈ 'ref' (125 MHz reference clock — time-based livetime), 'trg' (TRG input), 'tdc' (TDC input); channel 0..15 (ignored for ref).",
+        "bank_tag": -1,
+        "slot":     -1,
+        "source":   "",
+        "channel":  0
+    },
+
     "sync_format": {
         "_comment": "Absolute-time / run-state banks used by EvChannel::Sync(). The HEAD bank (0xE112, 5 words) is carried inside SYNC/EPICS events; control events (PRESTART 0x0011, GO 0x0012, END 0x0014) carry a 3-word UINT32 payload with a different word layout. See prad2dec/include/SyncData.h for the decoded struct.",
         "head_bank": {

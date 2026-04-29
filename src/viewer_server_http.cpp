@@ -529,14 +529,17 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     // --- progress ---
     if (uri == "/api/progress") { reply(progress_.toJson().dump()); return; }
 
-    // LIVETIME — temporary
+    // LIVETIME — TS (caget poll) and Meas. (DSC2 from data stream).  Either
+    // may be <0 to mean "not available"; the frontend hides each value
+    // independently.  The DSC2 path is read from activeApp() so it follows
+    // file/online mode without extra state.
     if (uri == "/api/livetime") {
+        double ts = -1.0;
+        double meas = activeApp().measured_livetime.load();
 #ifdef WITH_ET
-        double v = livetime_.load();
-        reply(json({{"livetime", v}}).dump());
-#else
-        reply(json({{"livetime", -1}}).dump());
+        ts = livetime_.load();
 #endif
+        reply(json({{"livetime", ts}, {"measured", meas}}).dump());
         return;
     }
 

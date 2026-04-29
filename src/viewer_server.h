@@ -214,12 +214,13 @@ private:
     void etReaderThread();
     void sleepMs(int ms);
 
-    // DAQ livetime (percent).  <0 = not available.
-    // Two write paths are supported and either may stay disabled:
-    //  · Optional shell-command poll (e.g. "caget -t <channel>") — see
-    //    livetimePollThread() and AppState::livetime_cmd.  Avoids a build-time
-    //    EPICS dependency.  Disabled when livetime_cmd is empty.
-    //  · Direct write from a future data-stream consumer (TI scaler bank).
+    // DAQ livetime (TS, percent).  <0 = not available.
+    // Written by livetimePollThread() — an optional shell-command poll
+    // (typical: "caget -t <channel>") configured via AppState::livetime_cmd.
+    // Disabled when livetime_cmd is empty.  Avoids a build-time EPICS
+    // dependency by shelling out to whatever tool the host provides.
+    // The "measured" companion lives on AppState::measured_livetime and is
+    // populated from the DSC2 scaler bank in the EVIO stream.
     std::atomic<double> livetime_{-1.0};
     std::thread         livetime_thread_;
     void                livetimePollThread();

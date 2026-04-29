@@ -93,11 +93,18 @@ public:
     using ControlCallback = std::function<void(uint32_t unix_time, uint64_t last_ti_ts)>;
     using EpicsCallback   = std::function<void(const std::string &text,
                                                 int32_t ev_num, uint64_t timestamp)>;
+    // Raw scaler bank (e.g. DSC2 0xE115).  Fired on every scanned event where
+    // the configured bank tag is present (Sync events typically; some sites
+    // also embed the bank in physics events).  EVIO-only — ROOT sources
+    // ignore the parameters.
+    using DscCallback     = std::function<void(const uint32_t *data, size_t nwords)>;
 
     virtual void iterateAll(EventCallback ev_cb,
                             ReconCallback recon_cb = nullptr,
                             ControlCallback ctrl_cb = nullptr,
-                            EpicsCallback epics_cb = nullptr) = 0;
+                            EpicsCallback epics_cb = nullptr,
+                            DscCallback dsc_cb = nullptr,
+                            int dsc_bank_tag = -1) = 0;
 };
 
 // ── Factory ──────────────────────────────────────────────────────────────

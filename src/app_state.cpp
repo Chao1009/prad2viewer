@@ -440,7 +440,6 @@ void AppState::processEvent(fdec::EventData &event,
                     for (int j = 0; j < 2; ++j) {
                         moller_xy_hist.fill(cinfo[j].lx, cinfo[j].ly,
                             moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
-                        moller_energy_hist.fill(reco_hits[j].energy, moller_e_min, moller_e_step);
                     }
                 }
             }
@@ -551,7 +550,6 @@ void AppState::processReconEvent(const ReconEventData &recon)
                 for (int j = 0; j < 2; ++j) {
                     moller_xy_hist.fill(cinfo[j].lx, cinfo[j].ly,
                         moller_xy_x_min, moller_xy_x_step, moller_xy_y_min, moller_xy_y_step);
-                    moller_energy_hist.fill(recon.clusters[j].energy, moller_e_min, moller_e_step);
                 }
             }
         }
@@ -976,7 +974,6 @@ void AppState::clearHistograms()
     for (auto &h : nblocks_hist_by_ncl)        h.clear();
     energy_angle_hist.clear();
     moller_xy_hist.clear();
-    moller_energy_hist.clear();
     moller_events = 0;
     hycal_xy_hist.clear();
     hycal_xy_events = 0;

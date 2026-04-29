@@ -149,7 +149,7 @@ function applyConfig(data){
         refreshLmsMs=data.refresh_ms.lms||2000;
     }
     if(data.livetime){
-        livetimeEnabled=!!data.livetime.enabled;
+        livetimeEnabled=!!(data.livetime.enabled || data.livetime.measured_enabled);
         livetimePollMs=Math.max(1000,(data.livetime.poll_sec||5)*1000);
         livetimeHealthy=data.livetime.healthy ?? 90;
         livetimeWarning=data.livetime.warning ?? 80;
@@ -177,7 +177,7 @@ function applyConfig(data){
     // show/hide mode-specific UI
     document.getElementById('nav-file').style.display   = mode!=='online'?'flex':'none';
     document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
-    // LIVETIME — temporary
+    // DAQ livetime — start/stop polling /api/livetime per mode.
     if(mode==='online') startLivetimePolling(); else stopLivetimePolling();
     document.getElementById('btn-open').style.display='';
 

@@ -322,12 +322,27 @@ void AppState::init(const std::string &db_dir,
             if (lt.contains("poll_sec")) livetime_poll_sec = std::max(1, (int)lt["poll_sec"]);
             if (lt.contains("healthy"))  livetime_healthy  = lt["healthy"];
             if (lt.contains("warning"))  livetime_warning  = lt["warning"];
+            // DSC2-scaler config (bank/slot/source/channel) lives in
+            // daq_config.json under `dsc_scaler` — see DaqConfig::DscScaler.
+            const auto &ds = daq_cfg.dsc_scaler;
+            using DSrc = evc::DaqConfig::DscScaler::Source;
+            const char *src_name = (ds.source == DSrc::Ref) ? "ref"
+                                 : (ds.source == DSrc::Trg) ? "trg" : "tdc";
             std::cerr << "Livetime  : "
                       << (livetime_cmd.empty() ? "disabled"
                                                : ("'" + livetime_cmd + "' every "
                                                   + std::to_string(livetime_poll_sec) + "s"))
                       << " healthy>=" << livetime_healthy
-                      << " warn>=" << livetime_warning << "\n";
+                      << " warn>=" << livetime_warning;
+            if (ds.enabled()) {
+                std::cerr << " | DSC2 bank=0x" << std::hex << ds.bank_tag << std::dec
+                          << " slot=" << ds.slot << " src=" << src_name;
+                if (ds.source != DSrc::Ref)
+                    std::cerr << " ch=" << ds.channel;
+            } else {
+                std::cerr << " | DSC2 disabled";
+            }
+            std::cerr << "\n";
         }
 
         if (rcfg.contains("color_ranges")) {
@@ -471,12 +486,6 @@ void AppState::init(const std::string &db_dir,
                     if (xy.contains("y_max"))  moller_xy_y_max  = xy["y_max"];
                     if (xy.contains("y_step")) moller_xy_y_step = xy["y_step"];
                 }
-                if (ml.contains("energy_hist")) {
-                    auto &eh = ml["energy_hist"];
-                    if (eh.contains("min"))  moller_e_min  = eh["min"];
-                    if (eh.contains("max"))  moller_e_max  = eh["max"];
-                    if (eh.contains("step")) moller_e_step = eh["step"];
-                }
             }
             if (ph.contains("hycal_cluster_hit")) {
                 auto &hc = ph["hycal_cluster_hit"];
@@ -573,7 +582,6 @@ void AppState::init(const std::string &db_dir,
     int ml_nx = std::max(1, (int)std::ceil((moller_xy_x_max - moller_xy_x_min) / moller_xy_x_step));
     int ml_ny = std::max(1, (int)std::ceil((moller_xy_y_max - moller_xy_y_min) / moller_xy_y_step));
     moller_xy_hist.init(ml_nx, ml_ny);
-    moller_energy_hist.init(std::max(1, (int)std::ceil((moller_e_max - moller_e_min) / moller_e_step)));
     int hxy_nx = std::max(1, (int)std::ceil((hxy_x_max - hxy_x_min) / hxy_x_step));
     int hxy_ny = std::max(1, (int)std::ceil((hxy_y_max - hxy_y_min) / hxy_y_step));
     hycal_xy_hist.init(hxy_nx, hxy_ny);

@@ -89,6 +89,25 @@ struct DaqConfig
     // V1190 TDC data bank tag (0xE107, tagger crate — flat array of hits)
     uint32_t tdc_bank_tag = 0;
 
+    // --- DSC2 scaler bank (livetime measurement) ----------------------------
+    // 67 32-bit words per slot, header 0xDCA00000|(slot<<8)|rflag, then
+    // [16 TRG gated, 16 TDC gated, 16 TRG ungated, 16 TDC ungated, ref gated,
+    //  ref ungated].  Live time = 1 - gated/ungated for the chosen counter:
+    //   Source::Ref   — 125 MHz reference clock (time-based livetime)
+    //   Source::Trg   — TRG channel input        (trigger-based)
+    //   Source::Tdc   — TDC channel input
+    // bank_tag<0 or slot<0 disables the measurement entirely.
+    struct DscScaler {
+        enum class Source { Ref, Trg, Tdc };
+        int    bank_tag = -1;
+        int    slot     = -1;
+        Source source   = Source::Ref;
+        int    channel  = 0;     // 0..15, ignored when source=Ref
+
+        bool enabled() const { return bank_tag >= 0 && slot >= 0; }
+    };
+    DscScaler dsc_scaler;
+
     // --- TI data format (fallback for single-event / non-CODA3 data) --------
     // TI bank layout: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high
     int ti_trigger_word;

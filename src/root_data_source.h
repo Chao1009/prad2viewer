@@ -42,7 +42,8 @@ public:
     std::string decodeEvent(int index, fdec::EventData &evt,
                              ssp::SspEventData *ssp = nullptr) override;
     void iterateAll(EventCallback ev_cb, ReconCallback recon_cb,
-                    ControlCallback ctrl_cb, EpicsCallback epics_cb) override;
+                    ControlCallback ctrl_cb, EpicsCallback epics_cb,
+                    DscCallback dsc_cb, int dsc_bank_tag) override;
 
 private:
     std::unordered_map<int, uint32_t> crate_to_roc_;
@@ -72,7 +73,8 @@ public:
                              ssp::SspEventData *ssp = nullptr) override;
     bool decodeReconEvent(int index, ReconEventData &recon) override;
     void iterateAll(EventCallback ev_cb, ReconCallback recon_cb,
-                    ControlCallback ctrl_cb, EpicsCallback epics_cb) override;
+                    ControlCallback ctrl_cb, EpicsCallback epics_cb,
+                    DscCallback dsc_cb, int dsc_bank_tag) override;
 
 private:
     std::unique_ptr<TFile> file_;

@@ -542,7 +542,12 @@ void ViewerServer::buildHistograms()
         // EPICS events
         [&](const std::string &text, int32_t ev_num, uint64_t ts) {
             app_file_.processEpics(text, app_file_.events_processed.load(), ts);
-        }
+        },
+        // DSC2 scaler bank → measured livetime
+        [&](const uint32_t *data, size_t nwords) {
+            app_file_.processDscBank(data, nwords);
+        },
+        app_file_.daq_cfg.dsc_scaler.bank_tag
     );
 
     std::cerr << "  Histograms: " << app_file_.events_processed.load() << " events"

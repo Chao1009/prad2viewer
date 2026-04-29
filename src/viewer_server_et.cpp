@@ -203,6 +203,18 @@ void ViewerServer::etReaderThread()
                     }
                 }
 
+                // DSC2 scaler bank → measured livetime (Sync events typically;
+                // some sites embed it in physics events too, so check both).
+                if (app_online_.daq_cfg.dsc_scaler.enabled()) {
+                    auto et = ch.GetEventType();
+                    if (et == EventType::Sync || et == EventType::Physics) {
+                        const auto *node = ch.FindFirstByTag(
+                            (uint32_t)app_online_.daq_cfg.dsc_scaler.bank_tag);
+                        if (node && node->data_words > 0)
+                            app_online_.processDscBank(ch.GetData(*node), node->data_words);
+                    }
+                }
+
                 for (int i = 0; i < ch.GetNEvents(); ++i) {
                     ssp_evt.clear();
                     const bool want_tagger =

@@ -91,6 +91,35 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
         if (bt.contains("tdc"))            cfg.tdc_bank_tag       = parse_hex(bt["tdc"]);
     }
 
+    // DSC2 scaler bank (livetime measurement).  Section is optional; absent
+    // or with bank_tag < 0 leaves the measurement disabled.
+    if (j.contains("dsc_scaler")) {
+        auto &ds = j["dsc_scaler"];
+        if (ds.contains("bank_tag")) {
+            auto &v = ds["bank_tag"];
+            if (v.is_number_integer()) cfg.dsc_scaler.bank_tag = v.get<int>();
+            else if (v.is_string()) {
+                std::string s = v.get<std::string>();
+                if (s.empty()) cfg.dsc_scaler.bank_tag = -1;
+                else {
+                    try { cfg.dsc_scaler.bank_tag = (int)std::stoul(s, nullptr, 0); }
+                    catch (...) { cfg.dsc_scaler.bank_tag = -1; }
+                }
+            }
+        }
+        if (ds.contains("slot"))    cfg.dsc_scaler.slot    = ds["slot"].get<int>();
+        if (ds.contains("channel")) cfg.dsc_scaler.channel = ds["channel"].get<int>();
+        if (ds.contains("source")) {
+            std::string src = ds["source"].get<std::string>();
+            if      (src.empty())  { /* leave default */ }
+            else if (src == "ref") cfg.dsc_scaler.source = DaqConfig::DscScaler::Source::Ref;
+            else if (src == "trg") cfg.dsc_scaler.source = DaqConfig::DscScaler::Source::Trg;
+            else if (src == "tdc") cfg.dsc_scaler.source = DaqConfig::DscScaler::Source::Tdc;
+            else std::cerr << "load_daq_config: dsc_scaler.source '" << src
+                           << "' unknown — expected 'ref' | 'trg' | 'tdc'\n";
+        }
+    }
+
     // TI format
     if (j.contains("ti_format")) {
         auto &ti = j["ti_format"];

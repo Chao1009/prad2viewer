@@ -168,7 +168,8 @@ std::string EvioDataSource::decodeEvent(int index, fdec::EventData &evt,
 // =========================================================================
 
 void EvioDataSource::iterateAll(EventCallback ev_cb, ReconCallback /*recon_cb*/,
-                                ControlCallback ctrl_cb, EpicsCallback epics_cb)
+                                ControlCallback ctrl_cb, EpicsCallback epics_cb,
+                                DscCallback dsc_cb, int dsc_bank_tag)
 {
     EvChannel ch;
     ch.SetConfig(cfg_);
@@ -202,6 +203,17 @@ void EvioDataSource::iterateAll(EventCallback ev_cb, ReconCallback /*recon_cb*/,
             std::string text = ch.ExtractEpicsText();
             if (!text.empty())
                 epics_cb(text, 0, last_ti_ts);
+        }
+
+        // DSC2 scaler bank — Sync events typically; some sites also embed it
+        // in physics events.
+        if (dsc_cb && dsc_bank_tag >= 0) {
+            auto et = ch.GetEventType();
+            if (et == EventType::Sync || et == EventType::Physics) {
+                const auto *node = ch.FindFirstByTag((uint32_t)dsc_bank_tag);
+                if (node && node->data_words > 0)
+                    dsc_cb(ch.GetData(*node), node->data_words);
+            }
         }
 
         // physics events (skip monitoring — no waveforms to process)

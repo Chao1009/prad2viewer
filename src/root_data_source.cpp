@@ -179,7 +179,8 @@ std::string RootRawDataSource::decodeEvent(int index, fdec::EventData &evt,
 }
 
 void RootRawDataSource::iterateAll(EventCallback ev_cb, ReconCallback /*recon_cb*/,
-                                    ControlCallback /*ctrl_cb*/, EpicsCallback /*epics_cb*/)
+                                    ControlCallback /*ctrl_cb*/, EpicsCallback /*epics_cb*/,
+                                    DscCallback /*dsc_cb*/, int /*dsc_bank_tag*/)
 {
     if (!tree_ || !ev_cb) return;
 
@@ -308,7 +309,8 @@ bool RootReconDataSource::decodeReconEvent(int index, ReconEventData &recon)
 }
 
 void RootReconDataSource::iterateAll(EventCallback /*ev_cb*/, ReconCallback recon_cb,
-                                      ControlCallback /*ctrl_cb*/, EpicsCallback /*epics_cb*/)
+                                      ControlCallback /*ctrl_cb*/, EpicsCallback /*epics_cb*/,
+                                      DscCallback /*dsc_cb*/, int /*dsc_bank_tag*/)
 {
     if (!tree_ || !recon_cb) return;
 

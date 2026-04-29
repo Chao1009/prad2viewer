@@ -163,6 +163,11 @@ struct AppState {
     float       livetime_healthy    = 90.f;
     float       livetime_warning    = 80.f;
 
+    // Measured DAQ livetime from DSC2 scalers in the EVIO stream
+    // (1 - gated/ungated).  Bank tag, slot, source, channel live in
+    // daq_cfg.dsc_scaler so the decoder/format details stay in prad2dec.
+    std::atomic<double> measured_livetime{-1.0};
+
     // online refresh rates (ms), served to frontend
     int refresh_event_ms = 200;
     int refresh_ring_ms  = 500;
@@ -190,8 +195,6 @@ struct AppState {
     // Møller XY histogram
     float moller_xy_x_min=-600.f, moller_xy_x_max=600.f, moller_xy_x_step=5.f;  // mm
     float moller_xy_y_min=-600.f, moller_xy_y_max=600.f, moller_xy_y_step=5.f;  // mm
-    // Møller energy histogram
-    float moller_e_min=0.f, moller_e_max=2500.f, moller_e_step=10.f; // MeV
 
     // HyCal cluster-hit XY (single-cluster ep-elastic candidates) — cuts + hist
     int   hxy_n_clusters      = 1;        // require Ncl == this
@@ -284,7 +287,6 @@ struct AppState {
     std::vector<Histogram> nblocks_hist_by_ncl;
     Histogram2D energy_angle_hist;
     Histogram2D moller_xy_hist;
-    Histogram   moller_energy_hist;
     Histogram2D hycal_xy_hist;       // single-cluster ep-elastic candidates (cuts in hxy_*)
     int         hycal_xy_events = 0; // events passing hycal_cluster_hit cuts
 
@@ -384,6 +386,12 @@ struct AppState {
     // ---- EPICS processing ---------------------------------------------------
     void processEpics(const std::string &text, int32_t event_number, uint64_t timestamp);
     void clearEpics();        // locks epics_mtx
+
+    // ---- DSC2 scaler processing --------------------------------------------
+    // Parse a DSC2 bank from sync/physics events and update measured_livetime
+    // atomically.  Bank/slot/source/channel come from daq_cfg.dsc_scaler.
+    // No-op when daq_cfg.dsc_scaler.enabled() is false.
+    void processDscBank(const uint32_t *data, size_t nwords);
 
     // ---- Clearing ----------------------------------------------------------
     void clearHistograms();   // locks data_mtx

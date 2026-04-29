@@ -82,7 +82,6 @@ json AppState::apiMoller() const
             {"xy_nx", moller_xy_hist.nx}, {"xy_ny", moller_xy_hist.ny},
             {"xy_x_min", moller_xy_x_min}, {"xy_x_max", moller_xy_x_max}, {"xy_x_step", moller_xy_x_step},
             {"xy_y_min", moller_xy_y_min}, {"xy_y_max", moller_xy_y_max}, {"xy_y_step", moller_xy_y_step},
-            {"energy_hist", histToJson(moller_energy_hist, moller_e_min, moller_e_max, moller_e_step)},
             {"moller_events", moller_events},
             {"total_events", cluster_events_processed},
             {"cuts", {{"energy_tolerance", moller_energy_tol},
@@ -293,6 +292,61 @@ void AppState::clearEpics()
     epics_events = 0;
 }
 
+// ---------- DSC2 scaler bank → measured livetime --------------------------
+// Bank layout (per slot, 67 words):
+//   [0]      header  0xDCA00000 | (slot<<8) | rflag
+//   [1..16]  TRG  Grp1 (gated/busy)  — 16 channels
+//   [17..32] TDC  Grp1 (gated/busy)  — 16 channels
+//   [33..48] TRG  Grp2 (ungated)     — 16 channels
+//   [49..64] TDC  Grp2 (ungated)     — 16 channels
+//   [65]     Ref  Grp1 (gated/busy)  — 125 MHz clock
+//   [66]     Ref  Grp2 (ungated)     — 125 MHz clock
+// Live time = 1 - gated/ungated.
+void AppState::processDscBank(const uint32_t *data, size_t nwords)
+{
+    const auto &ds = daq_cfg.dsc_scaler;
+    if (!ds.enabled() || data == nullptr) return;
+
+    static constexpr uint32_t HDR_MASK = 0xFFFF0000u;
+    static constexpr uint32_t HDR_ID   = 0xDCA00000u;
+    static constexpr int      WPS      = 67;
+    static constexpr int      NCH      = 16;
+    using DSrc = evc::DaqConfig::DscScaler::Source;
+
+    size_t pos = 0;
+    while (pos + (size_t)WPS <= nwords) {
+        uint32_t hdr = data[pos];
+        if ((hdr & HDR_MASK) != HDR_ID) break;
+        int slot = (int)((hdr >> 8) & 0xFFu);
+        if (slot != ds.slot) { pos += WPS; continue; }
+
+        const uint32_t *p = &data[pos + 1];
+        uint32_t gated = 0, ungated = 0;
+        switch (ds.source) {
+        case DSrc::Ref:
+            gated   = p[64];      // ref Grp1 (busy)
+            ungated = p[65];      // ref Grp2 (total)
+            break;
+        case DSrc::Trg:
+            if (ds.channel < 0 || ds.channel >= NCH) return;
+            gated   = p[ds.channel];            // TRG Grp1
+            ungated = p[32 + ds.channel];       // TRG Grp2
+            break;
+        case DSrc::Tdc:
+            if (ds.channel < 0 || ds.channel >= NCH) return;
+            gated   = p[16 + ds.channel];       // TDC Grp1
+            ungated = p[48 + ds.channel];       // TDC Grp2
+            break;
+        }
+
+        if (ungated > 0) {
+            double lt = (1.0 - (double)gated / (double)ungated) * 100.0;
+            measured_livetime.store(lt);
+        }
+        return;  // matched the slot — done
+    }
+}
+
 json AppState::apiEpicsChannels() const
 {
     std::lock_guard<std::mutex> lk(epics_mtx);
@@ -429,6 +483,7 @@ void AppState::fillConfigJson(json &cfg) const
     };
     cfg["livetime"] = {
         {"enabled", !livetime_cmd.empty()},
+        {"measured_enabled", daq_cfg.dsc_scaler.enabled()},
         {"poll_sec", livetime_poll_sec},
         {"healthy", livetime_healthy},
         {"warning", livetime_warning},

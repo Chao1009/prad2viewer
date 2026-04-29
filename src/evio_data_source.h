@@ -24,7 +24,8 @@ public:
                              ssp::SspEventData *ssp = nullptr) override;
 
     void iterateAll(EventCallback ev_cb, ReconCallback recon_cb,
-                    ControlCallback ctrl_cb, EpicsCallback epics_cb) override;
+                    ControlCallback ctrl_cb, EpicsCallback epics_cb,
+                    DscCallback dsc_cb, int dsc_bank_tag) override;
 
 private:
     evc::DaqConfig cfg_;

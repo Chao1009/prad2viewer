@@ -166,14 +166,18 @@ function renderGemEffCards() {
     const warning = cfg.warning || 70;
     root.innerHTML = '';
     counters.forEach(c => {
-        let cls = 'gray', txt = '—';
+        let cls = 'gray', txt = '—', fillPct = 0;
         if (c.den >= minDen) {
             txt = c.eff_pct.toFixed(1) + '%';
+            fillPct = Math.max(0, Math.min(100, c.eff_pct));
             cls = c.eff_pct >= healthy ? 'green'
                 : c.eff_pct >= warning ? 'amber' : 'red';
         }
         const el = document.createElement('div');
         el.className = 'gem-eff-card ' + cls;
+        // Translucent left-to-right fill behind the text — width tracks the
+        // efficiency ratio so the box itself "shows" the value at a glance.
+        el.style.setProperty('--fill-pct', fillPct + '%');
         const color = GEM_COLORS[c.id] || THEME.text;
         el.innerHTML =
             `<div class="name" style="color:${color}">${c.name || ('GEM' + c.id)}</div>` +

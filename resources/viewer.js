@@ -304,7 +304,8 @@ function loadEventData(reqId, data) {
     } else if(activeTab==='lms'){
         // LMS geo doesn't change per event — no redraw needed
     } else if(activeTab==='gem'){
-        fetchGemData();
+        // Right panel is per-event-independent (efficiency cards + last-good
+        // snapshot), refreshed on the histogram cadence by fetchGemAccum.
     } else if(activeTab==='gem_apv'){
         if(typeof fetchGemApvData==='function') fetchGemApvData(currentEvent);
     } else {
@@ -407,7 +408,7 @@ function switchTab(tab){
                    fetch(){ fetchLmsSummary(); } },
         epics:   { fetch(){ fetchEpicsChannels(); fetchEpicsLatest(); fetchAllEpicsSlots(); } },
         physics: { fetch(){ fetchPhysics(); } },
-        gem:     { fetch(){ fetchGemData(); fetchGemAccum(); },
+        gem:     { fetch(){ fetchGemAccum(); },
                    after(){ resizeGem(); } },
         gem_apv: { fetch(){ fetchGemApvData(currentEvent); },
                    after(){ resizeGemApv(); } },
@@ -507,13 +508,11 @@ function init(){
     registerPlot('cl-nblocks-hist','cluster', 'Blocks per Cluster');
     for (let d = 0; d < 4; d++)
         registerPlot('gem-resid-' + d, 'cluster', null);
-    registerPlot('gem-ncl-hist',   'gem',     'GEM Clusters / Event');
-    registerPlot('gem-theta-hist', 'gem',     'GEM Hit Angle');
+    registerPlot('gem-eff-zx', 'gem', null);
+    registerPlot('gem-eff-zy', 'gem', null);
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
     setupCopyBtn('btn-copy-nclust', ()=>currentNclustHist);
     setupCopyBtn('btn-copy-nblocks', ()=>currentNblocksHist);
-    setupCopyBtn('btn-copy-gem-ncl', ()=>currentGemNclHist);
-    setupCopyBtn('btn-copy-gem-theta', ()=>currentGemThetaHist);
 
     // cluster stat row column divider
     setupDivider('div-cl-stat','x',

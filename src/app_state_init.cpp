@@ -514,6 +514,17 @@ void AppState::init(const std::string &db_dir,
                     if (rh.contains("step")) gem_resid_step = rh["step"];
                 }
             }
+            if (ph.contains("gem_efficiency")) {
+                auto &ge = ph["gem_efficiency"];
+                if (ge.contains("min_cluster_energy"))      gem_eff_min_cluster_energy = ge["min_cluster_energy"];
+                if (ge.contains("match_window_mm"))         gem_eff_match_window_mm    = ge["match_window_mm"];
+                if (ge.contains("test_window_mm"))          gem_eff_test_window_mm     = ge["test_window_mm"];
+                if (ge.contains("max_chi2_per_dof"))        gem_eff_max_chi2           = ge["max_chi2_per_dof"];
+                if (ge.contains("max_hits_per_detector"))   gem_eff_max_hits_per_det   = ge["max_hits_per_detector"];
+                if (ge.contains("min_denom_for_eff"))       gem_eff_min_denom          = ge["min_denom_for_eff"];
+                if (ge.contains("healthy"))                 gem_eff_healthy            = ge["healthy"];
+                if (ge.contains("warning"))                 gem_eff_warning            = ge["warning"];
+            }
             std::cerr << "Physics   : " << physics_trigger
                       << " Moller: tol=" << moller_energy_tol
                       << " angle=[" << moller_angle_min << "," << moller_angle_max << "]"
@@ -539,23 +550,6 @@ void AppState::init(const std::string &db_dir,
             }
             std::cerr << "EPICS     : max_history=" << epics_max_history
                       << " slots=" << epics_default_slots.size() << "\n";
-        }
-
-        // GEM histogram config (optional section in config.json)
-        if (rcfg.contains("gem_histograms")) {
-            auto &gh = rcfg["gem_histograms"];
-            if (gh.contains("nclusters")) {
-                auto &nc = gh["nclusters"];
-                if (nc.contains("min"))  gem_ncl_min  = nc["min"];
-                if (nc.contains("max"))  gem_ncl_max  = nc["max"];
-                if (nc.contains("step")) gem_ncl_step = nc["step"];
-            }
-            if (gh.contains("theta")) {
-                auto &th = gh["theta"];
-                if (th.contains("min"))  gem_theta_min  = th["min"];
-                if (th.contains("max"))  gem_theta_max  = th["max"];
-                if (th.contains("step")) gem_theta_step = th["step"];
-            }
         }
 
         std::cerr << "Reco      : " << main_config
@@ -595,9 +589,7 @@ void AppState::init(const std::string &db_dir,
         for (auto &h : gem_dx_hist) h.init(resid_nbins);
         for (auto &h : gem_dy_hist) h.init(resid_nbins);
     }
-    gem_nclusters_hist.init(std::max(1, (gem_ncl_max - gem_ncl_min) / gem_ncl_step));
-    gem_theta_hist.init(std::max(1, (int)std::ceil((gem_theta_max - gem_theta_min) / gem_theta_step)));
-
+    initGemEfficiency();
     // ensure all transforms are pre-prepared before multithreaded use
     hycal_transform.prepare();
 }

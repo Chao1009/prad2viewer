@@ -450,20 +450,21 @@
                 </div>
             </div>
             <div class="gem-col-right">
-                <div class="gem-col-title">Event Clusters</div>
-                <div class="gem-cluster-row">
-                    <div class="gem-plane-cell"><div id="gem-plane-0" style="width:100%;height:100%"></div></div>
-                    <div class="gem-plane-cell"><div id="gem-plane-1" style="width:100%;height:100%"></div></div>
+                <div class="gem-col-title">Tracking Efficiency (HyCal-anchored fits)</div>
+                <div class="gem-eff-cards" id="gem-eff-cards"></div>
+                <div class="gem-eff-header">
+                    <span class="gem-eff-info" id="gem-eff-info">Waiting for matched event…</span>
+                    <span class="gem-eff-radio" id="gem-eff-radio">
+                        Test:
+                        <label><input type="radio" name="gem-eff-test" value="0"> GEM0</label>
+                        <label><input type="radio" name="gem-eff-test" value="1" checked> GEM1</label>
+                        <label><input type="radio" name="gem-eff-test" value="2"> GEM2</label>
+                        <label><input type="radio" name="gem-eff-test" value="3"> GEM3</label>
+                    </span>
                 </div>
-                <div class="gem-hist-row">
-                    <div class="gem-hist-cell">
-                        <div id="gem-ncl-hist" style="width:100%;height:100%"></div>
-                        <div class="hist-controls"><button id="btn-copy-gem-ncl" class="copy-btn" title="Copy data">copy</button></div>
-                    </div>
-                    <div class="gem-hist-cell">
-                        <div id="gem-theta-hist" style="width:100%;height:100%"></div>
-                        <div class="hist-controls"><button id="btn-copy-gem-theta" class="copy-btn" title="Copy data">copy</button></div>
-                    </div>
+                <div class="gem-eff-plots">
+                    <div class="gem-eff-plot"><div id="gem-eff-zx" style="width:100%;height:100%"></div></div>
+                    <div class="gem-eff-plot"><div id="gem-eff-zy" style="width:100%;height:100%"></div></div>
                 </div>
             </div>
         </div>

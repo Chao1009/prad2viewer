@@ -438,10 +438,32 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .gem-col-title { text-align:center; font-size:11px; color:var(--dim); padding:2px 0; }
 .gem-occ-grid { flex:1; min-height:0; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:2px; }
 .gem-occ-cell { min-height:0; position:relative; }
-.gem-cluster-row { flex:3; min-height:0; display:flex; gap:4px; }
-.gem-plane-cell { flex:1; min-height:0; position:relative; }
-.gem-hist-row { flex:2; min-height:0; display:flex; gap:4px; }
-.gem-hist-cell { flex:1; min-height:0; position:relative; }
+.gem-eff-cards {
+    flex:none; height:80px;
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:6px;
+    padding:4px 6px;
+}
+.gem-eff-card {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:4px; border:1px solid var(--border); border-radius:3px;
+    background:var(--canvas);
+}
+.gem-eff-card .name { font-size:11px; font-weight:600; }
+.gem-eff-card .pct  { font-size:18px; font-weight:bold; line-height:1.1; }
+.gem-eff-card .cnt  { font-size:10px; color:var(--dim); }
+.gem-eff-card.green  .pct { color:#51cf66; }
+.gem-eff-card.amber  .pct { color:#ffa500; }
+.gem-eff-card.red    .pct { color:#ff6b6b; }
+.gem-eff-card.gray   .pct { color:var(--dim); }
+.gem-eff-header {
+    flex:none; height:26px; display:flex; align-items:center;
+    justify-content:space-between; padding:0 8px; font-size:11px; color:var(--text);
+}
+.gem-eff-info { color:var(--dim); }
+.gem-eff-radio { display:flex; gap:8px; align-items:center; }
+.gem-eff-radio label { display:flex; gap:2px; align-items:center; cursor:pointer; }
+.gem-eff-plots { flex:1; min-height:0; display:flex; gap:4px; padding:0 4px 4px; }
+.gem-eff-plot  { flex:1; min-height:0; position:relative; }
 
 /* --- GEM APV waveform tab --- */
 .gem-apv-outer { display:none; flex-direction:column; flex:1; min-height:0; }

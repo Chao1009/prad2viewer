@@ -13,10 +13,6 @@
             "lms": 2000
         }
     },
-    "gem_histograms": {
-        "nclusters": {"min": 0, "max": 50, "step": 1},
-        "theta": {"min": 0.0, "max": 10.0, "step": 0.2}
-    },
     "waveform": {
         "accept_trigger_bits": [],
         "reject_trigger_bits": ["Pulser"],
@@ -124,6 +120,16 @@
             "require_ep_candidate": true,
             "window_mm": 10.0,
             "residual_hist": {"min": -50.0, "max": 50.0, "step": 0.5}
+        },
+        "gem_efficiency": {
+            "min_cluster_energy":     100.0,
+            "match_window_mm":         10.0,
+            "test_window_mm":           5.0,
+            "max_chi2_per_dof":        10.0,
+            "max_hits_per_detector":   50,
+            "min_denom_for_eff":       20,
+            "healthy":                 90,
+            "warning":                 70
         }
     },
     "elog": {

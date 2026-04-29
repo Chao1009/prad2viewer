@@ -73,7 +73,8 @@ All responses are JSON unless noted otherwise. The server also pushes real-time 
 | GET | `/api/gem/config` | GEM detector geometry and strip mapping |
 | GET | `/api/gem/hits` | GEM hits for the current event |
 | GET | `/api/gem/occupancy` | GEM strip occupancy histograms |
-| GET | `/api/gem/hist` | GEM amplitude histograms |
+| GET | `/api/gem/residuals` | GEM↔HyCal matching residuals |
+| GET | `/api/gem/efficiency` | Per-detector tracking-efficiency counters + last-good-event snapshot |
 
 ## Physics
 
@@ -81,6 +82,7 @@ All responses are JSON unless noted otherwise. The server also pushes real-time 
 |--------|----------|-------------|
 | GET | `/api/physics/energy_angle` | Energy vs. angle distribution |
 | GET | `/api/physics/moller` | Moller scattering analysis |
+| GET | `/api/physics/hycal_xy` | Single-cluster HyCal hit map |
 
 ## Elog
 

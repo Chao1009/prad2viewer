@@ -38,7 +38,7 @@ function clearFrontend(){
     document.getElementById('ring-select').innerHTML='';
 
     // GEM, EPICS, Physics tabs
-    currentGemNclHist=null; currentGemThetaHist=null;
+    gemEffData=null;
     clearEpicsFrontend();
     clearPhysicsFrontend();
 

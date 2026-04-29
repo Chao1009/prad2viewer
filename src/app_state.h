@@ -23,6 +23,7 @@ struct ReconEventData;
 
 #include <nlohmann/json.hpp>
 
+#include <array>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -121,12 +122,6 @@ struct AppState {
     static constexpr int GEM_OCC_NY = 30;
     std::vector<Histogram2D> gem_occupancy;  // one per detector
 
-    // GEM accumulated histograms
-    int   gem_ncl_min=0, gem_ncl_max=50, gem_ncl_step=1;
-    float gem_theta_min=0.f, gem_theta_max=10.f, gem_theta_step=0.2f;
-    Histogram gem_nclusters_hist;
-    Histogram gem_theta_hist;
-
     std::unordered_map<int, int> roc_to_crate;  // ROC tag → crate index
     nlohmann::json crate_roc_json;              // crate→ROC tag JSON
     nlohmann::json base_config;                 // modules, daq, crate_roc for /api/config
@@ -208,6 +203,18 @@ struct AppState {
     bool  gem_match_require_ep = true;    // gate on hxy_* selection (clean track)
     float gem_match_window_mm  = 10.f;    // only fill if sqrt(dx²+dy²) < this (mm)
     float gem_resid_min = -50.f, gem_resid_max = 50.f, gem_resid_step = 0.5f;  // mm
+
+    // GEM tracking-efficiency monitor (HyCal-anchored 4-point line fits).
+    // Pass A seeds with a GEM0 hit and tests detectors 1/2/3; Pass B seeds
+    // with a GEM1 hit and tests detector 0.  See processGemEfficiency().
+    float gem_eff_min_cluster_energy = 100.f;
+    float gem_eff_match_window_mm    = 10.f;
+    float gem_eff_test_window_mm     =  5.f;
+    float gem_eff_max_chi2           = 10.f;
+    int   gem_eff_max_hits_per_det   = 50;
+    int   gem_eff_min_denom          = 20;
+    float gem_eff_healthy            = 90.f;
+    float gem_eff_warning            = 70.f;
 
     // EPICS config
     int   epics_max_history = 5000;
@@ -296,6 +303,41 @@ struct AppState {
     std::vector<Histogram> gem_dy_hist;
     int                    gem_match_events = 0;
     std::vector<int>       gem_match_hits;  // per-det count of in-window hits
+
+    // GEM efficiency counters and last-good-event snapshot.
+    // num/den indexed by test detector (size = nDetectors, 0 if no GEMs).
+    std::vector<int> gem_eff_num;
+    std::vector<int> gem_eff_den;
+    static constexpr int GEM_EFF_MAX_DETS = 4;
+    struct GemEffSnapshot {
+        bool  valid    = false;
+        int   event_id = -1;
+        // HyCal cluster lab-frame xyz — anchor used in every test's fit.
+        float hycal_x = 0.f, hycal_y = 0.f, hycal_z = 0.f;
+        // One self-contained record per test detector.  Each test stores the
+        // GEM hits that went into its own (test-detector-excluded) refit, so
+        // the frontend can draw any test without cross-referencing siblings.
+        struct DetTest {
+            bool  tested = false;
+            bool  inside = false;     // predicted point inside detector active area
+            bool  found  = false;     // a hit was found within test_window of prediction
+            // GEM hits used in the refit (lab frame), indexed by det id.
+            // present=false for the test detector itself and for unmatched dets.
+            struct Hit { bool present = false; float lx=0, ly=0, lz=0; };
+            Hit fit_hits[GEM_EFF_MAX_DETS];
+            // Predicted intersection of the fit line with the test detector
+            // plane (both lab and detector-local); residual is found - predicted.
+            float predicted_lab_x = 0.f, predicted_lab_y = 0.f, predicted_lab_z = 0.f;
+            float predicted_local_x = 0.f, predicted_local_y = 0.f;
+            float found_lab_x = 0.f, found_lab_y = 0.f, found_lab_z = 0.f;
+            float resid_dx = 0.f, resid_dy = 0.f;
+            float chi2_per_dof = -1.f;
+            // Lab-frame fit line: x(z) = ax + bx·z, y(z) = ay + by·z
+            float ax = 0.f, bx = 0.f, ay = 0.f, by = 0.f;
+        };
+        DetTest tests[GEM_EFF_MAX_DETS];
+    };
+    GemEffSnapshot gem_eff_snapshot;
     int         moller_events = 0;
     int       cluster_events_processed = 0;
 
@@ -387,6 +429,19 @@ struct AppState {
     void processEpics(const std::string &text, int32_t event_number, uint64_t timestamp);
     void clearEpics();        // locks epics_mtx
 
+    // ---- GEM tracking efficiency monitor (called per HyCal cluster) --------
+    // Pass A: GEM0 seed → tests {1,2,3}.  Pass B: GEM1 seed → tests {0}.
+    // hits_by_det[d] = lab-frame (x,y,z) of every reconstructed GEM-d hit
+    // available for this event (capped internally to gem_eff_max_hits_per_det).
+    // Updates gem_eff_num/den, residual histograms, and gem_eff_snapshot.
+    using LabHit = std::array<float, 3>;
+    void runGemEfficiency(int event_id,
+                          float hcx, float hcy, float hcz,
+                          const std::vector<std::vector<LabHit>> &hits_by_det);
+    void clearGemEfficiency();   // counters + snapshot (data_mtx already held)
+    void initGemEfficiency();    // size num/den/residuals (called from init())
+    nlohmann::json gemEffSnapshotJson() const;  // assumes data_mtx held
+
     // ---- DSC2 scaler processing --------------------------------------------
     // Parse a DSC2 bank from sync/physics events and update measured_livetime
     // atomically.  Bank/slot/source/channel come from daq_cfg.dsc_scaler.
@@ -410,6 +465,7 @@ struct AppState {
     nlohmann::json apiMoller() const;
     nlohmann::json apiHycalXY() const;
     nlohmann::json apiGemResiduals() const;
+    nlohmann::json apiGemEfficiency() const;
     nlohmann::json apiEpicsChannels() const;
     nlohmann::json apiEpicsChannel(const std::string &name) const;
     nlohmann::json apiEpicsBatch(const std::vector<std::string> &names) const;
@@ -417,7 +473,6 @@ struct AppState {
     nlohmann::json apiGemHits() const;
     nlohmann::json apiGemConfig() const;
     nlohmann::json apiGemOccupancy() const;
-    nlohmann::json apiGemHist() const;
     // Per-event APV waveform dump (for the GEM APV monitor tab).
     // Caller must have just populated gem_sys with this event (e.g. via
     // processGemEvent or accumulate); this method only reads.  Raw ADC

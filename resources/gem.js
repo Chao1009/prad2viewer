@@ -1,31 +1,20 @@
 // gem.js — GEM detector visualization tab
 //
-// Left column:  per-event 2D cluster scatter (two planes stacked)
-// Right column: accumulated cluster occupancy heatmaps
-//
-// Hit coordinates from the backend are centered: (0,0) = beam center.
+// Left:  per-detector cluster occupancy heatmaps (2×2 grid)
+// Right: tracking-efficiency cards + last-good-event ZX/ZY display
+//        (HyCal-anchored 4-point line fits, see runGemEfficiency in
+//         app_state.cpp).  No per-event refresh on the right panel —
+//         the snapshot is server-side and only changes when a new event
+//         passes the χ² + acceptance gates.
 
 'use strict';
 
-// --- configuration ----------------------------------------------------------
 const GEM_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
-const GEM_PLANES = [
-    { name: 'Plane 1 (upstream)',   dets: [0, 1], hitId: 'gem-plane-0' },
-    { name: 'Plane 2 (downstream)', dets: [2, 3], hitId: 'gem-plane-1' },
-];
+
+let gemEffData = null;        // last /api/gem/efficiency response
+let gemEffSelectedTest = 1;   // which test detector to render in the ZX/ZY view
 
 // Theme-aware layout factories (read from the active THEME at call time).
-function PL_GEM() {
-    return {
-        ...plotlyLayout(),
-        paper_bgcolor: 'rgba(0,0,0,0)',
-        plot_bgcolor:  THEME.canvas,
-        font: { color: THEME.text, size: 11 },
-        margin: { l: 50, r: 20, t: 30, b: 40 },
-        hovermode: 'closest',
-    };
-}
-
 function PL_GEM_OCC() {
     return {
         ...plotlyLayout(),
@@ -38,136 +27,26 @@ function PL_GEM_OCC() {
     };
 }
 
-let gemConfig = null;
-
-// --- helpers ----------------------------------------------------------------
-
-function gemDetInfo(detId) {
-    const def = { xSize: 614.4, ySize: 512.0, xOff: 0, yOff: 0 };
-    if (!gemConfig || !gemConfig.layers) return def;
-    const layer = gemConfig.layers.find(l => l.id === detId);
-    if (!layer) return def;
-    const pos = layer.position || [0, 0, 0];
+function PL_GEM_EFF() {
     return {
-        xSize: layer.x_size || layer.x_apvs * 128 * layer.x_pitch,
-        ySize: layer.y_size || layer.y_apvs * 128 * layer.y_pitch,
-        xOff:  pos[0] || 0,
-        yOff:  pos[1] || 0,
+        ...plotlyLayout(),
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor:  THEME.canvas,
+        font: { color: THEME.text, size: 10 },
+        margin: { l: 50, r: 12, t: 24, b: 36 },
+        hovermode: 'closest',
+        showlegend: false,
     };
 }
 
 // --- fetch + render ---------------------------------------------------------
 
-function fetchGemData() {
-    const configReady = gemConfig
-        ? Promise.resolve(gemConfig)
-        : fetch('/api/gem/config').then(r => r.json()).then(cfg => { gemConfig = cfg; return cfg; });
-
-    configReady.then(() => {
-        fetch('/api/gem/hits').then(r => r.json()).then(plotGemHits).catch(() => {});
-    });
-}
-
 function fetchGemAccum() {
     fetch('/api/gem/occupancy').then(r => r.json()).then(plotGemOccupancy).catch(() => {});
-    fetch('/api/gem/hist').then(r => r.json()).then(plotGemHist).catch(() => {});
+    fetch('/api/gem/efficiency').then(r => r.json()).then(updateGemEfficiency).catch(() => {});
 }
 
-// --- event cluster scatter (left) -------------------------------------------
-
-function plotGemHits(data) {
-    if (!data || !data.enabled) {
-        GEM_PLANES.forEach(plane => {
-            const div = document.getElementById(plane.hitId);
-            if (div) div.innerHTML = '<div style="color:var(--dim);padding:40px;text-align:center">GEM not enabled</div>';
-        });
-        return;
-    }
-
-    const detectors = data.detectors || [];
-
-    GEM_PLANES.forEach((plane) => {
-        const traces = [];
-        const shapes = [];
-        // Compute the plane's geometric bounds from the static detector
-        // outlines (NOT from this event's hits) so the axes don't snap
-        // around as hits move from event to event.
-        let xMin = +Infinity, xMax = -Infinity;
-        let yMin = +Infinity, yMax = -Infinity;
-
-        plane.dets.forEach((detId) => {
-            const det = detectors.find(d => d.id === detId);
-            if (!det) return;
-
-            const hits = det.hits_2d || [];
-            const color = GEM_COLORS[detId] || THEME.textDim;
-            const detName = det.name || ('GEM' + detId);
-
-            traces.push({
-                x: hits.map(h => h.x),
-                y: hits.map(h => h.y),
-                mode: 'markers',
-                type: 'scatter',
-                name: detName,
-                marker: {
-                    color: color, size: 6, opacity: 0.8,
-                    line: { width: 0.5, color: THEME.selectBorder },
-                },
-                hovertemplate: detName + '<br>x=%{x:.1f} mm<br>y=%{y:.1f} mm<extra></extra>',
-            });
-
-            // detector outline — offset to lab frame position
-            const info = gemDetInfo(detId);
-            const x0 = info.xOff - info.xSize / 2;
-            const x1 = info.xOff + info.xSize / 2;
-            const y0 = info.yOff - info.ySize / 2;
-            const y1 = info.yOff + info.ySize / 2;
-            if (x0 < xMin) xMin = x0;
-            if (x1 > xMax) xMax = x1;
-            if (y0 < yMin) yMin = y0;
-            if (y1 > yMax) yMax = y1;
-            shapes.push({
-                type: 'rect',
-                x0, y0, x1, y1,
-                line: { color: color, width: 1.5, dash: 'dot' },
-                fillcolor: 'rgba(0,0,0,0)',
-            });
-        });
-
-        if (traces.length === 0) {
-            traces.push({ x: [], y: [], mode: 'markers', type: 'scatter',
-                          name: 'No data', marker: { size: 0 } });
-        }
-
-        // Pad the bounds slightly so outline strokes aren't clipped, and
-        // fall back to a sane default if no detector is present on the
-        // plane (gemConfig late-arriving).
-        let xRange = null, yRange = null;
-        if (isFinite(xMin) && isFinite(xMax)) {
-            const xPad = (xMax - xMin) * 0.04;
-            const yPad = (yMax - yMin) * 0.04;
-            xRange = [xMin - xPad, xMax + xPad];
-            yRange = [yMin - yPad, yMax + yPad];
-        }
-
-        const layout = Object.assign({}, PL_GEM(), {
-            title: { text: plane.name, font: { size: 13, color: THEME.text } },
-            xaxis: { title: 'X (mm)', scaleanchor: 'y', scaleratio: 1,
-                     range: xRange, autorange: xRange ? false : true,
-                     gridcolor: THEME.grid, zerolinecolor: THEME.border },
-            yaxis: { title: 'Y (mm)',
-                     range: yRange, autorange: yRange ? false : true,
-                     gridcolor: THEME.grid, zerolinecolor: THEME.border },
-            shapes: shapes,
-            showlegend: true,
-            legend: { x: 0.01, y: 0.99, bgcolor: 'rgba(0,0,0,0.3)', font: { size: 10 } },
-        });
-
-        Plotly.react(plane.hitId, traces, layout, { responsive: true, displayModeBar: false });
-    });
-}
-
-// --- occupancy heatmap (right, 2x2 per-detector) ---------------------------
+// --- occupancy heatmap (left, 2x2 per-detector) ----------------------------
 
 const GEM_OCC_IDS = ['gem-occ-0', 'gem-occ-1', 'gem-occ-2', 'gem-occ-3'];
 
@@ -209,14 +88,13 @@ function plotGemOccupancy(data) {
     if (zmax <= 0) zmax = 1e-6;   // avoid Plotly auto-scaling to a flat plot
 
     // Compact per-heatmap layout: thin colourbar only on the right column
-    // (cells 1 and 3), no axis titles, small title font.  Margins tightened
-    // so the 2x2 grid uses its real estate for the heatmaps, not whitespace.
+    // (cells 1 and 3), no axis titles, small title font.
     const compactMargin  = { l: 28, r: 8,  t: 18, b: 20 };
-    const compactMarginR = { l: 28, r: 42, t: 18, b: 20 };  // reserve for colourbar
+    const compactMarginR = { l: 28, r: 42, t: 18, b: 20 };
 
     GEM_OCC_IDS.forEach((divId, idx) => {
         const g = grids[idx];
-        const onRightCol = (idx % 2) === 1;   // 0,2 left | 1,3 right
+        const onRightCol = (idx % 2) === 1;
         const showBar = onRightCol;
         const titleText = g && g.det
             ? g.det.name + (total > 0 ? ` (${total})` : '')
@@ -261,56 +139,208 @@ function plotGemOccupancy(data) {
     });
 }
 
-// --- GEM histograms (bottom right) ------------------------------------------
+// --- efficiency cards + snapshot view (right) ------------------------------
 
-const GEM_HIST_IDS = ['gem-ncl-hist', 'gem-theta-hist'];
-let currentGemNclHist = null, currentGemThetaHist = null;
+function updateGemEfficiency(data) {
+    if (!data || !data.enabled) {
+        const c = document.getElementById('gem-eff-cards');
+        if (c) c.innerHTML = '<span style="color:var(--dim);grid-column:1/-1;align-self:center;text-align:center">GEM not enabled</span>';
+        const info = document.getElementById('gem-eff-info');
+        if (info) info.textContent = '';
+        plotGemEffEmpty();
+        return;
+    }
+    gemEffData = data;
+    renderGemEffCards();
+    renderGemEffSnapshot();
+}
 
-function plotGemHist(data) {
-    if (!data) { currentGemNclHist = currentGemThetaHist = null; return; }
-
-    function plotOne(divId, hdata, title, xlabel, color, refKey) {
-        if (!hdata || !hdata.bins || hdata.bins.length === 0) {
-            Plotly.react(divId, [], Object.assign({}, PL_GEM_OCC(), {
-                title: { text: title, font: { size: 12, color: THEME.text } },
-            }), { responsive: true, displayModeBar: false });
-            return null;
+function renderGemEffCards() {
+    if (!gemEffData) return;
+    const root = document.getElementById('gem-eff-cards');
+    if (!root) return;
+    const counters = gemEffData.counters || [];
+    const cfg = gemEffData.config || {};
+    const minDen  = cfg.min_denom_for_eff || 0;
+    const healthy = cfg.healthy || 90;
+    const warning = cfg.warning || 70;
+    root.innerHTML = '';
+    counters.forEach(c => {
+        let cls = 'gray', txt = '—';
+        if (c.den >= minDen) {
+            txt = c.eff_pct.toFixed(1) + '%';
+            cls = c.eff_pct >= healthy ? 'green'
+                : c.eff_pct >= warning ? 'amber' : 'red';
         }
-        const n = hdata.bins.length;
-        const x = Array.from({length: n}, (_, i) => hdata.min + (i + 0.5) * hdata.step);
-        const entries = hdata.bins.reduce((a, b) => a + b, 0);
-        // store non-zero bins for copy
-        const cx = [], cy = [];
-        for (let i = 0; i < n; i++) { if (hdata.bins[i] > 0) { cx.push(x[i]); cy.push(hdata.bins[i]); } }
-        Plotly.react(divId, [{
-            x: x, y: hdata.bins, type: 'bar',
-            marker: { color: color, line: { width: 0 } },
-            hovertemplate: xlabel + '=%{x:.1f}<br>count=%{y}<extra></extra>',
-        }], Object.assign({}, PL_GEM_OCC(), {
-            title: { text: title + '<br><span style="font-size:9px;color:var(--theme-text-dim)">' + entries + ' entries</span>',
-                     font: { size: 12, color: THEME.text } },
-            xaxis: { title: xlabel, gridcolor: THEME.grid, zerolinecolor: THEME.border },
-            yaxis: { title: 'Counts', gridcolor: THEME.grid, zerolinecolor: THEME.border },
-            bargap: 0.05,
-            shapes: refKey ? refShapes(refKey) : [],
-        }), { responsive: true, displayModeBar: false });
-        return { x: cx, y: cy };
+        const el = document.createElement('div');
+        el.className = 'gem-eff-card ' + cls;
+        const color = GEM_COLORS[c.id] || THEME.text;
+        el.innerHTML =
+            `<div class="name" style="color:${color}">${c.name || ('GEM' + c.id)}</div>` +
+            `<div class="pct">${txt}</div>` +
+            `<div class="cnt">${c.num} / ${c.den}</div>`;
+        root.appendChild(el);
+    });
+}
+
+function renderGemEffSnapshot() {
+    const info = document.getElementById('gem-eff-info');
+    if (!gemEffData) { plotGemEffEmpty(); return; }
+    const snap = gemEffData.snapshot;
+    if (!snap) {
+        if (info) info.textContent = 'Waiting for matched event…';
+        plotGemEffEmpty();
+        return;
+    }
+    const tests = snap.tests || [];
+    const t = tests[gemEffSelectedTest];
+    if (info) {
+        let chi2 = '—';
+        if (t && t.tested) chi2 = (+t.chi2_per_dof).toFixed(2);
+        const flags = tests.map((tt, i) => {
+            if (!tt || !tt.tested) return '';
+            return `G${i}${tt.found ? '✓' : '✗'}`;
+        }).filter(Boolean).join(' ');
+        info.textContent = `Event #${snap.event_id}   χ²/dof=${chi2}   ${flags}`;
+    }
+    plotGemEffSnapshot(t);
+}
+
+function plotGemEffEmpty() {
+    ['gem-eff-zx', 'gem-eff-zy'].forEach(id => {
+        if (document.getElementById(id))
+            Plotly.react(id, [], PL_GEM_EFF(), { responsive: true, displayModeBar: false });
+    });
+}
+
+function plotGemEffSnapshot(t) {
+    if (!gemEffData || !gemEffData.snapshot) { plotGemEffEmpty(); return; }
+    const snap = gemEffData.snapshot;
+    const hycalZ = gemEffData.hycal_z || 5800;
+    const testIdx = gemEffSelectedTest;
+    const tracesZX = [], tracesZY = [];
+
+    // HyCal anchor — square marker
+    tracesZX.push({
+        x: [snap.hycal_lab[2]], y: [snap.hycal_lab[0]],
+        mode: 'markers', type: 'scatter', name: 'HyCal',
+        marker: { symbol: 'square', color: THEME.text, size: 11,
+                  line: { color: THEME.selectBorder, width: 1 } },
+        hovertemplate: 'HyCal<br>z=%{x:.0f}<br>x=%{y:.1f}<extra></extra>',
+    });
+    tracesZY.push({
+        x: [snap.hycal_lab[2]], y: [snap.hycal_lab[1]],
+        mode: 'markers', type: 'scatter', name: 'HyCal',
+        marker: { symbol: 'square', color: THEME.text, size: 11,
+                  line: { color: THEME.selectBorder, width: 1 } },
+        hovertemplate: 'HyCal<br>z=%{x:.0f}<br>y=%{y:.1f}<extra></extra>',
+    });
+
+    if (t && t.tested) {
+        // Fit hits — filled circles, per-detector colors
+        (t.fit_hits || []).forEach(h => {
+            const c = GEM_COLORS[h.det] || THEME.text;
+            tracesZX.push({
+                x: [h.lz], y: [h.lx], mode: 'markers', type: 'scatter',
+                name: 'GEM' + h.det,
+                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+                hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>',
+            });
+            tracesZY.push({
+                x: [h.lz], y: [h.ly], mode: 'markers', type: 'scatter',
+                name: 'GEM' + h.det,
+                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+                hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>',
+            });
+        });
+
+        // Fit line — span from z=0 to HyCal z, dashed
+        const zSpan = [0, hycalZ];
+        tracesZX.push({
+            x: zSpan, y: zSpan.map(z => t.fit.ax + t.fit.bx * z),
+            mode: 'lines', type: 'scatter',
+            line: { color: THEME.text, width: 1.2, dash: 'dot' },
+            hoverinfo: 'skip',
+        });
+        tracesZY.push({
+            x: zSpan, y: zSpan.map(z => t.fit.ay + t.fit.by * z),
+            mode: 'lines', type: 'scatter',
+            line: { color: THEME.text, width: 1.2, dash: 'dot' },
+            hoverinfo: 'skip',
+        });
+
+        // Predicted point on test detector — star marker
+        const pColor = GEM_COLORS[testIdx] || THEME.text;
+        tracesZX.push({
+            x: [t.predicted_lab[2]], y: [t.predicted_lab[0]],
+            mode: 'markers', type: 'scatter',
+            marker: { symbol: 'star', color: pColor, size: 14,
+                      line: { color: THEME.selectBorder, width: 1.5 } },
+            hovertemplate: `Pred GEM${testIdx}<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>`,
+        });
+        tracesZY.push({
+            x: [t.predicted_lab[2]], y: [t.predicted_lab[1]],
+            mode: 'markers', type: 'scatter',
+            marker: { symbol: 'star', color: pColor, size: 14,
+                      line: { color: THEME.selectBorder, width: 1.5 } },
+            hovertemplate: `Pred GEM${testIdx}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
+        });
+
+        // Found hit (if any) — open circle outline
+        if (t.found) {
+            tracesZX.push({
+                x: [t.found_lab[2]], y: [t.found_lab[0]],
+                mode: 'markers', type: 'scatter',
+                marker: { symbol: 'circle-open', color: pColor, size: 16, line: { width: 2 } },
+                hovertemplate: `Found GEM${testIdx}<br>z=%{x:.0f}<br>x=%{y:.2f}<extra></extra>`,
+            });
+            tracesZY.push({
+                x: [t.found_lab[2]], y: [t.found_lab[1]],
+                mode: 'markers', type: 'scatter',
+                marker: { symbol: 'circle-open', color: pColor, size: 16, line: { width: 2 } },
+                hovertemplate: `Found GEM${testIdx}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
+            });
+        }
     }
 
-    currentGemNclHist = plotOne('gem-ncl-hist', data.nclusters, 'GEM Clusters / Event', 'N clusters', '#51cf66', 'gem_clusters');
-    currentGemThetaHist = plotOne('gem-theta-hist', data.theta, 'GEM Hit Angle', 'θ (deg)', '#00b4d8', 'gem_theta');
+    Plotly.react('gem-eff-zx', tracesZX, Object.assign({}, PL_GEM_EFF(), {
+        title: { text: 'Top view (Z–X)', font: { size: 10, color: THEME.text } },
+        xaxis: { title: 'z (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+        yaxis: { title: 'x (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+    }), { responsive: true, displayModeBar: false });
+    Plotly.react('gem-eff-zy', tracesZY, Object.assign({}, PL_GEM_EFF(), {
+        title: { text: 'Side view (Z–Y)', font: { size: 10, color: THEME.text } },
+        xaxis: { title: 'z (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+        yaxis: { title: 'y (mm)', gridcolor: THEME.grid, zerolinecolor: THEME.border },
+    }), { responsive: true, displayModeBar: false });
 }
+
+// --- detector selector wiring ----------------------------------------------
+
+function initGemEffSelector() {
+    const radios = document.querySelectorAll('input[name="gem-eff-test"]');
+    radios.forEach(r => {
+        r.addEventListener('change', () => {
+            if (r.checked) {
+                gemEffSelectedTest = parseInt(r.value, 10);
+                renderGemEffSnapshot();
+            }
+        });
+    });
+}
+// Wire selector once the DOM is ready (script is loaded after the markup).
+if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', initGemEffSelector);
+else
+    initGemEffSelector();
 
 // --- resize -----------------------------------------------------------------
 
 function resizeGem() {
-    GEM_PLANES.forEach(plane => {
-        try { Plotly.Plots.resize(plane.hitId); } catch (e) {}
-    });
     GEM_OCC_IDS.forEach(id => {
         try { Plotly.Plots.resize(id); } catch (e) {}
     });
-    GEM_HIST_IDS.forEach(id => {
+    ['gem-eff-zx', 'gem-eff-zy'].forEach(id => {
         try { Plotly.Plots.resize(id); } catch (e) {}
     });
 }

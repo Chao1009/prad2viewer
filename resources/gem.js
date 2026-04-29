@@ -220,25 +220,16 @@ function renderGemEffSnapshot() {
         plotGemEffView(null);
         return;
     }
-    const tests = snap.tests || [];
     if (info) {
-        // χ²/dof range across all tested detectors (single value if only one).
-        const chi2s = tests.filter(t => t && t.tested).map(t => +t.chi2_per_dof);
-        let chi2Str = '—';
-        if (chi2s.length === 1) chi2Str = chi2s[0].toFixed(2);
-        else if (chi2s.length > 1) {
-            const lo = Math.min(...chi2s), hi = Math.max(...chi2s);
-            chi2Str = lo.toFixed(2) === hi.toFixed(2)
-                ? lo.toFixed(2)
-                : `${lo.toFixed(2)}–${hi.toFixed(2)}`;
-        }
-        // Per-detector flags, colored to match the line/star in the plot.
-        const flags = tests.map((tt, i) => {
-            if (!tt || !tt.tested) return '';
+        const chi2 = (typeof snap.chi2_per_dof === 'number')
+            ? snap.chi2_per_dof.toFixed(2) : '—';
+        // Per-detector ✓/✗ flag — ✓ = detector contributed to the fit (its hit
+        // is within match_window of the seed line), ✗ = no in-window hit.
+        const flags = (snap.dets || []).map((d, i) => {
             const c = GEM_COLORS[i] || THEME.text;
-            return `<span style="color:${c}">GEM${i}${tt.found ? '✓' : '✗'}</span>`;
-        }).filter(Boolean).join(' ');
-        info.innerHTML = `Event #${snap.event_id} &nbsp; χ²/dof=${chi2Str} &nbsp; ${flags}`;
+            return `<span style="color:${c}">GEM${i}${d && d.used_in_fit ? '✓' : '✗'}</span>`;
+        }).join(' ');
+        info.innerHTML = `Event #${snap.event_id} &nbsp; χ²/dof=${chi2} &nbsp; ${flags}`;
     }
     plotGemEffView(snap);
 }
@@ -336,78 +327,62 @@ function plotGemEffView(snap) {
             hovertemplate: 'HyCal<br>z=%{x:.0f}<br>y=%{y:.1f}<extra></extra>',
         });
 
-        const tests = snap.tests || [];
-        // Dedupe GEM hits across tests by detector (seed scan is deterministic
-        // so the candidate on a given detector is the same across tests).
-        const hitByDet = {};
-        tests.forEach(t => {
-            if (!t || !t.tested) return;
-            (t.fit_hits || []).forEach(h => {
-                if (!(h.det in hitByDet)) hitByDet[h.det] = h;
-            });
+        // Single fit line through the good track (HyCal + matched GEMs).
+        // The dotted line goes from z=0 to HyCal z, drawn in theme text color.
+        const fit = snap.fit || {};
+        const z0 = 0, z1 = hycalZ;
+        tracesXY.push({
+            x: [fit.ax + fit.bx * z0, fit.ax + fit.bx * z1],
+            y: [fit.ay + fit.by * z0, fit.ay + fit.by * z1],
+            mode: 'lines', type: 'scatter', name: 'Fit',
+            line: { color: THEME.text, width: 1.2, dash: 'dot' },
+            opacity: 0.8, hoverinfo: 'skip',
         });
-        Object.values(hitByDet).forEach(h => {
-            const c = GEM_COLORS[h.det] || THEME.text;
-            tracesXY.push({
-                x: [h.lx], y: [h.ly], mode: 'markers', type: 'scatter',
-                name: 'GEM' + h.det,
-                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: 'GEM' + h.det + '<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>',
-            });
-            tracesZY.push({
-                x: [h.lz], y: [h.ly], mode: 'markers', type: 'scatter',
-                name: 'GEM' + h.det,
-                marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: 'GEM' + h.det + '<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>',
-            });
+        tracesZY.push({
+            x: [z0, z1],
+            y: [fit.ay + fit.by * z0, fit.ay + fit.by * z1],
+            mode: 'lines', type: 'scatter', name: 'Fit',
+            line: { color: THEME.text, width: 1.2, dash: 'dot' },
+            opacity: 0.8, hoverinfo: 'skip',
         });
 
-        // Per-test overlays — fit line + prediction (+ found marker) per
-        // tested detector R, colored to match GEM-R.
-        const z0 = 0, z1 = hycalZ;
-        tests.forEach((t, R) => {
-            if (!t || !t.tested) return;
+        // Per-detector overlays:
+        //   used_in_fit==true  → filled circle at hit position (counts as ✓ in numerator)
+        //   used_in_fit==false → only the prediction star (no hit within window)
+        (snap.dets || []).forEach(d => {
+            const R = d.id;
             const c = GEM_COLORS[R] || THEME.text;
-            tracesXY.push({
-                x: [t.fit.ax + t.fit.bx * z0, t.fit.ax + t.fit.bx * z1],
-                y: [t.fit.ay + t.fit.by * z0, t.fit.ay + t.fit.by * z1],
-                mode: 'lines', type: 'scatter', name: `Fit (test G${R})`,
-                line: { color: c, width: 1, dash: 'dot' },
-                opacity: 0.7, hoverinfo: 'skip',
-            });
-            tracesZY.push({
-                x: [z0, z1],
-                y: [t.fit.ay + t.fit.by * z0, t.fit.ay + t.fit.by * z1],
-                mode: 'lines', type: 'scatter', name: `Fit (test G${R})`,
-                line: { color: c, width: 1, dash: 'dot' },
-                opacity: 0.7, hoverinfo: 'skip',
-            });
-            tracesXY.push({
-                x: [t.predicted_lab[0]], y: [t.predicted_lab[1]],
-                mode: 'markers', type: 'scatter', name: `Pred G${R}`,
-                marker: { symbol: 'star', color: c, size: 12,
-                          line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: `Pred GEM${R}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>`,
-            });
-            tracesZY.push({
-                x: [t.predicted_lab[2]], y: [t.predicted_lab[1]],
-                mode: 'markers', type: 'scatter', name: `Pred G${R}`,
-                marker: { symbol: 'star', color: c, size: 12,
-                          line: { color: THEME.selectBorder, width: 1 } },
-                hovertemplate: `Pred GEM${R}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
-            });
-            if (t.found) {
+            if (d.hit_present && d.hit_lab) {
                 tracesXY.push({
-                    x: [t.found_lab[0]], y: [t.found_lab[1]],
-                    mode: 'markers', type: 'scatter', name: `Found G${R}`,
-                    marker: { symbol: 'circle-open', color: c, size: 14, line: { width: 2 } },
-                    hovertemplate: `Found GEM${R}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>`,
+                    x: [d.hit_lab[0]], y: [d.hit_lab[1]],
+                    mode: 'markers', type: 'scatter', name: 'GEM' + R,
+                    marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+                    hovertemplate: 'GEM' + R + ' hit<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>',
                 });
                 tracesZY.push({
-                    x: [t.found_lab[2]], y: [t.found_lab[1]],
-                    mode: 'markers', type: 'scatter', name: `Found G${R}`,
-                    marker: { symbol: 'circle-open', color: c, size: 14, line: { width: 2 } },
-                    hovertemplate: `Found GEM${R}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
+                    x: [d.hit_lab[2]], y: [d.hit_lab[1]],
+                    mode: 'markers', type: 'scatter', name: 'GEM' + R,
+                    marker: { color: c, size: 8, line: { color: THEME.selectBorder, width: 1 } },
+                    hovertemplate: 'GEM' + R + ' hit<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>',
+                });
+            }
+            // Prediction star — drawn for every detector regardless of whether
+            // it was in the fit, so the user can see where the track *should*
+            // have hit a missing detector.
+            if (d.predicted_lab) {
+                tracesXY.push({
+                    x: [d.predicted_lab[0]], y: [d.predicted_lab[1]],
+                    mode: 'markers', type: 'scatter', name: 'Pred G' + R,
+                    marker: { symbol: 'star', color: c, size: 12,
+                              line: { color: THEME.selectBorder, width: 1 } },
+                    hovertemplate: `Pred GEM${R}<br>x=%{x:.2f}<br>y=%{y:.2f}<extra></extra>`,
+                });
+                tracesZY.push({
+                    x: [d.predicted_lab[2]], y: [d.predicted_lab[1]],
+                    mode: 'markers', type: 'scatter', name: 'Pred G' + R,
+                    marker: { symbol: 'star', color: c, size: 12,
+                              line: { color: THEME.selectBorder, width: 1 } },
+                    hovertemplate: `Pred GEM${R}<br>z=%{x:.0f}<br>y=%{y:.2f}<extra></extra>`,
                 });
             }
         });

@@ -503,28 +503,6 @@ void AppState::init(const std::string &db_dir,
                     if (xy.contains("y_step")) hxy_y_step = xy["y_step"];
                 }
             }
-            if (ph.contains("gem_hycal_match")) {
-                auto &gm = ph["gem_hycal_match"];
-                if (gm.contains("require_ep_candidate")) gem_match_require_ep = gm["require_ep_candidate"];
-                if (gm.contains("window_mm"))            gem_match_window_mm  = gm["window_mm"];
-                if (gm.contains("residual_hist")) {
-                    auto &rh = gm["residual_hist"];
-                    if (rh.contains("min"))  gem_resid_min  = rh["min"];
-                    if (rh.contains("max"))  gem_resid_max  = rh["max"];
-                    if (rh.contains("step")) gem_resid_step = rh["step"];
-                }
-            }
-            if (ph.contains("gem_efficiency")) {
-                auto &ge = ph["gem_efficiency"];
-                if (ge.contains("min_cluster_energy"))      gem_eff_min_cluster_energy = ge["min_cluster_energy"];
-                if (ge.contains("match_window_mm"))         gem_eff_match_window_mm    = ge["match_window_mm"];
-                if (ge.contains("test_window_mm"))          gem_eff_test_window_mm     = ge["test_window_mm"];
-                if (ge.contains("max_chi2_per_dof"))        gem_eff_max_chi2           = ge["max_chi2_per_dof"];
-                if (ge.contains("max_hits_per_detector"))   gem_eff_max_hits_per_det   = ge["max_hits_per_detector"];
-                if (ge.contains("min_denom_for_eff"))       gem_eff_min_denom          = ge["min_denom_for_eff"];
-                if (ge.contains("healthy"))                 gem_eff_healthy            = ge["healthy"];
-                if (ge.contains("warning"))                 gem_eff_warning            = ge["warning"];
-            }
             std::cerr << "Physics   : " << physics_trigger
                       << " Moller: tol=" << moller_energy_tol
                       << " angle=[" << moller_angle_min << "," << moller_angle_max << "]"
@@ -550,6 +528,37 @@ void AppState::init(const std::string &db_dir,
             }
             std::cerr << "EPICS     : max_history=" << epics_max_history
                       << " slots=" << epics_default_slots.size() << "\n";
+        }
+
+        // Top-level "gem" block — diagnostics for the GEM tab (HyCal-anchored
+        // matching residuals + tracking-efficiency monitor).  Pulled out of
+        // "physics" so the GEM tab owns its own configuration.
+        if (rcfg.contains("gem")) {
+            auto &gemcfg = rcfg["gem"];
+            if (gemcfg.contains("hycal_match")) {
+                auto &gm = gemcfg["hycal_match"];
+                if (gm.contains("require_ep_candidate")) gem_match_require_ep = gm["require_ep_candidate"];
+                if (gm.contains("window_mm"))            gem_match_window_mm  = gm["window_mm"];
+                if (gm.contains("residual_hist")) {
+                    auto &rh = gm["residual_hist"];
+                    if (rh.contains("min"))  gem_resid_min  = rh["min"];
+                    if (rh.contains("max"))  gem_resid_max  = rh["max"];
+                    if (rh.contains("step")) gem_resid_step = rh["step"];
+                }
+            }
+            if (gemcfg.contains("efficiency")) {
+                auto &ge = gemcfg["efficiency"];
+                if (ge.contains("min_cluster_energy"))    gem_eff_min_cluster_energy = ge["min_cluster_energy"];
+                if (ge.contains("match_window_mm"))       gem_eff_match_window_mm    = ge["match_window_mm"];
+                if (ge.contains("max_chi2_per_dof"))      gem_eff_max_chi2           = ge["max_chi2_per_dof"];
+                if (ge.contains("max_hits_per_detector")) gem_eff_max_hits_per_det   = ge["max_hits_per_detector"];
+                if (ge.contains("min_denom_for_eff"))     gem_eff_min_denom          = ge["min_denom_for_eff"];
+                if (ge.contains("healthy"))               gem_eff_healthy            = ge["healthy"];
+                if (ge.contains("warning"))               gem_eff_warning            = ge["warning"];
+            }
+            std::cerr << "GEM cfg   : match window=" << gem_match_window_mm
+                      << "mm  efficiency: window=" << gem_eff_match_window_mm
+                      << "mm chi2/dof<=" << gem_eff_max_chi2 << "\n";
         }
 
         std::cerr << "Reco      : " << main_config

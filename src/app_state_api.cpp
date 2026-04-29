@@ -132,19 +132,19 @@ json AppState::apiGemResiduals() const
 json AppState::apiGemEfficiency() const
 {
     std::lock_guard<std::mutex> lk(data_mtx);
-    json counters = json::array();
     int n = (int)gem_eff_num.size();
     int n_dets_runtime = std::min(n, gem_sys.GetNDetectors());
-    // Geometry of each GEM detector (active-area extents and lab-frame
-    // position) — the frontend uses these for axis ranges and to draw the
-    // detector outline alongside the predicted point in the snapshot view.
+    int den = gem_eff_den;   // shared denominator
+
+    json counters = json::array();
     json detectors = json::array();
     for (int d = 0; d < n; ++d) {
         std::string name = (d < n_dets_runtime)
             ? gem_sys.GetDetectors()[d].name
             : ("GEM" + std::to_string(d));
-        int num = gem_eff_num[d], den = gem_eff_den[d];
+        int num = gem_eff_num[d];
         float eff_pct = (den > 0) ? (100.f * num / den) : 0.f;
+        // Each detector's card shows num/den with the same shared `den`.
         counters.push_back({
             {"id", d}, {"name", name},
             {"num", num}, {"den", den}, {"eff_pct", eff_pct},
@@ -157,21 +157,21 @@ json AppState::apiGemEfficiency() const
         }
         if (d < (int)gem_transforms.size()) {
             const auto &t = gem_transforms[d];
-            info["position"] = {t.x, t.y, t.z};
-            info["tilting"]  = {t.rx, t.ry, t.rz};
+            info["position"] = json::array({t.x, t.y, t.z});
+            info["tilting"]  = json::array({t.rx, t.ry, t.rz});
         }
         detectors.push_back(info);
     }
     return {
         {"enabled",   gem_enabled},
         {"counters",  counters},
+        {"den",       den},
         {"detectors", detectors},
         {"snapshot",  gemEffSnapshotJson()},
         {"hycal_z",   hycal_transform.z},
         {"config", {
             {"min_cluster_energy",    gem_eff_min_cluster_energy},
             {"match_window_mm",       gem_eff_match_window_mm},
-            {"test_window_mm",        gem_eff_test_window_mm},
             {"max_chi2_per_dof",      gem_eff_max_chi2},
             {"max_hits_per_detector", gem_eff_max_hits_per_det},
             {"min_denom_for_eff",     gem_eff_min_denom},
@@ -570,23 +570,6 @@ void AppState::fillConfigJson(json &cfg) const
             {"nblocks_min", hxy_nblocks_min},
             {"nblocks_max", hxy_nblocks_max},
         }},
-        {"gem_hycal_match", {
-            {"require_ep_candidate", gem_match_require_ep},
-            {"window_mm", gem_match_window_mm},
-            {"residual_hist", {
-                {"min", gem_resid_min}, {"max", gem_resid_max}, {"step", gem_resid_step},
-            }},
-        }},
-        {"gem_efficiency", {
-            {"min_cluster_energy",    gem_eff_min_cluster_energy},
-            {"match_window_mm",       gem_eff_match_window_mm},
-            {"test_window_mm",        gem_eff_test_window_mm},
-            {"max_chi2_per_dof",      gem_eff_max_chi2},
-            {"max_hits_per_detector", gem_eff_max_hits_per_det},
-            {"min_denom_for_eff",     gem_eff_min_denom},
-            {"healthy",               gem_eff_healthy},
-            {"warning",               gem_eff_warning},
-        }},
     };
     cfg["elog"] = {
         {"url", elog_url}, {"logbook", elog_logbook},
@@ -598,7 +581,25 @@ void AppState::fillConfigJson(json &cfg) const
         {"min_avg_points", epics_min_avg_pts}, {"mean_window", epics_mean_window},
         {"slots", epics_default_slots},
     };
+    // GEM tab owns its configuration: detector geometry (from apiGemConfig)
+    // plus the diagnostic configs that used to live under physics.
     cfg["gem"] = apiGemConfig();
+    cfg["gem"]["hycal_match"] = {
+        {"require_ep_candidate", gem_match_require_ep},
+        {"window_mm", gem_match_window_mm},
+        {"residual_hist", {
+            {"min", gem_resid_min}, {"max", gem_resid_max}, {"step", gem_resid_step},
+        }},
+    };
+    cfg["gem"]["efficiency"] = {
+        {"min_cluster_energy",    gem_eff_min_cluster_energy},
+        {"match_window_mm",       gem_eff_match_window_mm},
+        {"max_chi2_per_dof",      gem_eff_max_chi2},
+        {"max_hits_per_detector", gem_eff_max_hits_per_det},
+        {"min_denom_for_eff",     gem_eff_min_denom},
+        {"healthy",               gem_eff_healthy},
+        {"warning",               gem_eff_warning},
+    };
 }
 
 AppState::ApiResult AppState::handleReadApi(const std::string &uri) const

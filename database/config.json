@@ -26,7 +26,7 @@
         }
     },
     "clustering": {
-        "accept_trigger_bits": ["SSP0", "SSP1", "SSP2", "SSP3", "MasterOR"],
+        "accept_trigger_bits": ["SSP0", "SSP1", "SSP2", "SSP3"],
         "reject_trigger_bits": [],
         "min_module_energy": 1.0,
         "min_center_energy": 10.0,
@@ -115,16 +115,17 @@
                 "x_min": -600.0, "x_max": 600.0, "x_step": 5.0,
                 "y_min": -600.0, "y_max": 600.0, "y_step": 5.0
             }
-        },
-        "gem_hycal_match": {
+        }
+    },
+    "gem": {
+        "hycal_match": {
             "require_ep_candidate": true,
             "window_mm": 10.0,
             "residual_hist": {"min": -50.0, "max": 50.0, "step": 0.5}
         },
-        "gem_efficiency": {
+        "efficiency": {
             "min_cluster_energy":     100.0,
             "match_window_mm":         10.0,
-            "test_window_mm":           5.0,
             "max_chi2_per_dof":        10.0,
             "max_hits_per_detector":   50,
             "min_denom_for_eff":       20,

@@ -263,7 +263,7 @@ static float seedMeanTime(const StripCluster &cl, float ts_period)
 //=============================================================================
 
 static GEMHit makeHit(const StripCluster &xc, const StripCluster &yc,
-                       int det_id, float resolution)
+                       int det_id)
 {
     GEMHit hit;
     hit.x = xc.position;
@@ -278,7 +278,6 @@ static GEMHit makeHit(const StripCluster &xc, const StripCluster &yc,
     hit.y_max_timebin = yc.max_timebin;
     hit.x_size = static_cast<int>(xc.hits.size());
     hit.y_size = static_cast<int>(yc.hits.size());
-    hit.sig_pos = resolution;
     return hit;
 }
 
@@ -286,7 +285,7 @@ void GemCluster::CartesianReconstruct(
     const std::vector<StripCluster> &x_clusters,
     const std::vector<StripCluster> &y_clusters,
     std::vector<GEMHit> &container,
-    int det_id, float resolution) const
+    int det_id) const
 {
     container.clear();
 
@@ -304,7 +303,7 @@ void GemCluster::CartesianReconstruct(
                   });
         size_t npairs = std::min(xc.size(), yc.size());
         for (size_t i = 0; i < npairs; ++i)
-            container.push_back(makeHit(xc[i], yc[i], det_id, resolution));
+            container.push_back(makeHit(xc[i], yc[i], det_id));
         return;
     }
 
@@ -333,7 +332,7 @@ void GemCluster::CartesianReconstruct(
                     continue;
             }
 
-            container.push_back(makeHit(xc, yc, det_id, resolution));
+            container.push_back(makeHit(xc, yc, det_id));
         }
     }
 }

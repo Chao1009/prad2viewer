@@ -188,7 +188,6 @@ static void bind_gem(py::module_ &m)
         .def_readonly("y_max_timebin", &gem::GEMHit::y_max_timebin)
         .def_readonly("x_size",        &gem::GEMHit::x_size)
         .def_readonly("y_size",        &gem::GEMHit::y_size)
-        .def_readonly("sig_pos",       &gem::GEMHit::sig_pos)
         .def("__repr__", [](const gem::GEMHit &h) {
             char buf[160];
             std::snprintf(buf, sizeof(buf),
@@ -208,7 +207,6 @@ static void bind_gem(py::module_ &m)
         .def_readwrite("consecutive_thres",  &gem::ClusterConfig::consecutive_thres)
         .def_readwrite("split_thres",        &gem::ClusterConfig::split_thres)
         .def_readwrite("cross_talk_width",   &gem::ClusterConfig::cross_talk_width)
-        .def_readwrite("position_res",       &gem::ClusterConfig::position_res)
         .def_readwrite("charac_dists",       &gem::ClusterConfig::charac_dists)
         .def_readwrite("match_mode",         &gem::ClusterConfig::match_mode)
         .def_readwrite("match_adc_asymmetry",&gem::ClusterConfig::match_adc_asymmetry)
@@ -235,14 +233,13 @@ static void bind_gem(py::module_ &m)
             [](const gem::GemCluster &self,
                const std::vector<gem::StripCluster> &x_clusters,
                const std::vector<gem::StripCluster> &y_clusters,
-               int det_id, float resolution) {
+               int det_id) {
                 std::vector<gem::GEMHit> out;
-                self.CartesianReconstruct(x_clusters, y_clusters, out,
-                                          det_id, resolution);
+                self.CartesianReconstruct(x_clusters, y_clusters, out, det_id);
                 return out;
             },
             py::arg("x_clusters"), py::arg("y_clusters"),
-            py::arg("det_id"), py::arg("resolution"),
+            py::arg("det_id"),
             "Match X clusters with Y clusters on one detector to produce "
             "2-D GEMHits.");
 

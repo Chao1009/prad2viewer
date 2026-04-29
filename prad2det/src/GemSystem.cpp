@@ -67,7 +67,6 @@ void GemSystem::Init(const std::string &map_file)
     common_thres_    = j.value("common_mode_threshold", 20.f);
     zerosup_thres_   = j.value("zero_suppression_threshold", 5.f);
     crosstalk_thres_ = j.value("cross_talk_threshold", 8.f);
-    position_res_    = j.value("position_resolution", 0.08f);
 
     // strip-level cuts
     reject_first_timebin_ = j.value("reject_first_timebin", true);
@@ -336,7 +335,7 @@ void GemSystem::Reconstruct(GemCluster &clusterer)
         // Cartesian reconstruction: match X and Y clusters
         auto &xc = plane_data_[d][0].clusters;
         auto &yc = plane_data_[d][1].clusters;
-        clusterer.CartesianReconstruct(xc, yc, det_hits_[d], d, position_res_);
+        clusterer.CartesianReconstruct(xc, yc, det_hits_[d], d);
 
         // accumulate all hits
         all_hits_.insert(all_hits_.end(), det_hits_[d].begin(), det_hits_[d].end());

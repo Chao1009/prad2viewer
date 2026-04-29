@@ -22,7 +22,6 @@ struct ClusterConfig {
     int   consecutive_thres = 1;    // max gap between consecutive strips
     float split_thres       = 14.f; // charge valley depth for splitting
     float cross_talk_width  = 2.f;  // mm
-    float position_res      = 0.08f;// mm
     std::vector<float> charac_dists;// cross-talk characteristic distances
 
     // XY matching mode: 0 = ADC-sorted 1:1, 1 = full Cartesian with cuts
@@ -51,7 +50,7 @@ public:
     void CartesianReconstruct(const std::vector<StripCluster> &x_clusters,
                               const std::vector<StripCluster> &y_clusters,
                               std::vector<GEMHit> &hits,
-                              int det_id, float resolution) const;
+                              int det_id) const;
 
 private:
     // Group consecutive hits into preliminary clusters

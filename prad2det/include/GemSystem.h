@@ -58,7 +58,6 @@ struct GEMHit {
     float x_peak,   y_peak;
     short x_max_timebin, y_max_timebin;
     int   x_size, y_size;
-    float sig_pos;          // position resolution
 };
 
 // --- APV pedestal -----------------------------------------------------------
@@ -276,7 +275,6 @@ private:
     float common_thres_     = 20.f;
     float zerosup_thres_    = 5.f;
     float crosstalk_thres_  = 8.f;
-    float position_res_     = 0.08f;   // mm
 
     // --- strip-level cuts (from mpd_gem_view_ssp) -------------------------
     bool  reject_first_timebin_ = true;   // reject if peak at first time bin

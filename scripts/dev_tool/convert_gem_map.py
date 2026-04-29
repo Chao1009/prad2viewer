@@ -68,7 +68,6 @@ DEFAULT_HEADER: "OrderedDict[str, Any]" = OrderedDict([
     ("common_mode_threshold", 20.0),
     ("zero_suppression_threshold", 5.0),
     ("cross_talk_threshold", 8.0),
-    ("position_resolution", 0.08),
     ("reject_first_timebin", True),
     ("reject_last_timebin", True),
     ("min_peak_adc", 30.0),

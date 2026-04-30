@@ -552,6 +552,7 @@ if(!prad1){
                                 else ev->lms_id[lms_nch] = mod_name[3] - '0';
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->lms_npeaks[lms_nch] = wres.npeaks;
+                                if(wres.npeaks <= 0) continue;
                                 for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                     ev->lms_peak_height[lms_nch][p] = wres.peaks[p].height;
                                     ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
@@ -569,6 +570,7 @@ if(!prad1){
                                 ev->veto_id[veto_nch] = mod_name[1] - '0';
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->veto_npeaks[veto_nch] = wres.npeaks;
+                                if(wres.npeaks <= 0) continue;
                                 for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                     ev->veto_peak_height[veto_nch][p] = wres.peaks[p].height;
                                     ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;

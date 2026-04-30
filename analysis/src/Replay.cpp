@@ -197,6 +197,7 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
         tree->Branch("hycal.daq_peak_integral", ev.daq_peak_integral, Form("hycal.daq_peak_integral[hycal.nch][%d]/F",  fdec::MAX_PEAKS));
         tree->Branch("hycal.daq_peak_time",     ev.daq_peak_time,     Form("hycal.daq_peak_time[hycal.nch][%d]/F",      fdec::MAX_PEAKS));
         tree->Branch("hycal.daq_peak_cross",    ev.daq_peak_cross,    Form("hycal.daq_peak_cross[hycal.nch][%d]/I",     fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_pos",      ev.daq_peak_pos,      Form("hycal.daq_peak_pos[hycal.nch][%d]/I",       fdec::MAX_PEAKS));
         tree->Branch("hycal.daq_peak_coarse",   ev.daq_peak_coarse,   Form("hycal.daq_peak_coarse[hycal.nch][%d]/I",    fdec::MAX_PEAKS));
         tree->Branch("hycal.daq_peak_fine",     ev.daq_peak_fine,     Form("hycal.daq_peak_fine[hycal.nch][%d]/I",      fdec::MAX_PEAKS));
         tree->Branch("hycal.daq_peak_quality",  ev.daq_peak_quality,  Form("hycal.daq_peak_quality[hycal.nch][%d]/b",   fdec::MAX_PEAKS));
@@ -417,6 +418,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                 ev->daq_peak_integral[nch][p] = dp.integral;
                                 ev->daq_peak_time[nch][p]     = dp.time_ns;
                                 ev->daq_peak_cross[nch][p]    = dp.cross_sample;
+                                ev->daq_peak_pos[nch][p]      = dp.peak_sample;
                                 ev->daq_peak_coarse[nch][p]   = dp.coarse;
                                 ev->daq_peak_fine[nch][p]     = dp.fine;
                                 ev->daq_peak_quality[nch][p]  = dp.quality;

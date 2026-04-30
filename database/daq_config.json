@@ -80,11 +80,14 @@
     },
 
     "fadc250_firmware": {
-        "_comment": "Optional — FADC250 firmware Mode 1/2/3 emulation parameters for DAQ signal studies. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal (firmware register 0x000B). NSB = samples before threshold crossing, min 2 (register 0x0009). NSA = samples after threshold crossing, min 3 modes 0/1 / min 6 mode 2 (register 0x000A). MAX_PULSES = number of pulses kept per channel per window, 1..4 (CONFIG 1 register bits 6-5). CLK_NS = sample period in ns (4 ns at 250 MHz). Absent leaves these defaults; override to match the actual run config when comparing software output to firmware-reported pulse values.",
-        "TET":        50.0,
-        "NSB":        4,
-        "NSA":        10,
-        "MAX_PULSES": 4,
+        "_comment": "Optional — FADC250 firmware Mode 1/2/3 emulation parameters for DAQ signal studies. Field names follow the Hall-D V3 firmware API (faV3HallDSetProcMode); NPEAK is accepted as an alias for MAX_PULSES. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal. NSB = samples before threshold crossing. NSA = samples after threshold crossing. NPEAK / MAX_PULSES = pulses kept per channel per window (1..4). NSAT = consecutive samples above TET required for a valid pulse (1 = legacy single-sample crossing). NPED = leading samples summed for Vnoise (firmware: 4..15; default 4 reproduces legacy manual). MAXPED = pedestal-subtracted threshold above which samples are excluded from the pedestal sum (online outlier rejection; 0 disables). CLK_NS = sample period in ns (4 ns at 250 MHz). Values below match the real DAQ run settings.",
+        "TET":        10.0,
+        "NSB":        12,
+        "NSA":        160,
+        "NPEAK":      1,
+        "NSAT":       4,
+        "NPED":       3,
+        "MAXPED":     1,
         "CLK_NS":     4.0
     },
 

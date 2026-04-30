@@ -59,15 +59,34 @@ void Fadc250FwAnalyzer::Analyze(const uint16_t *raw, int n, float PED,
         s[i] = (v > 0.0f) ? v : 0.0f;
     }
 
-    // MANUAL §Requirements (~2366): "There must be at least 5 samples
-    // (background) before pulse. Four of these samples are used to determine
-    // the pedestal (Vnoise) floor."  Below 5 samples we can't even compute
-    // the noise floor — bail out cleanly.
-    if (n < 5) return;
-
-    // ── Step 1b — Vnoise from first 4 samples (MANUAL §TDC step 1b, ~2375).
-    const float Vnoise = (s[0] + s[1] + s[2] + s[3]) * 0.25f;
+    // ── Step 1b — Vnoise from the first NPED pedestal-subtracted samples.
+    // Manual §TDC step 1b (~2375) hardwires "Read four samples" — the Hall-D
+    // V3 firmware made this configurable (cfg.NPED, default 4 = manual).
+    // MAXPED applies online outlier rejection: any sample with s'[i] > MAXPED
+    // is excluded from the noise sum (firmware register; 0 disables).
+    int   nped = cfg.NPED < 1 ? 1 : cfg.NPED;
+    if (nped > n) nped = n;
+    const int maxped = cfg.MAXPED;     // 0 → filter disabled
+    float ped_sum = 0.0f;
+    int   ped_cnt = 0;
+    for (int i = 0; i < nped; ++i) {
+        if (maxped > 0 && s[i] > static_cast<float>(maxped)) continue;
+        ped_sum += s[i];
+        ped_cnt += 1;
+    }
+    // If MAXPED rejected everything (e.g. all leading samples already on
+    // a pulse), fall back to the unfiltered mean to avoid /0.
+    if (ped_cnt == 0) {
+        for (int i = 0; i < nped; ++i) ped_sum += s[i];
+        ped_cnt = nped;
+    }
+    const float Vnoise = ped_sum / static_cast<float>(ped_cnt);
     result.vnoise = Vnoise;
+
+    // MANUAL §Requirements (~2366): "There must be at least 5 samples
+    // (background) before pulse."  Four for Vnoise + at least one to settle;
+    // with configurable NPED we generalise to (NPED + 1).
+    if (n < nped + 1) { result.npeaks = 0; return; }
 
     // ── Step 1c — Vmin = Vnoise (MANUAL §TDC step 1c, ~2379).
     // Constant for the entire window — the manual's "first value greater
@@ -79,12 +98,14 @@ void Fadc250FwAnalyzer::Analyze(const uint16_t *raw, int n, float PED,
     const float TET = cfg.TET;
     const int   nsb = cfg.NSB;
     const int   nsa = cfg.NSA;
+    const int   nsat = cfg.NSAT < 1 ? 1 : cfg.NSAT;
     const int   max_pulses = std::min(cfg.MAX_PULSES, MAX_PEAKS);
     const float clk_per_64 = cfg.CLK_NS / 64.0f;  // ns per fine-time LSB
 
-    // Search starts at index 4 — manual §Requirements: "at least 5 samples
-    // (background) before pulse."  Four for Vnoise + at least one to settle.
-    int i = 4;
+    // Search starts after the pedestal window — manual §Requirements: "at
+    // least 5 samples (background) before pulse."  With NPED configurable
+    // we generalise: NPED background samples + at least 1 to settle.
+    int i = nped;
     int pulse_idx = 0;
 
     while (i < n - 1 && pulse_idx < max_pulses) {
@@ -131,6 +152,28 @@ void Fadc250FwAnalyzer::Analyze(const uint16_t *raw, int n, float PED,
         int cross = i_start;
         while (cross <= i_peak && s[cross] <= TET) ++cross;
         if (cross > i_peak) cross = i_peak;     // pathological — clamp.
+
+        // ── Hall-D V3 NSAT gate — require NSAT consecutive samples > TET
+        // starting at Tcross.  NSAT=1 (default) reproduces the legacy FADC250
+        // Mode 3 algorithm.  With NSAT>1, single-sample spikes (and short
+        // pulses that briefly exceed TET) are rejected.
+        if (nsat > 1) {
+            bool nsat_ok = true;
+            const int sat_end = cross + nsat;     // exclusive
+            if (sat_end > n) {
+                nsat_ok = false;                  // not enough samples left
+            } else {
+                for (int k = cross; k < sat_end; ++k) {
+                    if (s[k] <= TET) { nsat_ok = false; break; }
+                }
+            }
+            if (!nsat_ok) {
+                // Skip past this bump and resume the outer search — same
+                // recovery path as the sub-threshold rejection above.
+                while (i < n && s[i] > Vnoise) ++i;
+                continue;
+            }
+        }
 
         // ── Step 1f [R1] — Va = absolute mid amplitude.
         const float Va = Vmin + (Vpeak - Vmin) * 0.5f;
@@ -224,6 +267,7 @@ void Fadc250FwAnalyzer::Analyze(const uint16_t *raw, int n, float PED,
         p.time_units   = time_units;
         p.time_ns      = time_ns;
         p.cross_sample = cross;
+        p.peak_sample  = i_peak;
         p.integral     = integral;
         p.window_lo    = wlo;
         p.window_hi    = whi;

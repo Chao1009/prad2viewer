@@ -324,13 +324,21 @@
         <div class="hdiv" id="div-dq-2"></div>
         <div class="dq-cell" id="dq-cell-waveform">
             <div id="waveform-div" style="width:100%;height:100%"></div>
-            <div class="hist-controls">
-                <label title="Overlay waveforms across events"><input type="checkbox" id="wf-stack"> Stack</label>
-                <span id="wf-stack-count" style="display:none;color:var(--dim);font-size:11px"></span>
-                <button id="btn-wf-stack-reset" class="copy-btn" style="display:none" title="Clear stacked waveforms">reset</button>
-                <label title="FADC250 firmware Mode 1/2/3 emulation: TET / NSB / NSA / Vp / T annotated"><input type="checkbox" id="wf-daq"> DAQ</label>
-                <span id="wf-daq-info" style="display:none;color:var(--dim);font-size:11px"></span>
-<button id="btn-copy-wf" class="copy-btn" title="Copy waveform data">copy</button>
+            <div class="hist-controls hist-controls-split">
+                <!-- Left: dynamic readouts that come and go with the toggles.
+                     Pinned to the left edge so the right-hand controls don't
+                     shift when modes turn on/off. -->
+                <div class="hc-left">
+                    <span id="wf-stack-count" style="display:none;color:var(--dim);font-size:11px"></span>
+                    <button id="btn-wf-stack-reset" class="copy-btn" style="display:none" title="Clear stacked waveforms">reset</button>
+                    <span id="wf-daq-info" style="display:none;color:var(--dim);font-size:11px"></span>
+                </div>
+                <!-- Right: fixed-position checkboxes + copy button. -->
+                <div class="hc-right">
+                    <label title="Overlay waveforms across events"><input type="checkbox" id="wf-stack"> Stack</label>
+                    <label title="FADC250 firmware Mode 1/2/3 emulation: TET / NSB / NSA / Vp / T annotated"><input type="checkbox" id="wf-daq"> DAQ</label>
+                    <button id="btn-copy-wf" class="copy-btn" title="Copy waveform data">copy</button>
+                </div>
             </div>
         </div>
         <div class="hdiv" id="div-dq-3"></div>

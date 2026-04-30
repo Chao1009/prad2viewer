@@ -198,18 +198,19 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
         for (int p = 0; p < daq_res.npeaks; ++p) {
             const auto &pk = daq_res.peaks[p];
             daq_pulses.push_back({
-                {"n",      pk.pulse_id},
-                {"vmin",   std::round(pk.vmin  * 10) / 10},
-                {"vp",     std::round(pk.vpeak * 10) / 10},
-                {"va",     std::round(pk.va    * 10) / 10},
-                {"coarse", pk.coarse},
-                {"fine",   pk.fine},
-                {"t",      std::round(pk.time_ns * 100) / 100},
-                {"cross",  pk.cross_sample},
-                {"i",      std::round(pk.integral * 10) / 10},
-                {"wlo",    pk.window_lo},
-                {"whi",    pk.window_hi},
-                {"q",      pk.quality},
+                {"n",       pk.pulse_id},
+                {"vmin",    std::round(pk.vmin  * 10) / 10},
+                {"vp",      std::round(pk.vpeak * 10) / 10},
+                {"va",      std::round(pk.va    * 10) / 10},
+                {"coarse",  pk.coarse},
+                {"fine",    pk.fine},
+                {"t",       std::round(pk.time_ns * 100) / 100},
+                {"cross",   pk.cross_sample},
+                {"vp_pos",  pk.peak_sample},
+                {"i",       std::round(pk.integral * 10) / 10},
+                {"wlo",     pk.window_lo},
+                {"whi",     pk.window_hi},
+                {"q",       pk.quality},
             });
         }
 
@@ -224,6 +225,9 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
                     {"nsb",      daq_cfg.fadc250_fw.NSB},
                     {"nsa",      daq_cfg.fadc250_fw.NSA},
                     {"max_pulses", daq_cfg.fadc250_fw.MAX_PULSES},
+                    {"nsat",     daq_cfg.fadc250_fw.NSAT},
+                    {"nped",     daq_cfg.fadc250_fw.NPED},
+                    {"maxped",   daq_cfg.fadc250_fw.MAXPED},
                     {"clk_ns",   daq_cfg.fadc250_fw.CLK_NS},
                     {"pk",       daq_pulses}
                 }}};

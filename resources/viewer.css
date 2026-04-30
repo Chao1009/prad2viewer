@@ -295,6 +295,14 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 }
 .hist-controls label { cursor:pointer; display:flex; align-items:center; gap:2px; }
 .hist-controls input[type="checkbox"] { accent-color:var(--accent); }
+
+/* Split variant — left-anchored dynamic readouts, right-anchored fixed
+   controls.  Used on the waveform plot so toggling Stack/DAQ doesn't
+   shift the checkboxes / Copy button.  pointer-events:none on the empty
+   middle gap keeps plot hover working through it. */
+.hist-controls-split { left:4px; right:4px; justify-content:space-between; pointer-events:none; }
+.hist-controls-split .hc-left,
+.hist-controls-split .hc-right { display:flex; align-items:center; gap:6px; pointer-events:auto; }
 .copy-btn {
     z-index:10;
     background:var(--border); border:none; color:var(--dim); padding:2px 6px;

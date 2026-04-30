@@ -93,6 +93,8 @@ struct RawEventData {
     //   daq_peak_integral— Σ over [cross−NSB, cross+NSA] (Mode 2 integral)
     //   daq_peak_time    — interpolated mid-amplitude time (ns)
     //   daq_peak_cross   — Tcross sample index (Mode 1 "first sample number")
+    //   daq_peak_pos     — sample index of Vp itself (different from Tcross
+    //                      whenever the leading edge spans multiple samples)
     //   daq_peak_coarse  — 4-ns clock index of Vba (10-bit firmware field)
     //   daq_peak_fine    — sub-sample fine bits, 0..63 (62.5 ps LSB)
     //   daq_peak_quality — bitmask: Q_PEAK_AT_BOUNDARY|Q_NSB_TRUNCATED|
@@ -102,6 +104,7 @@ struct RawEventData {
     float   daq_peak_integral[kMaxChannels][fdec::MAX_PEAKS] = {};
     float   daq_peak_time[kMaxChannels][fdec::MAX_PEAKS]     = {};
     int     daq_peak_cross[kMaxChannels][fdec::MAX_PEAKS]    = {};
+    int     daq_peak_pos[kMaxChannels][fdec::MAX_PEAKS]      = {};
     int     daq_peak_coarse[kMaxChannels][fdec::MAX_PEAKS]   = {};
     int     daq_peak_fine[kMaxChannels][fdec::MAX_PEAKS]     = {};
     uint8_t daq_peak_quality[kMaxChannels][fdec::MAX_PEAKS]  = {};

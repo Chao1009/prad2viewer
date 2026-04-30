@@ -121,6 +121,7 @@ void test_T1_single_pulse()
         EXPECT_EQ(p.time_units, 388);
         EXPECT_NEAR(p.time_ns, 24.25, 1e-6);
         EXPECT_EQ(p.cross_sample, 6);
+        EXPECT_EQ(p.peak_sample, 7);
         EXPECT_NEAR(p.integral, 400.0f, 1e-4f);
         EXPECT_EQ(p.window_lo, 2);
         EXPECT_EQ(p.window_hi, 16);

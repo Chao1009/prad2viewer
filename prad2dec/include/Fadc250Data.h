@@ -169,6 +169,7 @@ struct DaqPeak {
     int      time_units;      // coarse * 64 + fine, LSB = 1/(CLK*64) = 62.5 ps
     float    time_ns;         // time_units * (CLK_NS / 64)
     int      cross_sample;    // first leading-edge sample > TET (Tcross)
+    int      peak_sample;     // sample index where vpeak was found (i_peak)
     float    integral;        // Σ s' over [cross-NSB, cross+NSA] (Mode 2)
     int      window_lo;       // clamped Mode 1 window start (inclusive)
     int      window_hi;       // clamped Mode 1 window end   (inclusive)

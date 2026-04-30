@@ -266,12 +266,14 @@ function renderWaveformDaq(mod, d, samples, x, tMax){
                 line:{color:col, width:2}, fill:'tonexty', fillcolor:fill});
         }
 
-        // Vp marker (open circle at peak sample).
-        traces.push({x:[p.cross*NS_PER_SAMPLE], y:[p.vp], type:'scatter',
+        // Vp marker (open circle at the peak sample, not Tcross).
+        const peakSample = (p.vp_pos !== undefined) ? p.vp_pos : p.cross;
+        const tPeakNs = peakSample * NS_PER_SAMPLE;
+        traces.push({x:[tPeakNs], y:[p.vp], type:'scatter',
             mode:'markers', marker:{color:col, size:9, symbol:'circle-open',
             line:{color:col, width:2}}, showlegend:false, hoverinfo:'skip'});
         annotations.push({
-            x:tCrossNs, y:p.vp, ax:30, ay:-20,
+            x:tPeakNs, y:p.vp, ax:30, ay:-20,
             text:`Vp${idx}=${p.vp.toFixed(0)}`,
             font:{color:col, size:10}, arrowcolor:col,
             showarrow:true, arrowhead:2,
@@ -298,11 +300,18 @@ function renderWaveformDaq(mod, d, samples, x, tMax){
         shapes.push({type:'line', x0:tCrossNs, x1:tNsaHi,
             y0:yBracket, y1:yBracket,
             line:{color:'#22b8cf', width:1.5}});
-        annotations.push({x:(tNsbLo+tCrossNs)/2, y:yBracket, ay:-12,
-            text:`NSB=${nsb}`, font:{color:'#ffa94d', size:9},
+        // Labels in ns, floored to the nearest sample (NSB and NSA are
+        // integer-sample firmware register values; one sample = 4 ns at
+        // 250 MHz).
+        const nsbNs = Math.floor(nsb) * NS_PER_SAMPLE;
+        const nsaNs = Math.floor(nsa) * NS_PER_SAMPLE;
+        annotations.push({x:(tNsbLo+tCrossNs)/2, y:yBracket,
+            yanchor:'bottom', yshift:2,
+            text:`NSB=${nsbNs} ns`, font:{color:'#ffa94d', size:9},
             showarrow:false});
-        annotations.push({x:(tCrossNs+tNsaHi)/2, y:yBracket, ay:-12,
-            text:`NSA=${nsa}`, font:{color:'#22b8cf', size:9},
+        annotations.push({x:(tCrossNs+tNsaHi)/2, y:yBracket,
+            yanchor:'bottom', yshift:2,
+            text:`NSA=${nsaNs} ns`, font:{color:'#22b8cf', size:9},
             showarrow:false});
 
         // Tcross dotted vertical (subtle).

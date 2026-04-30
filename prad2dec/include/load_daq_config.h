@@ -123,12 +123,18 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
     // FADC250 firmware-emulation parameters (TDC + Mode 1/2 reproduction).
     // Optional — absent leaves defaults; intended for DAQ signal studies and
     // for matching firmware-reported pulse values when running offline.
+    // Field names follow the Hall-D V3 firmware API (faV3HallDSetProcMode);
+    // NPEAK is accepted as an alias for MAX_PULSES.
     if (j.contains("fadc250_firmware")) {
         auto &ff = j["fadc250_firmware"];
         if (ff.contains("TET"))        cfg.fadc250_fw.TET        = ff["TET"].get<float>();
         if (ff.contains("NSB"))        cfg.fadc250_fw.NSB        = ff["NSB"].get<int>();
         if (ff.contains("NSA"))        cfg.fadc250_fw.NSA        = ff["NSA"].get<int>();
         if (ff.contains("MAX_PULSES")) cfg.fadc250_fw.MAX_PULSES = ff["MAX_PULSES"].get<int>();
+        else if (ff.contains("NPEAK")) cfg.fadc250_fw.MAX_PULSES = ff["NPEAK"].get<int>();
+        if (ff.contains("NSAT"))       cfg.fadc250_fw.NSAT       = ff["NSAT"].get<int>();
+        if (ff.contains("NPED"))       cfg.fadc250_fw.NPED       = ff["NPED"].get<int>();
+        if (ff.contains("MAXPED"))     cfg.fadc250_fw.MAXPED     = ff["MAXPED"].get<int>();
         if (ff.contains("CLK_NS"))     cfg.fadc250_fw.CLK_NS     = ff["CLK_NS"].get<float>();
     }
 

@@ -270,18 +270,24 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("time_units",   &fdec::DaqPeak::time_units)
         .def_readwrite("time_ns",      &fdec::DaqPeak::time_ns)
         .def_readwrite("cross_sample", &fdec::DaqPeak::cross_sample)
+        .def_readwrite("peak_sample",  &fdec::DaqPeak::peak_sample)
         .def_readwrite("integral",     &fdec::DaqPeak::integral)
         .def_readwrite("window_lo",    &fdec::DaqPeak::window_lo)
         .def_readwrite("window_hi",    &fdec::DaqPeak::window_hi)
         .def_readwrite("quality",      &fdec::DaqPeak::quality);
 
     py::class_<evc::DaqConfig::Fadc250FwConfig>(m, "Fadc250FwConfig",
-        "Firmware Mode 1/2/3 emulation knobs (TET/NSB/NSA/MAX_PULSES/CLK_NS).")
+        "Firmware Mode 1/2/3 emulation knobs.  Names follow the Hall-D V3 "
+        "firmware API (faV3HallDSetProcMode).  NPEAK is an alias for "
+        "MAX_PULSES.")
         .def(py::init<>())
         .def_readwrite("TET",        &evc::DaqConfig::Fadc250FwConfig::TET)
         .def_readwrite("NSB",        &evc::DaqConfig::Fadc250FwConfig::NSB)
         .def_readwrite("NSA",        &evc::DaqConfig::Fadc250FwConfig::NSA)
         .def_readwrite("MAX_PULSES", &evc::DaqConfig::Fadc250FwConfig::MAX_PULSES)
+        .def_readwrite("NSAT",       &evc::DaqConfig::Fadc250FwConfig::NSAT)
+        .def_readwrite("NPED",       &evc::DaqConfig::Fadc250FwConfig::NPED)
+        .def_readwrite("MAXPED",     &evc::DaqConfig::Fadc250FwConfig::MAXPED)
         .def_readwrite("CLK_NS",     &evc::DaqConfig::Fadc250FwConfig::CLK_NS);
 
     py::class_<fdec::Fadc250FwAnalyzer>(m, "Fadc250FwAnalyzer",

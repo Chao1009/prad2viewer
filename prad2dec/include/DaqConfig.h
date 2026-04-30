@@ -110,22 +110,35 @@ struct DaqConfig
 
     // --- FADC250 firmware Mode 1/2/3 emulation parameters -------------------
     // Mirrors the on-board firmware register settings that drive pulse
-    // identification (see FADC250 User's Manual):
-    //   TET — register 0x000B..0x001A (Trigger Energy Threshold, 12-bit, per
-    //         channel in firmware; we store one global value here)
-    //   NSB — register 0x0009 (samples before threshold crossing, ≥ 2)
-    //   NSA — register 0x000A (samples after,  ≥ 3 modes 0/1, ≥ 6 mode 2)
-    //   MAX_PULSES — CONFIG 1 register 0x0003, bits 6-5 (1..4)
-    //   CLK_NS    — sample period (4 ns at 250 MHz; configurable for studies
-    //               at other rates).
-    // Optional in JSON — absent leaves these defaults.  Override to match
-    // the actual run config when comparing software output to firmware-
-    // reported pulse values.  Used by Fadc250FwAnalyzer.
+    // identification.  Names follow the Hall-D V3 firmware API
+    // (faV3HallDSetProcMode in CODA RoLs):
+    //   TET        — Trigger Energy Threshold (ADC counts above per-channel
+    //                pedestal; firmware register 0x000B..0x001A, 12-bit).
+    //   NSB        — Samples before threshold crossing (register 0x0009).
+    //   NSA        — Samples after  threshold crossing (register 0x000A).
+    //   MAX_PULSES — Max pulses per channel per window (NPEAK in firmware
+    //                terminology / NP in faV3 API; CONFIG 1 bits 6-5, 1..4).
+    //   NSAT       — Number of *consecutive* samples above TET required for
+    //                a valid pulse.  NSAT=1 reproduces the legacy FADC250
+    //                Mode 3 algorithm (single-sample threshold crossing);
+    //                NSAT>1 filters single-sample spikes.
+    //   NPED       — Number of leading samples summed to estimate Vnoise
+    //                (firmware: 4..15).  Replaces the manual's hardwired 4.
+    //   MAXPED     — Pedestal-subtracted threshold above which samples are
+    //                excluded from the pedestal sum (online outlier
+    //                rejection).  0 disables the filter.
+    //   CLK_NS     — Sample period (4 ns at 250 MHz; exposed for sims at
+    //                other rates).
+    // Defaults preserve the original FADC250 manual algorithm — override
+    // in daq_config.json to match the actual run.
     struct Fadc250FwConfig {
         float TET        = 50.0f;
         int   NSB        = 4;
         int   NSA        = 10;
         int   MAX_PULSES = 4;
+        int   NSAT       = 1;     // 1 = legacy Mode 3 (single-sample TC)
+        int   NPED       = 4;     // matches manual's "Read four samples"
+        int   MAXPED     = 0;     // 0 disables outlier rejection
         float CLK_NS     = 4.0f;
     };
     Fadc250FwConfig fadc250_fw;

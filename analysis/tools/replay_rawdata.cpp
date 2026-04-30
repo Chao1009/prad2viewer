@@ -109,14 +109,14 @@ int main(int argc, char *argv[])
 
     if (evio_files.empty() || output_dir.empty()) {
         std::cerr << "Usage: replay_rawdata <evio_file_or_dir> [more files/dirs...] -o output_dir\n"
-                  << "       [-f max_files] [-j threads] [-D daq_config.json] [-n N] [-p]\n";
+                  << "       [-f max_files] [-j threads] [-c daq_config.json] [-d daq_map.json] [-n N] [-p]\n";
         std::cerr << "  -o  output directory (REQUIRED)\n";
         std::cerr << "  -f  max files to process (default: all)\n";
         std::cerr << "  -j  number of threads (default: 4)\n";
         std::cerr << "  -c  DAQ config JSON (default: <db>/daq_config.json)\n";
         std::cerr << "  -d  DAQ map JSON (default: <db>/hycal_daq_map.json)\n";
         std::cerr << "  -n  max events per file (default: all)\n";
-        std::cerr << "  -p  include peak analysis branches\n";
+        std::cerr << "  -p  include peak analysis branches (soft + firmware DAQ-mode)\n";
         return 1;
     }
     int num_files = static_cast<int>(evio_files.size());

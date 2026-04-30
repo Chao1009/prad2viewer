@@ -77,7 +77,6 @@ struct RawEventData {
     uint16_t     samples[kMaxChannels][fdec::MAX_SAMPLES] = {};
     float        ped_mean[kMaxChannels]    = {};
     float        ped_rms[kMaxChannels]     = {};
-    float        integral[kMaxChannels]    = {};
     float        gain_factor[kMaxChannels] = {};   // 1.0 for non-HyCal types
 
     // Optional soft-analyzer peak data (gated on -p flag in replay_rawdata)

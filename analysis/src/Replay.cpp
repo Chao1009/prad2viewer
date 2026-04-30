@@ -129,14 +129,6 @@ int Replay::moduleID(int roc, int slot, int ch) const
     }
 }
 
-float Replay::computeIntegral(const fdec::ChannelData &cd, float pedestal) const
-{
-    float sum = 0.f;
-    for (int i = 0; i < cd.nsamples; ++i)
-        sum += cd.samples[i] - pedestal;
-    return sum;
-}
-
 void Replay::clearEvent(EventVars &ev)
 {
     ev.event_num = 0;
@@ -182,7 +174,6 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("hycal.samples",     ev.samples,      Form("hycal.samples[hycal.nch][%d]/s", fdec::MAX_SAMPLES));
     tree->Branch("hycal.ped_mean",    ev.ped_mean,     "hycal.ped_mean[hycal.nch]/F");
     tree->Branch("hycal.ped_rms",     ev.ped_rms,      "hycal.ped_rms[hycal.nch]/F");
-    tree->Branch("hycal.integral",    ev.integral,     "hycal.integral[hycal.nch]/F");
     tree->Branch("hycal.gain_factor", ev.gain_factor,  "hycal.gain_factor[hycal.nch]/F");
     if (write_peaks) {
         tree->Branch("hycal.npeaks",       &ev.npeaks,       "hycal.npeaks[hycal.nch]/I");
@@ -391,7 +382,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ana.Analyze(cd.samples, cd.nsamples, wres);
                         ev->ped_mean[nch] = wres.ped.mean;
                         ev->ped_rms[nch]  = wres.ped.rms;
-                        ev->integral[nch] = computeIntegral(cd, wres.ped.mean);
 
                         // Gain correction is HyCal-only (PbGlass / PbWO4) —
                         // SCINT / LMS get unity factor.

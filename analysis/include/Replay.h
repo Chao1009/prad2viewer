@@ -77,7 +77,6 @@ private:
     void setupReconBranches(TTree *tree, EventVars_Recon &ev);
     void clearReconEvent(EventVars_Recon &ev);
 
-    float computeIntegral(const fdec::ChannelData &cd, float pedestal) const;
 
     using DaqMap = std::unordered_map<std::string, std::string>;  // "roc_slot_ch" -> name
     DaqMap daq_map_;

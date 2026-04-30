@@ -479,7 +479,9 @@ float GemSystem::commonModeSorting(float *buf, int size, [[maybe_unused]] int ap
     int count = 0;
 
     // Track the top NUM_HIGH_STRIPS highest values to exclude
-    std::vector<float> high_vals(NUM_HIGH_STRIPS, -9999.f);
+    // Use a stack array to avoid heap allocation in this hot-path function.
+    float high_vals[NUM_HIGH_STRIPS];
+    std::fill(high_vals, high_vals + NUM_HIGH_STRIPS, -9999.f);
 
     for (int i = 0; i < size; ++i) {
         sum += buf[i];
@@ -568,7 +570,8 @@ void GemSystem::collectHits(int apv_idx)
         float max_charge = -1e9f;
         float sum_adc = 0.f;
         short max_tb = 0;
-        std::vector<float> ts_adc(SSP_TIME_SAMPLES);
+        // Use a stack array to avoid heap allocation in this hot-path loop.
+        float ts_adc[SSP_TIME_SAMPLES];
         for (int ts = 0; ts < SSP_TIME_SAMPLES; ++ts) {
             float val = work.raw[RAW_IDX(ch, ts)];
             ts_adc[ts] = val;
@@ -599,7 +602,7 @@ void GemSystem::collectHits(int apv_idx)
         hit.max_timebin = max_tb;
         hit.position    = pos;
         hit.cross_talk  = xtalk;
-        hit.ts_adc      = std::move(ts_adc);
+        hit.ts_adc.assign(ts_adc, ts_adc + SSP_TIME_SAMPLES);
         hits.push_back(std::move(hit));
     }
 }

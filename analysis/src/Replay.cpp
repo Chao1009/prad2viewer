@@ -535,6 +535,7 @@ if(!prad1){
                         if(is_lms || is_alpha) {
                             if(mod_name[0] == 'L'){
                                 if(mod_name.length() != 4) continue;
+                                if(lms_nch >= 4) { lms_nch++; continue; } // guard against overflow
                                 if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
                                 else ev->lms_id[lms_nch] = mod_name[3] - '0';
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
@@ -551,6 +552,7 @@ if(!prad1){
                         if(is_sum && !is_lms) {
                             if(mod_name[0] == 'V'){
                                 if(mod_name.length() != 2) continue;
+                                if(veto_nch >= 4) { veto_nch++; continue; } // guard against overflow
                                 ev->veto_id[veto_nch] = mod_name[1] - '0';
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->veto_npeaks[veto_nch] = wres.npeaks;

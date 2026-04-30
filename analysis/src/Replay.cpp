@@ -169,9 +169,11 @@ void Replay::clearReconEvent(EventVars_Recon &ev)
     ev.ssp_raw.clear();
     std::fill(std::begin(ev.veto_npeaks), std::end(ev.veto_npeaks), 0);
     std::fill(&ev.veto_peak_time[0][0],     &ev.veto_peak_time[0][0]     + 4 * fdec::MAX_PEAKS, 0.f);
+    std::fill(&ev.veto_peak_height[0][0],   &ev.veto_peak_height[0][0]   + 4 * fdec::MAX_PEAKS, 0.f);
     std::fill(&ev.veto_peak_integral[0][0], &ev.veto_peak_integral[0][0] + 4 * fdec::MAX_PEAKS, 0.f);
     std::fill(std::begin(ev.lms_npeaks), std::end(ev.lms_npeaks), 0);
     std::fill(&ev.lms_peak_time[0][0],     &ev.lms_peak_time[0][0]     + 4 * fdec::MAX_PEAKS, 0.f);
+    std::fill(&ev.lms_peak_height[0][0],   &ev.lms_peak_height[0][0]   + 4 * fdec::MAX_PEAKS, 0.f);
     std::fill(&ev.lms_peak_integral[0][0], &ev.lms_peak_integral[0][0] + 4 * fdec::MAX_PEAKS, 0.f);
 }
 
@@ -559,6 +561,7 @@ if(!prad1){
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->lms_npeaks[lms_nch] = wres.npeaks;
                                 for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                    ev->lms_peak_height[lms_nch][p] = wres.peaks[p].height;
                                     ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
                                     ev->lms_peak_time[lms_nch][p] = wres.peaks[p].time;
                                 }
@@ -575,6 +578,7 @@ if(!prad1){
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->veto_npeaks[veto_nch] = wres.npeaks;
                                 for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                    ev->veto_peak_height[veto_nch][p] = wres.peaks[p].height;
                                     ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
                                     ev->veto_peak_time[veto_nch][p] = wres.peaks[p].time;
                                 }

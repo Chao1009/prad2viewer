@@ -300,7 +300,7 @@ int main(int argc, char *argv[])
         geo.gem_y[d] += gem_center_y[d];
     }
     //write back the updated geometry config to JSON file
-    WriteRunConfig(run_config, run_num, geo);
+    //WriteRunConfig(run_config, run_num, geo);
     
 
     //save histograms

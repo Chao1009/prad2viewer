@@ -258,6 +258,7 @@ if(BUILD_PYTHON)
         "hycal_gain_monitor:scripts/hycal_gain_monitor.py"
         "hycal_map_builder:scripts/hycal_map_builder.py"
         "hycal_event_viewer:scripts/hycal_event_viewer.py"
+        "gem_hycal_match_viewer:scripts/gem_hycal_match_viewer.py"
     )
     foreach(_entry ${_PRAD2_PY_WRAPPERS})
         string(REPLACE ":" ";" _parts "${_entry}")

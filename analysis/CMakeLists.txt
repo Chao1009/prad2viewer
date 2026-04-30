@@ -83,3 +83,8 @@ install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/prad2ana
 # load: `root -l <prefix>/share/prad2evviewer/analysis/scripts/rootlogon.C`.
 install(DIRECTORY scripts/ DESTINATION ${CMAKE_INSTALL_DATADIR}/prad2evviewer/analysis/scripts
         FILES_MATCHING PATTERN "*.C")
+
+# Install pyscripts/ — both the standalone analysis tools and the shared
+# _common.py helper imported by scripts/gem_hycal_match_viewer.py.
+install(DIRECTORY pyscripts/ DESTINATION ${CMAKE_INSTALL_DATADIR}/prad2evviewer/analysis/pyscripts
+        FILES_MATCHING PATTERN "*.py")

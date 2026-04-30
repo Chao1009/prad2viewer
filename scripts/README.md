@@ -111,6 +111,33 @@ hycal_event_viewer run.evio.00000
 File → Save writes the current per-module histograms to JSON for later
 inspection.
 
+### gem_hycal_match_viewer.py
+
+Per-event GEM↔HyCal matching browser.  Reuses `analysis/pyscripts/_common.py`
+so the reconstruction (HyCal waveform → energy → island clusters; GEM
+pedestal → CM → ZS → 2-D hits) and the parametric matching cut match the
+offline `gem_hycal_matching.py` / `.C` outputs bit-for-bit.
+
+Two views side-by-side:
+
+* **Front view** — HyCal geo (modules + cluster centroids) with GEM hits
+  projected through the target onto the HyCal plane, color-coded per
+  detector.  Dashed lines connect each best-matched HC × GEM pair.
+* **Side view** (Z-Y) — target / 4 GEM planes / HyCal face with hit
+  markers and matched-pair lines.
+
+Toolbar has standard navigation plus a **"Find next ▶▶"** button driven
+by two thresholds: minimum matched hits per detector (N) and minimum
+detectors satisfied (K).  The search is a foreground scan with a
+cancellable progress dialog.  An `nσ` spinbox tweaks the matching window
+without re-decoding the current event.
+
+```bash
+gem_hycal_match_viewer                       # File → Open…
+gem_hycal_match_viewer run.evio.00000        # auto-load
+gem_hycal_match_viewer run.evio.00000 -r 23867
+```
+
 ## Tagger / TDC
 
 ### tagger_viewer.py

@@ -108,6 +108,28 @@ struct DaqConfig
     };
     DscScaler dsc_scaler;
 
+    // --- FADC250 firmware Mode 1/2/3 emulation parameters -------------------
+    // Mirrors the on-board firmware register settings that drive pulse
+    // identification (see FADC250 User's Manual):
+    //   TET — register 0x000B..0x001A (Trigger Energy Threshold, 12-bit, per
+    //         channel in firmware; we store one global value here)
+    //   NSB — register 0x0009 (samples before threshold crossing, ≥ 2)
+    //   NSA — register 0x000A (samples after,  ≥ 3 modes 0/1, ≥ 6 mode 2)
+    //   MAX_PULSES — CONFIG 1 register 0x0003, bits 6-5 (1..4)
+    //   CLK_NS    — sample period (4 ns at 250 MHz; configurable for studies
+    //               at other rates).
+    // Optional in JSON — absent leaves these defaults.  Override to match
+    // the actual run config when comparing software output to firmware-
+    // reported pulse values.  Used by Fadc250FwAnalyzer.
+    struct Fadc250FwConfig {
+        float TET        = 50.0f;
+        int   NSB        = 4;
+        int   NSA        = 10;
+        int   MAX_PULSES = 4;
+        float CLK_NS     = 4.0f;
+    };
+    Fadc250FwConfig fadc250_fw;
+
     // --- TI data format (fallback for single-event / non-CODA3 data) --------
     // TI bank layout: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high
     int ti_trigger_word;

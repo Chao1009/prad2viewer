@@ -5,11 +5,16 @@ function clearFrontend(){
 
     // reset waveform stacking state
     wfStackTraces=[]; wfStackModKey=''; wfStackEnabled=false;
+    wfDaqEnabled=false;
     wfRequestId++;  // invalidate any in-flight waveform fetches
     lastHistModule='';
     document.getElementById('wf-stack').checked=false;
     document.getElementById('wf-stack-count').style.display='none';
     document.getElementById('btn-wf-stack-reset').style.display='none';
+    document.getElementById('wf-daq').checked=false;
+    document.getElementById('wf-daq-info').style.display='none';
+    document.getElementById('peaks-table-soft').style.display='';
+    document.getElementById('peaks-table-daq').style.display='none';
 
     // blank DQ plots but keep selected module
     Plotly.react('waveform-div',[], wfLayout(selectedModule?selectedModule.n:'', wfWindowNs()), PC2);
@@ -17,6 +22,7 @@ function clearFrontend(){
     Plotly.react('inthist-div',[],{...PL,title:{text:'Integral Histogram',font:{size:10,color:'#555'}}},PC2);
     Plotly.react('poshist-div',[],{...PL,title:{text:'Peak Position',font:{size:10,color:'#555'}}},PC2);
     document.getElementById('peaks-tbody').innerHTML='';
+    document.getElementById('peaks-tbody-daq').innerHTML='';
 
     // cluster tab
     initClHist(); plotClHist(); plotClStatHists();

@@ -114,6 +114,7 @@ set(PRAD2DEC_SOURCES
     src/VtpDecoder.cpp
     src/TdcDecoder.cpp
     src/WaveAnalyzer.cpp
+    src/Fadc250FwAnalyzer.cpp
     src/InstallPaths.cpp
 )
 if(WITH_ET)
@@ -159,3 +160,17 @@ include(GNUInstallDirs)
 
 install(TARGETS prad2dec ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/prad2dec)
+
+# ---------------------------------------------------------------------------
+# Tests (opt-in)
+# ---------------------------------------------------------------------------
+# Building the firmware-emulation regression test does not pull any external
+# dep — just the prad2dec lib (which is the system under test).  Wire it
+# into CTest when the parent project enables testing.
+option(PRAD2DEC_BUILD_TESTS "Build prad2dec unit tests" ON)
+if(PRAD2DEC_BUILD_TESTS)
+    enable_testing()
+    add_executable(prad2dec_test_fadc_fw test/test_fadc_fw.cpp)
+    target_link_libraries(prad2dec_test_fadc_fw PRIVATE prad2dec)
+    add_test(NAME prad2dec.fadc_fw COMMAND prad2dec_test_fadc_fw)
+endif()

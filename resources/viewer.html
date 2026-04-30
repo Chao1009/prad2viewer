@@ -328,17 +328,26 @@
                 <label title="Overlay waveforms across events"><input type="checkbox" id="wf-stack"> Stack</label>
                 <span id="wf-stack-count" style="display:none;color:var(--dim);font-size:11px"></span>
                 <button id="btn-wf-stack-reset" class="copy-btn" style="display:none" title="Clear stacked waveforms">reset</button>
+                <label title="FADC250 firmware Mode 1/2/3 emulation: TET / NSB / NSA / Vp / T annotated"><input type="checkbox" id="wf-daq"> DAQ</label>
+                <span id="wf-daq-info" style="display:none;color:var(--dim);font-size:11px"></span>
 <button id="btn-copy-wf" class="copy-btn" title="Copy waveform data">copy</button>
             </div>
         </div>
         <div class="hdiv" id="div-dq-3"></div>
         <div class="dq-cell dq-cell-table" id="dq-cell-table">
-            <table class="peaks-table">
+            <table class="peaks-table" id="peaks-table-soft">
                 <thead><tr>
                     <th>#</th><th>Pos</th><th>Time [ns]</th><th>Height</th>
                     <th>Integral</th><th>Left</th><th>Right</th><th>OVF</th>
                 </tr></thead>
                 <tbody id="peaks-tbody"></tbody>
+            </table>
+            <table class="peaks-table" id="peaks-table-daq" style="display:none">
+                <thead><tr>
+                    <th>#</th><th>Cross</th><th>T [ns]</th><th>Vp</th>
+                    <th>Σ (Mode 2)</th><th>NSB</th><th>NSA</th><th>Q</th>
+                </tr></thead>
+                <tbody id="peaks-tbody-daq"></tbody>
             </table>
         </div>
     </div>

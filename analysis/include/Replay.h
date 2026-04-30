@@ -9,6 +9,7 @@
 #include "EvChannel.h"
 #include "EventData.h"
 #include "WaveAnalyzer.h"
+#include "Fadc250FwAnalyzer.h"
 #include "DaqConfig.h"
 #include "ConfigSetup.h"
 #include "load_daq_config.h"
@@ -36,7 +37,25 @@ public:
     // Load DAQ map (module name lookup by crate/slot/channel).
     void LoadDaqMap(const std::string &json_path);
 
+    // Load module info (name → module type) from hycal_modules.json.
+    // Used by moduleType() for per-channel category dispatch — the "t"
+    // field in the JSON ("PbGlass" / "PbWO4" / "SCINT" / "LMS") is the
+    // single source of truth.  Optional but strongly recommended; without
+    // it every channel returns MOD_UNKNOWN and module_id encoding falls
+    // back to HyCal-only conventions.
+    void LoadModulesInfo(const std::string &json_path);
+
     std::string moduleName(int roc, int slot, int ch) const;
+    // Returns the prad2::ModuleType enum for the channel, or MOD_UNKNOWN
+    // if (a) no DAQ-map entry exists, or (b) hycal_modules.json wasn't
+    // loaded / doesn't contain this module.
+    prad2::ModuleType moduleType(int roc, int slot, int ch) const;
+    // Returns the globally-unique module_id (see RawEventData docs):
+    //   PbGlass : 1..1156      (G-module ID)
+    //   PbWO4   : 1001..2152   (W-module ID + 1000)
+    //   SCINT   : 3001..3004   (V1..V4)
+    //   LMS     : 3100..3103   (LMSPin=3100, LMS1..3=3101..3103)
+    // Returns -1 if the module name is unknown.
     int moduleID(int roc, int slot, int ch) const;
 
     // Convert an EVIO file to a ROOT file with a TTree.
@@ -62,6 +81,9 @@ private:
 
     using DaqMap = std::unordered_map<std::string, std::string>;  // "roc_slot_ch" -> name
     DaqMap daq_map_;
+    // name → ModuleType, populated by LoadModulesInfo().  Empty if the
+    // modules JSON wasn't loaded; moduleType() then returns MOD_UNKNOWN.
+    std::unordered_map<std::string, prad2::ModuleType> module_types_;
     evc::DaqConfig daq_cfg_;
 };
 

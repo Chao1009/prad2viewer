@@ -26,6 +26,7 @@
 #include "load_daq_config.h"
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
+#include "Fadc250FwAnalyzer.h"
 #include "SspData.h"
 #include "VtpData.h"
 #include "TdcData.h"
@@ -247,6 +248,72 @@ void bind_fadc(py::module_ &m)
             "Returns (pedestal_mean, pedestal_rms, peaks_list).  Peaks "
             "above ``cfg.min_threshold`` / ``cfg.threshold × rms`` are "
             "kept; up to ``MAX_PEAKS`` per call.");
+
+    // ----- Firmware-faithful (Mode 1/2/3) analyzer -----------------------
+    // Quality bitmask constants — exposed at module scope so callers can
+    // test pulse.quality & dec.Q_PEAK_AT_BOUNDARY etc.
+    m.attr("Q_GOOD")             = py::int_(fdec::Q_GOOD);
+    m.attr("Q_PEAK_AT_BOUNDARY") = py::int_(fdec::Q_PEAK_AT_BOUNDARY);
+    m.attr("Q_NSB_TRUNCATED")    = py::int_(fdec::Q_NSB_TRUNCATED);
+    m.attr("Q_NSA_TRUNCATED")    = py::int_(fdec::Q_NSA_TRUNCATED);
+    m.attr("Q_VA_OUT_OF_RANGE")  = py::int_(fdec::Q_VA_OUT_OF_RANGE);
+
+    py::class_<fdec::DaqPeak>(m, "DaqPeak",
+        "One firmware-mode pulse (Mode 1 + Mode 2 + Mode 3 result).")
+        .def(py::init<>())
+        .def_readwrite("pulse_id",     &fdec::DaqPeak::pulse_id)
+        .def_readwrite("vmin",         &fdec::DaqPeak::vmin)
+        .def_readwrite("vpeak",        &fdec::DaqPeak::vpeak)
+        .def_readwrite("va",           &fdec::DaqPeak::va)
+        .def_readwrite("coarse",       &fdec::DaqPeak::coarse)
+        .def_readwrite("fine",         &fdec::DaqPeak::fine)
+        .def_readwrite("time_units",   &fdec::DaqPeak::time_units)
+        .def_readwrite("time_ns",      &fdec::DaqPeak::time_ns)
+        .def_readwrite("cross_sample", &fdec::DaqPeak::cross_sample)
+        .def_readwrite("integral",     &fdec::DaqPeak::integral)
+        .def_readwrite("window_lo",    &fdec::DaqPeak::window_lo)
+        .def_readwrite("window_hi",    &fdec::DaqPeak::window_hi)
+        .def_readwrite("quality",      &fdec::DaqPeak::quality);
+
+    py::class_<evc::DaqConfig::Fadc250FwConfig>(m, "Fadc250FwConfig",
+        "Firmware Mode 1/2/3 emulation knobs (TET/NSB/NSA/MAX_PULSES/CLK_NS).")
+        .def(py::init<>())
+        .def_readwrite("TET",        &evc::DaqConfig::Fadc250FwConfig::TET)
+        .def_readwrite("NSB",        &evc::DaqConfig::Fadc250FwConfig::NSB)
+        .def_readwrite("NSA",        &evc::DaqConfig::Fadc250FwConfig::NSA)
+        .def_readwrite("MAX_PULSES", &evc::DaqConfig::Fadc250FwConfig::MAX_PULSES)
+        .def_readwrite("CLK_NS",     &evc::DaqConfig::Fadc250FwConfig::CLK_NS);
+
+    py::class_<fdec::Fadc250FwAnalyzer>(m, "Fadc250FwAnalyzer",
+        "Firmware-faithful FADC250 Mode 1/2/3 emulator.  Mirrors the on-board "
+        "TDC + pulse-windowing exactly (per FADC250 User's Manual).  Use this "
+        "to compare against firmware-reported pulse data, or for DAQ signal "
+        "studies where the soft (local-maxima) analyzer would diverge.")
+        .def(py::init<const evc::DaqConfig::Fadc250FwConfig &>(),
+             py::arg("cfg") = evc::DaqConfig::Fadc250FwConfig{})
+        .def_readwrite("cfg", &fdec::Fadc250FwAnalyzer::cfg)
+        .def("analyze",
+            [](const fdec::Fadc250FwAnalyzer &self,
+               py::array_t<uint16_t> samples, float ped) {
+                py::buffer_info buf = samples.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("samples must be a 1-D uint16 array");
+                fdec::DaqWaveResult res;
+                {
+                    py::gil_scoped_release rel;
+                    self.Analyze(static_cast<const uint16_t*>(buf.ptr),
+                                 static_cast<int>(buf.shape[0]), ped, res);
+                }
+                py::list peaks;
+                for (int i = 0; i < res.npeaks; ++i)
+                    peaks.append(res.peaks[i]);
+                return py::make_tuple(res.vnoise, peaks);
+            },
+            py::arg("samples"), py::arg("ped"),
+            "Run firmware Mode 3 (TDC) → Mode 1 + Mode 2 windowing on a "
+            "uint16 sample array.  Returns (vnoise, [DaqPeak, ...]).  ``ped`` "
+            "is the per-channel pedestal (firmware register or soft-analyzer "
+            "estimate); samples have not been pedestal-subtracted.");
 }
 
 // -------------------------------------------------------------------------
@@ -495,6 +562,7 @@ void bind_config(py::module_ &m)
         .def_readwrite("roc_tags",          &evc::DaqConfig::roc_tags)
         .def_readwrite("ti_master_tag",     &evc::DaqConfig::ti_master_tag)
         .def_readwrite("verbose_decode",    &evc::DaqConfig::verbose_decode)
+        .def_readwrite("fadc250_fw",        &evc::DaqConfig::fadc250_fw)
         .def("is_physics",    &evc::DaqConfig::is_physics)
         .def("is_monitoring", &evc::DaqConfig::is_monitoring)
         .def("is_control",    &evc::DaqConfig::is_control)

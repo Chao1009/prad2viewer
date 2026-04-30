@@ -1,6 +1,7 @@
 #include "app_state.h"
 #include "data_source.h"
 #include "load_daq_config.h"
+#include "Fadc250FwAnalyzer.h"
 
 #include <array>
 #include <fstream>
@@ -185,10 +186,47 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
         json sarr = json::array();
         for (int j = 0; j < cd.nsamples; ++j) sarr.push_back(cd.samples[j]);
 
+        // Firmware-faithful Mode 1/2/3 emulation alongside the soft analyzer.
+        // PED: at PRad-II's data path the recorded waveforms have already
+        // passed firmware TET, so the soft analyzer's pedestal mean is a
+        // sufficient proxy for the per-channel firmware register.
+        fdec::Fadc250FwAnalyzer fw_ana(daq_cfg.fadc250_fw);
+        fdec::DaqWaveResult daq_res;
+        fw_ana.Analyze(cd.samples, cd.nsamples, wres.ped.mean, daq_res);
+
+        json daq_pulses = json::array();
+        for (int p = 0; p < daq_res.npeaks; ++p) {
+            const auto &pk = daq_res.peaks[p];
+            daq_pulses.push_back({
+                {"n",      pk.pulse_id},
+                {"vmin",   std::round(pk.vmin  * 10) / 10},
+                {"vp",     std::round(pk.vpeak * 10) / 10},
+                {"va",     std::round(pk.va    * 10) / 10},
+                {"coarse", pk.coarse},
+                {"fine",   pk.fine},
+                {"t",      std::round(pk.time_ns * 100) / 100},
+                {"cross",  pk.cross_sample},
+                {"i",      std::round(pk.integral * 10) / 10},
+                {"wlo",    pk.window_lo},
+                {"whi",    pk.window_hi},
+                {"q",      pk.quality},
+            });
+        }
+
         return {{"key", chan_key}, {"s", sarr},
                 {"pm", std::round(wres.ped.mean * 10) / 10},
                 {"pr", std::round(wres.ped.rms * 10) / 10},
-                {"pk", encodePeaks(wres)}};
+                {"pk", encodePeaks(wres)},
+                {"daq", {
+                    {"vnoise",   std::round(daq_res.vnoise * 10) / 10},
+                    {"ped_used", std::round(wres.ped.mean  * 10) / 10},
+                    {"tet",      daq_cfg.fadc250_fw.TET},
+                    {"nsb",      daq_cfg.fadc250_fw.NSB},
+                    {"nsa",      daq_cfg.fadc250_fw.NSA},
+                    {"max_pulses", daq_cfg.fadc250_fw.MAX_PULSES},
+                    {"clk_ns",   daq_cfg.fadc250_fw.CLK_NS},
+                    {"pk",       daq_pulses}
+                }}};
     }
     return {{"error", "channel not found"}};
 }

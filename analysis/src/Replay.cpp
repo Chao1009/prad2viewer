@@ -47,6 +47,34 @@ void Replay::LoadDaqMap(const std::string &json_path)
     std::cerr << "Replay: loaded " << daq_map_.size() << " DAQ map entries\n";
 }
 
+void Replay::LoadModulesInfo(const std::string &json_path)
+{
+    std::ifstream f(json_path);
+    if (!f.is_open()) {
+        std::cerr << "Replay: cannot open modules info: " << json_path << "\n";
+        return;
+    }
+    auto j = json::parse(f, nullptr, false, true);
+    if (!j.is_array()) return;
+
+    auto parse_t = [](const std::string &t) {
+        if (t == "PbGlass") return prad2::MOD_PbGlass;
+        if (t == "PbWO4")   return prad2::MOD_PbWO4;
+        if (t == "SCINT")   return prad2::MOD_SCINT;
+        if (t == "LMS")     return prad2::MOD_LMS;
+        return prad2::MOD_UNKNOWN;
+    };
+
+    for (auto &entry : j) {
+        std::string name = entry.value("n", "");
+        std::string t    = entry.value("t", "");
+        if (name.empty()) continue;
+        module_types_[name] = parse_t(t);
+    }
+    std::cerr << "Replay: loaded " << module_types_.size()
+              << " module-type entries from " << json_path << "\n";
+}
+
 std::string Replay::moduleName(int roc, int slot, int ch) const
 {
     auto it = daq_map_.find(std::to_string(roc) + "_" + std::to_string(slot) +
@@ -54,13 +82,51 @@ std::string Replay::moduleName(int roc, int slot, int ch) const
     return (it != daq_map_.end()) ? it->second : "";
 }
 
+prad2::ModuleType Replay::moduleType(int roc, int slot, int ch) const
+{
+    auto name = moduleName(roc, slot, ch);
+    if (name.empty()) return prad2::MOD_UNKNOWN;
+    auto it = module_types_.find(name);
+    return (it != module_types_.end()) ? it->second : prad2::MOD_UNKNOWN;
+}
+
 int Replay::moduleID(int roc, int slot, int ch) const
 {
     auto name = moduleName(roc, slot, ch);
     if (name.empty()) return -1;
-    if(name[0] == 'G') return std::stoi(name.substr(1));
-    else if(name[0] == 'W') return std::stoi(name.substr(1))+1000;
-    else return -1; // Unknown module type
+    auto t = moduleType(roc, slot, ch);
+    // Globally-unique ID encoding — see RawEventData docs.  The numeric
+    // ranges are deliberately disjoint so HyCalSystem::module_by_id(...)
+    // returns nullptr for SCINT/LMS, letting existing HyCal consumers
+    // skip them via their existing nullptr / is_hycal() checks.
+    switch (t) {
+        case prad2::MOD_PbGlass:
+            // "G<n>" → n.  std::stoi tolerates trailing junk; in practice the
+            // map contains pure "G123" entries.
+            try { return std::stoi(name.substr(1)); } catch (...) { return -1; }
+
+        case prad2::MOD_PbWO4:
+            try { return std::stoi(name.substr(1)) + 1000; } catch (...) { return -1; }
+
+        case prad2::MOD_SCINT:
+            // "V1".."V4" → 3001..3004
+            if (name.size() >= 2 && name[0] == 'V')
+                try { return 3000 + std::stoi(name.substr(1)); } catch (...) {}
+            return -1;
+
+        case prad2::MOD_LMS:
+            // "LMSPin"=3100, "LMS1".."LMS3"=3101..3103
+            if (name == "LMSPin") return 3100;
+            if (name.rfind("LMS", 0) == 0 && name.size() == 4) {
+                char d = name[3];
+                if (d >= '1' && d <= '9') return 3100 + (d - '0');
+            }
+            return -1;
+
+        case prad2::MOD_UNKNOWN:
+        default:
+            return -1;
+    }
 }
 
 float Replay::computeIntegral(const fdec::ChannelData &cd, float pedestal) const
@@ -79,8 +145,6 @@ void Replay::clearEvent(EventVars &ev)
     ev.timestamp = 0;
     ev.nch = 0;
     ev.gem_nch = 0;
-    ev.veto_nch = 0;
-    ev.lms_nch = 0;
     ev.ssp_raw.clear();
 }
 
@@ -106,47 +170,36 @@ void Replay::setupBranches(TTree *tree, EventVars &ev, bool write_peaks)
     tree->Branch("trigger_type", &ev.trigger_type, "trigger_type/b");
     tree->Branch("trigger_bits", &ev.trigger_bits, "trigger_bits/i");
     tree->Branch("timestamp",    &ev.timestamp,    "timestamp/L");
-    tree->Branch("hycal.nch",       &ev.nch,       "hycal.nch/I");
-    tree->Branch("hycal.module_id", ev.module_id,  "hycal.module_id[hycal.nch]/s");
-    tree->Branch("hycal.nsamples",  ev.nsamples,   "hycal.nsamples[hycal.nch]/I");
-    tree->Branch("hycal.samples",   ev.samples,    Form("hycal.samples[hycal.nch][%d]/s", fdec::MAX_SAMPLES));
-    tree->Branch("hycal.ped_mean",  ev.ped_mean,   "hycal.ped_mean[hycal.nch]/F");
-    tree->Branch("hycal.ped_rms",   ev.ped_rms,    "hycal.ped_rms[hycal.nch]/F");
-    tree->Branch("hycal.integral",  ev.integral,   "hycal.integral[hycal.nch]/F");
-    tree->Branch("hycal.gain_factor", ev.gain_factor, "hycal.gain_factor[hycal.nch]/F");
+    // Unified FADC250 channel array (HyCal + Veto + LMS).  Categorisation
+    // is via hycal.module_type (prad2::ModuleType enum) per channel —
+    // existing HyCal consumers using hycal.module_by_id() naturally skip
+    // SCINT/LMS entries because their module_id values (3001+ / 3100+) are
+    // not registered in HyCalSystem.
+    tree->Branch("hycal.nch",         &ev.nch,         "hycal.nch/I");
+    tree->Branch("hycal.module_id",   ev.module_id,    "hycal.module_id[hycal.nch]/s");
+    tree->Branch("hycal.module_type", ev.module_type,  "hycal.module_type[hycal.nch]/b");
+    tree->Branch("hycal.nsamples",    ev.nsamples,     "hycal.nsamples[hycal.nch]/I");
+    tree->Branch("hycal.samples",     ev.samples,      Form("hycal.samples[hycal.nch][%d]/s", fdec::MAX_SAMPLES));
+    tree->Branch("hycal.ped_mean",    ev.ped_mean,     "hycal.ped_mean[hycal.nch]/F");
+    tree->Branch("hycal.ped_rms",     ev.ped_rms,      "hycal.ped_rms[hycal.nch]/F");
+    tree->Branch("hycal.integral",    ev.integral,     "hycal.integral[hycal.nch]/F");
+    tree->Branch("hycal.gain_factor", ev.gain_factor,  "hycal.gain_factor[hycal.nch]/F");
     if (write_peaks) {
         tree->Branch("hycal.npeaks",       &ev.npeaks,       "hycal.npeaks[hycal.nch]/I");
         tree->Branch("hycal.peak_height",  ev.peak_height,  Form("hycal.peak_height[hycal.nch][%d]/F", fdec::MAX_PEAKS));
         tree->Branch("hycal.peak_time",    ev.peak_time,    Form("hycal.peak_time[hycal.nch][%d]/F", fdec::MAX_PEAKS));
         tree->Branch("hycal.peak_integral",ev.peak_integral, Form("hycal.peak_integral[hycal.nch][%d]/F", fdec::MAX_PEAKS));
-    }
-    //veto branches
-    tree->Branch("veto.nch",       &ev.veto_nch,       "veto.nch/I");
-    tree->Branch("veto.id",        ev.veto_id,        "veto.id[veto.nch]/b");
-    tree->Branch("veto.nsamples",  ev.veto_nsamples,  "veto.nsamples[veto.nch]/I");
-    tree->Branch("veto.samples",   ev.veto_samples,   Form("veto.samples[veto.nch][%d]/s", fdec::MAX_SAMPLES));
-    tree->Branch("veto.ped_mean",  ev.veto_ped_mean,   "veto.ped_mean[veto.nch]/F");
-    tree->Branch("veto.ped_rms",   ev.veto_ped_rms,    "veto.ped_rms[veto.nch]/F");
-    tree->Branch("veto.integral",  ev.veto_integral,    "veto.integral[veto.nch]/F");
-    if (write_peaks) {
-        tree->Branch("veto.npeaks",       &ev.veto_npeaks,       "veto.npeaks[veto.nch]/I");
-        tree->Branch("veto.peak_height",  ev.veto_peak_height,  Form("veto.peak_height[veto.nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("veto.peak_time",    ev.veto_peak_time,    Form("veto.peak_time[veto.nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("veto.peak_integral",ev.veto_peak_integral, Form("veto.peak_integral[veto.nch][%d]/F", fdec::MAX_PEAKS));
-    }
-    //LMS branches
-    tree->Branch("lms.nch",       &ev.lms_nch,       "lms.nch/I");
-    tree->Branch("lms.id",        ev.lms_id,        "lms.id[lms.nch]/b");
-    tree->Branch("lms.nsamples",  ev.lms_nsamples,   "lms.nsamples[lms.nch]/I");
-    tree->Branch("lms.samples",   ev.lms_samples,    Form("lms.samples[lms.nch][%d]/s", fdec::MAX_SAMPLES));
-    tree->Branch("lms.ped_mean",  ev.lms_ped_mean,   "lms.ped_mean[lms.nch]/F");
-    tree->Branch("lms.ped_rms",   ev.lms_ped_rms,    "lms.ped_rms[lms.nch]/F");
-    tree->Branch("lms.integral",  ev.lms_integral,    "lms.integral[lms.nch]/F");
-    if (write_peaks) {
-        tree->Branch("lms.npeaks",       &ev.lms_npeaks,       "lms.npeaks[lms.nch]/I");
-        tree->Branch("lms.peak_height",  ev.lms_peak_height,  Form("lms.peak_height[lms.nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("lms.peak_time",    ev.lms_peak_time,    Form("lms.peak_time[lms.nch][%d]/F", fdec::MAX_PEAKS));
-        tree->Branch("lms.peak_integral",ev.lms_peak_integral, Form("lms.peak_integral[lms.nch][%d]/F", fdec::MAX_PEAKS));
+        // Firmware-mode (FADC250 Modes 1/2/3) emulation peaks — see
+        // Fadc250FwAnalyzer.  daq_peak_quality is a bitmask of Q_* flags
+        // (peak-at-boundary, NSB/NSA truncation, Va out-of-range).
+        tree->Branch("hycal.daq_npeaks",       &ev.daq_npeaks,        "hycal.daq_npeaks[hycal.nch]/I");
+        tree->Branch("hycal.daq_peak_vp",       ev.daq_peak_vp,       Form("hycal.daq_peak_vp[hycal.nch][%d]/F",        fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_integral", ev.daq_peak_integral, Form("hycal.daq_peak_integral[hycal.nch][%d]/F",  fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_time",     ev.daq_peak_time,     Form("hycal.daq_peak_time[hycal.nch][%d]/F",      fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_cross",    ev.daq_peak_cross,    Form("hycal.daq_peak_cross[hycal.nch][%d]/I",     fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_coarse",   ev.daq_peak_coarse,   Form("hycal.daq_peak_coarse[hycal.nch][%d]/I",    fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_fine",     ev.daq_peak_fine,     Form("hycal.daq_peak_fine[hycal.nch][%d]/I",      fdec::MAX_PEAKS));
+        tree->Branch("hycal.daq_peak_quality",  ev.daq_peak_quality,  Form("hycal.daq_peak_quality[hycal.nch][%d]/b",   fdec::MAX_PEAKS));
     }
     //GEM part
     tree->Branch("gem.nch",        &ev.gem_nch,   "gem.nch/I");
@@ -270,6 +323,12 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana;
     fdec::WaveResult wres;
+    // Firmware-mode emulator (FADC250 Modes 1/2/3).  Configured from the
+    // optional "fadc250_firmware" block in daq_config.json — defaults are
+    // safe for DAQ signal studies but should be overridden to match the
+    // actual run's TET/NSB/NSA/MAX_PULSES if comparing to firmware output.
+    fdec::Fadc250FwAnalyzer fw_ana(daq_cfg_.fadc250_fw);
+    fdec::DaqWaveResult dwres;
     int total = 0;
 
     int run_num = get_run_int(input_evio);
@@ -300,85 +359,31 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ev->timestamp    = event->info.timestamp;
             ev->ssp_raw      = ssp_raw_snapshot;
 
-            static constexpr uint32_t TBIT_lms = (1u << 24);
-            static constexpr uint32_t TBIT_alpha = (1u << 25);
-            bool is_lms = (ev->trigger_bits & TBIT_lms) != 0;
-            bool is_alpha = (ev->trigger_bits & TBIT_alpha) != 0;
-
-            // decode HyCal FADC250 data
+            // Decode FADC250 data — single pass over all channels (HyCal +
+            // Veto + LMS).  Type dispatch comes from hycal_modules.json,
+            // not module-name prefix; module_type[nch] records the category.
             int nch = 0;
-            int veto_nch = 0;
-            int lms_nch = 0;
             for (int r = 0; r < event->nrocs; ++r) {
                 auto &roc = event->rocs[r];
                 if (!roc.present) continue;
                 auto cit = roc_to_crate.find(roc.tag);
-                int crate;
-                if (cit == roc_to_crate.end()) crate = roc.tag;
-                else crate = cit->second;
+                int crate = (cit == roc_to_crate.end()) ? (int)roc.tag : cit->second;
                 for (int s = 0; s < fdec::MAX_SLOTS; ++s) {
                     if (!roc.slots[s].present) continue;
                     for (int c = 0; c < 16; ++c) {
                         if (!(roc.slots[s].channel_mask & (1ull << c))) continue;
                         auto &cd = roc.slots[s].channels[c];
                         if (cd.nsamples <= 0 || nch >= prad2::kMaxChannels) continue;
-                        int mod_id = moduleID(crate, s, c);
-                        if(mod_id < 0){
-                            std::string mod_name = moduleName(crate, s, c);
-                            if(mod_name[0] == 'V'){
-                                ev->veto_id[veto_nch] = mod_name[1] - '0';
-                                ev->veto_nsamples[veto_nch] = cd.nsamples;
-                                for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
-                                    ev->veto_samples[veto_nch][i] = cd.samples[i];
-                                ana.Analyze(cd.samples, cd.nsamples, wres);
-                                ev->veto_ped_mean[veto_nch] = wres.ped.mean;
-                                ev->veto_ped_rms[veto_nch]  = wres.ped.rms;
-                                ev->veto_integral[veto_nch] = computeIntegral(cd, wres.ped.mean);
-                                if (write_peaks) {
-                                    ev->veto_npeaks[veto_nch] = wres.npeaks;
-                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
-                                        ev->veto_peak_height[veto_nch][p]   = wres.peaks[p].height;
-                                        ev->veto_peak_time[veto_nch][p]     = wres.peaks[p].time;
-                                        ev->veto_peak_integral[veto_nch][p] = wres.peaks[p].integral;
-                                    }
-                                }
-                                veto_nch++;
-                            }
-                            else if(mod_name[0] == 'L'){
-                                if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
-                                else ev->lms_id[lms_nch] = mod_name[3] - '0';
-                                ev->lms_nsamples[lms_nch] = cd.nsamples;
-                                for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
-                                    ev->lms_samples[lms_nch][i] = cd.samples[i];
-                                ana.Analyze(cd.samples, cd.nsamples, wres);
-                                ev->lms_ped_mean[lms_nch] = wres.ped.mean;
-                                ev->lms_ped_rms[lms_nch]  = wres.ped.rms;
-                                ev->lms_integral[lms_nch] = computeIntegral(cd, wres.ped.mean);
-                                if (write_peaks) {
-                                    int best = -1; float best_h = -1.f;
-                                    ev->lms_npeaks[lms_nch] = wres.npeaks;
-                                    for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
-                                        ev->lms_peak_height[lms_nch][p]   = wres.peaks[p].height;
-                                        ev->lms_peak_time[lms_nch][p]     = wres.peaks[p].time;
-                                        ev->lms_peak_integral[lms_nch][p] = wres.peaks[p].integral;
-                                        if(wres.peaks[p].time > gRunConfig.hc_time_win_lo &&
-                                           wres.peaks[p].time < gRunConfig.hc_time_win_hi
-                                            && wres.peaks[p].height > best_h) {
-                                            best_h = wres.peaks[p].height; best = p;
-                                        }
-                                    }
-                                    if (best < 0) continue;
-                                }
-                                lms_nch++;
-                            }
-                            else{
-                                //std::cerr << "Replay: unknown module " << mod_name << " at crate " << crate << " slot " << s << " channel " << c << "\n";
-                            }
-                            continue;
-                        }
 
-                        ev->module_id[nch] = mod_id;
-                        ev->nsamples[nch] = cd.nsamples;
+                        int  mod_id   = moduleID(crate, s, c);
+                        auto mod_type = moduleType(crate, s, c);
+                        // Drop channels with no DAQ-map / module-info entry —
+                        // we have no way to interpret them downstream.
+                        if (mod_id < 0) continue;
+
+                        ev->module_id[nch]   = static_cast<uint16_t>(mod_id);
+                        ev->module_type[nch] = static_cast<uint8_t>(mod_type);
+                        ev->nsamples[nch]    = cd.nsamples;
                         for (int i = 0; i < cd.nsamples && i < fdec::MAX_SAMPLES; ++i)
                             ev->samples[nch][i] = cd.samples[i];
 
@@ -386,21 +391,35 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                         ev->ped_mean[nch] = wres.ped.mean;
                         ev->ped_rms[nch]  = wres.ped.rms;
                         ev->integral[nch] = computeIntegral(cd, wres.ped.mean);
-                        if(mod_id > 1000) ev->gain_factor[nch] = gain_correction.w[mod_id-1000].avg;
-                        else ev->gain_factor[nch] = gain_correction.g[mod_id].avg;
-                        
+
+                        // Gain correction is HyCal-only (PbGlass / PbWO4) —
+                        // SCINT / LMS get unity factor.
+                        if (mod_type == prad2::MOD_PbWO4) {
+                            ev->gain_factor[nch] = gain_correction.w[mod_id - 1000].avg;
+                        } else if (mod_type == prad2::MOD_PbGlass) {
+                            ev->gain_factor[nch] = gain_correction.g[mod_id].avg;
+                        } else {
+                            ev->gain_factor[nch] = 1.0f;
+                        }
+
                         if (write_peaks) {
                             ev->npeaks[nch] = wres.npeaks;
-                            int best = -1; float best_h = -1.f;
                             for (int p = 0; p < wres.npeaks && p < fdec::MAX_PEAKS; ++p) {
                                 ev->peak_height[nch][p]   = wres.peaks[p].height;
                                 ev->peak_time[nch][p]     = wres.peaks[p].time;
                                 ev->peak_integral[nch][p] = wres.peaks[p].integral;
-                                if(wres.peaks[p].time > gRunConfig.hc_time_win_lo &&
-                                   wres.peaks[p].time < gRunConfig.hc_time_win_hi
-                                    && wres.peaks[p].height > best_h) {
-                                    best_h = wres.peaks[p].height; best = p;
-                                }
+                            }
+                            fw_ana.Analyze(cd.samples, cd.nsamples, wres.ped.mean, dwres);
+                            ev->daq_npeaks[nch] = dwres.npeaks;
+                            for (int p = 0; p < dwres.npeaks && p < fdec::MAX_PEAKS; ++p) {
+                                const auto &dp = dwres.peaks[p];
+                                ev->daq_peak_vp[nch][p]       = dp.vpeak;
+                                ev->daq_peak_integral[nch][p] = dp.integral;
+                                ev->daq_peak_time[nch][p]     = dp.time_ns;
+                                ev->daq_peak_cross[nch][p]    = dp.cross_sample;
+                                ev->daq_peak_coarse[nch][p]   = dp.coarse;
+                                ev->daq_peak_fine[nch][p]     = dp.fine;
+                                ev->daq_peak_quality[nch][p]  = dp.quality;
                             }
                         }
                         nch++;
@@ -408,8 +427,6 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                 }
             }
             ev->nch = nch;
-            ev->veto_nch = veto_nch;
-            ev->lms_nch = lms_nch;
 
             // decode GEM SSP data
             int gem_ch = 0;

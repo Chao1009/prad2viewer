@@ -140,4 +140,46 @@ struct Pedestal {
     float mean, rms;
 };
 
+// --- firmware-faithful (Mode 1/2/3) analysis result -------------------------
+//
+// Quality bitmask — uint8_t so we have headroom past the firmware's 2-bit
+// field.  Multiple flags can compose: e.g. peak at boundary AND NSA truncated.
+//
+// Q_GOOD              = 0       no flags
+// Q_PEAK_AT_BOUNDARY  = 1 << 0  peak landed on the last sample
+// Q_NSB_TRUNCATED     = 1 << 1  cross - NSB clipped at 0
+// Q_NSA_TRUNCATED     = 1 << 2  cross + NSA clipped at N-1
+// Q_VA_OUT_OF_RANGE   = 1 << 3  Va not bracketed by samples on the leading edge
+//                                (very fast rise, or numerical edge case)
+constexpr uint8_t Q_GOOD             = 0;
+constexpr uint8_t Q_PEAK_AT_BOUNDARY = 1u << 0;
+constexpr uint8_t Q_NSB_TRUNCATED    = 1u << 1;
+constexpr uint8_t Q_NSA_TRUNCATED    = 1u << 2;
+constexpr uint8_t Q_VA_OUT_OF_RANGE  = 1u << 3;
+
+// One firmware-mode pulse (Mode 1 + Mode 2 + Mode 3 combined).
+// All ADC values are pedestal-subtracted (s' = max(0, s - PED)).
+struct DaqPeak {
+    int      pulse_id;        // 0..MAX_PULSES-1
+    float    vmin;            // = vnoise (manual step 1c)
+    float    vpeak;           // peak ADC value (last sample before strict decrease)
+    float    va;              // mid value = vmin + (vpeak - vmin) / 2
+    int      coarse;          // 4-ns clock index of Vba (10-bit field in firmware)
+    int      fine;            // 0..63 (6-bit firmware field)
+    int      time_units;      // coarse * 64 + fine, LSB = 1/(CLK*64) = 62.5 ps
+    float    time_ns;         // time_units * (CLK_NS / 64)
+    int      cross_sample;    // first leading-edge sample > TET (Tcross)
+    float    integral;        // Σ s' over [cross-NSB, cross+NSA] (Mode 2)
+    int      window_lo;       // clamped Mode 1 window start (inclusive)
+    int      window_hi;       // clamped Mode 1 window end   (inclusive)
+    uint8_t  quality;         // bitmask of Q_* flags above
+};
+
+struct DaqWaveResult {
+    float    vnoise;             // mean of first 4 pedestal-subtracted samples
+    int      npeaks;
+    DaqPeak  peaks[MAX_PEAKS];   // MAX_PEAKS=8 ≥ MAX_PULSES=4
+    void clear() { vnoise = 0; npeaks = 0; }
+};
+
 } // namespace fdec

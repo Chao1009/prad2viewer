@@ -30,59 +30,81 @@ static constexpr int kMaxGemStrips = ssp::MAX_MPDS * ssp::MAX_APVS_PER_MPD * ssp
 static constexpr int kMaxClusters  = 100;
 static constexpr int kMaxGemHits   = 400;
 
-// ── Raw replay ("events" tree) ───────────────────────────────────────────
+// ── Module type categorisation ────────────────────────────────────────────
+//
+// Single source of truth at the data-tree level.  Values come from the "t"
+// field of hycal_modules.json (PbGlass / PbWO4 / SCINT / LMS), parsed at
+// load time and stored per-channel in RawEventData::module_type.  Numeric
+// values are arbitrary but stable — kept as a uint8_t so the TTree branch
+// stays compact (1 byte per channel).
+//
+// Consumers categorise channels by this field; they should not parse the
+// module name.  An unrecognised type falls through to MOD_UNKNOWN and the
+// channel is still written to the tree (so nothing is silently dropped).
+enum ModuleType : uint8_t {
+    MOD_UNKNOWN = 0,
+    MOD_PbGlass = 1,
+    MOD_PbWO4   = 2,
+    MOD_SCINT   = 3,   // Veto scintillators (V1..V4)
+    MOD_LMS     = 4,   // LMS reference PMTs (LMSPin, LMS1..3)
+};
 
+// ── Raw replay ("events" tree) ───────────────────────────────────────────
+//
+// One flat FADC250 channel array.  HyCal, Veto, and LMS channels all live
+// in the same arrays — distinguish via `module_type[i]`.  Branch prefix
+// stays "hycal.*" for backwards compatibility with existing consumers; they
+// do `hycal.module_by_id(...)` then `if (!mod || !mod->is_hycal()) continue;`,
+// which transparently skips Veto/LMS entries because their module_id values
+// (3001..3004 / 3100..3103) are not registered in HyCalSystem.
+//
+// module_id encoding (globally unique across types):
+//   MOD_PbGlass : 1..1156      (matches HyCalSystem G-module IDs)
+//   MOD_PbWO4   : 1001..2152   (HyCal W-module IDs + 1000)
+//   MOD_SCINT   : 3001..3004   (V1..V4)
+//   MOD_LMS     : 3100..3103   (LMSPin=3100, LMS1..3 = 3101..3103)
 struct RawEventData {
     int      event_num    = 0;
     uint8_t  trigger_type = 0;   // main trigger (from event tag: tag - 0x80)
     uint32_t trigger_bits      = 0;   // FP trigger bits (multi-bit, from TI master d[5])
     long long  timestamp    = 0;
 
-    // HyCal per-channel data
+    // FADC250 per-channel data (HyCal + Veto + LMS, distinguished by module_type)
     int          nch = 0;
-    uint16_t     module_id[kMaxChannels] = {};
-    int nsamples[kMaxChannels] = {};
+    uint16_t     module_id[kMaxChannels]   = {};
+    uint8_t      module_type[kMaxChannels] = {};   // ModuleType enum value
+    int          nsamples[kMaxChannels]    = {};
     uint16_t     samples[kMaxChannels][fdec::MAX_SAMPLES] = {};
-    float   ped_mean[kMaxChannels] = {};
-    float   ped_rms[kMaxChannels]  = {};
-    float   integral[kMaxChannels] = {};
-    float   gain_factor[kMaxChannels] = {};
+    float        ped_mean[kMaxChannels]    = {};
+    float        ped_rms[kMaxChannels]     = {};
+    float        integral[kMaxChannels]    = {};
+    float        gain_factor[kMaxChannels] = {};   // 1.0 for non-HyCal types
 
-    //Veto per-channel data
-    int          veto_nch = 0;
-    uint8_t veto_id[4]   = {}; // 1,2,3,4 for veto1-4
-    int veto_nsamples[4] = {};
-    uint16_t     veto_samples[4][fdec::MAX_SAMPLES] = {};
-    float   veto_ped_mean[4] = {};
-    float   veto_ped_rms[4]  = {};
-    float   veto_integral[4] = {};
-
-    //LMS reference PMT data
-    int lms_nch = 0;
-    uint8_t lms_id[4] = {}; // 1,2,3 for lms1-3, 0 for Pin
-    int lms_nsamples[4] = {};
-    uint16_t lms_samples[4][fdec::MAX_SAMPLES] = {};
-    float   lms_ped_mean[4] = {};
-    float   lms_ped_rms[4]  = {};
-    float   lms_integral[4] = {};
-
-    // Optional peak data
-    int npeaks[kMaxChannels] = {};
+    // Optional soft-analyzer peak data (gated on -p flag in replay_rawdata)
+    int     npeaks[kMaxChannels] = {};
     float   peak_height[kMaxChannels][fdec::MAX_PEAKS]   = {};
     float   peak_time[kMaxChannels][fdec::MAX_PEAKS]     = {};
     float   peak_integral[kMaxChannels][fdec::MAX_PEAKS] = {};
 
-    //optional veto peak data
-    int veto_npeaks[4] = {};
-    float   veto_peak_height[4][fdec::MAX_PEAKS]   = {};
-    float   veto_peak_time[4][fdec::MAX_PEAKS]     = {};
-    float   veto_peak_integral[4][fdec::MAX_PEAKS] = {};
-
-    //optional LMS peak data
-    int lms_npeaks[4] = {};
-    float   lms_peak_height[4][fdec::MAX_PEAKS]   = {};
-    float   lms_peak_time[4][fdec::MAX_PEAKS]     = {};
-    float   lms_peak_integral[4][fdec::MAX_PEAKS] = {};
+    // Optional firmware-mode (FADC250 Modes 1/2/3) peak data — also gated on -p.
+    // Produced by Fadc250FwAnalyzer using the soft pedestal mean as PED.
+    //   daq_npeaks       — number of pulses kept (≤ Fadc250FwConfig.MAX_PULSES)
+    //   daq_peak_vp      — Vpeak (pedestal-subtracted ADC counts)
+    //   daq_peak_integral— Σ over [cross−NSB, cross+NSA] (Mode 2 integral)
+    //   daq_peak_time    — interpolated mid-amplitude time (ns)
+    //   daq_peak_cross   — Tcross sample index (Mode 1 "first sample number")
+    //   daq_peak_coarse  — 4-ns clock index of Vba (10-bit firmware field)
+    //   daq_peak_fine    — sub-sample fine bits, 0..63 (62.5 ps LSB)
+    //   daq_peak_quality — bitmask: Q_PEAK_AT_BOUNDARY|Q_NSB_TRUNCATED|
+    //                      Q_NSA_TRUNCATED|Q_VA_OUT_OF_RANGE (see Fadc250Data.h)
+    int     daq_npeaks[kMaxChannels] = {};
+    float   daq_peak_vp[kMaxChannels][fdec::MAX_PEAKS]       = {};
+    float   daq_peak_integral[kMaxChannels][fdec::MAX_PEAKS] = {};
+    float   daq_peak_time[kMaxChannels][fdec::MAX_PEAKS]     = {};
+    int     daq_peak_cross[kMaxChannels][fdec::MAX_PEAKS]    = {};
+    int     daq_peak_coarse[kMaxChannels][fdec::MAX_PEAKS]   = {};
+    int     daq_peak_fine[kMaxChannels][fdec::MAX_PEAKS]     = {};
+    uint8_t daq_peak_quality[kMaxChannels][fdec::MAX_PEAKS]  = {};
 
     // GEM per-strip data
     int        gem_nch = 0;

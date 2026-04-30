@@ -138,6 +138,11 @@ int main(int argc, char *argv[])
         if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
         replay.LoadDaqMap(db_dir + "/hycal_daq_map.json");
         std::cerr << "Using DAQ map: " << db_dir + "/hycal_daq_map.json" << "\n";
+        // Module-type dispatch comes from hycal_modules.json's "t" field —
+        // single source of truth for whether a channel is PbGlass / PbWO4 /
+        // SCINT / LMS.  Without this load, every channel falls back to
+        // MOD_UNKNOWN and only HyCal G/W modules get usable gain correction.
+        replay.LoadModulesInfo(db_dir + "/hycal_modules.json");
 
         while (true) {
             int idx = next_file.fetch_add(1);

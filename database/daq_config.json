@@ -4,6 +4,9 @@
     "modules_file":       "hycal_modules.json",
     "hycal_daq_map_file": "hycal_daq_map.json",
     "gem_daq_map_file":   "gem_daq_map.json",
+    "adc_format": "fadc250",
+    "ti_master_tag": "0x27",
+    "sparsify_sigma": 0,
 
     "event_tags": {
         "_comment": "CODA2/JLab legacy control tags (confirmed in PRad-II data). Built-in physics trigger 0xFF50 - 0xFF8F and 0x00A0 - 0x00BF auto-detected. Monitoring tags have TI data but no waveforms — skipped in file viewer and iteration.",
@@ -16,9 +19,6 @@
         "sync":         "0xC1",
         "epics":        "0x1F"
     },
-
-    "adc_format": "fadc250",
-    "sparsify_sigma": 0,
 
     "bank_tags": {
         "_comment": "JLab single-event mode banks. CODA trigger bank (0xFF2X) auto-detected by tag range.",
@@ -33,32 +33,7 @@
         "fadc_raw":        "0xE109",
         "tdc":             "0xE107"
     },
-
-    "ti_format": {
-        "_comment": "TI bank (0xE10A, after rol2 stripping): d[0]=event_header (event_type in bits 31:24 = TS input pattern), d[1]=trigger#, d[2]=ts_low, d[3]=ts_high|evtnum_high. TI master d[5] = 32-bit FP trigger inputs (tiSetFPInputReadout enabled). Baseline TS pattern always extracted from d[0] bits 31:24; TI master d[5] overrides with richer 32-bit FP data.",
-        "trigger_word":       1,
-        "time_low_word":      2,
-        "time_high_word":     3,
-        "time_high_mask":     "0x0000FFFF",
-        "time_high_shift":    0,
-        "trigger_type_word":  5,
-        "trigger_type_shift": 0,
-        "trigger_type_mask":  "0xFFFFFFFF"
-    },
-
-    "trigger_bank": {
-        "_comment": "0xC000 bank: 3 UINT32 words per event (event_number, event_tag, reserved)",
-        "event_number_word": 0,
-        "event_type_word":   1
-    },
-
-    "run_info": {
-        "_comment": "0xE10F bank in TI master crate (tag=0x27): run metadata",
-        "run_number_word":     1,
-        "event_count_word":    2,
-        "unix_timestamp_word": 3
-    },
-
+    
     "roc_tags": [
         {"tag": "0x80", "name": "adchycal1", "crate": 0,  "type": "roc"},
         {"tag": "0x81", "name": "tihycal1",  "crate": 0,  "type": "ti_slave"},
@@ -78,32 +53,6 @@
         {"tag": "0x92", "name": "gem_1",     "crate": 146, "type": "gem"},
         {"tag": "0x93", "name": "gem_2",     "crate": 147, "type": "gem"}
     ],
-
-    "ti_master_tag": "0x27",
-
-    "dsc_scaler": {
-        "_comment": "DSC2 scaler bank — used for measured DAQ livetime (1 - gated/ungated). Disabled until slot/channel are confirmed: leave bank_tag<0 or slot<0. When enabled, source ∈ 'ref' (125 MHz reference clock — time-based livetime), 'trg' (TRG input), 'tdc' (TDC input); channel 0..15 (ignored for ref).",
-        "bank_tag": -1,
-        "slot":     -1,
-        "source":   "",
-        "channel":  0
-    },
-
-    "sync_format": {
-        "_comment": "Absolute-time / run-state banks used by EvChannel::Sync(). The HEAD bank (0xE112, 5 words) is carried inside SYNC/EPICS events; control events (PRESTART 0x0011, GO 0x0012, END 0x0014) carry a 3-word UINT32 payload with a different word layout. See prad2dec/include/SyncData.h for the decoded struct.",
-        "head_bank": {
-            "tag":              "0xE112",
-            "run_number_word":  1,
-            "counter_word":     2,
-            "unix_time_word":   3,
-            "event_tag_word":   4
-        },
-        "control_event": {
-            "unix_time_word":   0,
-            "run_number_word":  1,
-            "run_type_word":    2
-        }
-    },
 
     "bank_structure": {
         "_comment": "Three-level physics event hierarchy: event_bank (depth 0) → ROC_crate (depth 1) → data_bank (depth 2). Composite bank 0xE101 adds a 4th internal level (0x000D metadata + 0x0000 data words) consumed directly by its decoder. Each data bank maps to a decoder 'module' and a 'product'; EvChannel::Get<product>() lazily dispatches the registered module on first access and caches the result per event.",
@@ -127,6 +76,64 @@
 
             "0xE114": { "module": "epics_data",        "product": "epics",      "type": "STRING"    },
             "0xE112": { "module": "sync_head",         "product": "sync",       "type": "UINT32"    }
+        }
+    },
+
+    "fadc250_firmware": {
+        "_comment": "Optional — FADC250 firmware Mode 1/2/3 emulation parameters for DAQ signal studies. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal (firmware register 0x000B). NSB = samples before threshold crossing, min 2 (register 0x0009). NSA = samples after threshold crossing, min 3 modes 0/1 / min 6 mode 2 (register 0x000A). MAX_PULSES = number of pulses kept per channel per window, 1..4 (CONFIG 1 register bits 6-5). CLK_NS = sample period in ns (4 ns at 250 MHz). Absent leaves these defaults; override to match the actual run config when comparing software output to firmware-reported pulse values.",
+        "TET":        50.0,
+        "NSB":        4,
+        "NSA":        10,
+        "MAX_PULSES": 4,
+        "CLK_NS":     4.0
+    },
+
+    "run_info": {
+        "_comment": "0xE10F bank in TI master crate (tag=0x27): run metadata",
+        "run_number_word":     1,
+        "event_count_word":    2,
+        "unix_timestamp_word": 3
+    },
+
+    "trigger_bank": {
+        "_comment": "0xC000 bank: 3 UINT32 words per event (event_number, event_tag, reserved)",
+        "event_number_word": 0,
+        "event_type_word":   1
+    },
+
+    "ti_format": {
+        "_comment": "TI bank (0xE10A, after rol2 stripping): d[0]=event_header (event_type in bits 31:24 = TS input pattern), d[1]=trigger#, d[2]=ts_low, d[3]=ts_high|evtnum_high. TI master d[5] = 32-bit FP trigger inputs (tiSetFPInputReadout enabled). Baseline TS pattern always extracted from d[0] bits 31:24; TI master d[5] overrides with richer 32-bit FP data.",
+        "trigger_word":       1,
+        "time_low_word":      2,
+        "time_high_word":     3,
+        "time_high_mask":     "0x0000FFFF",
+        "time_high_shift":    0,
+        "trigger_type_word":  5,
+        "trigger_type_shift": 0,
+        "trigger_type_mask":  "0xFFFFFFFF"
+    },
+
+    "dsc_scaler": {
+        "_comment": "DSC2 scaler bank — used for measured DAQ livetime (1 - gated/ungated). Disabled until slot/channel are confirmed: leave bank_tag<0 or slot<0. When enabled, source ∈ 'ref' (125 MHz reference clock — time-based livetime), 'trg' (TRG input), 'tdc' (TDC input); channel 0..15 (ignored for ref).",
+        "bank_tag": -1,
+        "slot":     -1,
+        "source":   "",
+        "channel":  0
+    },
+
+    "sync_format": {
+        "_comment": "Absolute-time / run-state banks used by EvChannel::Sync(). The HEAD bank (0xE112, 5 words) is carried inside SYNC/EPICS events; control events (PRESTART 0x0011, GO 0x0012, END 0x0014) carry a 3-word UINT32 payload with a different word layout. See prad2dec/include/SyncData.h for the decoded struct.",
+        "head_bank": {
+            "tag":              "0xE112",
+            "run_number_word":  1,
+            "counter_word":     2,
+            "unix_time_word":   3,
+            "event_tag_word":   4
+        },
+        "control_event": {
+            "unix_time_word":   0,
+            "run_number_word":  1,
+            "run_type_word":    2
         }
     }
 }

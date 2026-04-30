@@ -557,10 +557,39 @@ function init(){
         document.getElementById('wf-stack-count').style.display=wfStackEnabled?'':'none';
         document.getElementById('btn-wf-stack-reset').style.display=wfStackEnabled?'':'none';
         if(!wfStackEnabled){ wfStackTraces=[]; wfStackModKey=''; }
+        // Stack and DAQ modes are mutually exclusive — turning Stack on
+        // disables DAQ annotations (they don't compose meaningfully).
+        if(wfStackEnabled && wfDaqEnabled){
+            wfDaqEnabled=false;
+            document.getElementById('wf-daq').checked=false;
+            document.getElementById('wf-daq-info').style.display='none';
+            document.getElementById('peaks-table-soft').style.display='';
+            document.getElementById('peaks-table-daq').style.display='none';
+        }
         if(selectedModule) showWaveform(selectedModule);
     };
     document.getElementById('btn-wf-stack-reset').onclick=()=>{
         wfStackTraces=[]; wfStackModKey='';
+        if(selectedModule) showWaveform(selectedModule);
+    };
+
+    // waveform DAQ mode (firmware Mode 1/2/3 emulation) — annotates the plot
+    // with TET, NSB/NSA, Vp, T markers per the FADC250 manual.
+    document.getElementById('wf-daq').checked=false;
+    document.getElementById('wf-daq').onchange=e=>{
+        wfDaqEnabled=e.target.checked;
+        const info=document.getElementById('wf-daq-info');
+        info.style.display=wfDaqEnabled?'':'none';
+        document.getElementById('peaks-table-soft').style.display=wfDaqEnabled?'none':'';
+        document.getElementById('peaks-table-daq').style.display=wfDaqEnabled?'':'none';
+        // Mutually exclusive with Stack.
+        if(wfDaqEnabled && wfStackEnabled){
+            wfStackEnabled=false;
+            document.getElementById('wf-stack').checked=false;
+            document.getElementById('wf-stack-count').style.display='none';
+            document.getElementById('btn-wf-stack-reset').style.display='none';
+            wfStackTraces=[]; wfStackModKey='';
+        }
         if(selectedModule) showWaveform(selectedModule);
     };
 

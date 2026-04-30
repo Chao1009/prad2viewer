@@ -4,11 +4,29 @@ let currentWaveform=null;  // {x:[], y:[]} for copy button
 let wfStackEnabled=false;
 let wfStackTraces=[];      // [{x,y},...] accumulated waveforms
 let wfStackModKey='';      // module key for current stack (clear on module change)
+let wfDaqEnabled=false;    // DAQ-mode toggle: render firmware Mode 1/2/3 annotations
 let currentHist={};  // {divId: {x:[], y:[]}} for histogram copy
 let lastHistModule = '';
 let wfRequestId = 0;  // sequence guard for async waveform fetches
 
 const NS_PER_SAMPLE = 4;  // FADC250: 250 MHz → 4 ns/sample
+
+// Firmware quality bitmask (must match prad2dec/include/Fadc250Data.h).
+const Q_GOOD             = 0;
+const Q_PEAK_AT_BOUNDARY = 1 << 0;
+const Q_NSB_TRUNCATED    = 1 << 1;
+const Q_NSA_TRUNCATED    = 1 << 2;
+const Q_VA_OUT_OF_RANGE  = 1 << 3;
+
+function qualityLabel(q){
+    if(!q) return 'OK';
+    const flags=[];
+    if(q & Q_PEAK_AT_BOUNDARY) flags.push('peakBnd');
+    if(q & Q_NSB_TRUNCATED)    flags.push('NSBtrunc');
+    if(q & Q_NSA_TRUNCATED)    flags.push('NSAtrunc');
+    if(q & Q_VA_OUT_OF_RANGE)  flags.push('VaOOR');
+    return flags.join('+');
+}
 
 // Default waveform window from config (in ns). Used for x-range on empty plots.
 function wfWindowNs(){
@@ -93,6 +111,7 @@ function showWaveform(mod){
             if(wf.pk) d.pk=wf.pk;
             if(wf.pm!==undefined) d.pm=wf.pm;
             if(wf.pr!==undefined) d.pr=wf.pr;
+            if(wf.daq) d.daq=wf.daq;
             renderWaveform(mod, key, d, d.s);
         }).catch(()=>{ if(reqId === wfRequestId && !wfStackEnabled) renderWaveform(mod, key, d, null); });
     }
@@ -106,12 +125,21 @@ function renderWaveform(mod, key, d, samples){
         currentWaveform=null;
         Plotly.react('waveform-div',[], wfLayout(`${mod.n} — No samples`, wfWindowNs()), PC2);
         document.getElementById('peaks-tbody').innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No waveform data</td></tr>';
+        document.getElementById('peaks-tbody-daq').innerHTML='';
         return;
     }
 
     const peaks=d.pk||[], x=samples.map((_,i)=>i*NS_PER_SAMPLE);
     const tMax = (samples.length-1)*NS_PER_SAMPLE;
     currentWaveform={x, y:Array.from(samples)};
+
+    // --- DAQ (firmware-mode) annotations ---
+    // Mutually exclusive with stack mode — DAQ annotations don't make sense
+    // when overlaying many events.  Stack toggle disables DAQ; DAQ disables stack.
+    if(wfDaqEnabled && d.daq){
+        renderWaveformDaq(mod, d, samples, x, tMax);
+        return;
+    }
 
     // --- stacking mode ---
     if(wfStackEnabled){
@@ -177,6 +205,135 @@ function renderWaveform(mod, key, d, samples){
     });
     if(!peaks.length) rows='<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No peaks</td></tr>';
     document.getElementById('peaks-tbody').innerHTML=rows;
+}
+
+// =========================================================================
+// DAQ-mode (firmware Mode 1/2/3) renderer
+//
+// Annotates the waveform with the firmware-emulated TDC + windowing per the
+// FADC250 User's Manual: TET line, Vnoise baseline, NSB/NSA brackets around
+// each Tcross, Vp marker, vertical T line at the interpolated mid-amplitude
+// time, and the Mode 2 integration polygon (Σ).
+// =========================================================================
+function renderWaveformDaq(mod, d, samples, x, tMax){
+    const daq = d.daq || {};
+    const pulses = daq.pk || [];
+    const pedUsed = (daq.ped_used !== undefined) ? daq.ped_used : (d.pm || 0);
+    const tet     = daq.tet || 0;
+    const nsb     = daq.nsb || 0;
+    const nsa     = daq.nsa || 0;
+
+    // Update the inline read-out next to the toggle.
+    const info = document.getElementById('wf-daq-info');
+    if(info){
+        info.textContent = `TET=${tet} · NSB=${nsb} · NSA=${nsa} · PED=${pedUsed.toFixed(1)}`;
+    }
+    // Pedestal-subtracted samples — what the firmware sees and what all
+    // annotations are positioned against.
+    const ys = samples.map(v => Math.max(0, v - pedUsed));
+
+    const traces = [
+        {x, y:ys, type:'scatter', mode:'lines', name:'Waveform (ped-sub)',
+         line:{color:THEME.accent, width:1}},
+        {x:[0,tMax], y:[0,0], type:'scatter', mode:'lines', name:'Vnoise',
+         line:{color:THEME.textMuted, width:1, dash:'dash'}},
+        {x:[0,tMax], y:[tet,tet], type:'scatter', mode:'lines', name:`TET = ${tet}`,
+         line:{color:'#ff6b6b', width:1.4, dash:'dash'}},
+    ];
+
+    const shapes = timeCutShapes(tMax);
+    const annotations = [];
+
+    pulses.forEach((p, idx) => {
+        const col = PC[idx % PC.length];
+        const r = parseInt(col.slice(1,3),16),
+              g = parseInt(col.slice(3,5),16),
+              b = parseInt(col.slice(5,7),16);
+        const fill = `rgba(${r},${g},${b},0.20)`;
+        const tCrossNs = p.cross * NS_PER_SAMPLE;
+
+        // Mode-2 integration polygon — fill under the curve over [wlo, whi].
+        const wx=[], wy=[];
+        for(let j=p.wlo; j<=p.whi; ++j){
+            wx.push(j*NS_PER_SAMPLE);
+            wy.push(ys[j]);
+        }
+        if(wx.length){
+            traces.push({x:wx, y:wx.map(()=>0), type:'scatter', mode:'lines',
+                line:{width:0}, showlegend:false, hoverinfo:'skip'});
+            traces.push({x:wx, y:wy, type:'scatter', mode:'lines',
+                name:`Σ${idx} = ${p.i.toFixed(0)}`,
+                line:{color:col, width:2}, fill:'tonexty', fillcolor:fill});
+        }
+
+        // Vp marker (open circle at peak sample).
+        traces.push({x:[p.cross*NS_PER_SAMPLE], y:[p.vp], type:'scatter',
+            mode:'markers', marker:{color:col, size:9, symbol:'circle-open',
+            line:{color:col, width:2}}, showlegend:false, hoverinfo:'skip'});
+        annotations.push({
+            x:tCrossNs, y:p.vp, ax:30, ay:-20,
+            text:`Vp${idx}=${p.vp.toFixed(0)}`,
+            font:{color:col, size:10}, arrowcolor:col,
+            showarrow:true, arrowhead:2,
+        });
+
+        // Vertical T line at the interpolated mid-amplitude time.
+        shapes.push({type:'line', x0:p.t, x1:p.t, yref:'paper', y0:0, y1:1,
+            line:{color:col, width:1.6}});
+        annotations.push({
+            x:p.t, y:1, yref:'paper', yanchor:'bottom',
+            text:`T${idx}=${p.t.toFixed(2)} ns`,
+            font:{color:col, size:10}, showarrow:false,
+        });
+
+        // NSB/NSA brackets (just below the peak, light shaded blocks).
+        const yBracket = Math.max(0.05*p.vp, 5);
+        const tNsbLo = (p.cross - nsb) * NS_PER_SAMPLE;
+        const tNsaHi = (p.cross + nsa) * NS_PER_SAMPLE;
+        // NSB span (orange)
+        shapes.push({type:'line', x0:tNsbLo, x1:tCrossNs,
+            y0:yBracket, y1:yBracket,
+            line:{color:'#ffa94d', width:1.5}});
+        // NSA span (cyan)
+        shapes.push({type:'line', x0:tCrossNs, x1:tNsaHi,
+            y0:yBracket, y1:yBracket,
+            line:{color:'#22b8cf', width:1.5}});
+        annotations.push({x:(tNsbLo+tCrossNs)/2, y:yBracket, ay:-12,
+            text:`NSB=${nsb}`, font:{color:'#ffa94d', size:9},
+            showarrow:false});
+        annotations.push({x:(tCrossNs+tNsaHi)/2, y:yBracket, ay:-12,
+            text:`NSA=${nsa}`, font:{color:'#22b8cf', size:9},
+            showarrow:false});
+
+        // Tcross dotted vertical (subtle).
+        shapes.push({type:'line', x0:tCrossNs, x1:tCrossNs, yref:'paper',
+            y0:0, y1:1, line:{color:'#ff6b6b', width:0.8, dash:'dot'}});
+    });
+
+    const title = pulses.length
+        ? `${mod.n} — DAQ mode · ${pulses.length} pulse${pulses.length>1?'s':''}`
+        : `${mod.n} — DAQ mode · 0 pulses (Vp ≤ TET)`;
+    const layout = wfLayout(title, tMax);
+    layout.shapes = shapes;
+    layout.annotations = annotations;
+    layout.yaxis = {...layout.yaxis, title:'ADC (ped-subtracted)'};
+    layout.legend = {x:1, y:1, xanchor:'right', bgcolor:THEME.overlay,
+                     font:{size:9}};
+    Plotly.react('waveform-div', traces, layout, PC2);
+
+    // DAQ peaks table.
+    let rows='';
+    pulses.forEach((p, i) => {
+        const col = PC[i % PC.length];
+        rows += `<tr style="border-left:3px solid ${col}">`
+              + `<td>${p.n}</td><td>${p.cross}</td><td>${p.t.toFixed(2)}</td>`
+              + `<td>${p.vp.toFixed(0)}</td><td>${p.i.toFixed(0)}</td>`
+              + `<td>${p.wlo}..${p.cross}</td><td>${p.cross}..${p.whi}</td>`
+              + `<td style="text-align:center" title="${qualityLabel(p.q)}">${p.q?qualityLabel(p.q):'OK'}</td>`
+              + `</tr>`;
+    });
+    if(!pulses.length) rows = '<tr><td colspan="8" style="text-align:center;color:var(--dim);padding:8px">No firmware pulses (Vp ≤ TET)</td></tr>';
+    document.getElementById('peaks-tbody-daq').innerHTML = rows;
 }
 
 // =========================================================================

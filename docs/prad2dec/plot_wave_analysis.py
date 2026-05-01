@@ -6,10 +6,12 @@ Re-implements `fdec::WaveAnalyzer` (soft) and `fdec::Fadc250FwAnalyzer`
 (firmware Mode 1/2/3 emulation) in pure Python and runs both on the
 example waveform shipped in this directory.
 
-Outputs three PNGs alongside this script:
-  fig1_overview.png           — full waveform with key markers
-  fig2_firmware_analysis.png  — Vnoise / TET / Tcross / Va bracket / NSB / NSA
-  fig3_soft_analysis.png      — pedestal / smoothing / peak / integration
+Outputs five PNGs into ./figs/ (alongside this script):
+  figs/fig1_overview.png           — full waveform with key markers
+  figs/fig2_firmware_analysis.png  — Vnoise / TET / Tcross / Va bracket / NSB / NSA
+  figs/fig3_soft_analysis.png      — pedestal / smoothing / peak / integration
+  figs/fig4_soft_parameters.png    — pedestal-iteration + int_tail_ratio sensitivity
+  figs/fig5_smoothing.png          — smoothing on a low-S/N pulse
 
 Run:
   python plot_wave_analysis.py
@@ -308,7 +310,8 @@ print(f"  time_ns              : {sa['time_ns']:.2f} ns")
 # ---------------------------------------------------------------------------
 # Plot 1 — overview
 # ---------------------------------------------------------------------------
-out_dir = Path(__file__).parent
+out_dir = Path(__file__).parent / 'figs'
+out_dir.mkdir(exist_ok=True)
 fig, ax = plt.subplots(figsize=(10, 4.2))
 ax.plot(TIME, RAW, color='#1f77b4', lw=1.0, label='raw samples')
 ax.plot(TIME, RAW, 'o', color='#1f77b4', ms=2.5)

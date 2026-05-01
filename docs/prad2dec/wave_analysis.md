@@ -21,7 +21,7 @@ example pulse, with parameter values matching the real run config in
 100 samples × 4 ns. A short, bright pulse on top of a quiet ~146 ADC
 baseline, followed by a long scintillation tail.
 
-![overview](fig1_overview.png)
+![overview](figs/fig1_overview.png)
 
 | feature | value |
 |---|---|
@@ -104,14 +104,14 @@ For our trace:
 | `peak.left, peak.right` | 28, 49 (integration bounds) |
 | `peak.integral` | 9600 (ADC·sample, pedsub) |
 
-![waveform](fig3_soft_analysis.png)
+![waveform](figs/fig3_soft_analysis.png)
 
 ### Parameter sensitivity
 
 Two of the parameters above visibly change the analyzer's output on this
 trace:
 
-![params](fig4_soft_parameters.png)
+![params](figs/fig4_soft_parameters.png)
 
 **Left — pedestal `ped_flatness` × `ped_max_iter`.** All 30 baseline
 samples enter pass 1; samples deviating from the running mean by more
@@ -152,7 +152,7 @@ the pulse height. The figure below uses a different waveform — a small
 ~24 ADC bump on a baseline with ±3 ADC zig-zag — to show what the kernel
 does:
 
-![smoothing](fig5_smoothing.png)
+![smoothing](figs/fig5_smoothing.png)
 
 | `resolution` | spurious local maxima above +2 ADC | peak height (smoothed) |
 |---:|---:|---:|
@@ -269,7 +269,7 @@ s − Vnoise)`.
 
 The shaded band in `fig2` (right panel) is exactly this sum.
 
-![firmware](fig2_firmware_analysis.png)
+![firmware](figs/fig2_firmware_analysis.png)
 
 **8. Quality bitmask.** `0x00` = `Q_GOOD`. Set bits would indicate:
 
@@ -309,9 +309,9 @@ cd docs/prad2dec
 python plot_wave_analysis.py
 ```
 
-Regenerates `fig1_overview.png`, `fig2_firmware_analysis.png`,
-`fig3_soft_analysis.png`, `fig4_soft_parameters.png`,
-`fig5_smoothing.png` and prints the numeric results above.
+Regenerates `figs/fig1_overview.png`, `figs/fig2_firmware_analysis.png`,
+`figs/fig3_soft_analysis.png`, `figs/fig4_soft_parameters.png`,
+`figs/fig5_smoothing.png` and prints the numeric results above.
 
 ## See also
 

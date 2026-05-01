@@ -16,6 +16,8 @@ Workflow inside the GUI
     * *Set gain* – left-click / drag paints the spinbox value.
     * *Closing (null = 0)* – left-click / drag zeroes channels (mask off).
   Drag the mouse with the left button held to bulk-paint a region.
+* **Safe Cap** – clamp every channel's gain to a configurable
+  ``[Min, Max]`` (defaults ``[0.0, 0.15]``); gains stay non-negative.
 * **Reset** – revert all manual edits to the loaded base.
 * **Load .cnf… / Save .cnf…** – open / save an ``adchycal_gain.cnf`` file.
 
@@ -116,6 +118,23 @@ def resolve_gain(name: str,
         return DEFAULT_LMS_GAIN
     # V1-V4 scintillators and anything else
     return DEFAULT_SCINT_GAIN
+
+
+def safe_cap_gains(gains: Dict[str, float],
+                   min_cap: float = 0.0,
+                   max_cap: float = 0.15) -> Dict[str, float]:
+    """Clamp each gain in ``gains`` to ``[max(0, min_cap), max_cap]``.
+
+    The lower bound is floored at 0 — gain factors are physical and must
+    never be negative.  Raises ``ValueError`` if ``max_cap`` is below the
+    (non-negative) lower bound.
+    """
+    lo = max(0.0, float(min_cap))
+    hi = float(max_cap)
+    if hi < lo:
+        raise ValueError(f"max_cap ({hi}) must be >= min_cap ({lo})")
+    return {k: lo if v < lo else (hi if v > hi else v)
+            for k, v in gains.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -823,6 +842,43 @@ class _GainEditor(QMainWindow):
 
         v.addWidget(mask_grp)
 
+        # ---- Safe Cap group ----
+        # One-shot clamp of every DAQ-mapped channel to [min, max].  Min is
+        # floored at 0 (gains are non-negative), max defaults to 0.15.
+        cap_grp = QGroupBox("Safe Cap")
+        clayout = QHBoxLayout(cap_grp)
+        clayout.setContentsMargins(8, 4, 8, 4)
+        clayout.setSpacing(6)
+
+        self._sb_cap_min = QDoubleSpinBox()
+        self._sb_cap_min.setRange(0.0, 100.0)
+        self._sb_cap_min.setDecimals(6)
+        self._sb_cap_min.setValue(0.0)
+        self._sb_cap_min.setToolTip(
+            "Lower bound (clamped to >= 0; gains are non-negative)")
+
+        self._sb_cap_max = QDoubleSpinBox()
+        self._sb_cap_max.setRange(0.0, 100.0)
+        self._sb_cap_max.setDecimals(6)
+        self._sb_cap_max.setValue(0.15)
+        self._sb_cap_max.setToolTip("Upper bound")
+
+        self._btn_cap = QPushButton("Apply Safe Cap")
+        self._btn_cap.setStyleSheet(_btn_style())
+        self._btn_cap.setToolTip(
+            "Clamp every DAQ-mapped channel's gain to [Min, Max]")
+        self._btn_cap.clicked.connect(self._on_apply_safe_cap)
+
+        clayout.addWidget(QLabel("Min:"))
+        clayout.addWidget(self._sb_cap_min)
+        clayout.addSpacing(6)
+        clayout.addWidget(QLabel("Max:"))
+        clayout.addWidget(self._sb_cap_max)
+        clayout.addStretch()
+        clayout.addWidget(self._btn_cap)
+
+        v.addWidget(cap_grp)
+
         # ---- File row ----
         btn_load_cnf = QPushButton("Load .cnf…")
         btn_load_cnf.setStyleSheet(_btn_style())
@@ -956,6 +1012,50 @@ class _GainEditor(QMainWindow):
         self._notify_range_values()
         self._refresh_text()
         self._status.setText(f"{status_msg} — {len(batch)} channel(s)")
+
+    def _on_apply_safe_cap(self) -> None:
+        try:
+            capped = safe_cap_gains(
+                self._map.gains,
+                self._sb_cap_min.value(),
+                self._sb_cap_max.value())
+        except ValueError as exc:
+            QMessageBox.warning(self, "Invalid range", str(exc))
+            return
+
+        min_cap = max(0.0, self._sb_cap_min.value())
+        max_cap = self._sb_cap_max.value()
+        if QMessageBox.question(
+                self, "Apply safe cap?",
+                f"Clamp every DAQ-mapped channel's gain to "
+                f"[{min_cap:.6g}, {max_cap:.6g}]?\nUse Undo to revert.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
+        gains = dict(self._map.gains)
+        overrides = dict(self._map.overrides)
+        batch: List[Tuple[str, Optional[float]]] = []
+        for name, m in self._mod_map.items():
+            if m.crate < 0:
+                continue
+            new_v = capped.get(name)
+            if new_v is None or new_v == gains.get(name):
+                continue
+            batch.append((name, overrides.get(name)))
+            gains[name] = new_v
+            overrides[name] = new_v
+        if not batch:
+            self._status.setText("Safe Cap: all channels already in range")
+            return
+        self._history.append(batch)
+        self._map.set_gains(gains, overrides)
+        self._notify_range_values()
+        self._refresh_text()
+        self._status.setText(
+            f"Safe-capped to [{min_cap:.6g}, {max_cap:.6g}] — "
+            f"{len(batch)} channel(s)")
 
     def _on_default_changed(self, _) -> None:
         self._pbwo4 = self._sb_pbwo4.value()

@@ -5,10 +5,10 @@ plot_hycal_clustering.py — visualisations for fdec::HyCalCluster.
 Loads the actual HyCal geometry from `database/hycal_modules.json` and
 illustrates the four steps of the Island clustering algorithm:
 
-  hycal_fig1_layout.png         — full HyCal sectors + module types
-  hycal_fig2_single_cluster.png — DFS grouping, seed, log-weighted centroid
-  hycal_fig3_split.png          — two overlapping showers, profile-based split
-  hycal_fig4_params.png         — log_weight_thres effect + shower-depth curves
+  figs/hycal_fig1_layout.png         — full HyCal sectors + module types
+  figs/hycal_fig2_single_cluster.png — DFS grouping, seed, log-weighted centroid
+  figs/hycal_fig3_split.png          — two overlapping showers, profile-based split
+  figs/hycal_fig4_params.png         — log_weight_thres effect + shower-depth curves
 
 Run:
   python plot_hycal_clustering.py
@@ -25,6 +25,8 @@ from pathlib import Path
 # Geometry
 # ---------------------------------------------------------------------------
 HERE   = Path(__file__).parent
+FIGS   = HERE / 'figs'
+FIGS.mkdir(exist_ok=True)
 DB     = HERE.parent.parent / 'database' / 'hycal_modules.json'
 MODS   = json.loads(DB.read_text())
 HYCAL  = [m for m in MODS if m['t'] in ('PbGlass', 'PbWO4')]
@@ -139,7 +141,7 @@ ax.set_xlabel('x (mm, lab)'); ax.set_ylabel('y (mm, lab)')
 ax.set_title('HyCal module layout — 5 sectors, two crystal types')
 ax.grid(False)
 fig.tight_layout()
-fig.savefig(HERE / 'hycal_fig1_layout.png', dpi=130)
+fig.savefig(FIGS / 'hycal_fig1_layout.png', dpi=130)
 plt.close(fig)
 
 
@@ -233,7 +235,7 @@ ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)')
 ax.set_title("Single cluster — energy in MeV, seed + position window\n"
              f"E_total = {E_total:.0f} MeV, σ_shower = 15 mm")
 fig.tight_layout()
-fig.savefig(HERE / 'hycal_fig2_single_cluster.png', dpi=130)
+fig.savefig(FIGS / 'hycal_fig2_single_cluster.png', dpi=130)
 plt.close(fig)
 
 print(f"Single cluster:")
@@ -377,7 +379,7 @@ axB.set_title(
     f"E(★1) = {E_c1:.0f} MeV   E(★2) = {E_c2:.0f} MeV   (input {E1:.0f}, {E2:.0f})")
 
 fig.tight_layout()
-fig.savefig(HERE / 'hycal_fig3_split.png', dpi=130)
+fig.savefig(FIGS / 'hycal_fig3_split.png', dpi=130)
 plt.close(fig)
 
 print(f"\nTwo-shower split:")
@@ -445,7 +447,7 @@ axB.legend(loc='lower right', fontsize=8.5)
 axB.grid(alpha=0.3, which='both')
 
 fig.tight_layout()
-fig.savefig(HERE / 'hycal_fig4_params.png', dpi=130)
+fig.savefig(FIGS / 'hycal_fig4_params.png', dpi=130)
 plt.close(fig)
 
-print(f"\nWrote 4 PNGs to {HERE}")
+print(f"\nWrote 4 PNGs to {FIGS}")

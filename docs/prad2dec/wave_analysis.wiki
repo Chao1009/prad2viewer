@@ -394,7 +394,7 @@ cd docs/prad2dec
 python plot_wave_analysis.py
 </syntaxhighlight>
 
-Regenerates <code>fig1_overview.png</code>, <code>fig2_firmware_analysis.png</code>, <code>fig3_soft_analysis.png</code>, <code>fig4_soft_parameters.png</code>, <code>fig5_smoothing.png</code> and prints the numeric results above.
+Regenerates <code>figs/fig1_overview.png</code>, <code>figs/fig2_firmware_analysis.png</code>, <code>figs/fig3_soft_analysis.png</code>, <code>figs/fig4_soft_parameters.png</code>, <code>figs/fig5_smoothing.png</code> and prints the numeric results above.
 
 == See also ==
 

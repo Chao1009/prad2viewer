@@ -4,10 +4,10 @@ plot_gem_clustering.py — visualisations for gem::GemCluster.
 
 Illustrates the strip-level clustering pipeline + 2-D X/Y matching:
 
-  gem_fig1_layout.png         — 4 GEM detectors, X/Y planes, beam hole
-  gem_fig2_strip_clustering.png — group + split + charge-weighted position
-  gem_fig3_xy_matching.png    — Cartesian product with cuts vs ADC-sorted
-  gem_fig4_params.png         — split_thres effect + cross-talk distances
+  figs/gem_fig1_layout.png         — 4 GEM detectors, X/Y planes, beam hole
+  figs/gem_fig2_strip_clustering.png — group + split + charge-weighted position
+  figs/gem_fig3_xy_matching.png    — Cartesian product with cuts vs ADC-sorted
+  figs/gem_fig4_params.png         — split_thres effect + cross-talk distances
 
 Run:
   python plot_gem_clustering.py
@@ -21,6 +21,8 @@ from matplotlib.lines import Line2D
 from pathlib import Path
 
 HERE = Path(__file__).parent
+FIGS = HERE / 'figs'
+FIGS.mkdir(exist_ok=True)
 DB   = HERE.parent.parent / 'database' / 'gem_daq_map.json'
 
 
@@ -263,7 +265,7 @@ ax.grid(alpha=0.3)
 ax.set_aspect('auto')
 
 fig.tight_layout()
-fig.savefig(HERE / 'gem_fig1_layout.png', dpi=130)
+fig.savefig(FIGS / 'gem_fig1_layout.png', dpi=130)
 plt.close(fig)
 
 
@@ -376,7 +378,7 @@ ax.legend(loc='lower right', fontsize=8)
 ax.grid(alpha=0.3, axis='y')
 
 fig.tight_layout()
-fig.savefig(HERE / 'gem_fig2_strip_clustering.png', dpi=130)
+fig.savefig(FIGS / 'gem_fig2_strip_clustering.png', dpi=130)
 plt.close(fig)
 
 
@@ -498,7 +500,7 @@ ax.set_title(f"Mode 0 — ADC-sorted 1:1\n"
 ax.grid(alpha=0.3)
 
 fig.tight_layout()
-fig.savefig(HERE / 'gem_fig3_xy_matching.png', dpi=130)
+fig.savefig(FIGS / 'gem_fig3_xy_matching.png', dpi=130)
 plt.close(fig)
 
 
@@ -590,7 +592,7 @@ ax.legend(loc='upper right', fontsize=8)
 ax.grid(alpha=0.3, axis='y')
 
 fig.tight_layout()
-fig.savefig(HERE / 'gem_fig4_params.png', dpi=130)
+fig.savefig(FIGS / 'gem_fig4_params.png', dpi=130)
 plt.close(fig)
 
 print(f"Strip clustering: {len(clusters)} clusters")
@@ -598,4 +600,4 @@ for c in clusters:
     print(f"  hits {len(c['hits']):2d}  pos {c['position']:7.2f} mm"
           f"  Σ={c['total_charge']:6.0f}  peak={c['peak_charge']:6.0f}")
 
-print(f"\nWrote 4 PNGs to {HERE}")
+print(f"\nWrote 4 PNGs to {FIGS}")

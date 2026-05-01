@@ -18,7 +18,7 @@ PRad-II uses **four GEM detectors** in **two paired layers** for
 redundant 2-D tracking and ghost-hit rejection. Each detector reads
 out two orthogonal strip planes through APV25 chips at 0.4 mm pitch:
 
-![layout](gem_fig1_layout.png)
+![layout](figs/gem_fig1_layout.png)
 
 | field | value |
 |---|---|
@@ -154,7 +154,7 @@ useful when the four GEMs have different APV gains or noise levels.
 
 A 75-strip window with three real showers and ~4 ADC noise:
 
-![strip](gem_fig2_strip_clustering.png)
+![strip](figs/gem_fig2_strip_clustering.png)
 
 The left panel shows the full above-threshold strip distribution
 (threshold 30 ADC). DFS-style grouping with `consecutive_thres = 1`
@@ -184,7 +184,7 @@ Three X-plane clusters and three Y-plane clusters per detector, with
 two prompt big showers and one late, small "out-of-time" pair (e.g.
 backsplash or a delayed accidental):
 
-![matching](gem_fig3_xy_matching.png)
+![matching](figs/gem_fig3_xy_matching.png)
 
 **Left panel — Mode 1 (default).** All 9 X×Y candidates are listed.
 The big-prompt × big-prompt pairings (X0/X1 with Y0/Y1) easily pass
@@ -204,7 +204,7 @@ away good hits.
 
 ## Parameter sensitivity
 
-![params](gem_fig4_params.png)
+![params](figs/gem_fig4_params.png)
 
 **Left — `split_thres`.** Same multi-peak group, three different
 thresholds:
@@ -258,8 +258,8 @@ cd docs/prad2det
 python plot_gem_clustering.py
 ```
 
-Regenerates `gem_fig1_layout.png`, `gem_fig2_strip_clustering.png`,
-`gem_fig3_xy_matching.png`, `gem_fig4_params.png` and prints the
+Regenerates `figs/gem_fig1_layout.png`, `figs/gem_fig2_strip_clustering.png`,
+`figs/gem_fig3_xy_matching.png`, `figs/gem_fig4_params.png` and prints the
 reconstructed cluster table to stdout.
 
 ## See also

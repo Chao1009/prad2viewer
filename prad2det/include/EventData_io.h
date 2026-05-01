@@ -258,6 +258,8 @@ inline void SetReconWriteBranches(TTree *tree, ReconEventData &ev)
     tree->Branch("veto_npeaks",      ev.veto_npeaks,       "veto_npeaks[veto_nch]/I");
     tree->Branch("veto_peak_time",   ev.veto_peak_time,
                  Form("veto_peak_time[veto_nch][%d]/F",     fdec::MAX_PEAKS));
+    tree->Branch("veto_peak_height", ev.veto_peak_height,
+                 Form("veto_peak_height[veto_nch][%d]/F",   fdec::MAX_PEAKS));
     tree->Branch("veto_peak_integral", ev.veto_peak_integral,
                  Form("veto_peak_integral[veto_nch][%d]/F", fdec::MAX_PEAKS));
 
@@ -266,6 +268,8 @@ inline void SetReconWriteBranches(TTree *tree, ReconEventData &ev)
     tree->Branch("lms_npeaks",      ev.lms_npeaks,       "lms_npeaks[lms_nch]/I");
     tree->Branch("lms_peak_time",   ev.lms_peak_time,
                  Form("lms_peak_time[lms_nch][%d]/F",     fdec::MAX_PEAKS));
+    tree->Branch("lms_peak_height", ev.lms_peak_height,
+                 Form("lms_peak_height[lms_nch][%d]/F",   fdec::MAX_PEAKS));
     tree->Branch("lms_peak_integral", ev.lms_peak_integral,
                  Form("lms_peak_integral[lms_nch][%d]/F", fdec::MAX_PEAKS));
 
@@ -340,6 +344,7 @@ inline ReconReadStatus SetReconReadBranches(TTree *tree, ReconEventData &ev)
         bind("veto_npeaks",       ev.veto_npeaks);
         bind("veto_peak_time",    ev.veto_peak_time);
         bind("veto_peak_integral", ev.veto_peak_integral);
+        bind("veto_peak_height",  ev.veto_peak_height);
     }
 
     s.has_lms = (tree->GetBranch("lms_nch") != nullptr);
@@ -349,6 +354,7 @@ inline ReconReadStatus SetReconReadBranches(TTree *tree, ReconEventData &ev)
         bind("lms_npeaks",       ev.lms_npeaks);
         bind("lms_peak_time",    ev.lms_peak_time);
         bind("lms_peak_integral", ev.lms_peak_integral);
+        bind("lms_peak_height",  ev.lms_peak_height);
     }
 
     // ssp_raw — see note in SetRawReadBranches.

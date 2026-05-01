@@ -6,15 +6,16 @@ Re-implements `fdec::WaveAnalyzer` (soft) and `fdec::Fadc250FwAnalyzer`
 (firmware Mode 1/2/3 emulation) in pure Python and runs both on the
 example waveform shipped in this directory.
 
-Outputs five PNGs into ./figs/ (alongside this script):
-  figs/fig1_overview.png           — full waveform with key markers
-  figs/fig2_firmware_analysis.png  — Vnoise / TET / Tcross / Va bracket / NSB / NSA
-  figs/fig3_soft_analysis.png      — pedestal / smoothing / peak / integration
-  figs/fig4_soft_parameters.png    — pedestal-iteration + int_tail_ratio sensitivity
-  figs/fig5_smoothing.png          — smoothing on a low-S/N pulse
+Outputs five PNGs into ../plots/ (relative to this script):
+  plots/fig1_overview.png           — full waveform with key markers
+  plots/fig2_firmware_analysis.png  — Vnoise / TET / Tcross / Va bracket / NSB / NSA
+  plots/fig3_soft_analysis.png      — pedestal / smoothing / peak / integration
+  plots/fig4_soft_parameters.png    — pedestal-iteration + int_tail_ratio sensitivity
+  plots/fig5_smoothing.png          — smoothing on a low-S/N pulse
 
 Run:
-  python plot_wave_analysis.py
+  cd docs/technical_notes/waveform_analysis
+  python scripts/plot_wave_analysis.py
 """
 
 import numpy as np
@@ -191,7 +192,7 @@ def firmware_analyze(s, *, TET=10.0, NSB_ns=8, NSA_ns=128, NPED=3,
 # ---------------------------------------------------------------------------
 def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
                  ped_nsamples=30, ped_flatness=1.0, ped_max_iter=3,
-                 int_tail_ratio=0.1, clk_mhz=250.0):
+                 int_tail_ratio=0.1, tail_break_n=2, clk_mhz=250.0):
     n = len(s)
 
     # triangular smoothing
@@ -209,20 +210,22 @@ def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
                 wsum += 2.0 * w
             buf[i] = val / wsum
 
-    # iterative pedestal
+    # ── pedestal: median+MAD seed → iterative σ-clip
     nped = min(ped_nsamples, n)
     sc = buf[:nped].copy()
-    mean = float(np.mean(sc)); rms = float(np.std(sc))
+    mean = float(np.median(sc))
+    rms  = float(np.median(np.abs(sc - mean))) * 1.4826
     for _ in range(ped_max_iter):
         keep = np.abs(sc - mean) < max(rms, ped_flatness)
         if keep.sum() == sc.size or keep.sum() < 5:
             break
         sc = sc[keep]
         mean = float(np.mean(sc)); rms = float(np.std(sc))
+    nused = int(sc.size)
 
     thr = max(threshold * rms, min_threshold)
 
-    # find first local maximum above thresholds
+    # find first local maximum above threshold
     for i in range(1, n - 1):
         if buf[i] < buf[i - 1] or buf[i] < buf[i + 1]:
             continue
@@ -235,8 +238,8 @@ def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
         height_smooth = buf[i] - mean
         if height_smooth < thr:
             continue
-        if height_smooth < 3.0 * rms:
-            continue
+        # (the redundant `height_smooth < 3 * rms` check has been removed;
+        #  thr ≥ 5*rms in the default config already binds first.)
 
         # raw position correction
         raw_pos = i; raw_h = s[i] - mean
@@ -246,27 +249,55 @@ def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
             if i + j < n and (s[i + j] - mean) > raw_h:
                 raw_pos = i + j; raw_h = s[i + j] - mean
 
-        # integration with tail cutoff
+        # ── integration: walk outward with N-consecutive tail termination,
+        # INCLUSIVE int_left/int_right (only updated on commit).
         ped_height = buf[i] - mean
         tail_cut = ped_height * int_tail_ratio
         int_left = i; int_right = i
         integ = ped_height
+        N_break = max(1, tail_break_n)
+
+        # leftward
+        below_run = 0; pending = 0.0
         for j in range(i - 1, left - 1, -1):
             v = buf[j] - mean
             if v < tail_cut or v < rms:
-                int_left = j; break
-            integ += v; int_left = j
+                below_run += 1; pending += v
+                if below_run >= N_break: break
+            else:
+                integ += pending + v
+                pending = 0.0; below_run = 0
+                int_left = j
+        # rightward
+        below_run = 0; pending = 0.0
         for j in range(i + 1, right + 1):
             v = buf[j] - mean
             if v < tail_cut or v < rms:
-                int_right = j; break
-            integ += v; int_right = j
+                below_run += 1; pending += v
+                if below_run >= N_break: break
+            else:
+                integ += pending + v
+                pending = 0.0; below_run = 0
+                int_right = j
+
+        # ── sub-sample peak time: 3-point quadratic vertex around raw_pos
+        t_subsample = 0.0
+        if 0 < raw_pos < n - 1:
+            h_minus = float(s[raw_pos - 1])
+            h_zero  = float(s[raw_pos])
+            h_plus  = float(s[raw_pos + 1])
+            denom = h_minus - 2.0 * h_zero + h_plus
+            if denom < -1e-3:
+                delta = 0.5 * (h_minus - h_plus) / denom
+                t_subsample = max(-1.0, min(1.0, delta))
 
         return dict(
-            ped_mean=mean, ped_rms=rms, threshold=thr, buf=buf,
-            pos=raw_pos, height=float(raw_h),
+            ped_mean=mean, ped_rms=rms, ped_nused=nused,
+            threshold=thr, buf=buf,
+            pos=raw_pos, height=float(raw_h), t_subsample=t_subsample,
             int_left=int_left, int_right=int_right, integral=float(integ),
-            time_ns=raw_pos * 1e3 / clk_mhz, tail_cut=tail_cut,
+            time_ns=(raw_pos + t_subsample) * 1e3 / clk_mhz,
+            tail_cut=tail_cut,
         )
     return None
 
@@ -298,19 +329,21 @@ print()
 print("=" * 60)
 print("Soft analyzer  (WaveAnalyzer)")
 print("=" * 60)
-print(f"  pedestal             : mean={sa['ped_mean']:.2f}, rms={sa['ped_rms']:.2f}")
+print(f"  pedestal             : mean={sa['ped_mean']:.2f}, rms={sa['ped_rms']:.2f},"
+      f" nused={sa['ped_nused']}/30 (median/MAD bootstrap)")
 print(f"  threshold            : {sa['threshold']:.2f} (= max(5*rms, 3))")
 print(f"  raw peak             : sample {sa['pos']} (h={sa['height']:.0f})")
 print(f"  integration          : [{sa['int_left']}, {sa['int_right']}]"
-      f" tail-cut={sa['tail_cut']:.0f}")
+      f" inclusive (tail-cut={sa['tail_cut']:.0f}, N_break=2)")
 print(f"  integral             : {sa['integral']:.0f}")
-print(f"  time_ns              : {sa['time_ns']:.2f} ns")
+print(f"  time_ns              : {sa['time_ns']:.3f} ns"
+      f" (sub-sample δ = {sa['t_subsample']:+.3f})")
 
 
 # ---------------------------------------------------------------------------
 # Plot 1 — overview
 # ---------------------------------------------------------------------------
-out_dir = Path(__file__).parent / 'figs'
+out_dir = Path(__file__).parent.parent / 'plots'
 out_dir.mkdir(exist_ok=True)
 fig, ax = plt.subplots(figsize=(10, 4.2))
 ax.plot(TIME, RAW, color='#1f77b4', lw=1.0, label='raw samples')
@@ -434,7 +467,7 @@ plt.close(fig)
 fig, ax = plt.subplots(figsize=(10, 4.2))
 ax.plot(TIME, RAW, 'o', color='#1f77b4', ms=2.5, label='raw samples')
 ax.plot(TIME, sa['buf'], color='#ff7f0e', lw=1.2,
-        label=f"smoothed (res = 2)")
+        label=f"smoothed (smooth_order = 2)")
 ax.axhline(sa['ped_mean'], color='#888', lw=0.8, ls='--',
            label=f"pedestal = {sa['ped_mean']:.2f} ± {sa['ped_rms']:.2f}")
 ax.axhline(sa['ped_mean'] + sa['threshold'], color='#d62728', lw=0.8,
@@ -479,8 +512,9 @@ peds = RAW[:nped]
 xped = np.arange(nped) * CLK_NS
 
 kept_mask = np.ones(nped, dtype=bool)
-mean = float(np.mean(peds))
-rms  = float(np.std(peds))
+# Median + MAD·1.4826 robust seed (matches the C++ analyzer).
+mean = float(np.median(peds))
+rms  = float(np.median(np.abs(peds - mean))) * 1.4826
 init_mean, init_rms = mean, rms
 for _ in range(3):
     band = max(rms, PED_FLATNESS)
@@ -494,9 +528,9 @@ for _ in range(3):
 
 band = max(rms, PED_FLATNESS)
 
-# initial mean (no rejection) for comparison
+# median+MAD seed (no σ-clip iteration yet) for comparison
 axA.axhline(init_mean, color='#bbb', lw=0.8, ls=':',
-            label=f"raw mean = {init_mean:.2f} ({init_rms:.2f} rms)")
+            label=f"median seed = {init_mean:.2f} (MAD·1.4826 = {init_rms:.2f})")
 # converged band
 axA.fill_between(xped, mean - band, mean + band, color='#1f77b4',
                  alpha=0.10,
@@ -573,9 +607,9 @@ fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 4.4),
                                 gridspec_kw={'width_ratios': [1.2, 1]})
 
 variants = [
-    (1, '#888',    1.0, '-',  'raw (res = 1, no smoothing)'),
-    (2, '#ff7f0e', 1.6, '-',  'res = 2  (default)'),
-    (4, '#1f77b4', 1.6, '--', 'res = 4'),
+    (1, '#888',    1.0, '-',  'raw (smooth_order = 1, no smoothing)'),
+    (2, '#ff7f0e', 1.6, '-',  'smooth_order = 2  (default)'),
+    (4, '#1f77b4', 1.6, '--', 'smooth_order = 4'),
 ]
 
 # count local maxima above the noise floor for each smoothing setting
@@ -613,14 +647,14 @@ zoom_lo, zoom_hi = 100, 240
 axB.plot(TIME_SMALL, SMALL, 'o', color='#bbb', ms=3.5, label='raw')
 for res, col, lw, ls, lbl in variants:
     sm = triangular_smooth(SMALL, res)
-    axB.plot(TIME_SMALL, sm, ls=ls, color=col, lw=lw, label=f'res = {res}')
+    axB.plot(TIME_SMALL, sm, ls=ls, color=col, lw=lw, label=f'smooth_order = {res}')
 axB.set_xlim(zoom_lo, zoom_hi)
 axB.set_xlabel('time (ns)')
 axB.set_ylabel('ADC counts')
 
 # Maxima count as table inset
 table_lines = ["local maxima > +2 ADC:"] + \
-              [f"  res={r}:  {n}" for r, n in maxima_counts]
+              [f"  smooth_order={r}:  {n}" for r, n in maxima_counts]
 axB.text(0.97, 0.40, "\n".join(table_lines), transform=axB.transAxes,
          fontsize=8.5, ha='right', va='top', family='monospace',
          bbox=dict(facecolor='white', edgecolor='#bbb', alpha=0.95, pad=4))
@@ -636,6 +670,6 @@ plt.close(fig)
 print()
 print("Smoothing demo (small-signal waveform):")
 for r, n in maxima_counts:
-    print(f"  res={r}: {n} local maxima > +2 ADC")
+    print(f"  smooth_order={r}: {n} local maxima > +2 ADC")
 print()
 print(f"Wrote 5 PNGs to {out_dir}")

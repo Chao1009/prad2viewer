@@ -1,6 +1,6 @@
 # HyCal Clustering in `prad2det`
 
-`fdec::HyCalCluster` (in [`prad2det/include/HyCalCluster.h`](../../prad2det/include/HyCalCluster.h))
+`fdec::HyCalCluster` (in [`prad2det/include/HyCalCluster.h`](../../../prad2det/include/HyCalCluster.h))
 implements the **Island clustering** algorithm originally written for
 PRad-I (`PRadIslandCluster` / `PRadHyCalReconstructor`), now ported to
 operate on the index-based `HyCalSystem` geometry. It groups adjacent
@@ -21,7 +21,7 @@ each of five sectors (Center, Top, Right, Bottom, Left); the sector
 boundary is a known geometric step in module size and is handled by the
 `HyCalSystem::qdist()` quantised-distance helper.
 
-![layout](figs/hycal_fig1_layout.png)
+![layout](plots/hycal_fig1_layout.png)
 
 | sector | type | module size | count |
 |---|---|---:|---:|
@@ -110,7 +110,7 @@ to get the 3-D cluster position.
 ## Parameters
 
 All settings live in `fdec::ClusterConfig`. Defaults match
-[`database/reconstruction_config.json`](../../database/reconstruction_config.json).
+[`database/reconstruction_config.json`](../../../database/reconstruction_config.json).
 
 | field | default | unit | role |
 |---|---:|---|---|
@@ -129,7 +129,7 @@ A 1.1 GeV photon shower placed at (57, 89) mm, σ_shower ≈ 15 mm
 (Molière radius for PbWO₄ is ~20 mm, so most of the energy lives in
 the central 3×3).
 
-![single](figs/hycal_fig2_single_cluster.png)
+![single](plots/hycal_fig2_single_cluster.png)
 
 | quantity | value |
 |---|---:|
@@ -155,7 +155,7 @@ Two showers (1500 MeV at (−25, 5) mm, 900 MeV at (25, −8) mm) drop
 into the same connected island. Single DFS pass returns one group of
 ~25 modules with two local maxima.
 
-![split](figs/hycal_fig3_split.png)
+![split](plots/hycal_fig3_split.png)
 
 The left panel shows the input total energy (per module, MeV); the two
 local maxima — at the seed candidates ★1 / ★2 — are clearly separated
@@ -170,7 +170,7 @@ can choose to trust them less or apply a leakage correction.
 
 ## Parameter sensitivity
 
-![params](figs/hycal_fig4_params.png)
+![params](plots/hycal_fig4_params.png)
 
 **Left — `log_weight_thres`.** Sweeping `T` over [2, 6] on the single
 cluster from above shows a clear minimum near the default 3.6.
@@ -235,25 +235,25 @@ profile-based split in pure Python — close enough to the C++ for
 illustration, not bit-exact.
 
 ```bash
-cd docs/prad2det
+cd docs/technical_notes/hycal_clustering
 python plot_hycal_clustering.py
 ```
 
-Regenerates `figs/hycal_fig1_layout.png`, `figs/hycal_fig2_single_cluster.png`,
-`figs/hycal_fig3_split.png`, `figs/hycal_fig4_params.png` and prints reconstructed positions
+Regenerates `plots/hycal_fig1_layout.png`, `plots/hycal_fig2_single_cluster.png`,
+`plots/hycal_fig3_split.png`, `plots/hycal_fig4_params.png` and prints reconstructed positions
 + split fractions to stdout.
 
 ## See also
 
-- [`prad2det/include/HyCalCluster.h`](../../prad2det/include/HyCalCluster.h),
-  [`HyCalCluster.cpp`](../../prad2det/src/HyCalCluster.cpp) — algorithm source
-- [`prad2det/include/HyCalSystem.h`](../../prad2det/include/HyCalSystem.h) —
+- [`prad2det/include/HyCalCluster.h`](../../../prad2det/include/HyCalCluster.h),
+  [`HyCalCluster.cpp`](../../../prad2det/src/HyCalCluster.cpp) — algorithm source
+- [`prad2det/include/HyCalSystem.h`](../../../prad2det/include/HyCalSystem.h) —
   geometry, neighbour grids, sector helpers
-- [`database/hycal_modules.json`](../../database/hycal_modules.json) —
+- [`database/hycal_modules.json`](../../../database/hycal_modules.json) —
   per-module geometry (used by the plot script)
-- [`database/reconstruction_config.json`](../../database/reconstruction_config.json) —
+- [`database/reconstruction_config.json`](../../../database/reconstruction_config.json) —
   per-run cluster-config defaults
-- [`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md) —
+- [`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md) —
   branch layout for the recon tree (where `ClusterHit` lands as `cl_*`)
 - PRad-I lineage: `PRadIslandCluster` / `PRadHyCalReconstructor` in
   PRadAnalyzer

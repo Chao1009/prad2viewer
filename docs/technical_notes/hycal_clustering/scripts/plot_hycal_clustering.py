@@ -5,13 +5,14 @@ plot_hycal_clustering.py — visualisations for fdec::HyCalCluster.
 Loads the actual HyCal geometry from `database/hycal_modules.json` and
 illustrates the four steps of the Island clustering algorithm:
 
-  figs/hycal_fig1_layout.png         — full HyCal sectors + module types
-  figs/hycal_fig2_single_cluster.png — DFS grouping, seed, log-weighted centroid
-  figs/hycal_fig3_split.png          — two overlapping showers, profile-based split
-  figs/hycal_fig4_params.png         — log_weight_thres effect + shower-depth curves
+  plots/hycal_fig1_layout.png         — full HyCal sectors + module types
+  plots/hycal_fig2_single_cluster.png — DFS grouping, seed, log-weighted centroid
+  plots/hycal_fig3_split.png          — two overlapping showers, profile-based split
+  plots/hycal_fig4_params.png         — log_weight_thres effect + shower-depth curves
 
 Run:
-  python plot_hycal_clustering.py
+  cd docs/technical_notes/hycal_clustering
+  python scripts/plot_hycal_clustering.py
 """
 
 import json
@@ -25,9 +26,10 @@ from pathlib import Path
 # Geometry
 # ---------------------------------------------------------------------------
 HERE   = Path(__file__).parent
-FIGS   = HERE / 'figs'
+FIGS   = HERE.parent / 'plots'
 FIGS.mkdir(exist_ok=True)
-DB     = HERE.parent.parent / 'database' / 'hycal_modules.json'
+# scripts/ → hycal_clustering/ → technical_notes/ → docs/ → repo root → database/
+DB     = HERE.parent.parent.parent.parent / 'database' / 'hycal_modules.json'
 MODS   = json.loads(DB.read_text())
 HYCAL  = [m for m in MODS if m['t'] in ('PbGlass', 'PbWO4')]
 

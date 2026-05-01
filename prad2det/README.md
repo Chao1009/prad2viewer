@@ -8,12 +8,12 @@ from `prad2dec` and produces physics-level outputs (clusters, 2-D hits).
 - **HyCalSystem** — HyCal geometry, DAQ map, calibration constants, sector-grid neighbor lookup
 - **HyCalCluster** — Island clustering + log-weighted center-of-gravity
   on top of a `HyCalSystem`
-  (see [`docs/prad2det/hycal_clustering.md`](../docs/prad2det/hycal_clustering.md)
+  (see [`docs/technical_notes/hycal_clustering/hycal_clustering.md`](../docs/technical_notes/hycal_clustering/hycal_clustering.md)
   for a worked example with plots)
 - **GemSystem** — GEM detector hierarchy, pedestal / common-mode / zero-suppression, strip mapping (full-readout vs online-ZS auto-detected per APV)
 - **GemCluster** — Per-plane strip clustering + X/Y matching (Cartesian
   with cuts or ADC-sorted)
-  (see [`docs/prad2det/gem_clustering.md`](../docs/prad2det/gem_clustering.md)
+  (see [`docs/technical_notes/gem_clustering/gem_clustering.md`](../docs/technical_notes/gem_clustering/gem_clustering.md)
   for a worked example with plots)
 - **DetectorTransform** — 2×3 rotation + translation matrix for detector → lab-frame geometry
 - **EpicsStore** — EPICS slow-control snapshot accumulator with look-up by event number

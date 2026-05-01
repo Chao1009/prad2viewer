@@ -14,7 +14,7 @@ Static library for reading CODA EVIO data and decoding detector electronics.
 - **WaveAnalyzer** — Pedestal subtraction, peak search, integration
 - **Fadc250FwAnalyzer** — Bit-faithful FADC250 firmware Mode 1/2/3 emulation
   (TET / NSB / NSA / NSAT / NPED / MAXPED, see
-  [`docs/prad2dec/wave_analysis.md`](../docs/prad2dec/wave_analysis.md)
+  [`docs/technical_notes/waveform_analysis/wave_analysis.md`](../docs/technical_notes/waveform_analysis/wave_analysis.md)
   for a worked example with plots)
 
 ## Usage

@@ -10,18 +10,18 @@
 
 Both are stack-allocated, zero-heap on the hot path, and run side-by-side
 when `prad2ana_replay_rawdata` is invoked with the `-p` flag (see
-[`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md)).
+[`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md)).
 
 The remainder of this note walks through both algorithms on a single
 example pulse, with parameter values matching the real run config in
-[`database/daq_config.json`](../../database/daq_config.json).
+[`database/daq_config.json`](../../../database/daq_config.json).
 
 ## Example waveform
 
 100 samples × 4 ns. A short, bright pulse on top of a quiet ~146 ADC
 baseline, followed by a long scintillation tail.
 
-![overview](figs/fig1_overview.png)
+![overview](plots/fig1_overview.png)
 
 | feature | value |
 |---|---|
@@ -84,7 +84,7 @@ samples of the *smoothed* trace.
 - Compute a least-squares `slope` (ADC/sample) on the survivors — catches
   baseline drift that the σ-clip alone hides.
 
-For our trace: `mean = 145.61`, `rms = 0.45`, `nused = 26`, `slope ≈ 0`,
+For our trace: `mean = 145.61`, `rms = 0.45`, `nused = 28`, `slope ≈ 0`,
 `quality = Q_PED_GOOD` after convergence.
 
 **2b. Adaptive window.** If the leading window looks suspicious
@@ -149,19 +149,21 @@ For our trace:
 
 | field | value |
 |---|---|
-| `peak.pos` | sample 32 (t = 128.0 ns) |
+| `peak.pos` | sample 32 |
+| `peak.time` | 126.6 ns (raw + sub-sample δ = −0.36) |
 | `peak.height` | 1247 ADC (raw − pedestal) |
-| `peak.left, peak.right` | 28, 49 (integration bounds) |
+| `peak.left, peak.right` | 29, 48 (INCLUSIVE — 20 samples in `peak.integral`) |
 | `peak.integral` | 9600 (ADC·sample, pedsub) |
+| `peak.quality` | `Q_PEAK_GOOD` (no pile-up) |
 
-![waveform](figs/fig3_soft_analysis.png)
+![waveform](plots/fig3_soft_analysis.png)
 
 ### Pedestal quality
 
 The analyzer reports four scalars per channel that together describe how
 trustworthy the pedestal estimate is — written to the `events` tree as
 `hycal.ped_{mean,rms,nused,quality,slope}` (see
-[`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md)):
+[`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md)):
 
 | Field | Type | Use |
 |---|---|---|
@@ -194,7 +196,7 @@ baseline.
 Two of the parameters above visibly change the analyzer's output on this
 trace:
 
-![params](figs/fig4_soft_parameters.png)
+![params](plots/fig4_soft_parameters.png)
 
 **Left — pedestal `ped_flatness` × `ped_max_iter`.** All 30 baseline
 samples enter pass 1; samples deviating from the running mean by more
@@ -235,7 +237,7 @@ the pulse height. The figure below uses a different waveform — a small
 ~24 ADC bump on a baseline with ±3 ADC zig-zag — to show what the kernel
 does:
 
-![smoothing](figs/fig5_smoothing.png)
+![smoothing](plots/fig5_smoothing.png)
 
 | `smooth_order` | spurious local maxima above +2 ADC | peak height (smoothed) |
 |---:|---:|---:|
@@ -243,13 +245,14 @@ does:
 | 2 (default) | 3 | 166 |
 | 4 | 1 | 162 |
 
-`res = 1` keeps the raw zig-zag — six local maxima clear +2 ADC, the
-peak finder needs every other rejection rule (height-above-baseline,
-3·rms, peak-overlap ratio) to find the real one. `res = 2` collapses the
-zig-zag without visibly attenuating the pulse. `res = 4` removes
-essentially all baseline structure but starts to clip the peak by ~7
-ADC, so its use should be reserved for very low-S/N channels where
-peak-finding robustness is worth more than peak-height fidelity.
+`smooth_order = 1` keeps the raw zig-zag — six local maxima clear
++2 ADC, the peak finder needs the height-above-baseline +
+peak-overlap rejections to find the real one.  `smooth_order = 2`
+collapses the zig-zag without visibly attenuating the pulse.
+`smooth_order = 4` removes essentially all baseline structure but
+starts to clip the peak by ~7 ADC, so its use should be reserved for
+very low-S/N channels where peak-finding robustness is worth more
+than peak-height fidelity.
 
 The remaining parameters affect the bright-pulse example only
 marginally:
@@ -265,7 +268,7 @@ marginally:
 The firmware analyzer reproduces the on-board pipeline so we can compare
 offline analysis against firmware-reported values without re-running the
 DAQ. The full algorithm spec lives in
-[`docs/clas_fadc/FADC250_algorithms.md`](../clas_fadc/FADC250_algorithms.md);
+[`docs/clas_fadc/FADC250_algorithms.md`](../../clas_fadc/FADC250_algorithms.md);
 this section is a parameter-by-parameter walk-through.
 
 ### Parameters
@@ -352,7 +355,7 @@ s − Vnoise)`.
 
 The shaded band in `fig2` (right panel) is exactly this sum.
 
-![firmware](figs/fig2_firmware_analysis.png)
+![firmware](plots/fig2_firmware_analysis.png)
 
 **8. Quality bitmask.** `0x00` = `Q_DAQ_GOOD`. Set bits would indicate:
 
@@ -367,17 +370,18 @@ The shaded band in `fig2` (right panel) is exactly this sum.
 
 | field | waveform (`WaveAnalyzer`) | firmware (`Fadc250FwAnalyzer`) |
 |---|---|---|
-| pedestal | 145.61 ± 0.45 (30 samples, σ-clip) | 145.0 (3 samples, MAXPED filter) |
-| time | 128.0 ns (raw peak sample × 4) | 120.75 ns (TDC mid-amplitude interp.) |
+| pedestal | 145.61 ± 0.45 (28/30 samples, median/MAD seed + σ-clip) | 145.0 (3 samples, MAXPED filter) |
+| time | 126.6 ns (raw peak + quadratic sub-sample δ) | 120.75 ns (TDC mid-amplitude interp.) |
 | height | 1247 ADC (raw − ped) | 1247 ADC (`Vpeak − Vmin`) |
-| integral window | [28, 49] (22 samples, tail-driven) | [28, 62] (35 samples, fixed NSB/NSA) |
+| integral window | [29, 48] (20 samples, tail-driven, INCLUSIVE) | [28, 62] (35 samples, fixed NSB/NSA) |
 | integral | 9600 | 10589 |
 
-The waveform analyzer's *time* is the peak sample (rounded to 4 ns); the
-firmware's *time* is mid-amplitude on the rising edge with 62.5 ps LSB —
-they are intentionally different observables.
+The waveform analyzer's *time* is the peak vertex via 3-point quadratic
+fit (sub-sample, ≪ 1 ns precision for clean peaks); the firmware's
+*time* is mid-amplitude on the rising edge with 62.5 ps LSB — they
+are intentionally different observables.
 
-The firmware's wider window (140 ns vs the waveform analyzer's 88 ns)
+The firmware's wider window (140 ns vs the waveform analyzer's 80 ns)
 picks up more of the slow scintillation tail. With `NSA = 128 ns` the
 window stops at sample 62; the rest of the tail (samples 63..99) is
 excluded.
@@ -385,24 +389,25 @@ excluded.
 ## Reproducing the plots
 
 Both algorithms are re-implemented in
-[`plot_wave_analysis.py`](plot_wave_analysis.py) (NumPy + Matplotlib only).
+[`scripts/plot_wave_analysis.py`](scripts/plot_wave_analysis.py)
+(NumPy + Matplotlib only).
 
 ```bash
-cd docs/prad2dec
-python plot_wave_analysis.py
+cd docs/technical_notes/waveform_analysis
+python scripts/plot_wave_analysis.py
 ```
 
-Regenerates `figs/fig1_overview.png`, `figs/fig2_firmware_analysis.png`,
-`figs/fig3_soft_analysis.png`, `figs/fig4_soft_parameters.png`,
-`figs/fig5_smoothing.png` and prints the numeric results above.
+Regenerates `plots/fig1_overview.png`, `plots/fig2_firmware_analysis.png`,
+`plots/fig3_soft_analysis.png`, `plots/fig4_soft_parameters.png`,
+`plots/fig5_smoothing.png` and prints the numeric results above.
 
 ## See also
 
-- [`docs/clas_fadc/FADC250_algorithms.md`](../clas_fadc/FADC250_algorithms.md)
+- [`docs/clas_fadc/FADC250_algorithms.md`](../../clas_fadc/FADC250_algorithms.md)
   — full firmware algorithm spec with manual cross-references
-- [`prad2dec/include/WaveAnalyzer.h`](../../prad2dec/include/WaveAnalyzer.h),
-  [`WaveAnalyzer.cpp`](../../prad2dec/src/WaveAnalyzer.cpp) — C++ source
-- [`prad2dec/include/Fadc250FwAnalyzer.h`](../../prad2dec/include/Fadc250FwAnalyzer.h),
-  [`Fadc250FwAnalyzer.cpp`](../../prad2dec/src/Fadc250FwAnalyzer.cpp) — C++ source
-- [`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md) — branch
+- [`prad2dec/include/WaveAnalyzer.h`](../../../prad2dec/include/WaveAnalyzer.h),
+  [`WaveAnalyzer.cpp`](../../../prad2dec/src/WaveAnalyzer.cpp) — C++ source
+- [`prad2dec/include/Fadc250FwAnalyzer.h`](../../../prad2dec/include/Fadc250FwAnalyzer.h),
+  [`Fadc250FwAnalyzer.cpp`](../../../prad2dec/src/Fadc250FwAnalyzer.cpp) — C++ source
+- [`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md) — branch
   layout for the replay tree (where both analyzer outputs land)

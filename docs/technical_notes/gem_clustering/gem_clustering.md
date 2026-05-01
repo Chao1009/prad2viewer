@@ -1,6 +1,6 @@
 # GEM Clustering in `prad2det`
 
-`gem::GemCluster` (in [`prad2det/include/GemCluster.h`](../../prad2det/include/GemCluster.h))
+`gem::GemCluster` (in [`prad2det/include/GemCluster.h`](../../../prad2det/include/GemCluster.h))
 takes per-plane strip charges from the SSP/MPD readout and produces 2-D
 GEM hits. It runs in two stages: a **per-plane 1-D clustering**
 pipeline (group consecutive strips → recursively split at charge
@@ -18,7 +18,7 @@ PRad-II uses **four GEM detectors** in **two paired layers** for
 redundant 2-D tracking and ghost-hit rejection. Each detector reads
 out two orthogonal strip planes through APV25 chips at 0.4 mm pitch:
 
-![layout](figs/gem_fig1_layout.png)
+![layout](plots/gem_fig1_layout.png)
 
 | field | value |
 |---|---|
@@ -132,7 +132,7 @@ per-plane charge / size / max-timebin recorded for downstream use.
 ## Parameters
 
 All settings live in `gem::ClusterConfig` (in
-[`prad2det/include/GemSystem.h`](../../prad2det/include/GemSystem.h)).
+[`prad2det/include/GemSystem.h`](../../../prad2det/include/GemSystem.h)).
 The system stores one `ClusterConfig` per detector via
 `SetReconConfigs()`, so different detectors can have different cuts —
 useful when the four GEMs have different APV gains or noise levels.
@@ -154,7 +154,7 @@ useful when the four GEMs have different APV gains or noise levels.
 
 A 75-strip window with three real showers and ~4 ADC noise:
 
-![strip](figs/gem_fig2_strip_clustering.png)
+![strip](plots/gem_fig2_strip_clustering.png)
 
 The left panel shows the full above-threshold strip distribution
 (threshold 30 ADC). DFS-style grouping with `consecutive_thres = 1`
@@ -184,7 +184,7 @@ Three X-plane clusters and three Y-plane clusters per detector, with
 two prompt big showers and one late, small "out-of-time" pair (e.g.
 backsplash or a delayed accidental):
 
-![matching](figs/gem_fig3_xy_matching.png)
+![matching](plots/gem_fig3_xy_matching.png)
 
 **Left panel — Mode 1 (default).** All 9 X×Y candidates are listed.
 The big-prompt × big-prompt pairings (X0/X1 with Y0/Y1) easily pass
@@ -204,7 +204,7 @@ away good hits.
 
 ## Parameter sensitivity
 
-![params](figs/gem_fig4_params.png)
+![params](plots/gem_fig4_params.png)
 
 **Left — `split_thres`.** Same multi-peak group, three different
 thresholds:
@@ -243,36 +243,36 @@ Each X/Y match produces one `GEMHit`:
 | `x_size`, `y_size` | `int` | Number of strips in the X / Y cluster. |
 
 These map directly onto the `gem_*` branches of the recon tree (see
-[`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md)).
+[`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md)).
 
 ## Reproducing the plots
 
 The detector geometry is read from
-[`database/gem_daq_map.json`](../../database/gem_daq_map.json); the
+[`database/gem_daq_map.json`](../../../database/gem_daq_map.json); the
 strip-clustering and matching algorithms are re-implemented in pure
 Python in [`plot_gem_clustering.py`](plot_gem_clustering.py) (NumPy +
 Matplotlib only).
 
 ```bash
-cd docs/prad2det
+cd docs/technical_notes/gem_clustering
 python plot_gem_clustering.py
 ```
 
-Regenerates `figs/gem_fig1_layout.png`, `figs/gem_fig2_strip_clustering.png`,
-`figs/gem_fig3_xy_matching.png`, `figs/gem_fig4_params.png` and prints the
+Regenerates `plots/gem_fig1_layout.png`, `plots/gem_fig2_strip_clustering.png`,
+`plots/gem_fig3_xy_matching.png`, `plots/gem_fig4_params.png` and prints the
 reconstructed cluster table to stdout.
 
 ## See also
 
-- [`prad2det/include/GemCluster.h`](../../prad2det/include/GemCluster.h),
-  [`GemCluster.cpp`](../../prad2det/src/GemCluster.cpp) — algorithm source
-- [`prad2det/include/GemSystem.h`](../../prad2det/include/GemSystem.h) —
+- [`prad2det/include/GemCluster.h`](../../../prad2det/include/GemCluster.h),
+  [`GemCluster.cpp`](../../../prad2det/src/GemCluster.cpp) — algorithm source
+- [`prad2det/include/GemSystem.h`](../../../prad2det/include/GemSystem.h) —
   hierarchy, pedestal/CM/zero-suppression, strip mapping, per-detector
   `ClusterConfig` storage
-- [`database/gem_daq_map.json`](../../database/gem_daq_map.json) —
+- [`database/gem_daq_map.json`](../../../database/gem_daq_map.json) —
   APV mapping + plane / pitch / hole geometry
-- [`database/reconstruction_config.json`](../../database/reconstruction_config.json) —
+- [`database/reconstruction_config.json`](../../../database/reconstruction_config.json) —
   per-run cluster-config defaults
-- [`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md) —
+- [`docs/REPLAYED_DATA.md`](../../REPLAYED_DATA.md) —
   branch layout for the recon tree (where `GEMHit`s land as `gem_*`)
 - mpd_gem_view_ssp `GEMCluster` — original implementation lineage

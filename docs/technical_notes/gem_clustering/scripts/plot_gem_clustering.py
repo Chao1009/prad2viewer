@@ -4,13 +4,14 @@ plot_gem_clustering.py — visualisations for gem::GemCluster.
 
 Illustrates the strip-level clustering pipeline + 2-D X/Y matching:
 
-  figs/gem_fig1_layout.png         — 4 GEM detectors, X/Y planes, beam hole
-  figs/gem_fig2_strip_clustering.png — group + split + charge-weighted position
-  figs/gem_fig3_xy_matching.png    — Cartesian product with cuts vs ADC-sorted
-  figs/gem_fig4_params.png         — split_thres effect + cross-talk distances
+  plots/gem_fig1_layout.png         — 4 GEM detectors, X/Y planes, beam hole
+  plots/gem_fig2_strip_clustering.png — group + split + charge-weighted position
+  plots/gem_fig3_xy_matching.png    — Cartesian product with cuts vs ADC-sorted
+  plots/gem_fig4_params.png         — split_thres effect + cross-talk distances
 
 Run:
-  python plot_gem_clustering.py
+  cd docs/technical_notes/gem_clustering
+  python scripts/plot_gem_clustering.py
 """
 
 import json
@@ -21,9 +22,10 @@ from matplotlib.lines import Line2D
 from pathlib import Path
 
 HERE = Path(__file__).parent
-FIGS = HERE / 'figs'
+FIGS = HERE.parent / 'plots'
 FIGS.mkdir(exist_ok=True)
-DB   = HERE.parent.parent / 'database' / 'gem_daq_map.json'
+# scripts/ → gem_clustering/ → technical_notes/ → docs/ → repo root → database/
+DB   = HERE.parent.parent.parent.parent / 'database' / 'gem_daq_map.json'
 
 
 # ---------------------------------------------------------------------------

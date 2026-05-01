@@ -13,6 +13,7 @@ Run:
   python plot_gem_clustering.py
 """
 
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, FancyArrowPatch, Patch
@@ -20,15 +21,64 @@ from matplotlib.lines import Line2D
 from pathlib import Path
 
 HERE = Path(__file__).parent
+DB   = HERE.parent.parent / 'database' / 'gem_daq_map.json'
+
 
 # ---------------------------------------------------------------------------
-# Geometry constants (PRad-II GEM, gem_daq_map.json)
+# Strip-mapping (mirrors gem::buildStripMap in prad2det) — used to derive
+# the actual X/Y plane size and beam-hole position from gem_daq_map.json.
 # ---------------------------------------------------------------------------
-PITCH       = 0.4   # mm
-HOLE_W      = 52.0  # mm (beam hole width)
-HOLE_H      = 52.0  # mm
-DET_W       = 614.4 # X plane: 12 APVs × 128 ch × 0.4 mm
-DET_H       = 614.4 # Y plane: 24 APVs but two-halves around the hole
+def map_strip(ch, pos, orient, pin_rotate=0, shared_pos=-1,
+              hybrid_board=True, N=128, readout_center=32):
+    readout_off = readout_center + pin_rotate
+    eff_pos = shared_pos if shared_pos >= 0 else pos
+    plane_shift = (eff_pos - pos) * N - pin_rotate
+    strip = 32 * (ch % 4) + 8 * (ch // 4) - 31 * (ch // 16)
+    if hybrid_board:
+        strip = strip + 1 + strip % 4 - 5 * ((strip // 4) % 2)
+    if readout_off > 0:
+        if strip & 1:
+            strip = readout_off - (strip + 1) // 2
+        else:
+            strip = readout_off + strip // 2
+    strip &= (N - 1)
+    if orient == 1:
+        strip = (N - 1) - strip
+    strip += plane_shift + pos * N
+    return strip
+
+
+_raw = json.loads(DB.read_text(encoding='utf-8'))
+_apv_ch = _raw.get('apv_channels', 128)
+_ro_c   = _raw.get('readout_center', 32)
+_apvs   = [a for a in _raw['apvs'] if isinstance(a, dict) and 'crate' in a]
+
+# All four GEMs are identical — derive geometry from det 0
+_det0 = [a for a in _apvs if a.get('det') == 0]
+def _strips_of(plane):
+    out = []
+    match = []
+    for a in (x for x in _det0 if x.get('plane') == plane):
+        pin_r = a.get('pin_rotate') or 0
+        sp    = a.get('shared_pos') if a.get('shared_pos') is not None else -1
+        for ch in range(_apv_ch):
+            s = map_strip(ch, a['pos'], a.get('orient', 0), pin_r, sp,
+                          a.get('hybrid_board', True), _apv_ch, _ro_c)
+            out.append(s)
+            if a.get('match'):
+                match.append(s)
+    return out, match
+
+_xs, _xs_match = _strips_of('X')
+_ys, _ys_match = _strips_of('Y')
+
+PITCH  = _raw['layers'][0].get('x_pitch', 0.4)
+HOLE_W = _raw['hole']['width']
+HOLE_H = _raw['hole']['height']
+DET_W  = (max(_xs) + 1) * PITCH                              # 563.2 mm
+DET_H  = (max(_ys) + 1) * PITCH                              # 1228.8 mm
+HOLE_CX = (min(_xs_match) + max(_xs_match) + 1) / 2 * PITCH  # 534.4 mm — off-centre
+HOLE_CY = DET_H / 2                                          # 614.4 mm
 
 
 # ---------------------------------------------------------------------------
@@ -111,44 +161,70 @@ def _split_recursive(group, thres):
 # ---------------------------------------------------------------------------
 # Plot 1 — GEM detector layout
 # ---------------------------------------------------------------------------
-fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 5.5),
-                                gridspec_kw={'width_ratios': [1, 1.2]})
+# Coordinate convention: origin at the bottom-left of the detector, matching
+# the strip-numbering convention (strip 0 ≡ x = 0 / y = 0).  The beam hole
+# is *not* at the centre — it sits at (HOLE_CX, HOLE_CY) on the right side
+# of the X plane because APV positions 10/11 carry the half-strip "match"
+# pair that wraps around it.
+fig, (axA, axB) = plt.subplots(1, 2, figsize=(14, 6.0),
+                                gridspec_kw={'width_ratios': [1, 1.4]})
 
-# Panel A — beam-direction view of one detector (X strips horizontal, Y strips
-# vertical), showing the beam hole.
 ax = axA
-ax.add_patch(Rectangle((-DET_W / 2, -DET_H / 2), DET_W, DET_H,
+# detector outline
+ax.add_patch(Rectangle((0, 0), DET_W, DET_H,
                         facecolor='#e7f5ff', edgecolor='#1971c2', lw=1.5))
-# X strip indications (5 horizontal lines as visual cue)
-for y in np.linspace(-DET_H / 2 + 50, DET_H / 2 - 50, 9):
-    ax.plot([-DET_W / 2, DET_W / 2], [y, y], color='#74c0fc', lw=0.4, alpha=0.6)
-# Y strip indications (vertical)
-for x in np.linspace(-DET_W / 2 + 50, DET_W / 2 - 50, 9):
-    ax.plot([x, x], [-DET_H / 2, DET_H / 2], color='#fcc2d7', lw=0.4, alpha=0.6)
+
+# X-strip indications: vertical lines (constant x), broken at the hole
+n_xlines = 9
+for x in np.linspace(20, DET_W - 20, n_xlines):
+    if HOLE_CX - HOLE_W / 2 <= x <= HOLE_CX + HOLE_W / 2:
+        ax.plot([x, x], [0, HOLE_CY - HOLE_H / 2], color='#74c0fc', lw=0.4, alpha=0.7)
+        ax.plot([x, x], [HOLE_CY + HOLE_H / 2, DET_H], color='#74c0fc', lw=0.4, alpha=0.7)
+    else:
+        ax.plot([x, x], [0, DET_H], color='#74c0fc', lw=0.4, alpha=0.7)
+
+# Y-strip indications: horizontal lines (constant y), broken at the hole
+n_ylines = 17
+for y in np.linspace(40, DET_H - 40, n_ylines):
+    if HOLE_CY - HOLE_H / 2 <= y <= HOLE_CY + HOLE_H / 2:
+        ax.plot([0, HOLE_CX - HOLE_W / 2], [y, y], color='#fcc2d7', lw=0.4, alpha=0.7)
+        ax.plot([HOLE_CX + HOLE_W / 2, DET_W], [y, y], color='#fcc2d7', lw=0.4, alpha=0.7)
+    else:
+        ax.plot([0, DET_W], [y, y], color='#fcc2d7', lw=0.4, alpha=0.7)
+
 # beam hole
-ax.add_patch(Rectangle((-HOLE_W / 2, -HOLE_H / 2), HOLE_W, HOLE_H,
-                        facecolor='white', edgecolor='#000', lw=1.2))
-ax.text(0, 0, 'beam\nhole', ha='center', va='center', fontsize=8, color='#444')
+ax.add_patch(Rectangle((HOLE_CX - HOLE_W / 2, HOLE_CY - HOLE_H / 2),
+                        HOLE_W, HOLE_H,
+                        facecolor='#fff3bf', edgecolor='#fab005', lw=1.5,
+                        zorder=5))
+ax.annotate('beam hole\n52 × 52 mm',
+            xy=(HOLE_CX, HOLE_CY),
+            xytext=(HOLE_CX - 220, HOLE_CY + 80),
+            fontsize=8, color='#444', ha='center',
+            arrowprops=dict(arrowstyle='->', lw=0.9, color='#666'))
 
 # strip-direction labels
-ax.annotate('', xy=(-DET_W / 2 - 25, 0), xytext=(-DET_W / 2 - 25, 100),
-            arrowprops=dict(arrowstyle='<->', lw=1.2, color='#e64980'))
-ax.text(-DET_W / 2 - 35, 50, 'Y strips\n(vertical, measure y)',
-        ha='right', va='center', fontsize=8, color='#e64980')
-ax.annotate('', xy=(0, DET_H / 2 + 25), xytext=(100, DET_H / 2 + 25),
+ax.annotate('', xy=(-22, 60), xytext=(-22, 200),
             arrowprops=dict(arrowstyle='<->', lw=1.2, color='#1971c2'))
-ax.text(50, DET_H / 2 + 35, 'X strips (horizontal, measure x)',
-        ha='center', va='bottom', fontsize=8, color='#1971c2')
+ax.text(-30, 130, 'X strips\n(vertical,\nmeasure x)',
+        ha='right', va='center', fontsize=8, color='#1971c2')
+ax.annotate('', xy=(40, DET_H + 22), xytext=(180, DET_H + 22),
+            arrowprops=dict(arrowstyle='<->', lw=1.2, color='#e64980'))
+ax.text(110, DET_H + 35, 'Y strips (horizontal, measure y)',
+        ha='center', va='bottom', fontsize=8, color='#e64980')
 
-ax.set_xlim(-DET_W / 2 - 80, DET_W / 2 + 30)
-ax.set_ylim(-DET_H / 2 - 30, DET_H / 2 + 60)
+ax.set_xlim(-90, DET_W + 30)
+ax.set_ylim(-30, DET_H + 70)
 ax.set_aspect('equal')
 ax.set_xlabel('x (mm)'); ax.set_ylabel('y (mm)')
-ax.set_title("Single GEM detector — beam-direction view\n"
-             "X: 12 APVs × 128 ch (pitch 0.4 mm) · Y: 24 APVs × 128 ch")
+ax.set_title(f"Single GEM detector — beam-direction view\n"
+             f"X: 12 APVs × 128 ch ({DET_W:.1f} mm)  ·  "
+             f"Y: 24 APVs × 128 ch ({DET_H:.1f} mm)")
 ax.grid(False)
 
-# Panel B — beam-axis arrangement of 4 detectors
+# Panel B — beam-axis arrangement of 4 detectors.  Vertical extent is
+# the full Y plane size (DET_H = 1228.8 mm); the beam crosses each
+# detector at the hole y-centre (HOLE_CY = DET_H/2).
 ax = axB
 detectors = [
     ('GEM0', 5407 + 39.71 / 2, '#1971c2'),
@@ -157,29 +233,32 @@ detectors = [
     ('GEM3', 5807 - 39.71 / 2, '#faa2c1'),
 ]
 for i, (name, z, col) in enumerate(detectors):
-    ax.add_patch(Rectangle((z - 5, -DET_H / 2), 10, DET_H,
+    ax.add_patch(Rectangle((z - 5, 0), 10, DET_H,
                             facecolor=col, edgecolor='black', lw=0.8, alpha=0.6))
     # alternate label heights so paired detectors don't collide
-    yoff = DET_H / 2 + (15 if i % 2 == 0 else 55)
+    yoff = DET_H + (15 if i % 2 == 0 else 90)
     ax.text(z, yoff, name, ha='center', va='bottom',
             fontsize=9, color=col, fontweight='bold')
+    # mark the beam-hole opening in each detector
+    ax.add_patch(Rectangle((z - 5, HOLE_CY - HOLE_H / 2), 10, HOLE_H,
+                            facecolor='#fff3bf', edgecolor='#fab005', lw=0.8))
 
-# beam line
-ax.annotate('', xy=(6000, 0), xytext=(5200, 0),
+# beam line (passes through the hole y-centre)
+ax.annotate('', xy=(6050, HOLE_CY), xytext=(5200, HOLE_CY),
             arrowprops=dict(arrowstyle='->', lw=1.5, color='#444'))
-ax.text(5300, 25, 'beam', fontsize=9, color='#444')
+ax.text(5300, HOLE_CY + 40, 'beam', fontsize=9, color='#444')
 
-ax.text(5407, -DET_H / 2 - 60, 'Layer 1\n(z ≈ 5407 mm)',
+ax.text(5407, -100, 'Layer 1\n(z ≈ 5407 mm)',
         ha='center', va='top', fontsize=9, color='#666')
-ax.text(5807, -DET_H / 2 - 60, 'Layer 2\n(z ≈ 5807 mm)',
+ax.text(5807, -100, 'Layer 2\n(z ≈ 5807 mm)',
         ha='center', va='top', fontsize=9, color='#666')
 
-ax.set_xlim(5200, 6000)
-ax.set_ylim(-DET_H / 2 - 110, DET_H / 2 + 80)
+ax.set_xlim(5200, 6050)
+ax.set_ylim(-180, DET_H + 200)
 ax.set_xlabel('z (mm, lab)')
-ax.set_ylabel('y (mm)')
+ax.set_ylabel('y (mm, detector frame)')
 ax.set_title("4-GEM stack — paired layers (Δz = 39.7 mm)\n"
-             "for redundant tracking + ghost-hit rejection")
+             "yellow strip = beam hole (52 mm tall, on beam axis)")
 ax.grid(alpha=0.3)
 ax.set_aspect('auto')
 

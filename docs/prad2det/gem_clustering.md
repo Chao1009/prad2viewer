@@ -24,9 +24,9 @@ out two orthogonal strip planes through APV25 chips at 0.4 mm pitch:
 |---|---|
 | detectors | GEM0, GEM1 (layer 1, z ≈ 5407 mm); GEM2, GEM3 (layer 2, z ≈ 5807 mm) |
 | inter-detector spacing | 39.7 mm (within a layer) |
-| X plane | 12 APVs × 128 ch = 1 536 strips, pitch 0.4 mm |
-| Y plane | 24 APVs × 128 ch = 3 072 strips, pitch 0.4 mm (split around the beam hole) |
-| beam hole | 52 × 52 mm² central cut-out |
+| X plane | 12 APVs × 128 ch, pitch 0.4 mm — 1 408 strips ≈ 563.2 mm. APV positions 10/11 share strips around the hole (`shared_pos: 10`, `pin_rotate: 16`) |
+| Y plane | 24 APVs × 128 ch, pitch 0.4 mm — 3 072 strips ≈ 1 228.8 mm. Strips that cross the hole y-band are split into top + bottom segments |
+| beam hole | 52 × 52 mm², centred vertically (y = 614.4 mm) and offset along x (x = 534.4 mm) — sits inside the APV pos 10/11 strip range |
 
 Strip indices come from `GemSystem::ProcessEvent()` after pedestal
 subtraction, common-mode correction, and zero-suppression. Each

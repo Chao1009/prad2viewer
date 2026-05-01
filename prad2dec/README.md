@@ -12,6 +12,10 @@ Static library for reading CODA EVIO data and decoding detector electronics.
 - **Adc1881mDecoder** — ADC1881M decoding (original PRad)
 - **SspDecoder** — SSP/MPD fiber data for GEM readout
 - **WaveAnalyzer** — Pedestal subtraction, peak search, integration
+- **Fadc250FwAnalyzer** — Bit-faithful FADC250 firmware Mode 1/2/3 emulation
+  (TET / NSB / NSA / NSAT / NPED / MAXPED, see
+  [`docs/prad2dec/wave_analysis.md`](../docs/prad2dec/wave_analysis.md)
+  for a worked example with plots)
 
 ## Usage
 

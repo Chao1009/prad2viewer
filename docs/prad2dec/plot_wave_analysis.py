@@ -39,6 +39,43 @@ CLK_NS = 4.0
 N = len(RAW)
 TIME = np.arange(N) * CLK_NS
 
+# Smaller signal where the per-sample fluctuation is comparable to the
+# pulse height — chosen to show what the smoothing kernel does.  Pulse
+# peaks at sample 39 (~24 ADC above baseline), comparable to the ±3 ADC
+# zig-zag noise on the baseline.
+SMALL = np.array([
+    147,145,146,144,145,144,145,144,146,145,
+    145,144,145,145,145,142,149,143,146,143,
+    145,143,144,143,147,144,145,144,145,144,
+    145,144,146,143,145,144,146,146,159,169,
+    167,161,161,157,152,150,149,147,149,146,
+    149,146,148,145,146,146,146,146,146,146,
+    146,146,145,143,145,145,145,145,145,145,
+    145,145,145,144,148,144,146,143,146,144,
+    144,145,145,144,146,145,145,143,145,143,
+    145,144,145,144,147,144,145,143,145,143,
+], dtype=np.float64)
+N_SMALL = len(SMALL)
+TIME_SMALL = np.arange(N_SMALL) * CLK_NS
+
+
+def triangular_smooth(s, resolution):
+    """Same triangular kernel as fdec::WaveAnalyzer::smooth (res = 1 → no-op)."""
+    n = len(s)
+    if resolution <= 1:
+        return s.astype(np.float64).copy()
+    buf = np.empty(n)
+    for i in range(n):
+        val = float(s[i]); wsum = 1.0
+        for j in range(1, resolution):
+            if j > i or i + j >= n:
+                continue
+            w = 1.0 - j / float(resolution + 1)
+            val += w * (float(s[i - j]) + float(s[i + j]))
+            wsum += 2.0 * w
+        buf[i] = val / wsum
+    return buf
+
 # ---------------------------------------------------------------------------
 # Fadc250FwAnalyzer — firmware Mode 1/2/3 emulation (ns convention)
 # ---------------------------------------------------------------------------
@@ -422,5 +459,180 @@ fig.tight_layout()
 fig.savefig(out_dir / 'fig3_soft_analysis.png', dpi=130)
 plt.close(fig)
 
+
+# ---------------------------------------------------------------------------
+# Plot 4 — soft analyzer parameter sensitivity
+# ---------------------------------------------------------------------------
+# Panel A — pedestal iterative outlier rejection: replays the algorithm on
+# the first ped_nsamples samples, marking which got dropped.
+# Panel B — int_tail_ratio sensitivity: integrate from the peak walking
+# outward for r ∈ {0.05, 0.10, 0.20}; show resulting bounds and integrals.
+fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 4.5))
+
+# --- Panel A ---------------------------------------------------------------
+PED_FLATNESS = 1.0
+nped = 30
+peds = RAW[:nped]
+xped = np.arange(nped) * CLK_NS
+
+kept_mask = np.ones(nped, dtype=bool)
+mean = float(np.mean(peds))
+rms  = float(np.std(peds))
+init_mean, init_rms = mean, rms
+for _ in range(3):
+    band = max(rms, PED_FLATNESS)
+    new_mask = np.abs(peds - mean) < band
+    new_kept = kept_mask & new_mask
+    if new_kept.sum() == kept_mask.sum() or new_kept.sum() < 5:
+        break
+    kept_mask = new_kept
+    sc = peds[kept_mask]
+    mean = float(np.mean(sc)); rms = float(np.std(sc))
+
+band = max(rms, PED_FLATNESS)
+
+# initial mean (no rejection) for comparison
+axA.axhline(init_mean, color='#bbb', lw=0.8, ls=':',
+            label=f"raw mean = {init_mean:.2f} ({init_rms:.2f} rms)")
+# converged band
+axA.fill_between(xped, mean - band, mean + band, color='#1f77b4',
+                 alpha=0.10,
+                 label=f"final ±max(rms, ped_flatness) = ±{band:.2f}")
+axA.axhline(mean, color='#1f77b4', lw=1.2,
+            label=f"converged mean = {mean:.2f} ({rms:.2f} rms)")
+
+axA.plot(xped[kept_mask], peds[kept_mask], 'o', color='#1f77b4', ms=5,
+         label=f"kept ({int(kept_mask.sum())})")
+if (~kept_mask).any():
+    axA.plot(xped[~kept_mask], peds[~kept_mask], 'X', color='#d62728',
+             ms=10, mew=1.2,
+             label=f"rejected ({int((~kept_mask).sum())})")
+
+axA.set_xlabel('time (ns)')
+axA.set_ylabel('ADC counts')
+axA.set_title(f"Pedestal — iterative outlier rejection\n"
+              f"first ped_nsamples = {nped}, ped_max_iter = 3, "
+              f"ped_flatness = {PED_FLATNESS}")
+axA.legend(loc='lower right', fontsize=7.5, framealpha=0.92)
+axA.grid(alpha=0.3)
+
+# --- Panel B ---------------------------------------------------------------
+ratios = [0.05, 0.10, 0.20]
+colors = ['#2ca02c', '#ff7f0e', '#d62728']
+peak_pos = sa['pos']
+ped_mean = sa['ped_mean']
+ped_height = float(sa['height'])
+
+axB.plot(TIME, RAW, color='#1f77b4', lw=1.0)
+axB.axhline(ped_mean, color='#888', lw=0.8, ls='--', alpha=0.8)
+
+for r, col in zip(ratios, colors):
+    cut = ped_height * r
+    j = peak_pos
+    while j + 1 < N and (RAW[j + 1] - ped_mean) >= cut:
+        j += 1
+    right = j
+    j = peak_pos
+    while j - 1 >= 0 and (RAW[j - 1] - ped_mean) >= cut:
+        j -= 1
+    left = j
+    integ = float(np.sum(RAW[left:right + 1] - ped_mean))
+    nsamp = right - left + 1
+    # Cut-off line, only over the integration span
+    axB.plot([left * CLK_NS, right * CLK_NS],
+             [ped_mean + cut, ped_mean + cut],
+             color=col, lw=1.0, ls=':', alpha=0.9)
+    axB.axvline(right * CLK_NS, color=col, lw=0.6, ls='--', alpha=0.4)
+    axB.text(right * CLK_NS + 1, ped_mean + cut,
+             f" r={r:.2f}\n [{left},{right}]\n Σ={integ:.0f} ({nsamp}s)",
+             color=col, fontsize=7.5, va='center')
+
+axB.set_xlim(60, 320)
+axB.set_xlabel('time (ns)')
+axB.set_ylabel('ADC counts')
+axB.set_title("int_tail_ratio sensitivity\n"
+              "integration stops when (raw − ped) < r × peak height")
+axB.grid(alpha=0.3)
+
+fig.tight_layout()
+fig.savefig(out_dir / 'fig4_soft_parameters.png', dpi=130)
+plt.close(fig)
+
+
+# ---------------------------------------------------------------------------
+# Plot 5 — smoothing on a small-signal zig-zag waveform
+# ---------------------------------------------------------------------------
+# Demonstrates the `resolution` parameter on a low-S/N signal where the
+# per-sample fluctuation is comparable to the pulse height.  Local-maxima
+# search on the raw trace would trip on the zig-zag; smoothing collapses
+# the noise into a single clean peak.
+fig, (axA, axB) = plt.subplots(1, 2, figsize=(13, 4.4),
+                                gridspec_kw={'width_ratios': [1.2, 1]})
+
+variants = [
+    (1, '#888',    1.0, '-',  'raw (res = 1, no smoothing)'),
+    (2, '#ff7f0e', 1.6, '-',  'res = 2  (default)'),
+    (4, '#1f77b4', 1.6, '--', 'res = 4'),
+]
+
+# count local maxima above the noise floor for each smoothing setting
+def count_local_max(buf, threshold_above=2.0):
+    """count points that are strict local maxima at least `threshold_above`
+    ADC above the surrounding mean — a coarse stand-in for the analyzer's
+    thresholded peak search."""
+    n = len(buf); cnt = 0
+    bg = np.median(buf)
+    for i in range(1, n - 1):
+        if buf[i] > buf[i - 1] and buf[i] >= buf[i + 1] \
+           and buf[i] - bg > threshold_above:
+            cnt += 1
+    return cnt
+
+# Panel A: full waveform overlay
+axA.plot(TIME_SMALL, SMALL, 'o', color='#bbb', ms=2.5, label='raw samples')
+maxima_counts = []
+for res, col, lw, ls, lbl in variants:
+    sm = triangular_smooth(SMALL, res)
+    axA.plot(TIME_SMALL, sm, ls=ls, color=col, lw=lw, label=lbl)
+    maxima_counts.append((res, count_local_max(sm)))
+
+axA.axhline(np.median(SMALL), color='#444', lw=0.7, ls=':',
+            label=f"baseline ≈ {np.median(SMALL):.0f} ADC")
+axA.set_xlabel('time (ns)')
+axA.set_ylabel('ADC counts')
+axA.set_title("Smoothing on a low-S/N pulse\n"
+              "(peak ≈ 24 ADC above ±3 ADC zig-zag baseline)")
+axA.legend(loc='upper right', fontsize=8, framealpha=0.92)
+axA.grid(alpha=0.3)
+
+# Panel B: zoom near the pulse + spurious-maxima count
+zoom_lo, zoom_hi = 100, 240
+axB.plot(TIME_SMALL, SMALL, 'o', color='#bbb', ms=3.5, label='raw')
+for res, col, lw, ls, lbl in variants:
+    sm = triangular_smooth(SMALL, res)
+    axB.plot(TIME_SMALL, sm, ls=ls, color=col, lw=lw, label=f'res = {res}')
+axB.set_xlim(zoom_lo, zoom_hi)
+axB.set_xlabel('time (ns)')
+axB.set_ylabel('ADC counts')
+
+# Maxima count as table inset
+table_lines = ["local maxima > +2 ADC:"] + \
+              [f"  res={r}:  {n}" for r, n in maxima_counts]
+axB.text(0.97, 0.40, "\n".join(table_lines), transform=axB.transAxes,
+         fontsize=8.5, ha='right', va='top', family='monospace',
+         bbox=dict(facecolor='white', edgecolor='#bbb', alpha=0.95, pad=4))
+
+axB.set_title("Zoom on pulse region")
+axB.legend(loc='upper right', fontsize=8, framealpha=0.92)
+axB.grid(alpha=0.3)
+
+fig.tight_layout()
+fig.savefig(out_dir / 'fig5_smoothing.png', dpi=130)
+plt.close(fig)
+
 print()
-print(f"Wrote 3 PNGs to {out_dir}")
+print("Smoothing demo (small-signal waveform):")
+for r, n in maxima_counts:
+    print(f"  res={r}: {n} local maxima > +2 ADC")
+print()
+print(f"Wrote 5 PNGs to {out_dir}")

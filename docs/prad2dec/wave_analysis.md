@@ -5,8 +5,8 @@
 
 | Analyzer | Class | Purpose |
 |---|---|---|
-| Soft | `fdec::WaveAnalyzer` (`WaveAnalyzer.{h,cpp}`) | Robust local-maxima peak finding for HyCal energy / time use. Tolerates noisy pedestals, finds multiple peaks per channel. |
-| Firmware | `fdec::Fadc250FwAnalyzer` (`Fadc250FwAnalyzer.{h,cpp}`) | Bit-faithful emulation of the JLab FADC250 firmware Mode 1/2/3 (Hall-D V3 + NSAT/NPED/MAXPED extensions). Used to compare offline reconstruction against on-board firmware output. |
+| Waveform | `fdec::WaveAnalyzer` (`WaveAnalyzer.{h,cpp}`) | Robust local-maxima peak finding for HyCal energy / time use. Tolerates noisy pedestals, finds multiple peaks per channel. |
+| Firmware emulator | `fdec::Fadc250FwAnalyzer` (`Fadc250FwAnalyzer.{h,cpp}`) | Bit-faithful emulation of the JLab FADC250 firmware Mode 1/2/3 (Hall-D V3 + NSAT/NPED/MAXPED extensions). Used to compare offline reconstruction against on-board firmware output. |
 
 Both are stack-allocated, zero-heap on the hot path, and run side-by-side
 when `prad2ana_replay_rawdata` is invoked with the `-p` flag (see
@@ -34,6 +34,148 @@ baseline, followed by a long scintillation tail.
 
 This is representative of a HyCal PbWO₄ signal: a fast leading edge
 (~10 ns) followed by a long PMT/scintillator tail.
+
+## Waveform analyzer — `WaveAnalyzer`
+
+Used for HyCal calibration / monitoring where we want a robust peak
+height and a generous integral that follows the actual pulse shape rather
+than a fixed firmware window.
+
+### Parameters
+
+All settings live in `fdec::WaveConfig` (see `WaveAnalyzer.h`); the values
+shown are the defaults.
+
+| field | default | unit | role |
+|---|---:|---|---|
+| `resolution`     |   2 | half-width | Triangular smoothing kernel half-width. `1` disables smoothing. Larger values smear the rising edge but suppress per-sample noise. |
+| `threshold`      | 5.0 | × pedestal RMS | Peak-acceptance threshold above the local baseline. |
+| `min_threshold`  | 3.0 | ADC counts | Hard floor on the acceptance threshold — protects quiet channels where `5·rms` would underflow. |
+| `min_peak_ratio` | 0.3 | fraction | When two peaks overlap, the secondary must be ≥ this fraction of the primary's height to survive. |
+| `int_tail_ratio` | 0.1 | fraction | Integration stops when the pedsub waveform drops below `r × peak height`. Smaller values capture more of the tail. |
+| `ped_nsamples`   |  30 | samples | Window used for the pedestal estimate (start of the buffer). |
+| `ped_flatness`   | 1.0 | ADC counts | Floor on the outlier-rejection band: samples are kept iff `|s − μ| < max(rms, ped_flatness)`. Prevents over-tight clipping on already-quiet baselines. |
+| `ped_max_iter`   |   3 | iterations | Maximum outlier-rejection passes. Stops early if the mask doesn't change or fewer than 5 samples remain. |
+| `overflow`       | 4095 | ADC counts | 12-bit overflow value — peaks at this height are tagged. |
+| `clk_mhz`        | 250.0 | MHz | Sample rate for the time conversion `t_ns = pos · 1000 / clk_mhz`. |
+
+### Pipeline
+
+**1. Triangular smoothing.** `resolution = 2` (default) →
+`buf[i] = (raw[i−1]·w + raw[i] + raw[i+1]·w) / (1 + 2w)` with
+`w = 1 − 1/(res+1)`. With `res = 1` smoothing is disabled.
+
+**2. Iterative pedestal.** First `ped_nsamples = 30` samples of the
+*smoothed* trace. Iterate up to `ped_max_iter = 3` times:
+
+- compute `mean`, `rms`
+- drop samples deviating more than `max(rms, ped_flatness)` from the mean
+- re-compute
+
+For our trace: `mean = 145.61`, `rms = 0.45` after convergence.
+
+**3. Threshold.** `thr = max(threshold·rms, min_threshold)` =
+`max(5·0.45, 3.0) = 3.0`. The hard floor `min_threshold` keeps the
+threshold sane on quiet channels.
+
+**4. Local-maxima search.** Walk smoothed buffer; a peak is accepted iff:
+
+- it is a local max (with flat-plateau handling)
+- its height above the **local baseline** (linear interpolation between
+  the surrounding minima) exceeds `thr`
+- its height above the **pedestal mean** exceeds both `thr` and `3·rms`
+
+**5. Integration.** Walk outward from the peak, summing pedsub values
+until `s′ < tail_cut = int_tail_ratio · ped_height` (default 10 % of peak
+height) or `s′ < ped_rms`. This adapts to the pulse shape — wide pulses
+get wide windows, narrow pulses get narrow ones.
+
+**6. Raw-position correction.** The recorded `pos` is the raw-sample
+maximum near the smoothed peak (not the smoothed peak itself), so the
+reported height equals the actual ADC at the peak rather than a smoothed
+under-estimate.
+
+For our trace:
+
+| field | value |
+|---|---|
+| `peak.pos` | sample 32 (t = 128.0 ns) |
+| `peak.height` | 1247 ADC (raw − pedestal) |
+| `peak.left, peak.right` | 28, 49 (integration bounds) |
+| `peak.integral` | 9600 (ADC·sample, pedsub) |
+
+![waveform](fig3_soft_analysis.png)
+
+### Parameter sensitivity
+
+Two of the parameters above visibly change the analyzer's output on this
+trace:
+
+![params](fig4_soft_parameters.png)
+
+**Left — pedestal `ped_flatness` × `ped_max_iter`.** All 30 baseline
+samples enter pass 1; samples deviating from the running mean by more
+than `max(rms, ped_flatness) = 1.0` are dropped, the mean and rms are
+recomputed, and the procedure repeats. After convergence the band has
+collapsed onto the dominant cluster (146 / 147 ADC) and the outliers
+(values 143 / 144 / 145 / 150) are off the kept set. `ped_flatness` sets
+the noise floor below which the band stops shrinking — without it, a
+particularly quiet channel could iterate down to a band of zero width and
+reject everything except the modal value.
+
+> Note: the demo runs the procedure on the *raw* samples for readability
+> (integer values plot cleanly); the C++ runs it on the smoothed buffer,
+> which is why the converged mean shown here (146.50) is slightly higher
+> than the analyzer's reported value (145.61). The kept/rejected pattern
+> is the same in both cases.
+
+**Right — `int_tail_ratio`.** The integration walks outward from the
+peak and stops when the pedsub waveform falls below `r × peak height`.
+For this slow tail:
+
+| `int_tail_ratio` | window | samples | integral |
+|---:|:---:|---:|---:|
+| 0.20 | [30, 41] | 12 | 8376 |
+| 0.10 (default) | [30, 47] | 18 | 9477 |
+| 0.05 | [30, 57] | 28 | 10332 |
+
+The default of 0.10 is a good compromise: it captures the prompt peak
+plus the first ~70 ns of the tail, missing only the slow scintillation
+component (which is also where pile-up from the next event lives).
+Smaller `r` recovers more tail energy but increases sensitivity to
+baseline drift and downstream pulses.
+
+**Smoothing — `resolution`.** On the bright pulse above, smoothing is
+invisible at the scale of a 1247 ADC peak. It earns its keep on
+small-signal channels where the per-sample fluctuation is comparable to
+the pulse height. The figure below uses a different waveform — a small
+~24 ADC bump on a baseline with ±3 ADC zig-zag — to show what the kernel
+does:
+
+![smoothing](fig5_smoothing.png)
+
+| `resolution` | spurious local maxima above +2 ADC | peak height (smoothed) |
+|---:|---:|---:|
+| 1 (raw) | 6 | 169 |
+| 2 (default) | 3 | 166 |
+| 4 | 1 | 162 |
+
+`res = 1` keeps the raw zig-zag — six local maxima clear +2 ADC, the
+peak finder needs every other rejection rule (height-above-baseline,
+3·rms, peak-overlap ratio) to find the real one. `res = 2` collapses the
+zig-zag without visibly attenuating the pulse. `res = 4` removes
+essentially all baseline structure but starts to clip the peak by ~7
+ADC, so its use should be reserved for very low-S/N channels where
+peak-finding robustness is worth more than peak-height fidelity.
+
+The remaining parameters affect the bright-pulse example only
+marginally:
+
+- `threshold = 5` × the post-clipping rms (0.45) gives 2.25 ADC, below
+  the floor; `min_threshold = 3` wins. For a noisier channel with rms
+  ≳ 1 ADC the `5·rms` rule kicks in.
+- `min_peak_ratio` only matters when two peaks share an integration
+  range — single-pulse waveforms never trigger it.
 
 ## Firmware emulator — `Fadc250FwAnalyzer`
 
@@ -138,62 +280,9 @@ The shaded band in `fig2` (right panel) is exactly this sum.
 | `1 << 2` | `Q_NSA_TRUNCATED`   | `cross + NSA_s ≥ N`, window clipped |
 | `1 << 3` | `Q_VA_OUT_OF_RANGE` | `Va` not bracketed on the rising edge (numerical edge case) |
 
-## Soft analyzer — `WaveAnalyzer`
-
-Used for HyCal calibration / monitoring where we want a robust peak height
-and a generous integral that follows the actual pulse shape rather than a
-fixed firmware window.
-
-### Pipeline
-
-**1. Triangular smoothing.** `WaveConfig::resolution = 2` (default) →
-`buf[i] = (raw[i−1]·w + raw[i] + raw[i+1]·w) / (1 + 2w)` with
-`w = 1 − 1/(res+1)`. With `res = 1` smoothing is disabled.
-
-**2. Iterative pedestal.** First `ped_nsamples = 30` samples of the
-*smoothed* trace. Iterate up to `ped_max_iter = 3` times:
-
-- compute `mean`, `rms`
-- drop samples deviating more than `max(rms, ped_flatness)` from the mean
-- re-compute
-
-For our trace: `mean = 145.61`, `rms = 0.45` after convergence.
-
-**3. Threshold.** `thr = max(threshold·rms, min_threshold)` =
-`max(5·0.45, 3.0) = 3.0`. The hard floor `min_threshold` keeps the
-threshold sane on quiet channels.
-
-**4. Local-maxima search.** Walk smoothed buffer; a peak is accepted iff:
-
-- it is a local max (with flat-plateau handling)
-- its height above the **local baseline** (linear interpolation between
-  the surrounding minima) exceeds `thr`
-- its height above the **pedestal mean** exceeds both `thr` and `3·rms`
-
-**5. Integration.** Walk outward from the peak, summing pedsub values
-until `s′ < tail_cut = int_tail_ratio · ped_height` (default 10 % of peak
-height) or `s′ < ped_rms`. This adapts to the pulse shape — wide pulses
-get wide windows, narrow pulses get narrow ones.
-
-**6. Raw-position correction.** The recorded `pos` is the raw-sample
-maximum near the smoothed peak (not the smoothed peak itself), so the
-reported height equals the actual ADC at the peak rather than a smoothed
-under-estimate.
-
-For our trace:
-
-| field | value |
-|---|---|
-| `peak.pos` | sample 32 (t = 128.0 ns) |
-| `peak.height` | 1247 ADC (raw − pedestal) |
-| `peak.left, peak.right` | 28, 49 (integration bounds) |
-| `peak.integral` | 9600 (ADC·sample, pedsub) |
-
-![soft](fig3_soft_analysis.png)
-
 ## Side-by-side comparison
 
-| field | soft (`WaveAnalyzer`) | firmware (`Fadc250FwAnalyzer`) |
+| field | waveform (`WaveAnalyzer`) | firmware (`Fadc250FwAnalyzer`) |
 |---|---|---|
 | pedestal | 145.61 ± 0.45 (30 samples, σ-clip) | 145.0 (3 samples, MAXPED filter) |
 | time | 128.0 ns (raw peak sample × 4) | 120.75 ns (TDC mid-amplitude interp.) |
@@ -201,13 +290,14 @@ For our trace:
 | integral window | [28, 49] (22 samples, tail-driven) | [28, 62] (35 samples, fixed NSB/NSA) |
 | integral | 9600 | 10589 |
 
-The soft analyzer's *time* is the peak sample (rounded to 4 ns); the
+The waveform analyzer's *time* is the peak sample (rounded to 4 ns); the
 firmware's *time* is mid-amplitude on the rising edge with 62.5 ps LSB —
 they are intentionally different observables.
 
-The firmware's wider window (140 ns vs the soft analyzer's 88 ns) picks up
-more of the slow scintillation tail. With `NSA = 128 ns` the window stops
-at sample 62; the rest of the tail (samples 63..99) is excluded.
+The firmware's wider window (140 ns vs the waveform analyzer's 88 ns)
+picks up more of the slow scintillation tail. With `NSA = 128 ns` the
+window stops at sample 62; the rest of the tail (samples 63..99) is
+excluded.
 
 ## Reproducing the plots
 
@@ -220,15 +310,16 @@ python plot_wave_analysis.py
 ```
 
 Regenerates `fig1_overview.png`, `fig2_firmware_analysis.png`,
-`fig3_soft_analysis.png` and prints the numeric results above.
+`fig3_soft_analysis.png`, `fig4_soft_parameters.png`,
+`fig5_smoothing.png` and prints the numeric results above.
 
 ## See also
 
 - [`docs/clas_fadc/FADC250_algorithms.md`](../clas_fadc/FADC250_algorithms.md)
   — full firmware algorithm spec with manual cross-references
-- [`prad2dec/include/Fadc250FwAnalyzer.h`](../../prad2dec/include/Fadc250FwAnalyzer.h),
-  [`Fadc250FwAnalyzer.cpp`](../../prad2dec/src/Fadc250FwAnalyzer.cpp) — C++ source
 - [`prad2dec/include/WaveAnalyzer.h`](../../prad2dec/include/WaveAnalyzer.h),
   [`WaveAnalyzer.cpp`](../../prad2dec/src/WaveAnalyzer.cpp) — C++ source
+- [`prad2dec/include/Fadc250FwAnalyzer.h`](../../prad2dec/include/Fadc250FwAnalyzer.h),
+  [`Fadc250FwAnalyzer.cpp`](../../prad2dec/src/Fadc250FwAnalyzer.cpp) — C++ source
 - [`analysis/REPLAYED_DATA.md`](../../analysis/REPLAYED_DATA.md) — branch
   layout for the replay tree (where both analyzer outputs land)

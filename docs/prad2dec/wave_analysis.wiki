@@ -401,4 +401,4 @@ Regenerates <code>fig1_overview.png</code>, <code>fig2_firmware_analysis.png</co
 * <code>docs/clas_fadc/FADC250_algorithms.md</code> — full firmware algorithm spec with manual cross-references
 * <code>prad2dec/include/WaveAnalyzer.h</code>, <code>prad2dec/src/WaveAnalyzer.cpp</code> — C++ source
 * <code>prad2dec/include/Fadc250FwAnalyzer.h</code>, <code>prad2dec/src/Fadc250FwAnalyzer.cpp</code> — C++ source
-* <code>analysis/REPLAYED_DATA.md</code> — branch layout for the replay tree (where both analyzer outputs land)
+* <code>docs/REPLAYED_DATA.md</code> — branch layout for the replay tree (where both analyzer outputs land)

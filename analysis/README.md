@@ -41,7 +41,7 @@ prad2ana_replay_rawdata <evio_or_dir> [more...] -o <output_dir> \
   `hycal.daq_peak_*` (firmware Mode 1/2/3 emulation).  Without `-p`, only
   raw samples + module info are written; the soft analyzer is skipped
   entirely on the per-channel hot path.
-- See [REPLAYED_DATA.md](REPLAYED_DATA.md) for the full branch list.
+- See [REPLAYED_DATA.md](../docs/REPLAYED_DATA.md) for the full branch list.
 
 **replay_recon** — EVIO → reconstructed tree (`recon`): HyCal clustering,
 GEM hits, HyCal↔GEM straight-line matching.
@@ -56,7 +56,7 @@ prad2ana_replay_recon <evio_or_dir> [more...] -o <output_dir> \
   this is a legacy compatibility flag.
 - `-g` overrides the GEM pedestal file from `runinfo`; `-z` overrides
   the zero-suppression sigma threshold.
-- See [REPLAYED_DATA.md](REPLAYED_DATA.md) for the full branch list.
+- See [REPLAYED_DATA.md](../docs/REPLAYED_DATA.md) for the full branch list.
 
 ### Calibration
 

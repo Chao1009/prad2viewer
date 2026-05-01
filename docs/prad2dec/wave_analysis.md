@@ -10,7 +10,7 @@
 
 Both are stack-allocated, zero-heap on the hot path, and run side-by-side
 when `prad2ana_replay_rawdata` is invoked with the `-p` flag (see
-[`analysis/REPLAYED_DATA.md`](../../analysis/REPLAYED_DATA.md)).
+[`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md)).
 
 The remainder of this note walks through both algorithms on a single
 example pulse, with parameter values matching the real run config in
@@ -321,5 +321,5 @@ Regenerates `fig1_overview.png`, `fig2_firmware_analysis.png`,
   [`WaveAnalyzer.cpp`](../../prad2dec/src/WaveAnalyzer.cpp) — C++ source
 - [`prad2dec/include/Fadc250FwAnalyzer.h`](../../prad2dec/include/Fadc250FwAnalyzer.h),
   [`Fadc250FwAnalyzer.cpp`](../../prad2dec/src/Fadc250FwAnalyzer.cpp) — C++ source
-- [`analysis/REPLAYED_DATA.md`](../../analysis/REPLAYED_DATA.md) — branch
+- [`docs/REPLAYED_DATA.md`](../REPLAYED_DATA.md) — branch
   layout for the replay tree (where both analyzer outputs land)

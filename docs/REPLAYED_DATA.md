@@ -64,8 +64,9 @@ that the firmware analyzer uses is also gated on `-p`).
 | `hycal.ped_slope`      | `float[nch]`      | Linear drift across surviving samples (ADC/sample) |
 | `hycal.npeaks`         | `uint8[nch]`      | Soft peaks found |
 | `hycal.peak_height`    | `float[nch][8]`   | Peak height above pedestal |
-| `hycal.peak_time`      | `float[nch][8]`   | Peak time (ns) |
-| `hycal.peak_integral`  | `float[nch][8]`   | Peak integral |
+| `hycal.peak_time`      | `float[nch][8]`   | Peak time (ns) — quadratic-vertex sub-sample interpolation around the raw peak |
+| `hycal.peak_integral`  | `float[nch][8]`   | Peak integral over `[peak.left, peak.right]` (INCLUSIVE) |
+| `hycal.peak_quality`   | `uint8[nch][8]`   | `Q_PEAK_*` bitmask: `1` = `Q_PEAK_PILED` (this peak's integration window touches/overlaps an adjacent peak's, within `cfg.peak_pileup_gap` samples) |
 
 `hycal.ped_quality` bits (defined in `prad2dec/include/Fadc250Data.h`):
 

@@ -119,6 +119,7 @@ static json encodePeaks(const fdec::WaveResult &wres)
             {"i", std::round(pk.integral * 10) / 10},
             {"l", pk.left}, {"r", pk.right},
             {"o", pk.overflow ? 1 : 0},
+            {"q", pk.quality},
         });
     }
     return parr;

@@ -48,11 +48,13 @@ shown are the defaults.
 
 | field | default | unit | role |
 |---|---:|---|---|
-| `resolution`     |   2 | half-width | Triangular smoothing kernel half-width. `1` disables smoothing. Larger values smear the rising edge but suppress per-sample noise. |
+| `smooth_order`   |   2 | order | Triangular smoothing kernel order. `1` disables smoothing; `N` gives a `2N-1` tap kernel (effective half-width `N-1`). Larger values smear the rising edge but suppress per-sample noise. |
 | `threshold`      | 5.0 | × pedestal RMS | Peak-acceptance threshold above the local baseline. |
 | `min_threshold`  | 3.0 | ADC counts | Hard floor on the acceptance threshold — protects quiet channels where `5·rms` would underflow. |
 | `min_peak_ratio` | 0.3 | fraction | When two peaks overlap, the secondary must be ≥ this fraction of the primary's height to survive. |
 | `int_tail_ratio` | 0.1 | fraction | Integration stops when the pedsub waveform drops below `r × peak height`. Smaller values capture more of the tail. |
+| `tail_break_n`   |   2 | samples | Integration only terminates after this many *consecutive* sub-threshold samples — a single noise dip in the tail no longer truncates the integral early. |
+| `peak_pileup_gap`|   2 | samples | Two peaks whose integration windows are within this many samples of each other get the `Q_PEAK_PILED` flag set on both. |
 | `ped_nsamples`   |  30 | samples | Window used for the pedestal estimate (start of the buffer). |
 | `ped_flatness`   | 1.0 | ADC counts | Floor on the outlier-rejection band: samples are kept iff `|s − μ| < max(rms, ped_flatness)`. Prevents over-tight clipping on already-quiet baselines. |
 | `ped_max_iter`   |   3 | iterations | Maximum outlier-rejection passes. Stops early if the mask doesn't change or fewer than 5 samples remain. |
@@ -61,9 +63,11 @@ shown are the defaults.
 
 ### Pipeline
 
-**1. Triangular smoothing.** `resolution = 2` (default) →
+**1. Triangular smoothing.** `smooth_order = 2` (default) →
 `buf[i] = (raw[i−1]·w + raw[i] + raw[i+1]·w) / (1 + 2w)` with
-`w = 1 − 1/(res+1)`. With `res = 1` smoothing is disabled.
+`w = 1 − 1/(smooth_order + 1)`. `smooth_order = 1` disables smoothing
+(identity kernel); `smooth_order = N` uses a `2N − 1` tap kernel
+(effective half-width `N − 1`).
 
 **2. Iterative pedestal (median/MAD bootstrap).** First `ped_nsamples = 30`
 samples of the *smoothed* trace.
@@ -98,20 +102,48 @@ threshold sane on quiet channels.
 
 **4. Local-maxima search.** Walk smoothed buffer; a peak is accepted iff:
 
-- it is a local max (with flat-plateau handling)
+- it is a local max (the `trend()` flat-tolerance scales with `ped_rms`,
+  so noise wiggles on quiet channels don't fragment plateaus into
+  spurious mini-peaks)
 - its height above the **local baseline** (linear interpolation between
   the surrounding minima) exceeds `thr`
-- its height above the **pedestal mean** exceeds both `thr` and `3·rms`
+- its height above the **pedestal mean** exceeds `thr` (the `thr` gate
+  already implies `≥ 5·rms` in the default config; no separate
+  `≥ 3·rms` check needed)
 
-**5. Integration.** Walk outward from the peak, summing pedsub values
-until `s′ < tail_cut = int_tail_ratio · ped_height` (default 10 % of peak
-height) or `s′ < ped_rms`. This adapts to the pulse shape — wide pulses
-get wide windows, narrow pulses get narrow ones.
+**5. Integration.** Walk outward from the peak, summing pedsub values.
+A sample is treated as below-tail when `s′ < tail_cut =
+int_tail_ratio · ped_height` (default 10 % of peak height) or
+`s′ < ped_rms`.  Integration only terminates after **`tail_break_n`
+consecutive** below-tail samples — a single noise dip is held in
+`pending` and either committed (on recovery) or discarded (when the
+run reaches the threshold).  This adapts to the pulse shape (wide
+pulses get wide windows, narrow pulses get narrow ones) without being
+sensitive to one-sample wiggles in the slow tail.
+
+`peak.left` / `peak.right` are **INCLUSIVE** integration bounds: both
+samples are in `peak.integral`, and the JS viewer's shading
+(`waveform.js:185`, `for (j = p.l; j <= p.r; ++j)`) renders them
+faithfully.
 
 **6. Raw-position correction.** The recorded `pos` is the raw-sample
 maximum near the smoothed peak (not the smoothed peak itself), so the
 reported height equals the actual ADC at the peak rather than a smoothed
 under-estimate.
+
+**7. Sub-sample peak time.** A 3-point quadratic vertex through
+`raw[pos−1], raw[pos], raw[pos+1]` lifts the time resolution from the
+4 ns sample grid to ≪ 1 ns for clean peaks:
+`δ = (h_-1 − h_+1) / (2·(h_-1 − 2·h_0 + h_+1))`, clamped to
+`δ ∈ [−1, +1]` and applied only when the parabola is concave-down
+(real maximum).  Reported as `peak.time = (pos + δ) · 1e3 / clk_mhz`
+(ns).
+
+**8. Pile-up flagging.** After each peak is accepted, its integration
+window is compared to every previously-accepted peak's; if either
+peak's bounds come within `cfg.peak_pileup_gap` samples of the other's,
+both peaks get `Q_PEAK_PILED` set in `peak.quality`.  Diagnostic for
+downstream cuts on isolated vs piled-up pulses.
 
 For our trace:
 
@@ -196,7 +228,7 @@ component (which is also where pile-up from the next event lives).
 Smaller `r` recovers more tail energy but increases sensitivity to
 baseline drift and downstream pulses.
 
-**Smoothing — `resolution`.** On the bright pulse above, smoothing is
+**Smoothing — `smooth_order`.** On the bright pulse above, smoothing is
 invisible at the scale of a 1247 ADC peak. It earns its keep on
 small-signal channels where the per-sample fluctuation is comparable to
 the pulse height. The figure below uses a different waveform — a small
@@ -205,7 +237,7 @@ does:
 
 ![smoothing](figs/fig5_smoothing.png)
 
-| `resolution` | spurious local maxima above +2 ADC | peak height (smoothed) |
+| `smooth_order` | spurious local maxima above +2 ADC | peak height (smoothed) |
 |---:|---:|---:|
 | 1 (raw) | 6 | 169 |
 | 2 (default) | 3 | 166 |

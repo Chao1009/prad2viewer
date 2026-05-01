@@ -67,7 +67,7 @@ All settings live in <code>fdec::WaveConfig</code> (see <code>WaveAnalyzer.h</co
 ! unit
 ! role
 |-
-| <code>resolution</code>
+| <code>smooth_order</code>
 | 2
 | half-width
 | Triangular smoothing kernel half-width. <code>1</code> disables smoothing. Larger values smear the rising edge but suppress per-sample noise.
@@ -120,7 +120,7 @@ All settings live in <code>fdec::WaveConfig</code> (see <code>WaveAnalyzer.h</co
 
 === Pipeline ===
 
-'''1. Triangular smoothing.''' <code>resolution = 2</code> (default) → <code>buf[i] = (raw[i−1]·w + raw[i] + raw[i+1]·w) / (1 + 2w)</code> with <code>w = 1 − 1/(res+1)</code>. With <code>res = 1</code> smoothing is disabled.
+'''1. Triangular smoothing.''' <code>smooth_order = 2</code> (default) → <code>buf[i] = (raw[i−1]·w + raw[i] + raw[i+1]·w) / (1 + 2w)</code> with <code>w = 1 − 1/(res+1)</code>. With <code>res = 1</code> smoothing is disabled.
 
 '''2. Iterative pedestal.''' First <code>ped_nsamples = 30</code> samples of the ''smoothed'' trace. Iterate up to <code>ped_max_iter = 3</code> times:
 
@@ -201,12 +201,12 @@ Two of the parameters above visibly change the analyzer's output on this trace:
 
 The default of 0.10 is a good compromise: it captures the prompt peak plus the first ~70 ns of the tail, missing only the slow scintillation component (which is also where pile-up from the next event lives). Smaller <code>r</code> recovers more tail energy but increases sensitivity to baseline drift and downstream pulses.
 
-'''Smoothing — <code>resolution</code>.''' On the bright pulse above, smoothing is invisible at the scale of a 1247 ADC peak. It earns its keep on small-signal channels where the per-sample fluctuation is comparable to the pulse height. The figure below uses a different waveform — a small ~24 ADC bump on a baseline with ±3 ADC zig-zag — to show what the kernel does:
+'''Smoothing — <code>smooth_order</code>.''' On the bright pulse above, smoothing is invisible at the scale of a 1247 ADC peak. It earns its keep on small-signal channels where the per-sample fluctuation is comparable to the pulse height. The figure below uses a different waveform — a small ~24 ADC bump on a baseline with ±3 ADC zig-zag — to show what the kernel does:
 
 [[File:WA_fig5_smoothing.png|center|1100px|Smoothing on a low-S/N pulse — raw vs res=2 vs res=4]]
 
 {| class="wikitable"
-! <code>resolution</code>
+! <code>smooth_order</code>
 ! spurious local maxima above +2 ADC
 ! peak height (smoothed)
 |-

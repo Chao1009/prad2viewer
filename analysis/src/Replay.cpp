@@ -305,6 +305,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                                 ev->peak_height[nch][p]   = wres.peaks[p].height;
                                 ev->peak_time[nch][p]     = wres.peaks[p].time;
                                 ev->peak_integral[nch][p] = wres.peaks[p].integral;
+                                ev->peak_quality[nch][p]  = wres.peaks[p].quality;
                             }
                             fw_ana.Analyze(cd.samples, cd.nsamples, wres.ped.mean, dwres);
                             ev->daq_npeaks[nch] = static_cast<uint8_t>(dwres.npeaks);

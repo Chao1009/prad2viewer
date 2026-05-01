@@ -94,6 +94,7 @@ struct RawEventData {
     float   peak_height[kMaxChannels][fdec::MAX_PEAKS]   = {};
     float   peak_time[kMaxChannels][fdec::MAX_PEAKS]     = {};
     float   peak_integral[kMaxChannels][fdec::MAX_PEAKS] = {};
+    uint8_t peak_quality[kMaxChannels][fdec::MAX_PEAKS]  = {};   // Q_PEAK_* bitmask (currently just Q_PEAK_PILED)
 
     // Optional firmware-mode (FADC250 Modes 1/2/3) peak data — also gated on -p.
     // Produced by Fadc250FwAnalyzer using the soft pedestal mean as PED.

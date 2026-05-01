@@ -191,7 +191,10 @@ void bind_fadc(py::module_ &m)
 
     // ----- WaveAnalyzer types --------------------------------------------
     py::class_<fdec::Peak>(m, "Peak",
-        "One FADC pulse found by WaveAnalyzer.")
+        "One FADC pulse found by WaveAnalyzer.\n\n"
+        "  left / right — INCLUSIVE integration bounds (both samples are in `integral`)\n"
+        "  pos          — raw-sample maximum near the smoothed peak\n"
+        "  quality      — Q_PEAK_* bitmask (currently just Q_PEAK_PILED)")
         .def(py::init<>())
         .def_readwrite("height",   &fdec::Peak::height)
         .def_readwrite("integral", &fdec::Peak::integral)
@@ -199,7 +202,8 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("pos",      &fdec::Peak::pos)
         .def_readwrite("left",     &fdec::Peak::left)
         .def_readwrite("right",    &fdec::Peak::right)
-        .def_readwrite("overflow", &fdec::Peak::overflow);
+        .def_readwrite("overflow", &fdec::Peak::overflow)
+        .def_readwrite("quality",  &fdec::Peak::quality);
 
     py::class_<fdec::Pedestal>(m, "Pedestal",
         "Per-channel pedestal estimate from WaveAnalyzer.\n\n"
@@ -218,12 +222,14 @@ void bind_fadc(py::module_ &m)
     py::class_<fdec::WaveConfig>(m, "WaveConfig",
         "Knobs for WaveAnalyzer (smoothing, thresholds, pedestal window, ...).")
         .def(py::init<>())
-        .def_readwrite("resolution",     &fdec::WaveConfig::resolution)
-        .def_readwrite("threshold",      &fdec::WaveConfig::threshold)
-        .def_readwrite("min_threshold",  &fdec::WaveConfig::min_threshold)
-        .def_readwrite("min_peak_ratio", &fdec::WaveConfig::min_peak_ratio)
-        .def_readwrite("int_tail_ratio", &fdec::WaveConfig::int_tail_ratio)
-        .def_readwrite("ped_nsamples",   &fdec::WaveConfig::ped_nsamples)
+        .def_readwrite("smooth_order",     &fdec::WaveConfig::smooth_order)
+        .def_readwrite("threshold",        &fdec::WaveConfig::threshold)
+        .def_readwrite("min_threshold",    &fdec::WaveConfig::min_threshold)
+        .def_readwrite("min_peak_ratio",   &fdec::WaveConfig::min_peak_ratio)
+        .def_readwrite("int_tail_ratio",   &fdec::WaveConfig::int_tail_ratio)
+        .def_readwrite("tail_break_n",     &fdec::WaveConfig::tail_break_n)
+        .def_readwrite("peak_pileup_gap",  &fdec::WaveConfig::peak_pileup_gap)
+        .def_readwrite("ped_nsamples",     &fdec::WaveConfig::ped_nsamples)
         .def_readwrite("ped_flatness",   &fdec::WaveConfig::ped_flatness)
         .def_readwrite("ped_max_iter",   &fdec::WaveConfig::ped_max_iter)
         .def_readwrite("overflow",       &fdec::WaveConfig::overflow)
@@ -265,6 +271,11 @@ void bind_fadc(py::module_ &m)
     m.attr("Q_DAQ_NSB_TRUNCATED")    = py::int_(fdec::Q_DAQ_NSB_TRUNCATED);
     m.attr("Q_DAQ_NSA_TRUNCATED")    = py::int_(fdec::Q_DAQ_NSA_TRUNCATED);
     m.attr("Q_DAQ_VA_OUT_OF_RANGE")  = py::int_(fdec::Q_DAQ_VA_OUT_OF_RANGE);
+
+    // Soft-analyzer peak quality bitmask — currently just the pile-up
+    // flag.  Both peaks in a piled-up pair get the bit set.
+    m.attr("Q_PEAK_GOOD")            = py::int_(fdec::Q_PEAK_GOOD);
+    m.attr("Q_PEAK_PILED")           = py::int_(fdec::Q_PEAK_PILED);
 
     // Pedestal-fit quality bitmask — exposed so callers can filter on
     // Pedestal.quality (e.g. dec.Q_PED_PULSE_IN_WINDOW).

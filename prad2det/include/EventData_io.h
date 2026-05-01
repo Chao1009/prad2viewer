@@ -86,6 +86,8 @@ inline void SetRawWriteBranches(TTree *tree, RawEventData &ev, bool with_peaks)
                      Form("hycal.peak_time[hycal.nch][%d]/F",     fdec::MAX_PEAKS));
         tree->Branch("hycal.peak_integral", ev.peak_integral,
                      Form("hycal.peak_integral[hycal.nch][%d]/F", fdec::MAX_PEAKS));
+        tree->Branch("hycal.peak_quality",  ev.peak_quality,
+                     Form("hycal.peak_quality[hycal.nch][%d]/b",  fdec::MAX_PEAKS));
 
         // Firmware-mode (FADC250 Modes 1/2/3) emulation peaks.
         // daq_peak_quality is a Q_* bitmask (peak-at-boundary,
@@ -159,6 +161,9 @@ inline RawReadStatus SetRawReadBranches(TTree *tree, RawEventData &ev)
         bind("hycal.peak_height",   ev.peak_height);
         bind("hycal.peak_time",     ev.peak_time);
         bind("hycal.peak_integral", ev.peak_integral);
+        // peak_quality is a post-Mar-2026 addition — bind() no-ops on
+        // older files that pre-date it.
+        bind("hycal.peak_quality",  ev.peak_quality);
     }
 
     s.has_daq_peaks = (tree->GetBranch("hycal.daq_npeaks") != nullptr);

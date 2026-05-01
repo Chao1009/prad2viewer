@@ -130,11 +130,26 @@ struct EventData {
 };
 
 // --- analysis helpers (to be filled later) ----------------------------------
+// Soft-analyzer peak.  left / right are INCLUSIVE integration bounds —
+// `integral` sums buf[left..right] inclusive.  pos is the raw-sample
+// maximum near the smoothed peak (post-correction).  quality is a
+// Q_PEAK_* bitmask (defined below).
 struct Peak {
-    float height, integral, time;
-    int   pos, left, right;
-    bool  overflow;
+    float    height, integral, time;
+    int      pos;
+    int      left, right;
+    bool     overflow;
+    uint8_t  quality;
 };
+
+// Soft-analyzer peak quality bitmask (set by WaveAnalyzer::findPeaks).
+//
+// Q_PEAK_GOOD  = 0       no flags
+// Q_PEAK_PILED = 1 << 0  integration window is within `cfg.peak_pileup_gap`
+//                        samples of an adjacent peak's window — both peaks
+//                        in the pair get the bit set
+constexpr uint8_t Q_PEAK_GOOD  = 0;
+constexpr uint8_t Q_PEAK_PILED = 1u << 0;
 
 // Per-channel pedestal estimate from WaveAnalyzer.
 //   mean / rms  — final values after iterative outlier rejection

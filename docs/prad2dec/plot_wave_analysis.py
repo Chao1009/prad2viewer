@@ -61,18 +61,18 @@ N_SMALL = len(SMALL)
 TIME_SMALL = np.arange(N_SMALL) * CLK_NS
 
 
-def triangular_smooth(s, resolution):
+def triangular_smooth(s, smooth_order):
     """Same triangular kernel as fdec::WaveAnalyzer::smooth (res = 1 → no-op)."""
     n = len(s)
-    if resolution <= 1:
+    if smooth_order <= 1:
         return s.astype(np.float64).copy()
     buf = np.empty(n)
     for i in range(n):
         val = float(s[i]); wsum = 1.0
-        for j in range(1, resolution):
+        for j in range(1, smooth_order):
             if j > i or i + j >= n:
                 continue
-            w = 1.0 - j / float(resolution + 1)
+            w = 1.0 - j / float(smooth_order + 1)
             val += w * (float(s[i - j]) + float(s[i + j]))
             wsum += 2.0 * w
         buf[i] = val / wsum
@@ -189,22 +189,22 @@ def firmware_analyze(s, *, TET=10.0, NSB_ns=8, NSA_ns=128, NPED=3,
 # ---------------------------------------------------------------------------
 # WaveAnalyzer — soft analyzer (smoothing + iterative pedestal + local maxima)
 # ---------------------------------------------------------------------------
-def soft_analyze(s, *, resolution=2, threshold=5.0, min_threshold=3.0,
+def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
                  ped_nsamples=30, ped_flatness=1.0, ped_max_iter=3,
                  int_tail_ratio=0.1, clk_mhz=250.0):
     n = len(s)
 
     # triangular smoothing
-    if resolution <= 1:
+    if smooth_order <= 1:
         buf = s.astype(np.float64).copy()
     else:
         buf = np.empty(n)
         for i in range(n):
             val = s[i]; wsum = 1.0
-            for j in range(1, resolution):
+            for j in range(1, smooth_order):
                 if j > i or i + j >= n:
                     continue
-                w = 1.0 - j / float(resolution + 1)
+                w = 1.0 - j / float(smooth_order + 1)
                 val += w * (s[i - j] + s[i + j])
                 wsum += 2.0 * w
             buf[i] = val / wsum
@@ -240,7 +240,7 @@ def soft_analyze(s, *, resolution=2, threshold=5.0, min_threshold=3.0,
 
         # raw position correction
         raw_pos = i; raw_h = s[i] - mean
-        for j in range(1, resolution + 1):
+        for j in range(1, smooth_order + 1):
             if i - j >= 0 and (s[i - j] - mean) > raw_h:
                 raw_pos = i - j; raw_h = s[i - j] - mean
             if i + j < n and (s[i + j] - mean) > raw_h:
@@ -565,7 +565,7 @@ plt.close(fig)
 # ---------------------------------------------------------------------------
 # Plot 5 — smoothing on a small-signal zig-zag waveform
 # ---------------------------------------------------------------------------
-# Demonstrates the `resolution` parameter on a low-S/N signal where the
+# Demonstrates the `smooth_order` parameter on a low-S/N signal where the
 # per-sample fluctuation is comparable to the pulse height.  Local-maxima
 # search on the raw trace would trip on the zig-zag; smoothing collapses
 # the noise into a single clean peak.

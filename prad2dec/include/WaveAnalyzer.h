@@ -28,11 +28,13 @@ struct WaveResult {
 };
 
 struct WaveConfig {
-    int      resolution    = 2;       // smoothing half-width (1 = no smoothing)
+    int      smooth_order  = 2;       // kernel order: 1 = identity, N gives a 2N-1 tap triangular kernel
     float    threshold     = 5.0f;    // peak threshold in pedestal RMS units
     float    min_threshold = 3.0f;    // absolute floor (ADC counts above pedestal)
     float    min_peak_ratio = 0.3f;   // new peak must be ≥ this fraction of a nearby peak
-    float    int_tail_ratio = 0.1f;  // stop integration when signal drops below this fraction of peak height
+    float    int_tail_ratio = 0.1f;   // stop integration when signal drops below this fraction of peak height
+    int      tail_break_n  = 2;       // require N consecutive sub-threshold samples to terminate integration
+    int      peak_pileup_gap = 2;     // peaks with integration bounds within this many samples are flagged Q_PEAK_PILED
     int      ped_nsamples  = 30;      // max samples for pedestal window
     float    ped_flatness  = 1.0f;    // max RMS for a "flat" pedestal region
     int      ped_max_iter  = 3;       // outlier rejection iterations

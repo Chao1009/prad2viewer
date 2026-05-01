@@ -1877,7 +1877,7 @@ class HyCalEventViewer(QMainWindow):
 
         self._adv_wave_int_spins: Dict[str, QSpinBox] = {}
         for name, lo, hi, tip in [
-                ("resolution",   1, 16,  "smoothing half-width (1 = no smoothing)"),
+                ("smooth_order", 1, 16,  "kernel order (1 = identity, N gives 2N-1 taps)"),
                 ("ped_nsamples", 1, 64,  "samples to use for pedestal"),
                 ("ped_max_iter", 1, 100, "pedestal iteration cap"),
                 ("overflow",     0, 65535, "overflow cutoff (ADC)")]:

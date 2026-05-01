@@ -37,7 +37,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QComboBox, QLineEdit, QSpinBox,
     QFileDialog, QSplitter, QSizePolicy, QTableWidget,
     QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu,
-    QDialog, QFormLayout, QTextEdit, QMessageBox,
+    QDialog, QFormLayout, QTextEdit, QMessageBox, QCheckBox,
 )
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal, QTimer, QProcess
 from PyQt6.QtGui import (
@@ -58,9 +58,38 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = SCRIPT_DIR / ".." / "database"
 MODULES_JSON = DB_DIR / "hycal_modules.json"
 
-LMS_NAMES = ["LMS1", "LMS2", "LMS3"]
-LMS_REF_DEFAULT = 1          # index into LMS_NAMES -> "LMS2"
+LMS_NAMES = ["LMS1", "LMS2", "LMS3"]              # data keys (file/ROOT/geometry)
+LMS_DISPLAY = ["Ref1", "Ref2", "Ref3"]            # user-facing labels for the same modules
+LMS_REF_DEFAULT = 1          # index into LMS_NAMES -> "LMS2" (shown as "Ref2")
 FILE_PATTERN = re.compile(r"prad_(\d{6})_LMS\.dat$")
+
+
+def lms_display_name(name: Optional[str]) -> str:
+    """Map an LMS reference data key (LMS1/2/3) to its UI label (Ref1/2/3).
+
+    Non-LMS module names pass through unchanged so callers can use this
+    blindly when formatting any module name for display."""
+    if not name:
+        return name or ""
+    try:
+        return LMS_DISPLAY[LMS_NAMES.index(name)]
+    except ValueError:
+        return name
+
+# Upper-right charts (fixed set, in display order).  Each tuple is
+# (kind, label).  `kind` drives data extraction in _update_line_charts.
+#   ratio → ref PMT's LMS/Alpha (selected-ref)
+#   ref_lms → ref PMT's LMS peak±σ (selected-ref)
+#   ref_alpha → ref PMT's Alpha peak±σ (selected-ref)
+#   mod_lms → selected HyCal module's LMS peak±σ
+#   mod_gain → selected HyCal module's gain factor wrt selected ref
+CHART_PLOTS: List[Tuple[str, str]] = [
+    ("ratio",     "Ref LMS/Alpha"),
+    ("ref_lms",   "Ref LMS"),
+    ("ref_alpha", "Ref Alpha"),
+    ("mod_lms",   "Module LMS"),
+    ("mod_gain",  "Module Gain"),
+]
 
 # Default palette for non-drift modes (matches historical gain-monitor look).
 _DEFAULT_PALETTE = "blue-orange"
@@ -387,10 +416,11 @@ class HyCalGainMapWidget(HyCalMapWidget):
         return f"{v:.4f}"
 
     def _tooltip_text(self, name: str) -> str:
+        label = lms_display_name(name)
         v = self._values.get(name)
         if v is None:
-            return name
-        return f"{name}: {v:.5f}"
+            return label
+        return f"{label}: {v:.5f}"
 
     def _colorbar_center_text(self) -> str:
         if self._palette_override is not None:
@@ -413,7 +443,8 @@ class HyCalGainMapWidget(HyCalMapWidget):
             for name in self._label_names:
                 r = self._rects.get(name)
                 if r is not None:
-                    p.drawText(r, Qt.AlignmentFlag.AlignCenter, name)
+                    p.drawText(r, Qt.AlignmentFlag.AlignCenter,
+                               lms_display_name(name))
 
         if self._selected and self._selected in self._rects:
             p.setPen(QPen(QColor(THEME.SELECT_BORDER), 2.5))
@@ -490,11 +521,13 @@ def _chart_y_range(values: List[float], errors: List[float]) -> Tuple[float, flo
 # ===========================================================================
 
 class LMSLineChartWidget(QWidget):
-    """Line chart with error bars for LMS peak/alpha ratio vs run number."""
+    """Line chart with error bars vs run number."""
 
     PAD_L, PAD_R, PAD_T, PAD_B = 60, 16, 24, 32
 
-    runClicked = pyqtSignal(int)   # emits actual run number when a point is clicked
+    runClicked = pyqtSignal(int)              # emits actual run number on left-click
+    pointDeleteRequested = pyqtSignal(int)    # emits actual run number after right-click → "Delete run N"
+    pointBackupRequested = pyqtSignal(int)    # emits actual run number after right-click → "Move run N to backup"
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -507,13 +540,19 @@ class LMSLineChartWidget(QWidget):
         self._highlighted: bool = False
         self._current_run_number: int = -1
         self._y_range: Optional[Tuple[float, float]] = None
-        self.setMinimumHeight(100)
+        self._series_color: Optional[QColor] = None
+        self.setMinimumHeight(80)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,
                            QSizePolicy.Policy.Expanding)
         self.setMouseTracking(True)
 
     def set_y_range(self, lo: float, hi: float):
         self._y_range = (lo, hi)
+        self.update()
+
+    def set_series_color(self, color: Optional[QColor]):
+        """Override the default ACCENT-blue series colour. Pass None to clear."""
+        self._series_color = QColor(color) if color is not None else None
         self.update()
 
     def set_highlighted(self, on: bool):
@@ -567,7 +606,8 @@ class LMSLineChartWidget(QWidget):
             self.update()
 
     def mousePressEvent(self, event):
-        if event.button() != Qt.MouseButton.LeftButton:
+        btn = event.button()
+        if btn not in (Qt.MouseButton.LeftButton, Qt.MouseButton.RightButton):
             return
         runs = self._run_numbers
         if not runs:
@@ -580,8 +620,20 @@ class LMSLineChartWidget(QWidget):
             if d < best_d:
                 best_d = d
                 best_i = i
-        if best_d < 20 and best_i < len(self._actual_run_numbers):
-            self.runClicked.emit(self._actual_run_numbers[best_i])
+        if best_d >= 20 or best_i >= len(self._actual_run_numbers):
+            return
+        actual_rn = self._actual_run_numbers[best_i]
+        if btn == Qt.MouseButton.LeftButton:
+            self.runClicked.emit(actual_rn)
+        else:
+            menu = QMenu(self)
+            backup_act = menu.addAction(f"Move run {actual_rn} to backup")
+            backup_act.triggered.connect(
+                lambda _checked=False, rn=actual_rn: self.pointBackupRequested.emit(rn))
+            del_act = menu.addAction(f"Delete run {actual_rn}")
+            del_act.triggered.connect(
+                lambda _checked=False, rn=actual_rn: self.pointDeleteRequested.emit(rn))
+            menu.exec(event.globalPosition().toPoint())
 
     def leaveEvent(self, event):
         if self._hover_idx != -1:
@@ -618,7 +670,12 @@ class LMSLineChartWidget(QWidget):
         p.fillRect(0, 0, w, h, QColor(THEME.CANVAS))
 
         # title
-        title_color = QColor(THEME.HIGHLIGHT) if self._highlighted else QColor(THEME.ACCENT)
+        if self._highlighted:
+            title_color = QColor(THEME.HIGHLIGHT)
+        elif self._series_color is not None:
+            title_color = QColor(self._series_color)
+        else:
+            title_color = QColor(THEME.ACCENT)
         title_text = (self._title + "  [reference]") if self._highlighted else self._title
         p.setPen(title_color)
         p.setFont(QFont("Consolas", 10, QFont.Weight.Bold))
@@ -729,7 +786,12 @@ class LMSLineChartWidget(QWidget):
             p.drawLine(QPointF(sx - cap, sy_top), QPointF(sx + cap, sy_top))
             p.drawLine(QPointF(sx - cap, sy_bot), QPointF(sx + cap, sy_bot))
 
-        series_color = QColor(THEME.HIGHLIGHT) if self._highlighted else QColor(THEME.ACCENT)
+        if self._highlighted:
+            series_color = QColor(THEME.HIGHLIGHT)
+        elif self._series_color is not None:
+            series_color = QColor(self._series_color)
+        else:
+            series_color = QColor(THEME.ACCENT)
 
         # connecting line
         p.setPen(QPen(series_color, 1.5))
@@ -844,6 +906,9 @@ class RootHistWidget(QWidget):
         self._ovl_gauss: Optional[Tuple[float, float, float, float, float]] = None
         # Stack mode: keep multiple histograms visible at once.
         self._stack_mode: bool = False
+        # Which histogram to feed the stack from when both LMS and Alpha
+        # are available (reference PMTs only).  Ignored when no overlay.
+        self._stack_src: str = "LMS"
         self._stack_entries: List[Tuple[List[float], List[float], str]] = []
         self._x_lo = self._X_DEFAULT_LO
         self._x_hi = self._X_DEFAULT_HI
@@ -869,6 +934,24 @@ class RootHistWidget(QWidget):
             "QPushButton:hover{background:#28282a;color:#e6edf3;}"))
         self._stack_btn.clicked.connect(self._toggle_stack)
 
+        # Source selector for stack mode — only meaningful for the three
+        # reference PMTs, which carry both an LMS and an Alpha histogram.
+        # For other modules the choice silently falls back to LMS.
+        self._src_btn = QPushButton("Src: LMS", self)
+        self._src_btn.setFixedSize(86, 22)
+        self._src_btn.setFont(_f)
+        self._src_btn.setToolTip(
+            "Stack source (reference PMTs only):\n"
+            "  LMS   — stack the LMS histogram (default)\n"
+            "  Alpha — stack the alpha-peak histogram\n"
+            "Toggling clears the current stack to avoid mixing\n"
+            "LMS and Alpha distributions in one plot.")
+        self._src_btn.setStyleSheet(themed(
+            "QPushButton{background:rgba(29,29,31,220);color:#c9d1d9;"
+            "border:1px solid #30363d;border-radius:4px;}"
+            "QPushButton:hover{background:#28282a;color:#e6edf3;}"))
+        self._src_btn.clicked.connect(self._toggle_stack_src)
+
     # ------------------------------------------------------------------
     def set_histogram(self, values, edges, title: str = "",
                       gauss: Optional[Tuple[float, float, float, float, float]] = None,
@@ -876,27 +959,43 @@ class RootHistWidget(QWidget):
                       overlay_gauss: Optional[Tuple[float, float, float, float, float]] = None):
         vals_list = list(values)
         edges_list = list(edges)
+        ovl_vals_list = list(overlay_values) if overlay_values is not None else []
+        ovl_edges_list = list(overlay_edges) if overlay_edges is not None else []
         if self._stack_mode:
-            # Append to the stack.  Only the primary histogram is kept —
-            # alpha overlays and fits are deliberately hidden in this mode
+            # Pick which histogram to append.  For reference PMTs the user
+            # can opt to stack the alpha-peak distribution instead of the
+            # LMS one; non-reference modules have no overlay and silently
+            # fall back to LMS.  Fits and overlays are hidden in this mode
             # so multiple distributions stay readable.
-            self._stack_entries.append((vals_list, edges_list, title))
+            use_alpha = (self._stack_src == "Alpha"
+                         and ovl_vals_list and ovl_edges_list
+                         and len(ovl_edges_list) >= 2)
+            if use_alpha:
+                entry = (ovl_vals_list, ovl_edges_list, f"{title} [α]")
+            else:
+                entry = (vals_list, edges_list, title)
+            self._stack_entries.append(entry)
             if len(self._stack_entries) == 1:
                 self._x_lo = self._X_DEFAULT_LO
                 self._x_hi = self._X_DEFAULT_HI
-            self._title = (f"Stack: {len(self._stack_entries)} run(s) — "
+            self._title = (f"Stack [{self._stack_src}]: "
+                           f"{len(self._stack_entries)} run(s) — "
                            f"latest: {title}")
             self._gauss = None
-            self._ovl_values = []
-            self._ovl_edges = []
-            self._ovl_gauss = None
+            # Keep the latest single-mode payload so toggling the source
+            # can re-seed the stack from the currently shown run.
+            self._values = vals_list
+            self._edges = edges_list
+            self._ovl_values = ovl_vals_list
+            self._ovl_edges = ovl_edges_list
+            self._ovl_gauss = overlay_gauss
         else:
             self._values = vals_list
             self._edges = edges_list
             self._title = title
             self._gauss = gauss
-            self._ovl_values = list(overlay_values) if overlay_values is not None else []
-            self._ovl_edges = list(overlay_edges) if overlay_edges is not None else []
+            self._ovl_values = ovl_vals_list
+            self._ovl_edges = ovl_edges_list
             self._ovl_gauss = overlay_gauss
             self._x_lo = self._X_DEFAULT_LO
             self._x_hi = self._X_DEFAULT_HI
@@ -923,27 +1022,69 @@ class RootHistWidget(QWidget):
         if self._stack_mode:
             # When entering stack mode, seed the stack with whatever single
             # histogram is currently showing (so the user doesn't have to
-            # re-click the first run).
-            if self._values and self._edges:
+            # re-click the first run).  Honour the chosen source: for a
+            # reference PMT with an alpha overlay we can seed from Alpha.
+            seed_title = self._title
+            use_alpha = (self._stack_src == "Alpha"
+                         and self._ovl_values and self._ovl_edges
+                         and len(self._ovl_edges) >= 2)
+            if use_alpha:
+                self._stack_entries = [(list(self._ovl_values),
+                                        list(self._ovl_edges),
+                                        f"{seed_title} [α]")]
+            elif self._values and self._edges:
                 self._stack_entries = [(list(self._values),
                                         list(self._edges),
-                                        self._title)]
-                self._title = (f"Stack: {len(self._stack_entries)} run(s) — "
-                               f"latest: {self._title}")
+                                        seed_title)]
+            if self._stack_entries:
+                self._title = (f"Stack [{self._stack_src}]: "
+                               f"{len(self._stack_entries)} run(s) — "
+                               f"latest: {seed_title}")
                 self._gauss = None
-                self._ovl_values = []
-                self._ovl_edges = []
-                self._ovl_gauss = None
         else:
             # Leaving stack mode — drop the stack; the next set_histogram
             # call will repopulate the single-hist view.
             self._stack_entries = []
         self.update()
 
+    def _toggle_stack_src(self):
+        # Flip between LMS and Alpha.  Switching sources clears the stack
+        # so we never mix the two distributions in a single plot.
+        self._stack_src = "Alpha" if self._stack_src == "LMS" else "LMS"
+        self._src_btn.setText(f"Src: {self._stack_src}")
+        if self._stack_mode:
+            seed_title = self._title
+            # Strip any existing "Stack [...]:" prefix so re-seeding doesn't
+            # nest labels on repeated toggles.
+            if " — latest: " in seed_title:
+                seed_title = seed_title.split(" — latest: ", 1)[1]
+            self._stack_entries = []
+            use_alpha = (self._stack_src == "Alpha"
+                         and self._ovl_values and self._ovl_edges
+                         and len(self._ovl_edges) >= 2)
+            if use_alpha:
+                self._stack_entries = [(list(self._ovl_values),
+                                        list(self._ovl_edges),
+                                        f"{seed_title} [α]")]
+            elif self._values and self._edges:
+                self._stack_entries = [(list(self._values),
+                                        list(self._edges),
+                                        seed_title)]
+            if self._stack_entries:
+                self._title = (f"Stack [{self._stack_src}]: "
+                               f"{len(self._stack_entries)} run(s) — "
+                               f"latest: {seed_title}")
+            else:
+                self._title = f"Stack [{self._stack_src}]: 0 run(s)"
+        self.update()
+
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        # Anchor the Stack button to the top-right corner of the canvas.
-        self._stack_btn.move(self.width() - self._stack_btn.width() - 6, 4)
+        # Anchor the Stack button to the top-right corner of the canvas,
+        # and the Src selector immediately to its left.
+        stack_x = self.width() - self._stack_btn.width() - 6
+        self._stack_btn.move(stack_x, 4)
+        self._src_btn.move(stack_x - self._src_btn.width() - 6, 4)
 
     # ------------------------------------------------------------------
     def _plot_rect(self):
@@ -994,7 +1135,7 @@ class RootHistWidget(QWidget):
 
     def _clear_stack(self):
         self._stack_entries = []
-        self._title = "Stack: 0 run(s)"
+        self._title = f"Stack [{self._stack_src}]: 0 run(s)"
         self.update()
 
     def _unzoom(self):
@@ -1651,6 +1792,10 @@ class AnalyzeDialog(QDialog):
 _LOCAL_DATA_BASE  = "/data/evio/data"
 _REMOTE_HOST      = "clondaq2"
 _REMOTE_DATA_BASE = "/data/stage2"
+# Conservative per-file size for disk-space estimates when an actual remote
+# `ls -l` listing isn't available.  Each evio file is ~2 GB; bump slightly
+# for safety so we don't run out mid-copy.
+_EVIO_BYTES_PER_FILE_EST = int(2.1 * 1024 ** 3)
 
 
 def _fmt_bytes(b: int) -> str:
@@ -1666,9 +1811,11 @@ def _check_disk_space(remote_host: str, remote_run_dir: str,
     """Return (needed_bytes, free_bytes) for evio files [f_start, f_end].
 
     SSHes to remote_host and sums the sizes of files whose .evio.NNN suffix
-    falls within [f_start, f_end].  Checks free space on the filesystem that
+    falls within [f_start, f_end].  If the remote listing yields no usable
+    sizes, falls back to a conservative ~2 GB-per-file estimate using the
+    requested range count.  Free space is measured on the filesystem that
     contains local_base (or its nearest existing ancestor).
-    Raises RuntimeError if the SSH call fails.
+    Raises RuntimeError if the SSH call itself fails (exit 255).
     """
     result = subprocess.run(
         ["ssh", "-o", "ConnectTimeout=10",
@@ -1676,12 +1823,13 @@ def _check_disk_space(remote_host: str, remote_run_dir: str,
         capture_output=True, text=True, timeout=30,
     )
     # exit 255 means SSH itself failed to connect; other non-zero codes (e.g. 2
-    # when the remote directory doesn't exist yet) are fine — we just get no output
-    # and needed stays 0, so the space check passes trivially.
+    # when the remote directory doesn't exist yet) are recoverable — we fall
+    # back to the ~2GB-per-file estimate below.
     if result.returncode == 255:
         raise RuntimeError(result.stderr.strip() or "SSH connection failed")
 
     needed = 0
+    counted = 0
     for line in result.stdout.splitlines():
         parts = line.split()
         if len(parts) < 9:
@@ -1693,8 +1841,15 @@ def _check_disk_space(remote_host: str, remote_run_dir: str,
         if f_start <= n <= f_end:
             try:
                 needed += int(parts[4])
+                counted += 1
             except (ValueError, IndexError):
                 pass
+
+    # If we got nothing from the remote listing (empty dir, parse failure,
+    # SSH success but no files yet) fall back to a conservative estimate so
+    # the user doesn't proceed without any check at all.
+    if counted == 0:
+        needed = (f_end - f_start + 1) * _EVIO_BYTES_PER_FILE_EST
 
     # walk up to the nearest existing directory so disk_usage doesn't fail
     check_path = local_base
@@ -1990,7 +2145,14 @@ class DoItAllDialog(QDialog):
 
         self._run_edit = QLineEdit()
         self._run_edit.setPlaceholderText("e.g. 023739")
-        form.addRow("Run number:", self._run_edit)
+        form.addRow("Run number(s):", self._run_edit)
+
+        self._batch_check = QCheckBox(
+            "Batch mode (multiple runs; raw evio dirs are deleted after each "
+            "run is analysed)")
+        self._batch_check.setStyleSheet(themed("color:#c9d1d9;"))
+        self._batch_check.toggled.connect(self._on_batch_toggled)
+        form.addRow("", self._batch_check)
 
         # file range
         file_range_row = QHBoxLayout()
@@ -2070,15 +2232,38 @@ class DoItAllDialog(QDialog):
         if d:
             self._outdir_edit.setText(d)
 
+    def _on_batch_toggled(self, on: bool):
+        if on:
+            self._run_edit.setPlaceholderText(
+                "e.g. 023739 023740 023741   (space- or comma-separated)")
+        else:
+            self._run_edit.setPlaceholderText("e.g. 023739")
+
     def _on_run(self):
-        run_num    = self._run_edit.text().strip()
+        raw_runs   = self._run_edit.text().strip()
         n_cpu      = self._cpu_edit.text().strip()
         start_text = self._start_edit.text().strip() or "0"
         end_text   = self._end_edit.text().strip()   or "9999"
+        batch_mode = self._batch_check.isChecked()
 
-        if not run_num:
+        if not raw_runs:
             self._append("<span style='color:#f85149'>Please enter a run number.</span>")
             return
+
+        # Parse run numbers (single in normal mode, multi in batch mode).
+        if batch_mode:
+            run_numbers = [r for r in re.split(r'[,\s]+', raw_runs) if r]
+        else:
+            run_numbers = [raw_runs]
+        if not run_numbers:
+            self._append("<span style='color:#f85149'>No run numbers parsed.</span>")
+            return
+        for r in run_numbers:
+            if not r.isdigit():
+                self._append(f"<span style='color:#f85149'>"
+                             f"Invalid run number: {r}</span>")
+                return
+
         if not n_cpu.isdigit() or int(n_cpu) < 1:
             self._append("<span style='color:#f85149'>Number of CPUs must be a positive integer.</span>")
             return
@@ -2100,100 +2285,165 @@ class DoItAllDialog(QDialog):
         outdir      = self._outdir_edit.text().strip()    or \
             "/home/clasrun/prad2_daq/gain_monitoring/gain_monitor_output"
 
-        local_run_dir  = f"{local_base}/prad_{run_num}"
-        remote_run_dir = f"{remote_base}/prad_{run_num}"
-        script_dir     = os.path.dirname(_SCRIPT_PATH)
+        script_dir = os.path.dirname(_SCRIPT_PATH)
 
-        # pre-check for existing local files
-        existing = []
-        if os.path.isdir(local_run_dir):
-            import glob as _glob
-            for path in sorted(_glob.glob(f"{local_run_dir}/prad_{run_num}.evio.*")):
-                m = re.search(r'\.evio\.(\d+)$', os.path.basename(path))
-                if m:
-                    n = int(m.group(1))
-                    if f_start <= n <= f_end:
-                        existing.append(os.path.basename(path))
+        # Existing-files check only makes sense for single-run mode; in batch
+        # the bash loop already skips per-file (see "Already exists" branch).
+        if not batch_mode:
+            run_num = run_numbers[0]
+            local_run_dir = f"{local_base}/prad_{run_num}"
+            existing = []
+            if os.path.isdir(local_run_dir):
+                import glob as _glob
+                for path in sorted(_glob.glob(f"{local_run_dir}/prad_{run_num}.evio.*")):
+                    m = re.search(r'\.evio\.(\d+)$', os.path.basename(path))
+                    if m:
+                        n = int(m.group(1))
+                        if f_start <= n <= f_end:
+                            existing.append(os.path.basename(path))
+            if existing:
+                box = QMessageBox(self)
+                box.setWindowTitle("Files Already Present")
+                box.setText(
+                    f"{len(existing)} file(s) in the requested range already exist "
+                    f"in {local_run_dir}.\nThey will be skipped.")
+                box.setDetailedText("\n".join(existing))
+                box.setStandardButtons(
+                    QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+                box.setDefaultButton(QMessageBox.StandardButton.Ok)
+                if box.exec() == QMessageBox.StandardButton.Cancel:
+                    return
 
-        if existing:
-            box = QMessageBox(self)
-            box.setWindowTitle("Files Already Present")
-            box.setText(
-                f"{len(existing)} file(s) in the requested range already exist "
-                f"in {local_run_dir}.\nThey will be skipped.")
-            box.setDetailedText("\n".join(existing))
-            box.setStandardButtons(
-                QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-            box.setDefaultButton(QMessageBox.StandardButton.Ok)
-            if box.exec() == QMessageBox.StandardButton.Cancel:
-                return
-
-        # -- disk space check --
+        # Disk-space check: in batch mode only check the first run up front,
+        # since raw files for each completed run are removed before the next
+        # one starts.  The bash loop also re-checks per-run before scp using
+        # a conservative ~2GB-per-file estimate (see runtime block below).
+        first_run = run_numbers[0]
+        first_remote_run_dir = f"{remote_base}/prad_{first_run}"
         try:
             needed, free = _check_disk_space(
-                remote_host, remote_run_dir, local_base, f_start, f_end)
+                remote_host, first_remote_run_dir, local_base, f_start, f_end)
         except Exception as exc:
+            # SSH itself failed — fall back to the ~2GB-per-file estimate so
+            # the user isn't asked to "proceed without any check".
+            needed = (f_end - f_start + 1) * _EVIO_BYTES_PER_FILE_EST
+            check_path = local_base
+            while check_path and not os.path.exists(check_path):
+                check_path = os.path.dirname(check_path)
+            free = shutil.disk_usage(check_path or "/").free
+            self._append(
+                f"<span style='color:#d29922'>Could not reach remote host "
+                f"({exc}); estimating {_fmt_bytes(needed)} needed using "
+                f"~2 GB per file.</span><br>")
+        if needed > free:
             box = QMessageBox(self)
-            box.setWindowTitle("Disk Space Check Failed")
-            box.setIcon(QMessageBox.Icon.Warning)
-            box.setText(f"Could not check remote file sizes:\n{exc}\n\nProceed anyway?")
-            box.setStandardButtons(
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-            box.setDefaultButton(QMessageBox.StandardButton.No)
-            if box.exec() != QMessageBox.StandardButton.Yes:
-                return
-        else:
-            if needed > free:
-                box = QMessageBox(self)
-                box.setWindowTitle("Insufficient Disk Space")
-                box.setIcon(QMessageBox.Icon.Critical)
-                box.setText(
-                    "Not enough disk space to copy the requested files.\n\n"
-                    f"  Required : {_fmt_bytes(needed)}\n"
-                    f"  Available: {_fmt_bytes(free)}\n\n"
-                    "Free up space and try again.")
-                box.setStandardButtons(QMessageBox.StandardButton.Ok)
-                box.exec()
-                return
+            box.setWindowTitle("Insufficient Disk Space")
+            box.setIcon(QMessageBox.Icon.Critical)
+            hint = ("  (one run at a time; raw dir is wiped after each)"
+                    if batch_mode else "")
+            box.setText(
+                "Not enough disk space to copy the requested files.\n\n"
+                f"  Required : {_fmt_bytes(needed)}{hint}\n"
+                f"  Available: {_fmt_bytes(free)}\n\n"
+                "Free up space and try again.")
+            box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            box.exec()
+            return
 
-        # Combined bash: step 1 = scp, step 2 = analyze
+        # Bash: a single loop covers both single-run and batch.  In batch
+        # mode each iteration ends with `rm -rf` of the local run dir.
+        runs_string = " ".join(run_numbers)
+        cleanup_block = (
+            "    echo \"\"\n"
+            "    echo \"=== Run $RUN: cleanup — removing $LRD ===\"\n"
+            "    rm -rf \"$LRD\"\n"
+        ) if batch_mode else ""
+
         bash_cmd = (
             f"set -e\n"
+            f"RUNS=\"{runs_string}\"\n"
+            f"LOCAL_BASE={local_base}\n"
+            f"REMOTE_BASE={remote_base}\n"
+            f"REMOTE_HOST={remote_host}\n"
+            f"OUTDIR={outdir}\n"
+            f"SCRIPT_DIR={script_dir}\n"
+            f"SCRIPT={_SCRIPT_PATH}\n"
+            f"F_START={f_start}\n"
+            f"F_END={f_end}\n"
+            f"N_CPU={n_cpu}\n"
+            f"BYTES_PER_EVIO={_EVIO_BYTES_PER_FILE_EST}\n"
             f"\n"
-            f"# ── Step 1: Get Data ──────────────────────────────────────\n"
-            f"mkdir -p {local_run_dir}\n"
-            f"echo '=== Step 1: Copying evio files ==='\n"
-            f"echo 'Local directory: {local_run_dir}'\n"
-            f"echo 'Listing remote files...'\n"
-            f"ALL_FILES=$(ssh {remote_host} 'ls {remote_run_dir}/' 2>/dev/null | sort)\n"
-            f"COPIED=0; ALREADY=0\n"
-            f"while IFS= read -r f; do\n"
-            f"    NUM=$(echo \"$f\" | grep -oP '\\.evio\\.\\K[0-9]+')\n"
-            f"    [ -z \"$NUM\" ] && continue\n"
-            f"    N=$((10#$NUM))\n"
-            f"    if [ \"$N\" -lt {f_start} ] || [ \"$N\" -gt {f_end} ]; then continue; fi\n"
-            f"    if [ -f \"{local_run_dir}/$f\" ]; then\n"
-            f"        echo \"  Already exists: $f (skipping)\"\n"
-            f"        ALREADY=$((ALREADY+1))\n"
-            f"    else\n"
-            f"        echo \"  Copying $f\"\n"
-            f"        scp {remote_host}:{remote_run_dir}/$f {local_run_dir}/\n"
-            f"        COPIED=$((COPIED+1))\n"
+            f"for RUN in $RUNS; do\n"
+            f"    LRD=\"$LOCAL_BASE/prad_$RUN\"\n"
+            f"    RRD=\"$REMOTE_BASE/prad_$RUN\"\n"
+            f"\n"
+            f"    echo \"=== Run $RUN: Step 1 — Copying evio files ===\"\n"
+            f"    echo \"Local directory: $LRD\"\n"
+            f"    mkdir -p \"$LRD\"\n"
+            f"    ALL_FILES=$(ssh \"$REMOTE_HOST\" \"ls $RRD/\" 2>/dev/null | sort)\n"
+            f"\n"
+            f"    # Disk-space check: count files in the requested range that\n"
+            f"    # aren't already present locally, then assume ~2 GB each.\n"
+            f"    TO_COPY=0\n"
+            f"    while IFS= read -r f; do\n"
+            f"        NUM=$(echo \"$f\" | grep -oP '\\.evio\\.\\K[0-9]+')\n"
+            f"        [ -z \"$NUM\" ] && continue\n"
+            f"        N=$((10#$NUM))\n"
+            f"        if [ \"$N\" -lt \"$F_START\" ] || [ \"$N\" -gt \"$F_END\" ]; then continue; fi\n"
+            f"        if [ -f \"$LRD/$f\" ]; then continue; fi\n"
+            f"        TO_COPY=$((TO_COPY+1))\n"
+            f"    done <<< \"$ALL_FILES\"\n"
+            f"    NEEDED_BYTES=$((TO_COPY * BYTES_PER_EVIO))\n"
+            f"    DF_PATH=\"$LRD\"\n"
+            f"    while [ -n \"$DF_PATH\" ] && [ ! -e \"$DF_PATH\" ]; do\n"
+            f"        DF_PATH=$(dirname \"$DF_PATH\")\n"
+            f"    done\n"
+            f"    FREE_BYTES=$(df -B1 --output=avail \"$DF_PATH\" 2>/dev/null | tail -n1 | tr -d ' ')\n"
+            f"    NEED_GB=$((NEEDED_BYTES / 1073741824))\n"
+            f"    FREE_GB=$(( ${{FREE_BYTES:-0}} / 1073741824))\n"
+            f"    echo \"Disk-space check: $TO_COPY file(s) × ~2 GB ≈ ${{NEED_GB}} GB needed, ${{FREE_GB}} GB free.\"\n"
+            f"    if [ -n \"$FREE_BYTES\" ] && [ \"$FREE_BYTES\" -lt \"$NEEDED_BYTES\" ]; then\n"
+            f"        echo \"ERROR: insufficient disk space for run $RUN — aborting.\" >&2\n"
+            f"        exit 1\n"
             f"    fi\n"
-            f"done <<< \"$ALL_FILES\"\n"
-            f"echo \"Step 1 done. Copied $COPIED file(s), $ALREADY already present.\"\n"
             f"\n"
-            f"# ── Step 2: Analyze Data ──────────────────────────────────\n"
-            f"echo ''\n"
-            f"echo '=== Step 2: Running gain monitor analysis ==='\n"
-            f"cd {script_dir}\n"
-            f"INPUTDIR={local_base} OUTPUTDIR={outdir} bash {_SCRIPT_PATH} {run_num} {n_cpu}\n"
+            f"    COPIED=0; ALREADY=0\n"
+            f"    while IFS= read -r f; do\n"
+            f"        NUM=$(echo \"$f\" | grep -oP '\\.evio\\.\\K[0-9]+')\n"
+            f"        [ -z \"$NUM\" ] && continue\n"
+            f"        N=$((10#$NUM))\n"
+            f"        if [ \"$N\" -lt \"$F_START\" ] || [ \"$N\" -gt \"$F_END\" ]; then continue; fi\n"
+            f"        if [ -f \"$LRD/$f\" ]; then\n"
+            f"            echo \"  Already exists: $f (skipping)\"\n"
+            f"            ALREADY=$((ALREADY+1))\n"
+            f"        else\n"
+            f"            echo \"  Copying $f\"\n"
+            f"            scp \"$REMOTE_HOST:$RRD/$f\" \"$LRD/\"\n"
+            f"            COPIED=$((COPIED+1))\n"
+            f"        fi\n"
+            f"    done <<< \"$ALL_FILES\"\n"
+            f"    echo \"Run $RUN download done. Copied $COPIED file(s), $ALREADY already present.\"\n"
+            f"\n"
+            f"    echo \"\"\n"
+            f"    echo \"=== Run $RUN: Step 2 — Analysis ===\"\n"
+            f"    cd \"$SCRIPT_DIR\"\n"
+            f"    INPUTDIR=\"$LOCAL_BASE\" OUTPUTDIR=\"$OUTDIR\" bash \"$SCRIPT\" \"$RUN\" \"$N_CPU\"\n"
+            + cleanup_block +
+            f"done\n"
+            f"\n"
+            f"echo \"\"\n"
+            f"echo \"=== All runs done ===\"\n"
         )
 
         self._console.clear()
+        if batch_mode and len(run_numbers) > 1:
+            summary = f"Batch: {len(run_numbers)} runs ({runs_string})"
+        else:
+            summary = f"Run {run_numbers[0]}"
+        cleanup_note = "  | cleanup raw evio after each" if batch_mode else ""
         self._append(
-            f"<span style='color:#8b949e'>Run {run_num} | files {f_start}–{f_end}"
-            f" | {n_cpu} CPUs</span><br>")
+            f"<span style='color:#8b949e'>{summary} | files {f_start}–{f_end}"
+            f" | {n_cpu} CPUs{cleanup_note}</span><br>")
         self._run_btn.setEnabled(False)
         self._stop_btn.setEnabled(True)
         self._process.start("bash", ["-c", bash_cmd])
@@ -2246,6 +2496,10 @@ class GainMonitorWindow(QMainWindow):
         self._manual_vmax = 1.1
         self._log_scale = False
         self._selected_module: Optional[str] = None
+        # Last clicked HyCal (non-LMS) module — drives the orange mod plots.
+        # Held independently of `_selected_module` so picking a reference PMT
+        # doesn't blank the mod plots.
+        self._selected_hycal_module: Optional[str] = None
         self._start_run_idx: int = 0
         self._end_run_idx: int = 0
         self._thresh_g: float = 0.10
@@ -2410,7 +2664,7 @@ class GainMonitorWindow(QMainWindow):
 
         ctrl.addWidget(self._slabel("Ref:"))
         self._ref_combo = QComboBox()
-        self._ref_combo.addItems(LMS_NAMES)
+        self._ref_combo.addItems(LMS_DISPLAY)
         self._ref_combo.setCurrentIndex(LMS_REF_DEFAULT)
         self._ref_combo.setFixedWidth(90)
         self._ref_combo.setFont(QFont("Consolas", 10))
@@ -2628,18 +2882,29 @@ class GainMonitorWindow(QMainWindow):
         charts_layout.setSpacing(2)
 
         self._charts: List[LMSLineChartWidget] = []
-        for i, name in enumerate(LMS_NAMES):
+        for kind, label in CHART_PLOTS:
             chart = LMSLineChartWidget()
-            chart.set_data([], [], [], f"{name} (lms/alpha)")
-            chart.runClicked.connect(self._on_chart_run_clicked)
+            chart.set_data([], [], [], label)
+            # The two module-driven plots (LMS peak and gain factor) are
+            # tinted orange so they are visually distinct from the three
+            # blue reference plots above.
+            if kind in ("mod_lms", "mod_gain"):
+                chart.set_series_color(QColor(THEME.HIGHLIGHT))
+            chart.runClicked.connect(
+                lambda rn, k=kind: self._on_chart_run_clicked(k, rn))
+            chart.pointDeleteRequested.connect(self._on_delete_run)
+            chart.pointBackupRequested.connect(self._on_backup_run)
             self._charts.append(chart)
             charts_layout.addWidget(chart)
 
         right.addWidget(charts)
         self._hist_widget = RootHistWidget()
         right.addWidget(self._hist_widget)
-        right.setStretchFactor(0, 3)
-        right.setStretchFactor(1, 2)
+        # 5 stacked plots up top still need most of the vertical room, but
+        # the histogram below needs enough height to be readable.
+        right.setStretchFactor(0, 7)
+        right.setStretchFactor(1, 3)
+        self._right_splitter = right
 
         body.addWidget(right)
         # Body now has just two panels — the report table is a floating
@@ -2648,6 +2913,7 @@ class GainMonitorWindow(QMainWindow):
         body.setStretchFactor(0, 2)  # HyCal map
         body.setStretchFactor(1, 5)  # charts + reserved
         QTimer.singleShot(0, lambda: self._body.setSizes([500, 1100]))
+        QTimer.singleShot(0, lambda: self._right_splitter.setSizes([700, 300]))
 
         root.addWidget(body, stretch=1)
 
@@ -2864,6 +3130,7 @@ class GainMonitorWindow(QMainWindow):
         self._end_run_idx = last
         self._current_run_idx = last
         self._selected_module = None
+        self._selected_hycal_module = None
         self._map.set_selected(None)
         self._deviation_stats_key = None
 
@@ -2979,11 +3246,179 @@ class GainMonitorWindow(QMainWindow):
                 self._run_combo.setCurrentIndex(i)
                 return
 
-    def _on_chart_run_clicked(self, run_number: int):
+    def _on_chart_run_clicked(self, kind: str, run_number: int):
+        # Clicking a point on one of the three reference-PMT plots should
+        # switch the histogram (and selected module) to the current ref PMT
+        # — otherwise the histogram would keep showing whatever HyCal
+        # module was last picked on the map.
+        if kind in ("ratio", "ref_lms", "ref_alpha"):
+            ref_name = LMS_NAMES[self._current_ref_idx]
+            if self._selected_module != ref_name:
+                self._on_module_clicked(ref_name)
         if self._view_mode != 3:
             self._on_jump_to_run(run_number)
         else:
             self._load_lms_hist(self._selected_module, run_number)
+
+    def _run_file_paths(self, run_number: int) -> List[str]:
+        folder = self._current_folder
+        return [
+            os.path.join(folder, f"prad_{run_number:06d}_LMS.dat"),
+            os.path.join(folder, f"prad_{run_number:06d}_LMS.root"),
+            os.path.join(folder, f"prad_{run_number:06d}_LMS_fitted.root"),
+        ]
+
+    def _drop_run_from_state(self, run_idx: int, run_number: int):
+        """Remove a run from in-memory state and refresh combos / views.
+        Called by both the delete and the backup flows once the on-disk
+        action has succeeded."""
+        del self._runs[run_idx]
+        self._file_snapshot.pop(run_number, None)
+        for key in [k for k in self._hist_cache if k[0] == run_number]:
+            self._hist_cache.pop(key, None)
+
+        n = len(self._runs)
+
+        def _shift(idx: int) -> int:
+            return idx - 1 if idx > run_idx else idx
+
+        self._start_run_idx = max(0, min(_shift(self._start_run_idx), n - 1))
+        self._end_run_idx = max(0, min(_shift(self._end_run_idx), n - 1))
+        self._current_run_idx = max(0, min(_shift(self._current_run_idx), n - 1))
+        if self._start_run_idx > self._end_run_idx:
+            self._start_run_idx, self._end_run_idx = (
+                self._end_run_idx, self._start_run_idx)
+        self._current_run_idx = max(self._start_run_idx,
+                                    min(self._current_run_idx,
+                                        self._end_run_idx))
+
+        self._start_combo.blockSignals(True)
+        self._end_combo.blockSignals(True)
+        self._start_combo.clear()
+        self._end_combo.clear()
+        for rd in self._runs:
+            self._start_combo.addItem(str(rd.run_number))
+            self._end_combo.addItem(str(rd.run_number))
+        self._start_combo.setCurrentIndex(self._start_run_idx)
+        self._end_combo.setCurrentIndex(self._end_run_idx)
+        self._start_combo.blockSignals(False)
+        self._end_combo.blockSignals(False)
+        self._populate_run_combo()
+
+        self._recompute_pairwise_diffs()
+        self._deviation_stats_key = None
+        self._status_lbl.setText(f"{len(self._runs)} runs loaded")
+        self._update_all_views()
+
+    def _on_delete_run(self, run_number: int):
+        """Remove a run from memory and delete its .dat/.root files on disk."""
+        run_idx = next((i for i, rd in enumerate(self._runs)
+                        if rd.run_number == run_number), -1)
+        if run_idx < 0:
+            return
+        if len(self._runs) <= 1:
+            QMessageBox.warning(self, "Cannot delete",
+                                "Refusing to delete the last remaining run.")
+            return
+
+        paths = self._run_file_paths(run_number)
+        existing = [p for p in paths if os.path.exists(p)]
+        details = ("\n  ".join(existing) if existing
+                   else "(no on-disk files found — only in-memory record)")
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Confirm run deletion")
+        box.setText(f"Are you sure you want to delete run {run_number}?")
+        box.setInformativeText(
+            "The following files will be permanently removed from disk:\n  "
+            + details
+            + "\n\nThis cannot be undone.")
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        yes_btn = box.button(QMessageBox.StandardButton.Yes)
+        if yes_btn is not None:
+            yes_btn.setText("Delete")
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+
+        errors: List[str] = []
+        for p in paths:
+            if not os.path.exists(p):
+                continue
+            try:
+                os.remove(p)
+            except OSError as e:
+                errors.append(f"{p}: {e}")
+        if errors:
+            QMessageBox.warning(self, "Delete partially failed",
+                                "Some files could not be deleted:\n\n"
+                                + "\n".join(errors))
+
+        self._drop_run_from_state(run_idx, run_number)
+
+    def _on_backup_run(self, run_number: int):
+        """Move a run's .dat/.root files into <folder>/backup/ and drop the
+        run from the in-memory state."""
+        run_idx = next((i for i, rd in enumerate(self._runs)
+                        if rd.run_number == run_number), -1)
+        if run_idx < 0:
+            return
+        if len(self._runs) <= 1:
+            QMessageBox.warning(self, "Cannot backup",
+                                "Refusing to remove the last remaining run "
+                                "from the view.")
+            return
+
+        folder = self._current_folder
+        backup_dir = os.path.join(folder, "backup")
+        paths = self._run_file_paths(run_number)
+        existing = [p for p in paths if os.path.exists(p)]
+        details = ("\n  ".join(existing) if existing
+                   else "(no on-disk files found — only in-memory record)")
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Confirm move to backup")
+        box.setText(f"Move run {run_number} to backup?")
+        box.setInformativeText(
+            "The following files will be moved to:\n  "
+            + backup_dir + "\n\n  "
+            + details
+            + "\n\nThe run will also be removed from the current view.")
+        box.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        yes_btn = box.button(QMessageBox.StandardButton.Yes)
+        if yes_btn is not None:
+            yes_btn.setText("Move")
+        if box.exec() != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            os.makedirs(backup_dir, exist_ok=True)
+        except OSError as e:
+            QMessageBox.critical(self, "Backup failed",
+                                 f"Could not create backup directory:\n"
+                                 f"{backup_dir}\n\n{e}")
+            return
+
+        errors: List[str] = []
+        for p in paths:
+            if not os.path.exists(p):
+                continue
+            dest = os.path.join(backup_dir, os.path.basename(p))
+            try:
+                shutil.move(p, dest)
+            except (OSError, shutil.Error) as e:
+                errors.append(f"{p} → {dest}: {e}")
+        if errors:
+            QMessageBox.warning(self, "Backup partially failed",
+                                "Some files could not be moved:\n\n"
+                                + "\n".join(errors))
+
+        self._drop_run_from_state(run_idx, run_number)
 
     def _on_cycle_palette(self):
         if self._view_mode == 2:
@@ -3045,16 +3480,17 @@ class GainMonitorWindow(QMainWindow):
         mod = self._mod_by_name.get(name)
         if not mod:
             return
+        disp = lms_display_name(name)
         active = self._active_runs
         if not active:
-            self._info.setText(f"{name} ({mod.mod_type})")
+            self._info.setText(f"{disp} ({mod.mod_type})")
             return
         rd = self._runs[self._current_run_idx]
         mrec = rd.modules.get(name)
-        ref = LMS_NAMES[self._current_ref_idx]
+        ref = LMS_DISPLAY[self._current_ref_idx]
         if mrec:
             gain = mrec.gain_factors[self._current_ref_idx]
-            base = (f"{name} ({mod.mod_type})  gain[{ref}]: {gain:.5f}"
+            base = (f"{disp} ({mod.mod_type})  gain[{ref}]: {gain:.5f}"
                     f"  lms_peak: {mrec.lms_peak:.2f}"
                     f"  lms_sigma: {mrec.lms_sigma:.2f}")
             if self._view_mode == 1:
@@ -3067,10 +3503,26 @@ class GainMonitorWindow(QMainWindow):
                     base += f"  dev: {dev:+.2f}σ"
             self._info.setText(base)
         else:
-            self._info.setText(f"{name} ({mod.mod_type})  no data")
+            self._info.setText(f"{disp} ({mod.mod_type})  no data")
 
     def _on_module_clicked(self, name: str):
-        self._selected_module = name if name else None
+        new_sel = name if name else None
+        self._selected_module = new_sel
+        # The orange mod plots latch onto the last-clicked HyCal module and
+        # only ever change when the user clicks another one — clicks on a
+        # reference PMT, on empty map space, or on the mod plots themselves
+        # leave them as-is.
+        if new_sel and new_sel not in LMS_NAMES:
+            self._selected_hycal_module = new_sel
+        # Clicking one of the three LMS cells doubles as a reference-PMT
+        # picker: feed it through the Ref dropdown so the rest of the UI
+        # (ref plots, geo view, irregular table) updates exactly as it
+        # would from a manual dropdown change.  setCurrentIndex is a no-op
+        # when the index is already current.
+        if new_sel in LMS_NAMES:
+            new_ref_idx = LMS_NAMES.index(new_sel)
+            if new_ref_idx != self._current_ref_idx:
+                self._ref_combo.setCurrentIndex(new_ref_idx)
         self._map.set_selected(self._selected_module)
         if self._selected_module:
             self._irregular_table.select_module(self._selected_module)
@@ -3151,7 +3603,7 @@ class GainMonitorWindow(QMainWindow):
             if len(self._hist_cache) > _HIST_CACHE_MAX:
                 self._hist_cache.popitem(last=False)
         self._hist_widget.set_histogram(values, edges,
-                                        f"{hist_module}  run {run_number}",
+                                        f"{lms_display_name(hist_module)}  run {run_number}",
                                         gauss=gauss,
                                         overlay_values=ovl_values,
                                         overlay_edges=ovl_edges,
@@ -3344,70 +3796,112 @@ class GainMonitorWindow(QMainWindow):
             return
 
         first_run = active[0].run_number
-
         ref_idx = self._current_ref_idx
+        ref_name = LMS_NAMES[ref_idx]
+        curr_run_number = self._runs[self._current_run_idx].run_number
 
-        # Reference-channel cells (LMS1/2/3) are stored in rd.lms, not
-        # rd.modules — so the per-module-gain branch can't render them.
-        # When the user clicks one of those, fall through to the default
-        # lms/alpha ratio plot (which is the meaningful trend for the
-        # reference channels themselves).
-        is_ref_module = (self._selected_module in LMS_NAMES)
-        if self._selected_module and not is_ref_module:
-            mname = self._selected_module
-            # single pass: all 3 channels share the same valid-run check
-            chart_data: List[Tuple[List, List, List]] = [([], [], []) for _ in range(3)]
+        # Mod plots track the last-clicked HyCal module, so they stay
+        # populated when the user clicks on a reference PMT (cell or
+        # ref-plot point).  Ref plots ignore mname entirely.
+        mname = self._selected_hycal_module
+        has_module = bool(mname)
+
+        for i, (kind, _label) in enumerate(CHART_PLOTS):
+            indices, actual_runs, vals, errs, title = self._series_for_kind(
+                kind, ref_idx, ref_name, mname, has_module, active, first_run)
+            chart = self._charts[i]
+            chart.set_data(indices, vals, errs, title, actual_runs)
+            if vals:
+                chart.set_y_range(*_chart_y_range(vals, errs))
+            chart.set_current_run(curr_run_number)
+            chart.set_highlighted(False)
+
+    def _series_for_kind(
+        self, kind: str, ref_idx: int, ref_name: str,
+        mname: Optional[str], has_module: bool,
+        active: List[RunData], first_run: int,
+    ) -> Tuple[List[int], List[int], List[float], List[float], str]:
+        """Build (indices, actual_runs, vals, errs, title) for one of the
+        five fixed plots."""
+        indices: List[int] = []
+        actual_runs: List[int] = []
+        vals: List[float] = []
+        errs: List[float] = []
+
+        ref_disp = lms_display_name(ref_name)
+        mname_disp = lms_display_name(mname) if mname else mname
+
+        if kind == "ratio":
+            for idx, rd in enumerate(active):
+                rec = rd.lms.get(ref_name)
+                if rec is None or rec.alpha_peak == 0 or rec.lms_peak == 0:
+                    continue
+                ratio = rec.lms_peak / rec.alpha_peak
+                rel_lms = rec.lms_sigma / rec.lms_peak
+                rel_alpha = rec.alpha_sigma / rec.alpha_peak
+                err = ratio * math.sqrt(rel_lms ** 2 + rel_alpha ** 2)
+                indices.append(idx + 1)
+                actual_runs.append(rd.run_number)
+                vals.append(ratio)
+                errs.append(err)
+            return indices, actual_runs, vals, errs, (
+                f"{ref_disp}  LMS/Alpha  (run1={first_run})")
+
+        if kind == "ref_lms":
+            for idx, rd in enumerate(active):
+                rec = rd.lms.get(ref_name)
+                if rec is None or rec.lms_peak == 0:
+                    continue
+                indices.append(idx + 1)
+                actual_runs.append(rd.run_number)
+                vals.append(rec.lms_peak)
+                errs.append(rec.lms_sigma)
+            return indices, actual_runs, vals, errs, (
+                f"{ref_disp}  LMS peak±σ  (run1={first_run})")
+
+        if kind == "ref_alpha":
+            for idx, rd in enumerate(active):
+                rec = rd.lms.get(ref_name)
+                if rec is None or rec.alpha_peak == 0:
+                    continue
+                indices.append(idx + 1)
+                actual_runs.append(rd.run_number)
+                vals.append(rec.alpha_peak)
+                errs.append(rec.alpha_sigma)
+            return indices, actual_runs, vals, errs, (
+                f"{ref_disp}  Alpha peak±σ  (run1={first_run})")
+
+        if kind == "mod_lms":
+            if not has_module:
+                return indices, actual_runs, vals, errs, (
+                    f"Module LMS — select a HyCal module  (run1={first_run})")
+            for idx, rd in enumerate(active):
+                mrec = rd.modules.get(mname)
+                if mrec is None or mrec.lms_peak == 0:
+                    continue
+                indices.append(idx + 1)
+                actual_runs.append(rd.run_number)
+                vals.append(mrec.lms_peak)
+                errs.append(mrec.lms_sigma)
+            return indices, actual_runs, vals, errs, (
+                f"{mname_disp}  LMS peak±σ  (run1={first_run})")
+
+        if kind == "mod_gain":
+            if not has_module:
+                return indices, actual_runs, vals, errs, (
+                    f"Module Gain[{ref_disp}] — select a HyCal module  "
+                    f"(run1={first_run})")
             for idx, rd in enumerate(active):
                 mrec = rd.modules.get(mname)
                 if mrec is None:
                     continue
-                run_num = rd.run_number
-                gf = mrec.gain_factors
-                for i in range(3):
-                    d = chart_data[i]
-                    d[0].append(idx + 1)
-                    d[1].append(run_num)
-                    d[2].append(gf[i])
-            curr_run_number = self._runs[self._current_run_idx].run_number
-            for i, lms_name in enumerate(LMS_NAMES):
-                indices, actual_runs, gains = chart_data[i]
-                self._charts[i].set_data(
-                    indices, gains, [],
-                    f"{mname}  gain[{lms_name}]  (run1={first_run})",
-                    actual_runs)
-                if gains:
-                    self._charts[i].set_y_range(*_chart_y_range(gains, []))
-                self._charts[i].set_highlighted(i == ref_idx)
-                self._charts[i].set_current_run(curr_run_number)
-        else:
-            # single pass: collect LMS ratio data for all 3 channels at once
-            chart_data2: List[Tuple[List, List, List, List]] = [([], [], [], []) for _ in range(3)]
-            for idx, rd in enumerate(active):
-                run_num = rd.run_number
-                for i, lms_name in enumerate(LMS_NAMES):
-                    rec = rd.lms.get(lms_name)
-                    if rec is None or rec.alpha_peak == 0 or rec.lms_peak == 0:
-                        continue
-                    ratio = rec.lms_peak / rec.alpha_peak
-                    rel_lms = rec.lms_sigma / rec.lms_peak
-                    rel_alpha = rec.alpha_sigma / rec.alpha_peak
-                    err = ratio * math.sqrt(rel_lms ** 2 + rel_alpha ** 2)
-                    d = chart_data2[i]
-                    d[0].append(idx + 1)
-                    d[1].append(run_num)
-                    d[2].append(ratio)
-                    d[3].append(err)
-            curr_run_number = self._runs[self._current_run_idx].run_number
-            for i, lms_name in enumerate(LMS_NAMES):
-                indices, actual_runs, ratios, errors = chart_data2[i]
-                self._charts[i].set_data(
-                    indices, ratios, errors,
-                    f"{lms_name} (lms/alpha)  (run1={first_run})",
-                    actual_runs)
-                if ratios:
-                    self._charts[i].set_y_range(*_chart_y_range(ratios, errors))
-                self._charts[i].set_highlighted(i == ref_idx)
-                self._charts[i].set_current_run(curr_run_number)
+                indices.append(idx + 1)
+                actual_runs.append(rd.run_number)
+                vals.append(mrec.gain_factors[ref_idx])
+            return indices, actual_runs, vals, errs, (
+                f"{mname_disp}  gain[{ref_disp}]  (run1={first_run})")
+
+        return indices, actual_runs, vals, errs, ""
 
     def _update_irregular_table(self):
         active = self._active_runs

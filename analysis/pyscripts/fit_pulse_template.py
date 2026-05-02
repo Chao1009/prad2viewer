@@ -62,11 +62,6 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
-try:
-    from scipy.optimize import curve_fit
-except ImportError:
-    raise SystemExit("[ERROR] scipy is required (pip install scipy)")
-
 import _common as C
 from _common import dec  # prad2py.dec re-export
 
@@ -80,93 +75,29 @@ PULSE_CACHE = 20
 # Pulse model
 # ---------------------------------------------------------------------------
 #
-# We fit on *normalized* pulses (peak height = 1) so the fit only sees the
-# shape, not the amplitude.  Keeping amplitude in the fit was the original
-# failure mode: high-amplitude channels report enormous χ²/dof for visually
-# excellent fits because σ (late-tail RMS) is set by the pedestal noise,
-# while residuals scale with amplitude — the χ² gate rejects channels that
-# the fit actually nailed.  Normalising removes amplitude as a free
-# parameter and makes χ²/dof comparable across the whole detector.
+# Fitting itself runs in C++ via dec.WaveAnalyzer.fit_pulse_shape() —
+# three-parameter Levenberg-Marquardt on the unit-amplitude two-tau model
+# (T(t; t0, τ_r, τ_f) / T_max), with the per-pulse peak-height
+# normalisation that decouples shape from amplitude.  See
+# prad2dec/src/WaveAnalyzer.cpp::FitPulseShape for the implementation.
+#
+# We keep a small Python `two_tau_unit` here only for the diagnostic
+# plot overlay (drawn once per channel from the median fit params) — the
+# fitting hot path no longer touches it.
 
 def two_tau_unit(t: np.ndarray, t0: float, tau_r: float, tau_f: float) -> np.ndarray:
-    """Two-tau pulse normalized to unit peak height.  Zero for t ≤ t0."""
+    """Two-tau pulse normalized to unit peak height — used only for the
+    plot overlay (the C++ fitter has its own implementation)."""
     out = np.zeros_like(t, dtype=np.float64)
     mask = t > t0
     if not mask.any():
         return out
     dt = t[mask] - t0
     raw = (1.0 - np.exp(-dt / tau_r)) * np.exp(-dt / tau_f)
-    # Closed-form peak value of the unit-A model — divides out so the
-    # returned curve has max = 1 regardless of (τ_r, τ_f).
     u = tau_r / (tau_r + tau_f)
     t_max = (1.0 - u) * (u ** (tau_r / tau_f))
     out[mask] = raw / t_max
     return out
-
-
-def fit_pulse(samples_pedsub: np.ndarray, peak_idx: int, clk_ns: float,
-              ped_rms: float, model_err_floor: float = 0.01
-              ) -> Optional[Tuple[Dict[str, float], Dict[str, float], float, float]]:
-    """Fit one pedsub pulse on its normalised shape.  Time axis is in ns.
-
-    Returns (params, perr, chi2_per_dof, peak_amp) on success, None on
-    convergence failure.  peak_amp is the original (un-normalised) ADC
-    peak — kept for downstream amplitude diagnostics — and is *not* a fit
-    parameter.
-
-    σ for the χ² normalisation has two contributions: pedestal noise
-    (relative size = ped_rms / peak_amp) and a floor for residual model
-    mismatch (`model_err_floor`, fraction of unit peak).  At low
-    amplitude the noise term dominates; at high amplitude the model-
-    error floor takes over so χ²/dof stays in a comparable band instead
-    of blowing up on visually-fine fits.  Default 1% of peak matches the
-    typical sub-sample / pulse-tail mismatch of the two-tau model on
-    PbWO₄ + PMT data.
-    """
-    n = samples_pedsub.shape[0]
-    if n < 8:
-        return None
-    t = np.arange(n, dtype=np.float64) * clk_ns
-
-    peak_amp = float(samples_pedsub[peak_idx])
-    if peak_amp <= 0.0:
-        return None
-    t_peak_ns = peak_idx * clk_ns
-
-    # Normalise to unit peak height — the fit sees shape only.
-    pulse_norm = samples_pedsub.astype(np.float64) / peak_amp
-
-    p0    = (t_peak_ns - 2.0 * clk_ns, 1.0 * clk_ns,  5.0 * clk_ns)
-    lower = (-2.0 * clk_ns,             0.2 * clk_ns,  1.0 * clk_ns)
-    upper = (t[-1],                    10.0 * clk_ns, 80.0 * clk_ns)
-
-    sigma_noise = max(float(ped_rms), 1.0) / peak_amp
-    sigma_norm  = max(sigma_noise, float(model_err_floor))
-
-    try:
-        popt, pcov = curve_fit(
-            two_tau_unit, t, pulse_norm,
-            p0=p0, bounds=(lower, upper),
-            sigma=np.full(n, sigma_norm), absolute_sigma=True,
-            maxfev=2000,
-        )
-    except (RuntimeError, ValueError):
-        return None
-
-    if not (np.isfinite(popt).all() and np.isfinite(pcov).all()):
-        return None
-    perr = np.sqrt(np.clip(np.diag(pcov), 0.0, None))
-
-    resid = pulse_norm - two_tau_unit(t, *popt)
-    dof = max(1, n - 3)
-    chi2_per_dof = float(((resid / sigma_norm) ** 2).sum() / dof)
-
-    t0, tau_r, tau_f = popt
-    params = {"t0_ns": float(t0),
-              "tau_r_ns": float(tau_r), "tau_f_ns": float(tau_f)}
-    errors = {"t0_ns": float(perr[0]),
-              "tau_r_ns": float(perr[1]), "tau_f_ns": float(perr[2])}
-    return params, errors, chi2_per_dof, peak_amp
 
 
 # ---------------------------------------------------------------------------
@@ -581,8 +512,11 @@ def main() -> None:
                                 if lo < 0 or hi > samples.shape[0]:
                                     continue
 
-                                slc_pedsub = samples[lo:hi].astype(np.float64) - ped
-                                rel_peak = pk.pos - lo
+                                # Hand the raw uint16 slice straight to the
+                                # C++ fitter — no float64 conversion, no
+                                # pedsub in Python.
+                                slice_u16 = samples[lo:hi]
+                                rel_peak  = pk.pos - lo
 
                                 st = stats.get(name)
                                 if st is None:
@@ -597,27 +531,29 @@ def main() -> None:
                                 st.ped_rms_sum  += float(rms)
                                 st.ped_n        += 1
 
-                                fit = fit_pulse(slc_pedsub, rel_peak, clk_ns,
-                                                ped_rms=float(rms),
-                                                model_err_floor=args.model_err_floor)
-                                if fit is None:
+                                fit = dec.WaveAnalyzer.fit_pulse_shape(
+                                    slice_u16, rel_peak,
+                                    float(ped), float(rms), clk_ns,
+                                    args.model_err_floor)
+                                if not fit.ok:
                                     continue
-                                params, _perr, chi2, peak_amp = fit
-                                st.tau_r.append(params["tau_r_ns"])
-                                st.tau_f.append(params["tau_f_ns"])
-                                st.t0.append(params["t0_ns"])
-                                st.peak_amp.append(float(peak_amp))
-                                st.chi2.append(chi2)
+                                st.tau_r.append(fit.tau_r_ns)
+                                st.tau_f.append(fit.tau_f_ns)
+                                st.t0.append(fit.t0_ns)
+                                st.peak_amp.append(fit.peak_amp)
+                                st.chi2.append(fit.chi2_per_dof)
                                 st.n_used += 1
                                 n_pulses_used += 1
 
-                                # Cache raw pulses + their peak amps for later
-                                # plotting (the diagnostic PNGs draw the
-                                # normalised stack so the eye sees shape, not
-                                # amplitude).  Only when plotting is on.
+                                # Cache raw pulses + their peak amps for the
+                                # diagnostic plots (normalised stack vs
+                                # median fit).  Pedsub on the fly here so
+                                # the cache lives in absolute ADC like the
+                                # fit's input.  Only when plotting is on.
                                 if plotting and len(st.sample_pulses) < PULSE_CACHE:
-                                    st.sample_pulses.append(slc_pedsub.copy())
-                                    st.sample_peak_amps.append(float(peak_amp))
+                                    st.sample_pulses.append(
+                                        slice_u16.astype(np.float64) - ped)
+                                    st.sample_peak_amps.append(fit.peak_amp)
 
                 if n_phys >= next_progress:
                     _emit_progress(n_files_open, len(p.evio_files), fpath)

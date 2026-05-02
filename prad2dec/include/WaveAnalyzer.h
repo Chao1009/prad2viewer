@@ -154,6 +154,44 @@ public:
     }
     void ClearChannelKey() { SetChannelKey(-1, -1, -1); }
 
+    // ---- Per-pulse shape fit (calibration utility) -------------------
+    //
+    // Output of FitPulseShape().  `ok=false` means the LM solve never
+    // accepted a step (no useful fit returned); fields below are
+    // undefined in that case except `peak_amp` which is set as soon as
+    // the slice is validated.
+    struct PulseFitResult {
+        bool   ok;
+        float  t0_ns;          // template onset, ns from start of slice
+        float  tau_r_ns;
+        float  tau_f_ns;
+        float  peak_amp;       // raw pedsub peak height (ADC, un-normalised)
+        float  chi2_per_dof;   // on the normalised pulse
+        int    n_iter;
+    };
+
+    // Three-parameter Levenberg-Marquardt fit of the unit-amplitude
+    // two-tau model T(t; t0, τ_r, τ_f) / T_max(τ_r, τ_f) to a waveform
+    // slice after pedsub + per-pulse peak-height normalisation.  Used by
+    // analysis/pyscripts/fit_pulse_template.py to build the per-channel
+    // template store; the script aggregates per-pulse results to a
+    // median/MAD entry per channel.
+    //
+    // Static because the fit has no analyzer state — purely a math
+    // operation.  Stack-only: scratch sized for MAX_SAMPLES floats.
+    //
+    // `slice` is a window of `nslice` samples around the peak;
+    // `peak_idx_in_slice` is the position of the maximum within that
+    // window (caller picks).  `ped` and `ped_rms` come from the same
+    // analyzer pass that produced the peak.  `model_err_floor` floors
+    // the per-sample σ on the normalised pulse (default 1% of unit
+    // peak) so χ²/dof stays comparable across amplitudes.
+    static PulseFitResult FitPulseShape(const uint16_t *slice, int nslice,
+                                        int peak_idx_in_slice,
+                                        float ped, float ped_rms,
+                                        float clk_ns,
+                                        float model_err_floor = 0.01f);
+
     // Power-user / diagnostic API: explicit NNLS deconvolution against a
     // caller-supplied template.  Used by the Python `apply_pulse_template`
     // script to plot before/after comparisons; NOT called by production

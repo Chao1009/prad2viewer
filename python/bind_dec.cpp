@@ -314,6 +314,19 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("tau_f_ns",  &fdec::PulseTemplate::tau_f_ns)
         .def_readwrite("is_global", &fdec::PulseTemplate::is_global);
 
+    py::class_<fdec::WaveAnalyzer::PulseFitResult>(m, "PulseFitResult",
+        "Output of WaveAnalyzer.fit_pulse_shape() — three-parameter "
+        "Levenberg-Marquardt fit of the unit-amplitude two-tau model to "
+        "a single normalised pulse.  Inspect `.ok` before reading the "
+        "shape parameters.")
+        .def_readonly("ok",            &fdec::WaveAnalyzer::PulseFitResult::ok)
+        .def_readonly("t0_ns",         &fdec::WaveAnalyzer::PulseFitResult::t0_ns)
+        .def_readonly("tau_r_ns",      &fdec::WaveAnalyzer::PulseFitResult::tau_r_ns)
+        .def_readonly("tau_f_ns",      &fdec::WaveAnalyzer::PulseFitResult::tau_f_ns)
+        .def_readonly("peak_amp",      &fdec::WaveAnalyzer::PulseFitResult::peak_amp)
+        .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitResult::chi2_per_dof)
+        .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitResult::n_iter);
+
     py::class_<fdec::WaveResult>(m, "WaveResult",
         "Output of WaveAnalyzer.analyze_result(): {ped, npeaks, peaks}. "
         "Use this as the second argument to WaveAnalyzer.deconvolve() to "
@@ -416,6 +429,35 @@ void bind_fadc(py::module_ &m)
             "peak finding).  Returns the smoothed buffer as a float32 "
             "numpy array — useful for plotting the curve the peak finder "
             "actually sees.")
+        .def_static("fit_pulse_shape",
+            [](py::array_t<uint16_t> slice, int peak_idx,
+               float ped, float ped_rms, float clk_ns,
+               float model_err_floor) {
+                py::buffer_info buf = slice.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("slice must be a 1-D uint16 array");
+                fdec::WaveAnalyzer::PulseFitResult res;
+                {
+                    py::gil_scoped_release rel;
+                    res = fdec::WaveAnalyzer::FitPulseShape(
+                        static_cast<const uint16_t*>(buf.ptr),
+                        static_cast<int>(buf.shape[0]),
+                        peak_idx, ped, ped_rms, clk_ns,
+                        model_err_floor);
+                }
+                return res;
+            },
+            py::arg("slice"), py::arg("peak_idx"),
+            py::arg("ped"), py::arg("ped_rms"), py::arg("clk_ns"),
+            py::arg("model_err_floor") = 0.01f,
+            "Static C++ Levenberg-Marquardt fit of the unit-amplitude "
+            "two-tau pulse-shape model to one normalised pulse — orders "
+            "of magnitude faster than scipy.optimize.curve_fit on the "
+            "equivalent model.  `slice` is a uint16 waveform window "
+            "around the peak; `peak_idx` is the position of the maximum "
+            "within the slice; `ped` / `ped_rms` come from the same "
+            "WaveAnalyzer pass that produced the peak.  Returns a "
+            "PulseFitResult; check `.ok` before reading the params.")
         .def("set_template_store",
             [](fdec::WaveAnalyzer &self,
                const fdec::PulseTemplateStore *store) {

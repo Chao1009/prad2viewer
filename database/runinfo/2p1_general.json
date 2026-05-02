@@ -9,17 +9,17 @@
             },
             "target": [0.0, 0.0, 0.0],
             "hycal": {
-                "position": [-0.48, -0.17, 6269.81],
+                "position": [-0.48, 1.39, 6269.81],
                 "tilting": [0.0, 0.0, 0.0]
             },
             "gem": {
-                "pedestal_file":    "gem_peds/peds_24111.txt",
-                "common_mode_file": "gem_peds/cm_24111.txt",
+                "pedestal_file":    "gem_peds/peds_24177.txt",
+                "common_mode_file": "gem_peds/cm_24177.txt",
                 "detectors": [
-                    {"id": 0, "position": [-231.26, -1.0, 5820.0], "tilting": [180.0, 0.0, 0.0]},
-                    {"id": 1, "position": [231.39, -1.5, 5852.0], "tilting": [180.0, 0.0, 180.0]},
-                    {"id": 2, "position": [-230.0, 1.5, 5416.0], "tilting": [180.0, 0.0, 0.0]},
-                    {"id": 3, "position": [230.0, -1.7, 5458.9], "tilting": [180.0, 0.0, 180.0]}
+                    {"id": 0, "position": [-229.26, 1.5, 5805.0], "tilting": [180.0, 0.0, 0.0]},
+                    {"id": 1, "position": [226.7, 1.5, 5850.0], "tilting": [180.0, 0.0, 180.0]},
+                    {"id": 2, "position": [-228.8, 1.8, 5413.0], "tilting": [180.0, 0.0, 0.0]},
+                    {"id": 3, "position": [227.0, 1.3, 5458.9], "tilting": [180.0, 0.0, 180.0]}
                 ]
             },
             "time_cuts": {

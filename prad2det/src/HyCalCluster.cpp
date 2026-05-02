@@ -68,11 +68,11 @@ void HyCalCluster::Clear()
     clusters_.clear();
 }
 
-void HyCalCluster::AddHit(int module_index, float energy)
+void HyCalCluster::AddHit(int module_index, float energy, float time)
 {
     if (module_index < 0 || module_index >= sys_.module_count()) return;
     if (energy > config_.min_module_energy)
-        hits_.push_back({module_index, energy});
+        hits_.push_back({module_index, energy, time});
 }
 
 void HyCalCluster::FormClusters()
@@ -372,6 +372,7 @@ ClusterHit HyCalCluster::reconstruct_pos(const ModuleCluster &cl) const
     ClusterHit result;
     result.center_id = center_mod.id;
     result.energy    = cl.energy;
+    result.time      = cl.center.time;
     result.nblocks   = static_cast<int>(cl.hits.size());
     result.flag      = cl.flag;
 

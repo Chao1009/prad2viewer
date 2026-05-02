@@ -132,7 +132,7 @@ int main(int argc, char *argv[])
             float adc = ev->peak_integral[j][0];
             float energy = (mod->cal_factor > 0.) ?
                 static_cast<float>(mod->energize(adc)) : adc * 0.2f;
-            clusterer.AddHit(mod->index, energy);
+            clusterer.AddHit(mod->index, energy, 0.f); // time info not available in raw branches, set to 0
         }
         clusterer.FormClusters();
         std::vector<fdec::ClusterHit> hits;

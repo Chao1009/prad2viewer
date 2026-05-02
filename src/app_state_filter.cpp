@@ -247,7 +247,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
                         float energy = (mod->cal_factor > 0.)
                             ? static_cast<float>(mod->energize(adc_val))
                             : adc_val * adc_to_mev;
-                        clusterer.AddHit(mod->index, energy);
+                        clusterer.AddHit(mod->index, energy, 0.f);
                     }
                 }
             }

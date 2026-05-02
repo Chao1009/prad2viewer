@@ -333,7 +333,7 @@ int plot_hits_at_hycal(const char *evio_path,
                         if (best < 0) continue;
                         float energy = static_cast<float>(
                             mod->energize(wres.peaks[best].integral));
-                        hc_clusterer.AddHit(mod->index, energy);
+                        hc_clusterer.AddHit(mod->index, energy, 0.f);
                     }
                 }
             }

@@ -12,7 +12,7 @@
 //   HyCalCluster clusterer(sys);
 //   // per-event:
 //   clusterer.Clear();
-//   clusterer.AddHit(module_index, energy);
+//   clusterer.AddHit(module_index, energy, time);
 //   clusterer.FormClusters();
 //   for (auto &cl : clusterer.GetClusters()) { ... }
 //=============================================================================
@@ -45,6 +45,7 @@ struct ClusterConfig {
 struct ModuleHit {
     int   index;        // module index in HyCalSystem
     float energy;       // calibrated energy (MeV)
+    float time;         // ADC peaking time (ns)
 };
 
 // --- cluster result ---------------------------------------------------------
@@ -52,12 +53,14 @@ struct ModuleCluster {
     ModuleHit              center;     // seed module (highest energy local max)
     std::vector<ModuleHit> hits;       // all hits (energy may be split)
     float                  energy = 0.f;
+    float                  time   = 0.f; // peaking time of center modules (ns)
     uint32_t               flag   = 0;
 
     void add_hit(const ModuleHit &h)
     {
         hits.push_back(h);
         energy += h.energy;
+        time = h.time;
     }
 };
 
@@ -66,6 +69,7 @@ struct ClusterHit {
     int   center_id;    // PrimEx ID of center module
     float x, y;         // reconstructed position (mm)
     float energy;       // total cluster energy (MeV)
+    float time;         // ADC peaking time (ns) of center module
     int   nblocks;      // number of modules in cluster
     int   npos;         // number of modules used in position reconstruction
     uint32_t flag;      // cluster flags
@@ -150,7 +154,7 @@ public:
 
     // --- per-event interface ------------------------------------------------
     void Clear();
-    void AddHit(int module_index, float energy);
+    void AddHit(int module_index, float energy, float time);
     void FormClusters();
     void ReconstructHits(std::vector<ClusterHit> &out) const;
 

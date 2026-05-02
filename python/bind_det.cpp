@@ -676,13 +676,15 @@ static void bind_hycal(py::module_ &m)
         "One HyCal module hit fed into the clusterer.")
         .def(py::init<>())
         .def_readwrite("index",  &fdec::ModuleHit::index)
-        .def_readwrite("energy", &fdec::ModuleHit::energy);
+        .def_readwrite("energy", &fdec::ModuleHit::energy)
+        .def_readwrite("time",   &fdec::ModuleHit::time);
 
     py::class_<fdec::ModuleCluster>(m, "ModuleCluster",
         "Module-level cluster: seed + constituent hits + total energy + flags.")
         .def_readonly("center", &fdec::ModuleCluster::center)
         .def_readonly("hits",   &fdec::ModuleCluster::hits)
         .def_readonly("energy", &fdec::ModuleCluster::energy)
+        .def_readonly("time",   &fdec::ModuleCluster::time)
         .def_readonly("flag",   &fdec::ModuleCluster::flag);
 
     py::class_<fdec::ClusterHit>(m, "ClusterHit",
@@ -691,6 +693,7 @@ static void bind_hycal(py::module_ &m)
         .def_readonly("x",         &fdec::ClusterHit::x)
         .def_readonly("y",         &fdec::ClusterHit::y)
         .def_readonly("energy",    &fdec::ClusterHit::energy)
+        .def_readonly("time",      &fdec::ClusterHit::time)
         .def_readonly("nblocks",   &fdec::ClusterHit::nblocks)
         .def_readonly("npos",      &fdec::ClusterHit::npos)
         .def_readonly("flag",      &fdec::ClusterHit::flag)
@@ -730,9 +733,9 @@ static void bind_hycal(py::module_ &m)
         .def("clear", &fdec::HyCalCluster::Clear,
              "Reset per-event state.  Call before add_hit()s for each event.")
         .def("add_hit", &fdec::HyCalCluster::AddHit,
-             py::arg("module_index"), py::arg("energy"),
+             py::arg("module_index"), py::arg("energy"), py::arg("time"),
              "Add a hit for the module at `module_index` with the given "
-             "calibrated energy (MeV).")
+             "calibrated energy (MeV) and time (ns).")
         .def("form_clusters",
             [](fdec::HyCalCluster &self) {
                 py::gil_scoped_release rel;

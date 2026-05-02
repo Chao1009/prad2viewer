@@ -218,6 +218,7 @@ inline void SetReconWriteBranches(TTree *tree, ReconEventData &ev)
     tree->Branch("cl_energy",  ev.cl_energy,   "cl_energy[n_clusters]/F");
     tree->Branch("cl_nblocks", ev.cl_nblocks,  "cl_nblocks[n_clusters]/b");
     tree->Branch("cl_center",  ev.cl_center,   "cl_center[n_clusters]/s");
+    tree->Branch("cl_time",    ev.cl_time,     "cl_time[n_clusters]/F");
     tree->Branch("cl_flag",    ev.cl_flag,     "cl_flag[n_clusters]/i");
 
     // Per-cluster HyCal↔GEM matches (one row per HyCal cluster, 4 GEMs).
@@ -300,6 +301,7 @@ inline ReconReadStatus SetReconReadBranches(TTree *tree, ReconEventData &ev)
     bind("cl_energy",  ev.cl_energy);
     bind("cl_nblocks", ev.cl_nblocks);
     bind("cl_center",  ev.cl_center);
+    bind("cl_time",    ev.cl_time);
     bind("cl_flag",    ev.cl_flag);
 
     s.has_per_cl_match = (tree->GetBranch("matchFlag") != nullptr);

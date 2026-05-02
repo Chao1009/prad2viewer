@@ -68,11 +68,11 @@ void HyCalCluster::Clear()
     clusters_.clear();
 }
 
-void HyCalCluster::AddHit(int module_index, float energy)
+void HyCalCluster::AddHit(int module_index, float energy, float time)
 {
     if (module_index < 0 || module_index >= sys_.module_count()) return;
     if (energy > config_.min_module_energy)
-        hits_.push_back({module_index, energy});
+        hits_.push_back({module_index, energy, time});
 }
 
 void HyCalCluster::FormClusters()

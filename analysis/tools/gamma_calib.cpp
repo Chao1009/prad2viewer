@@ -3,7 +3,7 @@
 // get the ratio of expected/measured peak position, and write to a database file. 
 //=============================================================================
 //
-// Usage: gama_calib <input_raw.root|dir> input_calib_file output_calib_file
+// Usage: gamma_calib <input_raw.root|dir> input_calib_file output_calib_file
 //                         --option       [-o output_root_file] [-n max_events]
 //
 // Reads rawdata(adc level).root (peak mode), runs HyCal clustering, fills per-module energy histograms
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
     prad2::SetRawReadBranches(tree, *ev);
 
     // --- setup output ROOT file
-    if(output_root_file.empty()) output_root_file = "gama_calib_info.root";
+    if(output_root_file.empty()) output_root_file = "gamma_calib_info.root";
     TFile *outfile = TFile::Open(output_root_file.c_str(), "RECREATE");
 
     //setup for reconstruction

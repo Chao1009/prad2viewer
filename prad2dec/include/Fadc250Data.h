@@ -230,4 +230,70 @@ struct DaqWaveResult {
     void clear() { vnoise = 0; npeaks = 0; }
 };
 
+// ----------------------------------------------------------------------------
+// NNLS pile-up deconvolution: per-channel pulse template + per-event output.
+// ----------------------------------------------------------------------------
+//
+// The soft analyzer's local-maxima search reports peaks but cannot cleanly
+// separate amplitudes when pulses overlap (the integral of one peak bleeds
+// into the rising edge of the next).  WaveAnalyzer::Deconvolve() solves
+// that by fitting a non-negative linear combination of per-peak template
+// instances to the pedsub waveform — see
+// docs/technical_notes/waveform_analysis/wave_analysis.md and
+// fdec::WaveConfig::NnlsDeconvConfig in WaveAnalyzer.h.
+
+// Per-channel pulse template (medians from fit_pulse_template.py).  τ_r and
+// τ_f are time constants in ns of the two-tau scintillator+PMT model
+//
+//   T(t; τ_r, τ_f) = (1 − exp(−t/τ_r)) · exp(−t/τ_f)   for t ≥ 0
+//
+// is_global: true if this is the synthesized fallback (median across all
+// "good" channels) rather than a per-channel fit.
+struct PulseTemplate {
+    float   tau_r_ns;
+    float   tau_f_ns;
+    bool    is_global;
+};
+
+// Per-event deconv output, parallel to WaveResult.peaks[0..n-1].
+//
+// `state` is a single-valued enum (not a bitmask):
+//   Q_DECONV_NOT_RUN          Deconvolve() never invoked (or n_peaks==0)
+//   Q_DECONV_DISABLED         cfg.nnls_deconv.enabled == false
+//   Q_DECONV_NO_TEMPLATE      caller asked for deconv but tmpl was empty
+//   Q_DECONV_BAD_TEMPLATE     τ_r / τ_f failed range validation
+//   Q_DECONV_SINGULAR         design matrix ill-conditioned, deconv aborted
+//   Q_DECONV_APPLIED          channel template, NNLS converged
+//   Q_DECONV_FALLBACK_GLOBAL  global-median template, NNLS converged
+//
+// On any non-converged outcome the amplitude/height/integral arrays are
+// zeroed so callers can safely fall back to WaveResult.peaks values
+// without checking state per element.
+struct DeconvOutput {
+    uint8_t state;
+    int     n;                      // # peaks deconvolved (= WaveResult.npeaks at call time)
+    float   amplitude[MAX_PEAKS];   // a_k from NNLS (template-shape units)
+    float   height  [MAX_PEAKS];    // a_k · T_max(τ_r, τ_f)
+    float   integral[MAX_PEAKS];    // a_k · Σ template over per-peak window
+    float   chi2_per_dof;           // residual chi² normalized by sigma=ped.rms
+    float   cond_number;            // proxy condition number of M^T M
+    void clear()
+    {
+        state = 0; n = 0; chi2_per_dof = 0; cond_number = 0;
+        for (int i = 0; i < MAX_PEAKS; ++i) {
+            amplitude[i] = 0;
+            height[i]    = 0;
+            integral[i]  = 0;
+        }
+    }
+};
+
+constexpr uint8_t Q_DECONV_NOT_RUN          = 0;
+constexpr uint8_t Q_DECONV_DISABLED         = 1;
+constexpr uint8_t Q_DECONV_NO_TEMPLATE      = 2;
+constexpr uint8_t Q_DECONV_BAD_TEMPLATE     = 3;
+constexpr uint8_t Q_DECONV_SINGULAR         = 4;
+constexpr uint8_t Q_DECONV_APPLIED          = 5;
+constexpr uint8_t Q_DECONV_FALLBACK_GLOBAL  = 6;
+
 } // namespace fdec

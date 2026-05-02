@@ -1,5 +1,7 @@
 #include "WaveAnalyzer.h"
 
+#include <limits>
+
 using namespace fdec;
 
 // --- triangular-kernel smoothing (your SmoothSpectrum, zero-alloc) ----------
@@ -392,4 +394,309 @@ void WaveAnalyzer::Analyze(const uint16_t *samples, int nsamples, WaveResult &re
             break;
         }
     }
+}
+
+//=============================================================================
+// NNLS pile-up deconvolution
+//=============================================================================
+//
+// Given pedsub samples b[0..n-1] and K peak times τ_1..τ_K (each placed so
+// that the template peak sits at the WaveAnalyzer-reported peak time), we
+// fit non-negative amplitudes a_k by minimising ||M a - b||² subject to
+// a_k ≥ 0, where M[i,k] = T(t_i − τ_k_onset; τ_r, τ_f).
+//
+// Algorithm: Lawson-Hanson active-set NNLS.  Hand-coded for K ≤ MAX_PEAKS
+// because (a) we already need stack-only scratch, (b) external linear
+// algebra deps would be intrusive in the analyzer hot path, and (c) the
+// problem is tiny — typical K is 2..3 and Cholesky on K×K is essentially
+// free.
+
+namespace {
+
+// Lower-triangular Cholesky factorisation of a KxK SPD matrix M (row-major,
+// L is also row-major).  Returns the smallest pivot squared (= L[k,k]²) so
+// callers can do a conditioning check.  Returns -1 on failure (M not SPD).
+inline float cholesky(const float *M, float *L, int K)
+{
+    float min_pivot_sq = std::numeric_limits<float>::infinity();
+    for (int i = 0; i < K; ++i) {
+        for (int j = 0; j <= i; ++j) {
+            float sum = M[i * K + j];
+            for (int k = 0; k < j; ++k)
+                sum -= L[i * K + k] * L[j * K + k];
+            if (i == j) {
+                if (sum <= 0.0f) return -1.0f;
+                if (sum < min_pivot_sq) min_pivot_sq = sum;
+                L[i * K + j] = std::sqrt(sum);
+            } else {
+                L[i * K + j] = sum / L[j * K + j];
+            }
+        }
+        // Zero the strict upper triangle so chol_solve is well-defined
+        for (int j = i + 1; j < K; ++j) L[i * K + j] = 0.0f;
+    }
+    return min_pivot_sq;
+}
+
+// Solve L L^T x = b in place using a precomputed Cholesky factor.
+inline void chol_solve(const float *L, const float *b, float *x, int K)
+{
+    float y[MAX_PEAKS];
+    // Forward: L y = b
+    for (int i = 0; i < K; ++i) {
+        float s = b[i];
+        for (int k = 0; k < i; ++k) s -= L[i * K + k] * y[k];
+        y[i] = s / L[i * K + i];
+    }
+    // Back: L^T x = y
+    for (int i = K - 1; i >= 0; --i) {
+        float s = y[i];
+        for (int k = i + 1; k < K; ++k) s -= L[k * K + i] * x[k];
+        x[i] = s / L[i * K + i];
+    }
+}
+
+// Active-set NNLS for small K (≤ MAX_PEAKS).  Inputs:
+//   AtA  K×K precomputed M^T M (row-major)
+//   Atb  K-vector M^T b
+// Output:
+//   x    K-vector solution, x_k ≥ 0
+// Returns:
+//   smallest pivot² ever encountered during the inner Cholesky solves —
+//   < 0 if the active submatrix went indefinite (caller should treat
+//   that as singular).  The conditioning proxy max_diag(AtA) / min_pivot²
+//   is left to the caller.
+inline float nnls_smallK(const float *AtA, const float *Atb, int K, float *x)
+{
+    // KKT tolerance — scale to the problem size so it's invariant to the
+    // numerical scale of b.
+    float Atb_max = 0.0f;
+    for (int j = 0; j < K; ++j)
+        Atb_max = std::max(Atb_max, std::abs(Atb[j]));
+    const float tol_kkt = 1.0e-6f * std::max(Atb_max, 1.0f);
+    const float tol_x   = 1.0e-7f * std::max(Atb_max, 1.0f);
+
+    bool inP[MAX_PEAKS];          // false = active set R, true = passive set P
+    for (int j = 0; j < K; ++j) { x[j] = 0.0f; inP[j] = false; }
+
+    float min_pivot_sq_seen = std::numeric_limits<float>::infinity();
+    constexpr int MAX_OUTER = 3 * MAX_PEAKS + 5;
+
+    for (int outer = 0; outer < MAX_OUTER; ++outer) {
+        // w = M^T (b - M x) = Atb - AtA x — KKT residual / gradient
+        float w[MAX_PEAKS];
+        for (int j = 0; j < K; ++j) {
+            float wj = Atb[j];
+            for (int k = 0; k < K; ++k) wj -= AtA[j * K + k] * x[k];
+            w[j] = wj;
+        }
+        // Pick max w over the active set; converged if all are ≤ tol.
+        int   best = -1;
+        float wmax = tol_kkt;
+        for (int j = 0; j < K; ++j) {
+            if (!inP[j] && w[j] > wmax) { wmax = w[j]; best = j; }
+        }
+        if (best < 0) return min_pivot_sq_seen;  // optimal
+        inP[best] = true;
+
+        // Inner loop: solve LS on current P, back off if any x_p went < 0.
+        constexpr int MAX_INNER = 3 * MAX_PEAKS + 5;
+        for (int inner = 0; inner < MAX_INNER; ++inner) {
+            // Build sub-matrix indexed by current P.
+            int  idx[MAX_PEAKS]; int Kp = 0;
+            for (int j = 0; j < K; ++j) if (inP[j]) idx[Kp++] = j;
+            if (Kp == 0) break;
+
+            float subM[MAX_PEAKS * MAX_PEAKS];
+            float subb[MAX_PEAKS];
+            for (int p = 0; p < Kp; ++p) {
+                subb[p] = Atb[idx[p]];
+                for (int q = 0; q < Kp; ++q)
+                    subM[p * Kp + q] = AtA[idx[p] * K + idx[q]];
+            }
+
+            float L[MAX_PEAKS * MAX_PEAKS];
+            float pivot_sq = cholesky(subM, L, Kp);
+            if (pivot_sq < 0.0f) {
+                // Sub-problem went singular — bail out and return a flag.
+                return -1.0f;
+            }
+            if (pivot_sq < min_pivot_sq_seen) min_pivot_sq_seen = pivot_sq;
+
+            float s_sub[MAX_PEAKS];
+            chol_solve(L, subb, s_sub, Kp);
+
+            float s[MAX_PEAKS];
+            for (int j = 0; j < K; ++j) s[j] = 0.0f;
+            for (int p = 0; p < Kp; ++p) s[idx[p]] = s_sub[p];
+
+            // Find the most-violating component — smallest s_k for k in P.
+            float alpha = 1.0f;
+            int blocker = -1;
+            for (int p = 0; p < Kp; ++p) {
+                int j = idx[p];
+                if (s[j] <= tol_x) {
+                    const float denom = x[j] - s[j];
+                    if (denom > tol_x) {
+                        const float a = x[j] / denom;
+                        if (a < alpha) { alpha = a; blocker = j; }
+                    }
+                }
+            }
+
+            if (blocker < 0) {
+                // All s_k > 0 — accept the LS solution.
+                for (int j = 0; j < K; ++j) x[j] = s[j];
+                break;  // exit inner loop, back to outer
+            }
+
+            // Step part-way and drop blockers from P.
+            for (int j = 0; j < K; ++j) x[j] = x[j] + alpha * (s[j] - x[j]);
+            for (int j = 0; j < K; ++j)
+                if (inP[j] && x[j] <= tol_x) { x[j] = 0.0f; inP[j] = false; }
+        }
+    }
+    return min_pivot_sq_seen;
+}
+
+// Closed-form template peak position offset (ns) and peak value.
+//   t_peak = τ_r · ln((τ_r + τ_f) / τ_r)
+//   T_max  = (τ_f / (τ_r + τ_f)) · (τ_r / (τ_r + τ_f))^(τ_r/τ_f)
+inline void template_peak(float tr, float tf, float &t_off, float &t_max)
+{
+    const float u = tr / (tr + tf);
+    t_off = tr * std::log(1.0f / u);
+    t_max = (1.0f - u) * std::pow(u, tr / tf);
+}
+
+// Unit-amplitude template at sample times t_i = i·clk_ns, with template
+// onset at t0 (ns).  Writes n values into `col`.
+inline void template_column(float *col, int n, float clk_ns,
+                            float t0, float tr, float tf)
+{
+    for (int i = 0; i < n; ++i) {
+        const float t = i * clk_ns;
+        if (t <= t0) { col[i] = 0.0f; continue; }
+        const float dt = t - t0;
+        col[i] = (1.0f - std::exp(-dt / tr)) * std::exp(-dt / tf);
+    }
+}
+
+} // namespace (anonymous)
+
+void WaveAnalyzer::Deconvolve(const uint16_t *samples, int nsamples,
+                              const WaveResult &wres,
+                              const PulseTemplate &tmpl,
+                              DeconvOutput &dec_out) const
+{
+    dec_out.clear();
+
+    // Bail-out fast paths.
+    if (!cfg.nnls_deconv.enabled) {
+        dec_out.state = Q_DECONV_DISABLED;
+        return;
+    }
+    if (!samples || nsamples <= 0 || nsamples > MAX_SAMPLES) {
+        dec_out.state = Q_DECONV_NOT_RUN;
+        return;
+    }
+    const int K = wres.npeaks;
+    if (K <= 0 || K > MAX_PEAKS) {
+        dec_out.state = Q_DECONV_NOT_RUN;
+        return;
+    }
+
+    const auto &dcfg = cfg.nnls_deconv;
+    const float tr = tmpl.tau_r_ns;
+    const float tf = tmpl.tau_f_ns;
+    if (!(tr >= dcfg.tau_r_min_ns && tr <= dcfg.tau_r_max_ns) ||
+        !(tf >= dcfg.tau_f_min_ns && tf <= dcfg.tau_f_max_ns) ||
+        !(tr > 0.0f) || !(tf > 0.0f)) {
+        dec_out.state = Q_DECONV_BAD_TEMPLATE;
+        return;
+    }
+
+    const float clk_ns  = (cfg.clk_mhz > 0.0f) ? (1000.0f / cfg.clk_mhz) : 4.0f;
+    const float ped     = wres.ped.mean;
+    const float sigma   = std::max(wres.ped.rms, 1.0f);
+
+    float t_off = 0.0f, t_max = 0.0f;
+    template_peak(tr, tf, t_off, t_max);
+
+    // Build pedsub vector b and design matrix M (column-major: M[i + k*N]).
+    // We size on the full waveform — keeping it simple and cheap; for K ≤ 8
+    // and N ≤ MAX_SAMPLES (200) the matrix is at most 1600 floats.
+    float b[MAX_SAMPLES];
+    for (int i = 0; i < nsamples; ++i)
+        b[i] = static_cast<float>(samples[i]) - ped;
+
+    float M[MAX_SAMPLES * MAX_PEAKS];
+    for (int k = 0; k < K; ++k) {
+        const float t_pk = wres.peaks[k].time;       // ns from sample 0
+        const float t0   = t_pk - t_off;
+        template_column(&M[k * MAX_SAMPLES], nsamples, clk_ns, t0, tr, tf);
+    }
+
+    // Normal equations.  AtA is K×K row-major, Atb is K-vector.
+    float AtA[MAX_PEAKS * MAX_PEAKS];
+    float Atb[MAX_PEAKS];
+    float diag_max = 0.0f;
+    for (int k = 0; k < K; ++k) {
+        float s = 0.0f;
+        for (int i = 0; i < nsamples; ++i)
+            s += M[k * MAX_SAMPLES + i] * b[i];
+        Atb[k] = s;
+        for (int j = 0; j <= k; ++j) {
+            float dot = 0.0f;
+            for (int i = 0; i < nsamples; ++i)
+                dot += M[k * MAX_SAMPLES + i] * M[j * MAX_SAMPLES + i];
+            AtA[k * K + j] = dot;
+            AtA[j * K + k] = dot;
+        }
+        if (AtA[k * K + k] > diag_max) diag_max = AtA[k * K + k];
+    }
+
+    // Conditioning gate — if any active-set Cholesky pivot drops below
+    // diag_max / cond_number_max, the system is too ill-conditioned to
+    // trust per-peak amplitudes.  We surface that as Q_DECONV_SINGULAR.
+    float a[MAX_PEAKS];
+    const float min_pivot_sq = nnls_smallK(AtA, Atb, K, a);
+    const float cond_proxy = (min_pivot_sq > 0.0f && diag_max > 0.0f)
+                           ? (diag_max / min_pivot_sq)
+                           : std::numeric_limits<float>::infinity();
+    dec_out.cond_number = cond_proxy;
+
+    if (min_pivot_sq < 0.0f || cond_proxy > dcfg.cond_number_max ||
+        !std::isfinite(cond_proxy)) {
+        dec_out.state = Q_DECONV_SINGULAR;
+        return;
+    }
+
+    // Per-peak height and integral-over-window from the converged a_k.
+    for (int k = 0; k < K; ++k) {
+        dec_out.amplitude[k] = a[k];
+        dec_out.height[k]    = a[k] * t_max;
+    }
+    for (int k = 0; k < K; ++k) {
+        const int i_pk = static_cast<int>(std::lround(wres.peaks[k].time / clk_ns));
+        const int lo   = std::max(0,        i_pk - dcfg.pre_samples);
+        const int hi   = std::min(nsamples, i_pk + dcfg.post_samples + 1);
+        float sum = 0.0f;
+        for (int i = lo; i < hi; ++i) sum += M[k * MAX_SAMPLES + i];
+        dec_out.integral[k] = a[k] * sum;
+    }
+
+    // Global χ²/dof of the reconstructed waveform.
+    float chi2 = 0.0f;
+    for (int i = 0; i < nsamples; ++i) {
+        float fit = 0.0f;
+        for (int k = 0; k < K; ++k) fit += a[k] * M[k * MAX_SAMPLES + i];
+        const float r = (b[i] - fit) / sigma;
+        chi2 += r * r;
+    }
+    const int dof = std::max(1, nsamples - K);
+    dec_out.chi2_per_dof = chi2 / static_cast<float>(dof);
+
+    dec_out.n     = K;
+    dec_out.state = tmpl.is_global ? Q_DECONV_FALLBACK_GLOBAL : Q_DECONV_APPLIED;
 }

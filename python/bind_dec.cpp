@@ -219,6 +219,22 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("quality", &fdec::Pedestal::quality)
         .def_readwrite("slope",   &fdec::Pedestal::slope);
 
+    py::class_<fdec::WaveConfig::NnlsDeconvConfig>(m, "NnlsDeconvConfig",
+        "Nested config (fdec::WaveConfig::NnlsDeconvConfig) — knobs for the "
+        "NNLS pile-up deconvolution.  Mirrors the JSON layout in "
+        "database/daq_config.json under fadc250_waveform.analyzer.nnls_deconv.")
+        .def(py::init<>())
+        .def_readwrite("enabled",                     &fdec::WaveConfig::NnlsDeconvConfig::enabled)
+        .def_readwrite("fallback_to_global_template", &fdec::WaveConfig::NnlsDeconvConfig::fallback_to_global_template)
+        .def_readwrite("apply_to_all_peaks",          &fdec::WaveConfig::NnlsDeconvConfig::apply_to_all_peaks)
+        .def_readwrite("tau_r_min_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_r_min_ns)
+        .def_readwrite("tau_r_max_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_r_max_ns)
+        .def_readwrite("tau_f_min_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_f_min_ns)
+        .def_readwrite("tau_f_max_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_f_max_ns)
+        .def_readwrite("cond_number_max", &fdec::WaveConfig::NnlsDeconvConfig::cond_number_max)
+        .def_readwrite("pre_samples",     &fdec::WaveConfig::NnlsDeconvConfig::pre_samples)
+        .def_readwrite("post_samples",    &fdec::WaveConfig::NnlsDeconvConfig::post_samples);
+
     py::class_<fdec::WaveConfig>(m, "WaveConfig",
         "Knobs for WaveAnalyzer (smoothing, thresholds, pedestal window, ...).")
         .def(py::init<>())
@@ -237,7 +253,57 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("ped_flatness",   &fdec::WaveConfig::ped_flatness)
         .def_readwrite("ped_max_iter",   &fdec::WaveConfig::ped_max_iter)
         .def_readwrite("overflow",       &fdec::WaveConfig::overflow)
-        .def_readwrite("clk_mhz",        &fdec::WaveConfig::clk_mhz);
+        .def_readwrite("clk_mhz",        &fdec::WaveConfig::clk_mhz)
+        .def_readwrite("nnls_deconv",    &fdec::WaveConfig::nnls_deconv);
+
+    py::class_<fdec::PulseTemplate>(m, "PulseTemplate",
+        "Per-channel two-tau pulse template used by WaveAnalyzer.deconvolve(). "
+        "tau_r_ns / tau_f_ns are the median values from "
+        "fit_pulse_template.py.  is_global=True marks the synthesized "
+        "fallback template (median across all 'good' channels).")
+        .def(py::init<>())
+        .def(py::init([](float tr, float tf, bool is_global) {
+                fdec::PulseTemplate t{tr, tf, is_global};
+                return t;
+             }),
+             py::arg("tau_r_ns"), py::arg("tau_f_ns"),
+             py::arg("is_global") = false)
+        .def_readwrite("tau_r_ns",  &fdec::PulseTemplate::tau_r_ns)
+        .def_readwrite("tau_f_ns",  &fdec::PulseTemplate::tau_f_ns)
+        .def_readwrite("is_global", &fdec::PulseTemplate::is_global);
+
+    py::class_<fdec::WaveResult>(m, "WaveResult",
+        "Output of WaveAnalyzer.analyze_result(): {ped, npeaks, peaks}. "
+        "Use this as the second argument to WaveAnalyzer.deconvolve() to "
+        "avoid re-running the peak finder.")
+        .def(py::init<>())
+        .def_readwrite("ped",    &fdec::WaveResult::ped)
+        .def_readonly("npeaks",  &fdec::WaveResult::npeaks)
+        .def_property_readonly("peaks", [](const fdec::WaveResult &self) {
+            py::list out;
+            for (int i = 0; i < self.npeaks; ++i) out.append(self.peaks[i]);
+            return out;
+        });
+
+    py::class_<fdec::DeconvOutput>(m, "DeconvOutput",
+        "NNLS pile-up deconvolution output.  amplitude/height/integral are "
+        "Python lists of length n (= WaveResult.npeaks).  state is a "
+        "single-valued enum (Q_DECONV_*); on any non-converged outcome the "
+        "lists are empty.")
+        .def(py::init<>())
+        .def_readonly("state",        &fdec::DeconvOutput::state)
+        .def_readonly("n",            &fdec::DeconvOutput::n)
+        .def_readonly("chi2_per_dof", &fdec::DeconvOutput::chi2_per_dof)
+        .def_readonly("cond_number",  &fdec::DeconvOutput::cond_number)
+        .def_property_readonly("amplitude", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.amplitude, self.amplitude + self.n);
+        })
+        .def_property_readonly("height", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.height, self.height + self.n);
+        })
+        .def_property_readonly("integral", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.integral, self.integral + self.n);
+        });
 
     py::class_<fdec::WaveAnalyzer>(m, "WaveAnalyzer",
         "Fast C++ pedestal + peak finder used by the server.  Call "
@@ -307,7 +373,47 @@ void bind_fadc(py::module_ &m)
             "Run only the triangular-kernel smoothing pass (no pedestal / "
             "peak finding).  Returns the smoothed buffer as a float32 "
             "numpy array — useful for plotting the curve the peak finder "
-            "actually sees.");
+            "actually sees.")
+        .def("analyze_result",
+            [](const fdec::WaveAnalyzer &self, py::array_t<uint16_t> samples) {
+                py::buffer_info buf = samples.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("samples must be a 1-D uint16 array");
+                fdec::WaveResult res;
+                {
+                    py::gil_scoped_release rel;
+                    self.Analyze(static_cast<const uint16_t*>(buf.ptr),
+                                 static_cast<int>(buf.shape[0]), res);
+                }
+                return res;
+            },
+            py::arg("samples"),
+            "Like analyze() but returns the full WaveResult object — pass "
+            "this back to deconvolve() so the deconvolver sees the same "
+            "pedestal and peak set the analyzer found.")
+        .def("deconvolve",
+            [](const fdec::WaveAnalyzer &self,
+               py::array_t<uint16_t> samples,
+               const fdec::WaveResult &wres,
+               const fdec::PulseTemplate &tmpl) {
+                py::buffer_info buf = samples.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("samples must be a 1-D uint16 array");
+                fdec::DeconvOutput out;
+                {
+                    py::gil_scoped_release rel;
+                    self.Deconvolve(static_cast<const uint16_t*>(buf.ptr),
+                                    static_cast<int>(buf.shape[0]),
+                                    wres, tmpl, out);
+                }
+                return out;
+            },
+            py::arg("samples"), py::arg("wres"), py::arg("template_"),
+            "Run NNLS pile-up deconvolution against per-channel template "
+            "`template_`.  Caller must have already obtained `wres` from "
+            "analyze_result() with the same samples.  Returns a "
+            "DeconvOutput; check `.state` (Q_DECONV_*) before reading the "
+            "height/integral arrays.");
 
     // ----- Firmware-faithful (Mode 1/2/3) analyzer -----------------------
     // Quality bitmask constants — exposed at module scope so callers can
@@ -332,6 +438,17 @@ void bind_fadc(py::module_ &m)
     m.attr("Q_PED_PULSE_IN_WINDOW")  = py::int_(fdec::Q_PED_PULSE_IN_WINDOW);
     m.attr("Q_PED_OVERFLOW")         = py::int_(fdec::Q_PED_OVERFLOW);
     m.attr("Q_PED_TRAILING_WINDOW")  = py::int_(fdec::Q_PED_TRAILING_WINDOW);
+
+    // NNLS deconv state — single-valued enum (not a bitmask).  Test
+    // dec_out.state == dec.Q_DECONV_APPLIED to know whether to read
+    // dec_out.height / .integral.
+    m.attr("Q_DECONV_NOT_RUN")          = py::int_(fdec::Q_DECONV_NOT_RUN);
+    m.attr("Q_DECONV_DISABLED")         = py::int_(fdec::Q_DECONV_DISABLED);
+    m.attr("Q_DECONV_NO_TEMPLATE")      = py::int_(fdec::Q_DECONV_NO_TEMPLATE);
+    m.attr("Q_DECONV_BAD_TEMPLATE")     = py::int_(fdec::Q_DECONV_BAD_TEMPLATE);
+    m.attr("Q_DECONV_SINGULAR")         = py::int_(fdec::Q_DECONV_SINGULAR);
+    m.attr("Q_DECONV_APPLIED")          = py::int_(fdec::Q_DECONV_APPLIED);
+    m.attr("Q_DECONV_FALLBACK_GLOBAL")  = py::int_(fdec::Q_DECONV_FALLBACK_GLOBAL);
 
     py::class_<fdec::DaqPeak>(m, "DaqPeak",
         "One firmware-mode pulse (Mode 1 + Mode 2 + Mode 3 result).")

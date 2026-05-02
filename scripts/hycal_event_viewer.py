@@ -1561,7 +1561,22 @@ class HyCalEventViewer(QMainWindow):
 
         thr_cfg = hist_config.get("thresholds", {})
         self._hist_threshold = float(thr_cfg.get("min_peak_height", 10.0))
-        self._wcfg = WaveConfig()
+
+        # Seed the analyzer config from daq_config.json's
+        # `fadc250_waveform.analyzer` block (override layers, top to bottom):
+        #   1. WaveConfig() built-in defaults
+        #   2. daq_config.json analyzer block
+        #   3. monitor_config.json `thresholds` overrides (below)
+        #   4. Live UI dock edits
+        # Falls back to plain defaults if the daq_config can't be loaded —
+        # opening files later will fail loudly anyway in that case.
+        try:
+            _dc = (prad2py.dec.load_daq_config(self._daq_cfg_path)
+                   if self._daq_cfg_path
+                   else prad2py.dec.load_daq_config())
+            self._wcfg = WaveConfig(_dc.wave_cfg)
+        except Exception:
+            self._wcfg = WaveConfig()
         self._wcfg.min_peak_ratio = float(thr_cfg.get(
             "min_secondary_peak_ratio", self._wcfg.min_peak_ratio))
 

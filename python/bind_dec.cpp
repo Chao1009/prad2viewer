@@ -222,6 +222,10 @@ void bind_fadc(py::module_ &m)
     py::class_<fdec::WaveConfig>(m, "WaveConfig",
         "Knobs for WaveAnalyzer (smoothing, thresholds, pedestal window, ...).")
         .def(py::init<>())
+        .def(py::init<const fdec::WaveConfig &>(), py::arg("other"),
+             "Copy-construct from another WaveConfig (use this when "
+             "snapshotting cfg.wave_cfg from a DaqConfig — direct "
+             "assignment would alias the underlying field).")
         .def_readwrite("smooth_order",     &fdec::WaveConfig::smooth_order)
         .def_readwrite("threshold",        &fdec::WaveConfig::threshold)
         .def_readwrite("min_threshold",    &fdec::WaveConfig::min_threshold)
@@ -662,6 +666,7 @@ void bind_config(py::module_ &m)
         .def_readwrite("ti_master_tag",     &evc::DaqConfig::ti_master_tag)
         .def_readwrite("verbose_decode",    &evc::DaqConfig::verbose_decode)
         .def_readwrite("fadc250_fw",        &evc::DaqConfig::fadc250_fw)
+        .def_readwrite("wave_cfg",          &evc::DaqConfig::wave_cfg)
         .def("is_physics",    &evc::DaqConfig::is_physics)
         .def("is_monitoring", &evc::DaqConfig::is_monitoring)
         .def("is_control",    &evc::DaqConfig::is_control)

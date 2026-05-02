@@ -405,7 +405,7 @@ def setup_pipeline(*,
     p.hc_clusterer = det.HyCalCluster(p.hycal)
     p.hc_clusterer.set_config(det.HyCalClusterConfig())
 
-    p.wave_ana = dec.WaveAnalyzer(dec.WaveConfig())
+    p.wave_ana = dec.WaveAnalyzer(p.cfg.wave_cfg)
 
     # ---- GEM -------------------------------------------------------------
     gem_map = gem_map_file or resolve_db_path("gem_daq_map.json")

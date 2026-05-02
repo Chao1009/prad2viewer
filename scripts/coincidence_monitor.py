@@ -1523,7 +1523,7 @@ class ProcessWorkerLocal(QThread):
         cfg      = dec.load_daq_config()
         ch       = dec.EvChannel()
         ch.set_config(cfg)
-        analyzer = dec.WaveAnalyzer(dec.WaveConfig())
+        analyzer = dec.WaveAnalyzer(cfg.wave_cfg)
 
         # Pre-scan to get total EVIO record count for the progress bar.
         total_records = 0

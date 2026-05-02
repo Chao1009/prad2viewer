@@ -372,6 +372,7 @@ ClusterHit HyCalCluster::reconstruct_pos(const ModuleCluster &cl) const
     ClusterHit result;
     result.center_id = center_mod.id;
     result.energy    = cl.energy;
+    result.time      = cl.center.time;
     result.nblocks   = static_cast<int>(cl.hits.size());
     result.flag      = cl.flag;
 

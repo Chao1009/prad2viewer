@@ -53,14 +53,12 @@ struct ModuleCluster {
     ModuleHit              center;     // seed module (highest energy local max)
     std::vector<ModuleHit> hits;       // all hits (energy may be split)
     float                  energy = 0.f;
-    float                  time   = 0.f; // peaking time of center modules (ns)
     uint32_t               flag   = 0;
 
     void add_hit(const ModuleHit &h)
     {
         hits.push_back(h);
         energy += h.energy;
-        time = h.time;
     }
 };
 

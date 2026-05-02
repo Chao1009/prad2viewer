@@ -684,7 +684,6 @@ static void bind_hycal(py::module_ &m)
         .def_readonly("center", &fdec::ModuleCluster::center)
         .def_readonly("hits",   &fdec::ModuleCluster::hits)
         .def_readonly("energy", &fdec::ModuleCluster::energy)
-        .def_readonly("time",   &fdec::ModuleCluster::time)
         .def_readonly("flag",   &fdec::ModuleCluster::flag);
 
     py::class_<fdec::ClusterHit>(m, "ClusterHit",

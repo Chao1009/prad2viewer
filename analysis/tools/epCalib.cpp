@@ -327,7 +327,7 @@ int main(int argc, char *argv[])
                         float energy = (mod->cal_factor > 0)
                             ? static_cast<float>(mod->energize(adc))
                             : adc * 0.f;
-                        clusterer.AddHit(mod->index, energy);
+                        clusterer.AddHit(mod->index, energy, 0.f); // time info not available in raw branches, set to 0
                     }
 
                     clusterer.FormClusters();

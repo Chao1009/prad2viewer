@@ -39,7 +39,7 @@ never touches the JSON or recomputes geometry.
 ### Step 1 — DFS grouping
 
 Each above-threshold hit (`energy > min_module_energy`) is loaded with
-`AddHit(module_index, energy)`. The grouping pass walks every hit and,
+`AddHit(module_index, energy, time)`. The grouping pass walks every hit and,
 via depth-first search through `HyCalSystem::for_each_neighbor`, builds
 **connected components** — a "group" is a maximal set of hits where each
 member shares an edge (or, optionally, a corner) with another member.

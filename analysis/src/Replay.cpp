@@ -581,7 +581,7 @@ if(!prad1){
                             else{
                                 const auto *mod = hycal.module_by_daq(crate, s, c);
                                 if (!mod || !mod->is_hycal()) continue;
-                                float adc = 0.f;
+                                float adc = 0.f, time = 0.f;
                                 if(prad1 == true) 
                                     adc = cd.samples[0] * 0.543; //0.543 for prad1 run1308,correct to 1.1GeV
                                 else{
@@ -600,13 +600,14 @@ if(!prad1){
                                     }
                                     if (bestIdx < 0) continue;
                                     adc = wres.peaks[bestIdx].integral;
+                                    time = wres.peaks[bestIdx].time;
                                 }
                                 //gain correction for HyCal modules
                                 if(mod->id > 1000) adc *= gain_correction.w[mod->id-1000].avg;
                                 else adc *= gain_correction.g[mod->id].avg;
 
                                 float energy = static_cast<float>(mod->energize(adc));
-                                clusterer.AddHit(mod->index, energy);
+                                clusterer.AddHit(mod->index, energy, time);
                                 ev->total_energy += energy;
                                 nch++;
                             }
@@ -624,11 +625,8 @@ if(!prad1){
             //HyCal event reconstrued, fill root tree and histograms
             ev->n_clusters = std::min((int)hits.size(), prad2::kMaxClusters);
             for (int i = 0; i < ev->n_clusters; ++i) {
-                ev->cl_x[i]       = hits[i].x;
-                ev->cl_y[i]       = hits[i].y;
-                ev->cl_z[i]       = fdec::shower_depth(hits[i].center_id, hits[i].energy);
-                ev->cl_energy[i]  = hits[i].energy;
                 ev->cl_nblocks[i] = hits[i].nblocks;
+                ev->cl_time[i]    = hits[i].time;
                 //transform the cluster positions to the lab coordinate
                 HCHit local_hit = {hits[i].x, hits[i].y, fdec::shower_depth(hits[i].center_id, hits[i].energy), 
                     hits[i].energy, static_cast<uint16_t>(hits[i].center_id), hits[i].flag};

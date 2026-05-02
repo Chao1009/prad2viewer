@@ -42,7 +42,7 @@ hsys.LoadCalibration("database/hycal_calib.json");
 fdec::HyCalCluster hcl(hsys);
 
 hcl.Clear();
-for (auto &[idx, E] : hits) hcl.AddHit(idx, E);
+for (auto &[idx, E] : hits) hcl.AddHit(idx, E, time);
 hcl.FormClusters();
 std::vector<fdec::ClusterHit> out;
 hcl.ReconstructHits(out);

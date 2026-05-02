@@ -120,22 +120,49 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
         }
     }
 
-    // FADC250 firmware-emulation parameters (TDC + Mode 1/2 reproduction).
-    // Optional — absent leaves defaults; intended for DAQ signal studies and
-    // for matching firmware-reported pulse values when running offline.
-    // Field names follow the Hall-D V3 firmware API (faV3HallDSetProcMode);
-    // NPEAK is accepted as an alias for MAX_PULSES.
-    if (j.contains("fadc250_firmware")) {
-        auto &ff = j["fadc250_firmware"];
-        if (ff.contains("TET"))        cfg.fadc250_fw.TET        = ff["TET"].get<float>();
-        if (ff.contains("NSB"))        cfg.fadc250_fw.NSB        = ff["NSB"].get<int>();
-        if (ff.contains("NSA"))        cfg.fadc250_fw.NSA        = ff["NSA"].get<int>();
-        if (ff.contains("MAX_PULSES")) cfg.fadc250_fw.MAX_PULSES = ff["MAX_PULSES"].get<int>();
-        else if (ff.contains("NPEAK")) cfg.fadc250_fw.MAX_PULSES = ff["NPEAK"].get<int>();
-        if (ff.contains("NSAT"))       cfg.fadc250_fw.NSAT       = ff["NSAT"].get<int>();
-        if (ff.contains("NPED"))       cfg.fadc250_fw.NPED       = ff["NPED"].get<int>();
-        if (ff.contains("MAXPED"))     cfg.fadc250_fw.MAXPED     = ff["MAXPED"].get<int>();
-        if (ff.contains("CLK_NS"))     cfg.fadc250_fw.CLK_NS     = ff["CLK_NS"].get<float>();
+    // FADC250 waveform analysis parameters.  Two sub-sections:
+    //
+    //   "firmware" — on-board Mode 1/2/3 emulator (Fadc250FwAnalyzer).  Field
+    //                names follow the Hall-D V3 firmware API
+    //                (faV3HallDSetProcMode); NPEAK is accepted as an alias
+    //                for MAX_PULSES.
+    //
+    //   "analyzer" — offline soft analyzer (WaveAnalyzer).  Field names mirror
+    //                fdec::WaveConfig (snake_case).  Used by the replay, the
+    //                viewer, and the JSON written to disk for clusters/peaks.
+    //
+    // Both sections are optional — absent fields keep the C++ defaults.
+    if (j.contains("fadc250_waveform")) {
+        auto &fw = j["fadc250_waveform"];
+
+        if (fw.contains("firmware")) {
+            auto &ff = fw["firmware"];
+            if (ff.contains("TET"))        cfg.fadc250_fw.TET        = ff["TET"].get<float>();
+            if (ff.contains("NSB"))        cfg.fadc250_fw.NSB        = ff["NSB"].get<int>();
+            if (ff.contains("NSA"))        cfg.fadc250_fw.NSA        = ff["NSA"].get<int>();
+            if (ff.contains("MAX_PULSES")) cfg.fadc250_fw.MAX_PULSES = ff["MAX_PULSES"].get<int>();
+            else if (ff.contains("NPEAK")) cfg.fadc250_fw.MAX_PULSES = ff["NPEAK"].get<int>();
+            if (ff.contains("NSAT"))       cfg.fadc250_fw.NSAT       = ff["NSAT"].get<int>();
+            if (ff.contains("NPED"))       cfg.fadc250_fw.NPED       = ff["NPED"].get<int>();
+            if (ff.contains("MAXPED"))     cfg.fadc250_fw.MAXPED     = ff["MAXPED"].get<int>();
+            if (ff.contains("CLK_NS"))     cfg.fadc250_fw.CLK_NS     = ff["CLK_NS"].get<float>();
+        }
+
+        if (fw.contains("analyzer")) {
+            auto &an = fw["analyzer"];
+            if (an.contains("smooth_order"))    cfg.wave_cfg.smooth_order    = an["smooth_order"].get<int>();
+            if (an.contains("threshold"))       cfg.wave_cfg.threshold       = an["threshold"].get<float>();
+            if (an.contains("min_threshold"))   cfg.wave_cfg.min_threshold   = an["min_threshold"].get<float>();
+            if (an.contains("min_peak_ratio"))  cfg.wave_cfg.min_peak_ratio  = an["min_peak_ratio"].get<float>();
+            if (an.contains("int_tail_ratio"))  cfg.wave_cfg.int_tail_ratio  = an["int_tail_ratio"].get<float>();
+            if (an.contains("tail_break_n"))    cfg.wave_cfg.tail_break_n    = an["tail_break_n"].get<int>();
+            if (an.contains("peak_pileup_gap")) cfg.wave_cfg.peak_pileup_gap = an["peak_pileup_gap"].get<int>();
+            if (an.contains("ped_nsamples"))    cfg.wave_cfg.ped_nsamples    = an["ped_nsamples"].get<int>();
+            if (an.contains("ped_flatness"))    cfg.wave_cfg.ped_flatness    = an["ped_flatness"].get<float>();
+            if (an.contains("ped_max_iter"))    cfg.wave_cfg.ped_max_iter    = an["ped_max_iter"].get<int>();
+            if (an.contains("overflow"))        cfg.wave_cfg.overflow        = static_cast<uint16_t>(an["overflow"].get<int>());
+            if (an.contains("clk_mhz"))         cfg.wave_cfg.clk_mhz         = an["clk_mhz"].get<float>();
+        }
     }
 
     // TI format

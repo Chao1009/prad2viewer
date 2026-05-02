@@ -295,7 +295,7 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         std::vector<std::pair<int, std::string>> updated;
         updated.reserve(snap.size());
         {
-            fdec::WaveAnalyzer ana;
+            fdec::WaveAnalyzer ana(app_online_.daq_cfg.wave_cfg);
             ana.cfg.min_peak_ratio = app_online_.hist_cfg.min_peak_ratio;
             fdec::WaveResult wres;
             for (auto &p : snap) {
@@ -412,7 +412,7 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
 
         accumulate(evnum, *event_ptr, ssp_ptr.get());
 
-        fdec::WaveAnalyzer ana;
+        fdec::WaveAnalyzer ana(activeApp().daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = activeApp().hist_cfg.min_peak_ratio;
         fdec::WaveResult wres;
         reply(activeApp().encodeWaveformJson(*event_ptr, chan_key, ana, wres).dump());

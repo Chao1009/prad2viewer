@@ -107,6 +107,38 @@ shown are the defaults.
 | `overflow`       | 4095 | ADC counts | 12-bit overflow value — peaks at this height are tagged. |
 | `clk_mhz`        | 250.0 | MHz | Sample rate for the time conversion `t_ns = pos · 1000 / clk_mhz`. |
 
+#### Configuration in `daq_config.json`
+
+Every field above is overridable at runtime via the `fadc250_waveform.analyzer`
+block in [`database/daq_config.json`](../../../database/daq_config.json) — only
+the fields you list are touched, the rest stay at the defaults shown above.
+The replay (`prad2ana_replay_rawdata`), the viewer servers, and the filter
+path all pick the analyzer up through `evc::DaqConfig::wave_cfg`, so a single
+edit propagates to every consumer.
+
+```jsonc
+"fadc250_waveform": {
+    "analyzer": {
+        "smooth_order":    2,
+        "threshold":       5.0,
+        "min_threshold":   3.0,
+        "min_peak_ratio":  0.3,
+        "int_tail_ratio":  0.1,
+        "tail_break_n":    2,
+        "peak_pileup_gap": 2,
+        "ped_nsamples":    30,
+        "ped_flatness":    1.0,
+        "ped_max_iter":    3,
+        "overflow":        4095,
+        "clk_mhz":         250.0
+    },
+    "firmware": { /* see Firmware emulator section */ }
+}
+```
+
+`fdec::WaveConfig` in [`prad2dec/include/WaveAnalyzer.h`](../../../prad2dec/include/WaveAnalyzer.h)
+remains the source of truth for field semantics and default values.
+
 ### Pipeline
 
 **1. Triangular smoothing.** `smooth_order = 2` (default) →
@@ -368,7 +400,8 @@ this section is a parameter-by-parameter walk-through.
 
 ### Parameters
 
-Parameters live under the `fadc250_firmware` block in `daq_config.json`.
+Parameters live under the `fadc250_waveform.firmware` block in
+[`database/daq_config.json`](../../../database/daq_config.json).
 **`NSB` and `NSA` are in nanoseconds**, floored to whole 4 ns samples
 inside the analyzer; everything else is unitless or in ADC counts.
 
@@ -385,9 +418,13 @@ inside the analyzer; everything else is unitless or in ADC counts.
 
 Run-config defaults (current `daq_config.json`):
 
-```json
-"TET": 10.0, "NSB": 8, "NSA": 128, "NPEAK": 1,
-"NSAT": 4, "NPED": 3, "MAXPED": 1, "CLK_NS": 4.0
+```jsonc
+"fadc250_waveform": {
+    "firmware": {
+        "TET": 10.0, "NSB": 8, "NSA": 128, "NPEAK": 1,
+        "NSAT": 4, "NPED": 3, "MAXPED": 1, "CLK_NS": 4.0
+    }
+}
 ```
 
 ### Pipeline

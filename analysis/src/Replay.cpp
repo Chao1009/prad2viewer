@@ -212,11 +212,11 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
 
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
-    fdec::WaveAnalyzer ana;
+    fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
     fdec::WaveResult wres;
     // Firmware-mode emulator (FADC250 Modes 1/2/3).  Configured from the
-    // optional "fadc250_firmware" block in daq_config.json — defaults are
-    // safe for DAQ signal studies but should be overridden to match the
+    // optional "fadc250_waveform.firmware" block in daq_config.json — defaults
+    // are safe for DAQ signal studies but should be overridden to match the
     // actual run's TET/NSB/NSA/MAX_PULSES if comparing to firmware output.
     fdec::Fadc250FwAnalyzer fw_ana(daq_cfg_.fadc250_fw);
     fdec::DaqWaveResult dwres;
@@ -469,9 +469,9 @@ if(!prad1){
     //initialize tools for event decoder and cluster reconstruction
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
-    fdec::WaveAnalyzer ana;
+    fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
     fdec::WaveResult wres;
-    
+
     int total = 0;
 
     int run_num = get_run_int(input_evio);

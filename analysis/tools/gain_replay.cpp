@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
     ch.SetConfig(daq_cfg);
 
     auto event = std::make_unique<fdec::EventData>();
-    fdec::WaveAnalyzer ana;
+    fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
     fdec::WaveResult wres;
     int total = 0;
 

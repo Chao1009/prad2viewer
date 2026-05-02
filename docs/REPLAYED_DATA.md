@@ -88,7 +88,7 @@ events that fail it.
 
 Bit-faithful emulation of the JLab FADC250 firmware (Hall-D V3
 extensions: NSAT/NPED/MAXPED).  Configured via the
-[`fadc250_firmware`](../database/daq_config.json) block in
+[`fadc250_waveform.firmware`](../database/daq_config.json) block in
 `daq_config.json`.  See
 [`docs/clas_fadc/FADC250_algorithms.md`](../docs/clas_fadc/FADC250_algorithms.md)
 for the algorithm spec.
@@ -229,5 +229,7 @@ prad2ana_replay_rawdata /data/evio/data/prad_024154/prad_024154.evio.00000 -o ./
 Output: `/data/replay_raw/prad_024154.00000_raw.root`.
 
 DAQ-emulation knobs (`TET` / `NSB` / `NSA` / `NPEAK` / `NSAT` / `NPED` /
-`MAXPED`) are read from the `fadc250_firmware` block in `daq_config.json` —
-override there to match the actual run.
+`MAXPED`) are read from the `fadc250_waveform.firmware` block in
+`daq_config.json`; the offline soft analyzer (`WaveAnalyzer`) is configured
+from the sibling `fadc250_waveform.analyzer` block — override either to
+match the actual run.

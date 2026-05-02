@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
     reader.SetConfig(cfg);
 
     static fdec::EventData evt;
-    fdec::WaveAnalyzer wave;
+    fdec::WaveAnalyzer wave(cfg.wave_cfg);
     
     double alphaRef[N_LMS_REF] = {};
     bool   alphaValid = false;

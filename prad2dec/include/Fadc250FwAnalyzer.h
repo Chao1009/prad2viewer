@@ -25,7 +25,7 @@
 // and proceeds.  No per-channel firmware register file in v1.
 //
 // Configuration source: evc::DaqConfig::Fadc250FwConfig in DaqConfig.h, populated from
-// the optional "fadc250_firmware" block in daq_config.json.
+// the optional "fadc250_waveform.firmware" block in daq_config.json.
 //
 // Manual citations are embedded inline in the .cpp — see the algorithm
 // summary in docs/clas_fadc/FADC250_algorithms.md for the full discussion

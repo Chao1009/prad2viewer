@@ -165,7 +165,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
         if (filter_wf_keys.empty()) return false;  // enabled but no modules resolved
 
         bool any_module_pass = false;
-        fdec::WaveAnalyzer ana;
+        fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
         fdec::WaveResult wres;
 
@@ -213,7 +213,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
         fdec::HyCalCluster clusterer(hycal);
         clusterer.SetConfig(cluster_cfg);
 
-        fdec::WaveAnalyzer ana;
+        fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
         fdec::WaveResult wres;
 

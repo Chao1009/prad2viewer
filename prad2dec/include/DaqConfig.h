@@ -9,6 +9,8 @@
 // by the application layer (see load_daq_config.h).
 //=============================================================================
 
+#include "WaveAnalyzer.h"   // fdec::WaveConfig — analyzer parameters live here
+
 #include <cstdint>
 #include <vector>
 #include <string>
@@ -145,6 +147,12 @@ struct DaqConfig
         float CLK_NS     = 4.0f;
     };
     Fadc250FwConfig fadc250_fw;
+
+    // --- Soft (offline) waveform analyzer parameters ------------------------
+    // fdec::WaveConfig — full set documented in prad2dec/include/WaveAnalyzer.h.
+    // Defaults preserve the analyzer's built-in behaviour; override per run by
+    // listing fields under "fadc250_waveform.analyzer" in daq_config.json.
+    fdec::WaveConfig wave_cfg;
 
     // --- TI data format (fallback for single-event / non-CODA3 data) --------
     // TI bank layout: word[0]=header, word[1]=trigger#, word[2]=ts_low, word[3]=ts_high

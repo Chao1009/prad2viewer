@@ -79,16 +79,36 @@
         }
     },
 
-    "fadc250_firmware": {
-        "_comment": "Optional — FADC250 firmware Mode 1/2/3 emulation parameters for DAQ signal studies. Field names follow the Hall-D V3 firmware API (faV3HallDSetProcMode); NPEAK is accepted as an alias for MAX_PULSES. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal. NSB = window before threshold crossing, in ns (floored to whole samples = CLK_NS). NSA = window after threshold crossing, in ns (floored to whole samples). NPEAK / MAX_PULSES = pulses kept per channel per window (1..4). NSAT = consecutive samples above TET required for a valid pulse (1 = legacy single-sample crossing). NPED = leading samples summed for Vnoise (firmware: 4..15; default 4 reproduces legacy manual). MAXPED = pedestal-subtracted threshold above which samples are excluded from the pedestal sum (online outlier rejection; 0 disables). CLK_NS = sample period in ns (4 ns at 250 MHz). Values below match the real DAQ run settings.",
-        "TET":        10.0,
-        "NSB":        8,
-        "NSA":        128,
-        "NPEAK":      1,
-        "NSAT":       4,
-        "NPED":       3,
-        "MAXPED":     1,
-        "CLK_NS":     4.0
+    "fadc250_waveform": {
+        "_comment": "FADC250 waveform analysis parameters. 'firmware' configures the Fadc250FwAnalyzer (on-board Mode 1/2/3 emulator) used for DAQ signal studies; 'analyzer' configures the offline soft analyzer (fdec::WaveAnalyzer) that writes pedestal+peaks to the replay tree and feeds the viewer. Both sections are optional — absent fields keep the C++ defaults (see Fadc250FwConfig in DaqConfig.h and WaveConfig in WaveAnalyzer.h).",
+
+        "firmware": {
+            "_comment": "Hall-D V3 firmware API (faV3HallDSetProcMode); NPEAK is accepted as an alias for MAX_PULSES. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal. NSB / NSA = window before / after threshold crossing in ns (floored to whole samples = CLK_NS). NPEAK / MAX_PULSES = pulses kept per channel per window (1..4). NSAT = consecutive samples above TET required for a valid pulse (1 = legacy single-sample crossing). NPED = leading samples summed for Vnoise (firmware: 4..15; default 4 reproduces legacy manual). MAXPED = pedestal-subtracted threshold above which samples are excluded from the pedestal sum (online outlier rejection; 0 disables). CLK_NS = sample period in ns (4 ns at 250 MHz). Values below match the real DAQ run settings.",
+            "TET":        10.0,
+            "NSB":        8,
+            "NSA":        128,
+            "NPEAK":      1,
+            "NSAT":       4,
+            "NPED":       3,
+            "MAXPED":     1,
+            "CLK_NS":     4.0
+        },
+
+        "analyzer": {
+            "_comment": "fdec::WaveConfig — offline soft analyzer. smooth_order: triangular kernel order (1 = identity, N gives a 2N-1 tap kernel). threshold / min_threshold: peak threshold in ped-RMS units, with absolute floor in ADC counts above pedestal. min_peak_ratio: a new peak must be ≥ this fraction of a nearby peak. int_tail_ratio: stop integration when signal drops below this fraction of peak height. tail_break_n: require N consecutive sub-threshold samples to terminate integration. peak_pileup_gap: peaks with integration bounds within this many samples are flagged Q_PEAK_PILED. ped_nsamples: max samples for the pedestal window. ped_flatness: max RMS for a 'flat' pedestal region (floors the noise estimate). ped_max_iter: σ-clip iterations for outlier rejection. overflow: ADC overflow value (12-bit FADC = 4095). clk_mhz: sample-clock frequency for time conversion.",
+            "smooth_order":    2,
+            "threshold":       5.0,
+            "min_threshold":   3.0,
+            "min_peak_ratio":  0.3,
+            "int_tail_ratio":  0.1,
+            "tail_break_n":    2,
+            "peak_pileup_gap": 2,
+            "ped_nsamples":    30,
+            "ped_flatness":    1.0,
+            "ped_max_iter":    3,
+            "overflow":        4095,
+            "clk_mhz":         250.0
+        }
     },
 
     "run_info": {

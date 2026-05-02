@@ -903,7 +903,7 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
     const float tf_lo = 1.0f * clk_ns;
     const float tf_hi = 80.0f * clk_ns;
 
-    constexpr int   MAX_ITER  = 50;
+    constexpr int   MAX_ITER  = 100;       // ~scipy curve_fit default budget
     constexpr float TOL_PARAM = 1e-5f;     // relative param step in clk_ns units
     constexpr float LAMBDA0   = 1.0e-3f;
     constexpr float LAMBDA_UP = 10.0f;
@@ -913,8 +913,16 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
     float lambda = LAMBDA0;
     float chi2   = chi2_eval(y, nslice, clk_ns, t0, tr, tf);
 
+    // Best params seen during the loop — we return these unconditionally
+    // at the end, matching scipy.optimize.curve_fit semantics ("hand back
+    // the best found, let the caller decide via χ²/dof whether the fit
+    // is useful").  Without this, ~12% of fits where the initial guess
+    // is already near-optimal silently report ok=false because no LM
+    // step strictly improves χ².
+    float chi2_best = chi2;
+    float t0_best = t0, tr_best = tr, tf_best = tf;
+
     int iter = 0;
-    bool any_accepted = false;
     for (; iter < MAX_ITER; ++iter) {
         // Residuals at current point.
         float r[MAX_SAMPLES];
@@ -980,10 +988,23 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
         }
 
         // Trial point, clamped to bounds.
-        const float new_t0 = std::clamp(t0 + delta[0], t0_lo, t0_hi);
-        const float new_tr = std::clamp(tr + delta[1], tr_lo, tr_hi);
-        const float new_tf = std::clamp(tf + delta[2], tf_lo, tf_hi);
+        //
+        // Sign: we set up J_ik = ∂r_i/∂p_k = -∂model_i/∂p_k and g = J^T r,
+        // then solved (J^T J + λI) δ = g.  The Gauss-Newton step that
+        // minimises ||r + J δ||² is δ_GN = -(J^T J + λI)^{-1} J^T r, i.e.
+        // the NEGATIVE of what chol3_solve returned — so the parameter
+        // update is `p - delta`, not `p + delta`.
+        const float new_t0 = std::clamp(t0 - delta[0], t0_lo, t0_hi);
+        const float new_tr = std::clamp(tr - delta[1], tr_lo, tr_hi);
+        const float new_tf = std::clamp(tf - delta[2], tf_lo, tf_hi);
         const float new_chi2 = chi2_eval(y, nslice, clk_ns, new_t0, new_tr, new_tf);
+
+        // Always remember the best point we've seen, even if the strict-
+        // accept test below rejects it.
+        if (std::isfinite(new_chi2) && new_chi2 < chi2_best) {
+            chi2_best = new_chi2;
+            t0_best = new_t0; tr_best = new_tr; tf_best = new_tf;
+        }
 
         if (new_chi2 < chi2) {
             const float dpar = std::abs(delta[0]) / clk_ns
@@ -992,7 +1013,6 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
             t0 = new_t0; tr = new_tr; tf = new_tf;
             chi2 = new_chi2;
             lambda = std::max(lambda / LAMBDA_DN, 1.0e-12f);
-            any_accepted = true;
             if (dpar < TOL_PARAM) { ++iter; break; }
         } else {
             lambda *= LAMBDA_UP;
@@ -1000,15 +1020,16 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
         }
     }
 
-    if (!any_accepted) return res;
-    if (!std::isfinite(t0) || !std::isfinite(tr) || !std::isfinite(tf))
+    // Return the best params seen.  ok=false only if every candidate
+    // produced NaN/Inf — initial guess can't get worse than that.
+    if (!std::isfinite(t0_best) || !std::isfinite(tr_best) || !std::isfinite(tf_best))
         return res;
 
     const int dof = std::max(1, nslice - 3);
-    res.t0_ns        = t0;
-    res.tau_r_ns     = tr;
-    res.tau_f_ns     = tf;
-    res.chi2_per_dof = (chi2 * w_inv2) / static_cast<float>(dof);
+    res.t0_ns        = t0_best;
+    res.tau_r_ns     = tr_best;
+    res.tau_f_ns     = tf_best;
+    res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
     res.n_iter       = iter;
     res.ok           = true;
     return res;

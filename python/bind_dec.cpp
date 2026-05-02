@@ -327,6 +327,19 @@ void bind_fadc(py::module_ &m)
         .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitResult::chi2_per_dof)
         .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitResult::n_iter);
 
+    py::class_<fdec::WaveAnalyzer::PulseFitGammaResult>(m, "PulseFitGammaResult",
+        "Output of WaveAnalyzer.fit_pulse_shape_gamma() — Gamma model "
+        "v(t) = (t-t0)^b · exp(-c·(t-t0)) (Li et al. 2024, "
+        "10.1371/journal.pone.0313999).  c_inv_ns = 1/c so it's "
+        "directly comparable to two-tau τ_f / τ_r.")
+        .def_readonly("ok",            &fdec::WaveAnalyzer::PulseFitGammaResult::ok)
+        .def_readonly("t0_ns",         &fdec::WaveAnalyzer::PulseFitGammaResult::t0_ns)
+        .def_readonly("b",             &fdec::WaveAnalyzer::PulseFitGammaResult::b)
+        .def_readonly("c_inv_ns",      &fdec::WaveAnalyzer::PulseFitGammaResult::c_inv_ns)
+        .def_readonly("peak_amp",      &fdec::WaveAnalyzer::PulseFitGammaResult::peak_amp)
+        .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitGammaResult::chi2_per_dof)
+        .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitGammaResult::n_iter);
+
     py::class_<fdec::WaveResult>(m, "WaveResult",
         "Output of WaveAnalyzer.analyze_result(): {ped, npeaks, peaks}. "
         "Use this as the second argument to WaveAnalyzer.deconvolve() to "
@@ -458,6 +471,31 @@ void bind_fadc(py::module_ &m)
             "within the slice; `ped` / `ped_rms` come from the same "
             "WaveAnalyzer pass that produced the peak.  Returns a "
             "PulseFitResult; check `.ok` before reading the params.")
+        .def_static("fit_pulse_shape_gamma",
+            [](py::array_t<uint16_t> slice, int peak_idx,
+               float ped, float ped_rms, float clk_ns,
+               float model_err_floor) {
+                py::buffer_info buf = slice.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("slice must be a 1-D uint16 array");
+                fdec::WaveAnalyzer::PulseFitGammaResult res;
+                {
+                    py::gil_scoped_release rel;
+                    res = fdec::WaveAnalyzer::FitPulseShapeGamma(
+                        static_cast<const uint16_t*>(buf.ptr),
+                        static_cast<int>(buf.shape[0]),
+                        peak_idx, ped, ped_rms, clk_ns,
+                        model_err_floor);
+                }
+                return res;
+            },
+            py::arg("slice"), py::arg("peak_idx"),
+            py::arg("ped"), py::arg("ped_rms"), py::arg("clk_ns"),
+            py::arg("model_err_floor") = 0.01f,
+            "Same machinery as fit_pulse_shape() but with the Gamma "
+            "model from Li et al. 2024 (PLOS ONE 10.1371/journal.pone."
+            "0313999): v(t) = (t-t0)^b · exp(-c·(t-t0)) for t > t0.  "
+            "Three params (t0, b, c).  Returns PulseFitGammaResult.")
         .def("set_template_store",
             [](fdec::WaveAnalyzer &self,
                const fdec::PulseTemplateStore *store) {

@@ -819,6 +819,27 @@ inline float t_max_value(float tr, float tf)
     return (1.0f - u) * std::pow(u, tr / tf);
 }
 
+// Gamma model — semi-empirical PMT/CR-RC pulse shape from Li et al. 2024.
+//   v(t; t0, b, c) = (t-t0)^b · exp(-c·(t-t0))   for t > t0
+//   peak at t = t0 + b/c, peak value (b/c)^b · exp(-b)
+// We always work with the peak-normalised form: dividing by the peak
+// value gives a unit-amplitude template, same convention as two-tau.
+inline float gamma_unit_pt(float t, float t0, float b, float c, float t_max_inv)
+{
+    if (t <= t0) return 0.0f;
+    const float dt = t - t0;
+    // pow(0, b) for b > 0 is 0, but std::pow at extreme arguments can go
+    // weird in float; the dt > 0 guard above is enough.
+    return std::pow(dt, b) * std::exp(-c * dt) * t_max_inv;
+}
+
+inline float gamma_t_max_value(float b, float c)
+{
+    if (!(b > 0.0f) || !(c > 0.0f)) return 1.0f;     // defensive
+    const float t_pk = b / c;
+    return std::pow(t_pk, b) * std::exp(-b);
+}
+
 // 3×3 SPD solve via Cholesky.  Returns false if A is not positive
 // definite (caller bumps λ and retries).  A is row-major; b and x are
 // 3-vectors.
@@ -855,6 +876,19 @@ inline float chi2_eval(const float *y, int n, float clk_ns,
     for (int i = 0; i < n; ++i) {
         const float t = i * clk_ns;
         const float r = y[i] - two_tau_unit_pt(t, t0, tr, tf, t_max_inv);
+        s += r * r;
+    }
+    return s;
+}
+
+inline float chi2_eval_gamma(const float *y, int n, float clk_ns,
+                             float t0, float b, float c)
+{
+    const float t_max_inv = 1.0f / gamma_t_max_value(b, c);
+    float s = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const float t = i * clk_ns;
+        const float r = y[i] - gamma_unit_pt(t, t0, b, c, t_max_inv);
         s += r * r;
     }
     return s;
@@ -1029,6 +1063,160 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
     res.t0_ns        = t0_best;
     res.tau_r_ns     = tr_best;
     res.tau_f_ns     = tf_best;
+    res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
+    res.n_iter       = iter;
+    res.ok           = true;
+    return res;
+}
+
+WaveAnalyzer::PulseFitGammaResult
+WaveAnalyzer::FitPulseShapeGamma(const uint16_t *slice, int nslice,
+                                 int peak_idx_in_slice,
+                                 float ped, float ped_rms,
+                                 float clk_ns,
+                                 float model_err_floor)
+{
+    PulseFitGammaResult res{};
+    res.ok = false;
+
+    if (!slice || nslice < 8 || nslice > MAX_SAMPLES) return res;
+    if (peak_idx_in_slice < 0 || peak_idx_in_slice >= nslice) return res;
+
+    const float peak_amp = static_cast<float>(slice[peak_idx_in_slice]) - ped;
+    if (peak_amp <= 0.0f) return res;
+    res.peak_amp = peak_amp;
+
+    float y[MAX_SAMPLES];
+    const float inv_amp = 1.0f / peak_amp;
+    for (int i = 0; i < nslice; ++i)
+        y[i] = (static_cast<float>(slice[i]) - ped) * inv_amp;
+
+    const float sigma_noise = std::max(ped_rms, 1.0f) * inv_amp;
+    const float sigma       = std::max(sigma_noise, model_err_floor);
+    const float w_inv2      = 1.0f / (sigma * sigma);
+
+    // Initial guess: t0 a couple of samples before the observed peak,
+    // shape exponent b ≈ 2 (roughly CR-RC second-order), c chosen so the
+    // model peak (b/c) sits near the observed peak.
+    float t0 = peak_idx_in_slice * clk_ns - 2.0f * clk_ns;
+    float b  = 2.0f;
+    float c  = b / std::max(2.0f * clk_ns, 1.0f);   // peak ~2 samples after t0
+
+    const float t0_lo = -2.0f * clk_ns;
+    const float t0_hi = (nslice - 1) * clk_ns;
+    const float b_lo  = 0.5f;
+    const float b_hi  = 20.0f;
+    const float c_lo  = 0.005f;       // 1/c up to 200 ns
+    const float c_hi  = 5.0f;         // 1/c down to 0.2 ns
+
+    constexpr int   MAX_ITER  = 100;
+    constexpr float TOL_PARAM = 1e-5f;
+    constexpr float LAMBDA0   = 1.0e-3f;
+    constexpr float LAMBDA_UP = 10.0f;
+    constexpr float LAMBDA_DN = 10.0f;
+    constexpr float LAMBDA_MAX = 1.0e10f;
+
+    float lambda = LAMBDA0;
+    float chi2   = chi2_eval_gamma(y, nslice, clk_ns, t0, b, c);
+
+    float chi2_best = chi2;
+    float t0_best = t0, b_best = b, c_best = c;
+
+    int iter = 0;
+    for (; iter < MAX_ITER; ++iter) {
+        // Residuals at current point.
+        float r[MAX_SAMPLES];
+        const float t_max_inv = 1.0f / gamma_t_max_value(b, c);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            r[i] = y[i] - gamma_unit_pt(t, t0, b, c, t_max_inv);
+        }
+
+        // Forward-difference Jacobian.
+        float J[MAX_SAMPLES * 3];
+        const float h_t0 = std::max(1e-3f * clk_ns, 1e-6f);
+        const float h_b  = std::max(1e-3f * b,      1e-6f);
+        const float h_c  = std::max(1e-3f * c,      1e-9f);
+
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = gamma_unit_pt(t, t0,        b, c, t_max_inv);
+            const float fp = gamma_unit_pt(t, t0 + h_t0, b, c, t_max_inv);
+            J[i + 0 * MAX_SAMPLES] = -(fp - f0) / h_t0;     // dr/dt0
+        }
+        const float tmi_bp = 1.0f / gamma_t_max_value(b + h_b, c);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = gamma_unit_pt(t, t0, b,       c, t_max_inv);
+            const float fp = gamma_unit_pt(t, t0, b + h_b, c, tmi_bp);
+            J[i + 1 * MAX_SAMPLES] = -(fp - f0) / h_b;       // dr/db
+        }
+        const float tmi_cp = 1.0f / gamma_t_max_value(b, c + h_c);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = gamma_unit_pt(t, t0, b, c,       t_max_inv);
+            const float fp = gamma_unit_pt(t, t0, b, c + h_c, tmi_cp);
+            J[i + 2 * MAX_SAMPLES] = -(fp - f0) / h_c;       // dr/dc
+        }
+
+        // Normal equations.
+        float A[9] = {0};
+        float g[3] = {0};
+        for (int i = 0; i < nslice; ++i) {
+            const float j0 = J[i + 0 * MAX_SAMPLES];
+            const float j1 = J[i + 1 * MAX_SAMPLES];
+            const float j2 = J[i + 2 * MAX_SAMPLES];
+            A[0] += j0 * j0; A[1] += j0 * j1; A[2] += j0 * j2;
+                              A[4] += j1 * j1; A[5] += j1 * j2;
+                                                A[8] += j2 * j2;
+            g[0] += j0 * r[i]; g[1] += j1 * r[i]; g[2] += j2 * r[i];
+        }
+        A[3] = A[1]; A[6] = A[2]; A[7] = A[5];
+
+        float Aug[9] = {A[0]+lambda, A[1], A[2],
+                        A[3], A[4]+lambda, A[5],
+                        A[6], A[7], A[8]+lambda};
+        float delta[3];
+        if (!chol3_solve(Aug, g, delta)) {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+            continue;
+        }
+
+        // Subtract delta — same sign convention as FitPulseShape.
+        const float new_t0 = std::clamp(t0 - delta[0], t0_lo, t0_hi);
+        const float new_b  = std::clamp(b  - delta[1], b_lo,  b_hi);
+        const float new_c  = std::clamp(c  - delta[2], c_lo,  c_hi);
+        const float new_chi2 = chi2_eval_gamma(y, nslice, clk_ns,
+                                               new_t0, new_b, new_c);
+
+        if (std::isfinite(new_chi2) && new_chi2 < chi2_best) {
+            chi2_best = new_chi2;
+            t0_best = new_t0; b_best = new_b; c_best = new_c;
+        }
+
+        if (new_chi2 < chi2) {
+            const float dpar = std::abs(delta[0]) / clk_ns
+                             + std::abs(delta[1]) / std::max(b, 0.1f)
+                             + std::abs(delta[2]) / std::max(c, 1e-3f);
+            t0 = new_t0; b = new_b; c = new_c;
+            chi2 = new_chi2;
+            lambda = std::max(lambda / LAMBDA_DN, 1.0e-12f);
+            if (dpar < TOL_PARAM) { ++iter; break; }
+        } else {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+        }
+    }
+
+    if (!std::isfinite(t0_best) || !std::isfinite(b_best) || !std::isfinite(c_best))
+        return res;
+    if (!(c_best > 0.0f)) return res;
+
+    const int dof = std::max(1, nslice - 3);
+    res.t0_ns        = t0_best;
+    res.b            = b_best;
+    res.c_inv_ns     = 1.0f / c_best;
     res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
     res.n_iter       = iter;
     res.ok           = true;

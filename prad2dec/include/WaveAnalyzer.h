@@ -170,6 +170,28 @@ public:
         int    n_iter;
     };
 
+    // Output of FitPulseShapeGamma() — same conventions, but the shape is
+    // the 3-parameter Gamma model from Li et al. 2024 (PLOS ONE
+    // 10.1371/journal.pone.0313999):
+    //
+    //     v(t) = (t-t0)^b · exp(-c·(t-t0))   for t > t0
+    //
+    // physically motivated as the impulse response of a multi-stage
+    // CR-RC shaping network (which is what the FADC250 anti-alias
+    // front end actually is).  The peak is at t = t0 + b/c.  `b` is a
+    // shape exponent allowed to be a real number (not just integer
+    // filter order); `c_inv_ns` = 1/c stored as ns instead of 1/ns so
+    // it's directly comparable to the two-tau τ_f / τ_r values.
+    struct PulseFitGammaResult {
+        bool   ok;
+        float  t0_ns;
+        float  b;              // shape exponent (≈ filter order)
+        float  c_inv_ns;       // 1/c, ns — asymptotic decay timescale
+        float  peak_amp;
+        float  chi2_per_dof;
+        int    n_iter;
+    };
+
     // Three-parameter Levenberg-Marquardt fit of the unit-amplitude
     // two-tau model T(t; t0, τ_r, τ_f) / T_max(τ_r, τ_f) to a waveform
     // slice after pedsub + per-pulse peak-height normalisation.  Used by
@@ -191,6 +213,17 @@ public:
                                         float ped, float ped_rms,
                                         float clk_ns,
                                         float model_err_floor = 0.01f);
+
+    // Same fit machinery as FitPulseShape but with the Gamma model (see
+    // PulseFitGammaResult for the formula).  Three shape params (t0, b,
+    // c); the per-pulse peak-height normalisation is identical.  Caller
+    // and downstream Python script use --model {two_tau,gamma} to switch.
+    static PulseFitGammaResult FitPulseShapeGamma(const uint16_t *slice,
+                                                  int nslice,
+                                                  int peak_idx_in_slice,
+                                                  float ped, float ped_rms,
+                                                  float clk_ns,
+                                                  float model_err_floor = 0.01f);
 
     // Power-user / diagnostic API: explicit NNLS deconvolution against a
     // caller-supplied template.  Used by the Python `apply_pulse_template`

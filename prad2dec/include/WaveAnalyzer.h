@@ -185,6 +185,29 @@ public:
         int    n_iter;
     };
 
+    // Output of FitPulseShapeTwoTauP() — same conventions as PulseFitResult
+    // but with a fourth shape parameter `p` controlling the rise-edge
+    // sharpness:
+    //
+    //     T(t) = [1 − exp(−(t−t0)/τ_r)]^p · exp(−(t−t0)/τ_f)
+    //
+    // p = 1 is the standard two-tau form (sharp onset, slope = 1/τ_r at
+    // t = t0).  p = 2 makes the rise sigmoidal with zero initial slope;
+    // p > 2 is even smoother.  Decouples rise *shape* from rise
+    // *timescale*, addressing the systematic onset mismatch the standard
+    // two-tau model has against PMT pulses that pass through a multi-
+    // stage shaping filter.
+    struct PulseFitTwoTauPResult {
+        bool   ok;
+        float  t0_ns;
+        float  tau_r_ns;
+        float  tau_f_ns;
+        float  p;              // rise-edge exponent
+        float  peak_amp;
+        float  chi2_per_dof;
+        int    n_iter;
+    };
+
 
     // Three-parameter Levenberg-Marquardt fit of the unit-amplitude
     // two-tau model T(t; t0, τ_r, τ_f) / T_max(τ_r, τ_f) to a waveform
@@ -207,6 +230,19 @@ public:
                                         float ped, float ped_rms,
                                         float clk_ns,
                                         float model_err_floor = 0.01f);
+
+    // Same fit machinery as FitPulseShape but with the 4-parameter
+    // two-tau-with-rise-exponent model (see PulseFitTwoTauPResult for the
+    // formula).  Used by the calibration script when --model=two_tau_p
+    // to test whether allowing the rise *shape* (not just *timescale*)
+    // to be free closes the systematic chi² gap on high-amplitude
+    // channels where the standard two-tau onset is too sharp.
+    static PulseFitTwoTauPResult FitPulseShapeTwoTauP(const uint16_t *slice,
+                                                      int nslice,
+                                                      int peak_idx_in_slice,
+                                                      float ped, float ped_rms,
+                                                      float clk_ns,
+                                                      float model_err_floor = 0.01f);
 
 
     // Power-user / diagnostic API: explicit NNLS deconvolution against a

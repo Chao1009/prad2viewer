@@ -100,6 +100,25 @@ def two_tau_unit(t: np.ndarray, t0: float, tau_r: float, tau_f: float) -> np.nda
     return out
 
 
+def two_tau_p_unit(t: np.ndarray, t0: float, tau_r: float, tau_f: float,
+                   p: float) -> np.ndarray:
+    """[1 - exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f), peak normalised to 1.
+    For plot overlays only; C++ FitPulseShapeTwoTauP is the real fitter."""
+    out = np.zeros_like(t, dtype=np.float64)
+    mask = t > t0
+    if not mask.any():
+        return out
+    dt = t[mask] - t0
+    u = 1.0 - np.exp(-dt / tau_r)
+    u = np.clip(u, 0.0, None)
+    raw = (u ** p) * np.exp(-dt / tau_f)
+    denom = tau_r + p * tau_f
+    u_pk = p * tau_f / denom
+    t_max = (u_pk ** p) * ((tau_r / denom) ** (tau_r / tau_f))
+    out[mask] = raw / t_max
+    return out
+
+
 # ---------------------------------------------------------------------------
 # Per-channel accumulator
 # ---------------------------------------------------------------------------
@@ -113,6 +132,7 @@ class ChannelStats:
     tau_r:    List[float] = field(default_factory=list)
     tau_f:    List[float] = field(default_factory=list)
     t0:       List[float] = field(default_factory=list)
+    p_list:   List[float] = field(default_factory=list)   # populated only when --model=two_tau_p
     chi2:     List[float] = field(default_factory=list)
     peak_amp: List[float] = field(default_factory=list)   # original ADC peak height per pulse
     ped_mean_sum: float = 0.0
@@ -145,7 +165,7 @@ def finalize_channel(s: ChannelStats, min_pulses: int, chi2_max: float
     good = bool(s.n_used >= min_pulses and chi2_med < chi2_max)
     ped_mean = s.ped_mean_sum / s.ped_n if s.ped_n else float("nan")
     ped_rms  = s.ped_rms_sum  / s.ped_n if s.ped_n else float("nan")
-    return {
+    rec = {
         "channel_id": s.channel_id,
         "n_pulses_attempted": s.n_attempted,
         "n_pulses_used":      s.n_used,
@@ -157,6 +177,10 @@ def finalize_channel(s: ChannelStats, min_pulses: int, chi2_max: float
         "ped": {"mean": float(ped_mean), "rms": float(ped_rms)},
         "good_fit": good,
     }
+    if s.p_list:                     # only present for --model=two_tau_p
+        p_med, p_mad = _median_mad(s.p_list)
+        rec["p"] = {"median": p_med, "mad": p_mad}
+    return rec
 
 
 # ---------------------------------------------------------------------------
@@ -193,7 +217,13 @@ def plot_channel(plt, st: ChannelStats, clk_ns: float, pre: int, post: int,
         med_tau_f = float(np.median(st.tau_f))
         med_pk    = float(np.median(st.peak_amp))
         t_dense   = np.linspace(0, (pre + post) * clk_ns, 400)
-        unit_curve = two_tau_unit(t_dense, med_t0, med_tau_r, med_tau_f)
+        if st.p_list:
+            med_p = float(np.median(st.p_list))
+            unit_curve = two_tau_p_unit(t_dense, med_t0, med_tau_r,
+                                        med_tau_f, med_p)
+        else:
+            med_p = None
+            unit_curve = two_tau_unit(t_dense, med_t0, med_tau_r, med_tau_f)
 
         # Top — raw scale.
         for s in st.sample_pulses:
@@ -213,10 +243,11 @@ def plot_channel(plt, st: ChannelStats, clk_ns: float, pre: int, post: int,
         ax_norm.axhline(1.0, color="0.6", lw=0.6, ls="--")
 
         chi2_med = float(np.median(st.chi2)) if st.chi2 else float("nan")
+        p_str = f"  p={med_p:.2f}" if med_p is not None else ""
         title = (f"{label + ' ' if label else ''}{st.name}  "
                  f"({st.channel_id})\n"
                  f"n_used={st.n_used}  "
-                 f"τ_r={med_tau_r:.2f} ns  τ_f={med_tau_f:.2f} ns  "
+                 f"τ_r={med_tau_r:.2f} ns  τ_f={med_tau_f:.2f} ns{p_str}  "
                  f"peak={med_pk:.0f} ADC  χ²/dof med={chi2_med:.2f}")
     else:
         for s in st.sample_pulses:
@@ -346,6 +377,16 @@ def main() -> None:
                     help="Minimum peak height (ADC, pedsub) for fitting.")
     ap.add_argument("--height-rms-mult", type=float, default=10.0,
                     help="Also require peak height >= this × ped.rms.")
+    ap.add_argument("--model", choices=["two_tau", "two_tau_p"],
+                    default="two_tau",
+                    help="Pulse-shape model.  'two_tau': "
+                         "(1 - exp(-(t-t0)/τ_r)) · exp(-(t-t0)/τ_f).  "
+                         "'two_tau_p': adds a rise-edge exponent so the "
+                         "rise *shape* is free, not just the timescale: "
+                         "[1 - exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f).  "
+                         "Use two_tau_p when the standard model's onset "
+                         "is too sharp on the data (high-amp PMT pulses "
+                         "in particular).")
     ap.add_argument("--model-err-floor", type=float, default=0.01,
                     help="Floor on per-sample sigma in the normalised fit, as "
                          "a fraction of unit peak.  Caps how much a small "
@@ -526,17 +567,31 @@ def main() -> None:
                                 st.ped_rms_sum  += float(rms)
                                 st.ped_n        += 1
 
-                                fit = dec.WaveAnalyzer.fit_pulse_shape(
-                                    slice_u16, rel_peak,
-                                    float(ped), float(rms), clk_ns,
-                                    args.model_err_floor)
-                                if not fit.ok:
-                                    continue
-                                st.tau_r.append(fit.tau_r_ns)
-                                st.tau_f.append(fit.tau_f_ns)
-                                st.t0.append(fit.t0_ns)
-                                st.peak_amp.append(fit.peak_amp)
-                                st.chi2.append(fit.chi2_per_dof)
+                                if args.model == "two_tau_p":
+                                    fit = dec.WaveAnalyzer.fit_pulse_shape_two_tau_p(
+                                        slice_u16, rel_peak,
+                                        float(ped), float(rms), clk_ns,
+                                        args.model_err_floor)
+                                    if not fit.ok:
+                                        continue
+                                    st.tau_r.append(fit.tau_r_ns)
+                                    st.tau_f.append(fit.tau_f_ns)
+                                    st.t0.append(fit.t0_ns)
+                                    st.p_list.append(fit.p)
+                                    st.peak_amp.append(fit.peak_amp)
+                                    st.chi2.append(fit.chi2_per_dof)
+                                else:  # two_tau
+                                    fit = dec.WaveAnalyzer.fit_pulse_shape(
+                                        slice_u16, rel_peak,
+                                        float(ped), float(rms), clk_ns,
+                                        args.model_err_floor)
+                                    if not fit.ok:
+                                        continue
+                                    st.tau_r.append(fit.tau_r_ns)
+                                    st.tau_f.append(fit.tau_f_ns)
+                                    st.t0.append(fit.t0_ns)
+                                    st.peak_amp.append(fit.peak_amp)
+                                    st.chi2.append(fit.chi2_per_dof)
                                 st.n_used += 1
                                 n_pulses_used += 1
 
@@ -581,9 +636,16 @@ def main() -> None:
             "n_pulses_attempted": n_pulses_attempted,
             "n_pulses_used": n_pulses_used,
             "n_channels": len(stats),
-            "model": "two_tau",
-            "model_formula": "((1 - exp(-(t-t0)/tau_r)) * exp(-(t-t0)/tau_f)) / T_max(tau_r, tau_f),  t > t0",
-            "fit_params": ["t0_ns", "tau_r_ns", "tau_f_ns"],
+            "model": args.model,
+            "model_formula": (
+                "((1 - exp(-(t-t0)/tau_r)) * exp(-(t-t0)/tau_f)) / T_max(tau_r, tau_f),  t > t0"
+                if args.model == "two_tau" else
+                "([1 - exp(-(t-t0)/tau_r)]^p * exp(-(t-t0)/tau_f)) / T_max(tau_r, tau_f, p),  t > t0   "
+                "[two-tau with rise-edge exponent]"
+            ),
+            "fit_params": (["t0_ns", "tau_r_ns", "tau_f_ns"]
+                           if args.model == "two_tau"
+                           else ["t0_ns", "tau_r_ns", "tau_f_ns", "p"]),
             "amplitude_handling": "each pulse divided by its own pedsub peak height before the fit; peak_amp_adc records the un-normalised peak amplitude per channel for downstream diagnostics",
             "sigma_per_sample": "ped.rms / pulse_peak_amp (i.e. relative noise on the normalised pulse) — keeps chi2/dof comparable across channels with very different signal amplitudes",
             "clk_ns": clk_ns,

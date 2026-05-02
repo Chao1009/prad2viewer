@@ -329,6 +329,19 @@ void bind_fadc(py::module_ &m)
         .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitResult::chi2_per_dof)
         .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitResult::n_iter);
 
+    py::class_<fdec::WaveAnalyzer::PulseFitTwoTauPResult>(m, "PulseFitTwoTauPResult",
+        "Output of WaveAnalyzer.fit_pulse_shape_two_tau_p() — same as "
+        "PulseFitResult plus the rise-edge exponent `p` "
+        "(T = [1-exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f)).")
+        .def_readonly("ok",            &fdec::WaveAnalyzer::PulseFitTwoTauPResult::ok)
+        .def_readonly("t0_ns",         &fdec::WaveAnalyzer::PulseFitTwoTauPResult::t0_ns)
+        .def_readonly("tau_r_ns",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::tau_r_ns)
+        .def_readonly("tau_f_ns",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::tau_f_ns)
+        .def_readonly("p",             &fdec::WaveAnalyzer::PulseFitTwoTauPResult::p)
+        .def_readonly("peak_amp",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::peak_amp)
+        .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitTwoTauPResult::chi2_per_dof)
+        .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitTwoTauPResult::n_iter);
+
     py::class_<fdec::WaveResult>(m, "WaveResult",
         "Output of WaveAnalyzer.analyze_result(): {ped, npeaks, peaks}. "
         "Use this as the second argument to WaveAnalyzer.deconvolve() to "
@@ -468,6 +481,33 @@ void bind_fadc(py::module_ &m)
             "within the slice; `ped` / `ped_rms` come from the same "
             "WaveAnalyzer pass that produced the peak.  Returns a "
             "PulseFitResult; check `.ok` before reading the params.")
+        .def_static("fit_pulse_shape_two_tau_p",
+            [](py::array_t<uint16_t> slice, int peak_idx,
+               float ped, float ped_rms, float clk_ns,
+               float model_err_floor) {
+                py::buffer_info buf = slice.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("slice must be a 1-D uint16 array");
+                fdec::WaveAnalyzer::PulseFitTwoTauPResult res;
+                {
+                    py::gil_scoped_release rel;
+                    res = fdec::WaveAnalyzer::FitPulseShapeTwoTauP(
+                        static_cast<const uint16_t*>(buf.ptr),
+                        static_cast<int>(buf.shape[0]),
+                        peak_idx, ped, ped_rms, clk_ns,
+                        model_err_floor);
+                }
+                return res;
+            },
+            py::arg("slice"), py::arg("peak_idx"),
+            py::arg("ped"), py::arg("ped_rms"), py::arg("clk_ns"),
+            py::arg("model_err_floor") = 0.01f,
+            "Same machinery as fit_pulse_shape() but with the four-"
+            "parameter two-tau-with-rise-exponent model: "
+            "T = [1-exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f).  Allows the "
+            "rise *shape* to vary independently of the rise *timescale* — "
+            "addresses the systematic onset mismatch the standard two-tau "
+            "form has against multi-stage-shaped PMT pulses.")
         .def("set_template_store",
             [](fdec::WaveAnalyzer &self,
                const fdec::PulseTemplateStore *store) {

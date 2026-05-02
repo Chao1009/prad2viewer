@@ -913,6 +913,47 @@ inline float chi2_eval(const float *y, int n, float clk_ns,
     return s;
 }
 
+// ---- Two-tau with rise-edge exponent ---------------------------------
+//
+// T(t; t0, τ_r, τ_f, p) = [1 − exp(−(t−t0)/τ_r)]^p · exp(−(t−t0)/τ_f)
+//
+// Closed-form peak:
+//   u_peak  = p·τ_f / (τ_r + p·τ_f)        (= 1 − exp(−dt_peak/τ_r))
+//   dt_peak = τ_r · ln((τ_r + p·τ_f) / τ_r)
+//   T_max   = u_peak^p · (τ_r/(τ_r + p·τ_f))^(τ_r/τ_f)
+//
+// p = 1 reduces to the standard two-tau form (verify: u_peak = τ_f/(τ_r+τ_f),
+// matches t_max_value above).
+inline float two_tau_p_unit_pt(float t, float t0, float tr, float tf,
+                                float p, float t_max_inv)
+{
+    if (t <= t0) return 0.0f;
+    const float dt = t - t0;
+    const float u  = 1.0f - std::exp(-dt / tr);
+    if (u <= 0.0f) return 0.0f;
+    return std::pow(u, p) * std::exp(-dt / tf) * t_max_inv;
+}
+
+inline float t_max_value_p(float tr, float tf, float p)
+{
+    if (!(tr > 0.0f) || !(tf > 0.0f) || !(p > 0.0f)) return 1.0f;  // defensive
+    const float denom = tr + p * tf;
+    const float u_peak = p * tf / denom;            // (1 - exp(-dt_peak/τ_r))
+    return std::pow(u_peak, p) * std::pow(tr / denom, tr / tf);
+}
+
+inline float chi2_eval_two_tau_p(const float *y, int n, float clk_ns,
+                                  float t0, float tr, float tf, float p)
+{
+    const float t_max_inv = 1.0f / t_max_value_p(tr, tf, p);
+    float s = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const float t = i * clk_ns;
+        const float r = y[i] - two_tau_p_unit_pt(t, t0, tr, tf, p, t_max_inv);
+        s += r * r;
+    }
+    return s;
+}
 
 } // anon
 
@@ -1083,6 +1124,187 @@ WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
     res.t0_ns        = t0_best;
     res.tau_r_ns     = tr_best;
     res.tau_f_ns     = tf_best;
+    res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
+    res.n_iter       = iter;
+    res.ok           = true;
+    return res;
+}
+
+WaveAnalyzer::PulseFitTwoTauPResult
+WaveAnalyzer::FitPulseShapeTwoTauP(const uint16_t *slice, int nslice,
+                                    int peak_idx_in_slice,
+                                    float ped, float ped_rms,
+                                    float clk_ns,
+                                    float model_err_floor)
+{
+    PulseFitTwoTauPResult res{};
+    res.ok = false;
+
+    if (!slice || nslice < 8 || nslice > MAX_SAMPLES) return res;
+    if (peak_idx_in_slice < 0 || peak_idx_in_slice >= nslice) return res;
+
+    const float peak_amp = static_cast<float>(slice[peak_idx_in_slice]) - ped;
+    if (peak_amp <= 0.0f) return res;
+    res.peak_amp = peak_amp;
+
+    float y[MAX_SAMPLES];
+    const float inv_amp = 1.0f / peak_amp;
+    for (int i = 0; i < nslice; ++i)
+        y[i] = (static_cast<float>(slice[i]) - ped) * inv_amp;
+
+    const float sigma_noise = std::max(ped_rms, 1.0f) * inv_amp;
+    const float sigma       = std::max(sigma_noise, model_err_floor);
+    const float w_inv2      = 1.0f / (sigma * sigma);
+
+    // Initial guesses — match FitPulseShape's, plus p starting at the
+    // sigmoidal value 2.0 (mid-range for the expected [1, 3] span; LM
+    // can drift up or down within bounds).
+    float t0 = peak_idx_in_slice * clk_ns - 2.0f * clk_ns;
+    float tr = 1.0f * clk_ns;
+    float tf = 5.0f * clk_ns;
+    float p  = 2.0f;
+
+    const float t0_lo = -2.0f * clk_ns;
+    const float t0_hi = (nslice - 1) * clk_ns;
+    const float tr_lo = 0.2f * clk_ns;
+    const float tr_hi = 10.0f * clk_ns;
+    const float tf_lo = 1.0f * clk_ns;
+    const float tf_hi = 80.0f * clk_ns;
+    const float p_lo  = 0.3f;     // < 1 = sharp/under-shoot rise (allowed but unusual)
+    const float p_hi  = 10.0f;    // > 10 = pathologically smooth
+
+    constexpr int   MAX_ITER  = 100;
+    constexpr float TOL_PARAM = 1e-5f;
+    constexpr float LAMBDA0   = 1.0e-3f;
+    constexpr float LAMBDA_UP = 10.0f;
+    constexpr float LAMBDA_DN = 10.0f;
+    constexpr float LAMBDA_MAX = 1.0e10f;
+
+    float lambda = LAMBDA0;
+    float chi2   = chi2_eval_two_tau_p(y, nslice, clk_ns, t0, tr, tf, p);
+
+    float chi2_best = chi2;
+    float t0_best = t0, tr_best = tr, tf_best = tf, p_best = p;
+
+    int iter = 0;
+    for (; iter < MAX_ITER; ++iter) {
+        // Residuals at current point.
+        float r[MAX_SAMPLES];
+        const float t_max_inv = 1.0f / t_max_value_p(tr, tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            r[i] = y[i] - two_tau_p_unit_pt(t, t0, tr, tf, p, t_max_inv);
+        }
+
+        // Forward-difference Jacobian (4 columns, n_data × 4, column-
+        // major with stride MAX_SAMPLES).
+        float J[MAX_SAMPLES * 4];
+        const float h_t0 = std::max(1e-3f * clk_ns, 1e-6f);
+        const float h_tr = std::max(1e-3f * tr,     1e-6f);
+        const float h_tf = std::max(1e-3f * tf,     1e-6f);
+        const float h_p  = std::max(1e-3f * p,      1e-6f);
+
+        const float tmi_t0 = t_max_inv;            // T_max independent of t0
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0,        tr, tf, p, tmi_t0);
+            const float fp = two_tau_p_unit_pt(t, t0 + h_t0, tr, tf, p, tmi_t0);
+            J[i + 0 * MAX_SAMPLES] = -(fp - f0) / h_t0;     // dr/dt0
+        }
+        const float tmi_trp = 1.0f / t_max_value_p(tr + h_tr, tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr,        tf, p, t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr + h_tr, tf, p, tmi_trp);
+            J[i + 1 * MAX_SAMPLES] = -(fp - f0) / h_tr;     // dr/dτ_r
+        }
+        const float tmi_tfp = 1.0f / t_max_value_p(tr, tf + h_tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr, tf,        p, t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr, tf + h_tf, p, tmi_tfp);
+            J[i + 2 * MAX_SAMPLES] = -(fp - f0) / h_tf;     // dr/dτ_f
+        }
+        const float tmi_pp = 1.0f / t_max_value_p(tr, tf, p + h_p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr, tf, p,       t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr, tf, p + h_p, tmi_pp);
+            J[i + 3 * MAX_SAMPLES] = -(fp - f0) / h_p;      // dr/dp
+        }
+
+        // Normal equations.  A is 4×4 row-major.
+        float A[16] = {0};
+        float g[4]  = {0};
+        for (int i = 0; i < nslice; ++i) {
+            const float j0 = J[i + 0 * MAX_SAMPLES];
+            const float j1 = J[i + 1 * MAX_SAMPLES];
+            const float j2 = J[i + 2 * MAX_SAMPLES];
+            const float j3 = J[i + 3 * MAX_SAMPLES];
+            A[ 0] += j0*j0; A[ 1] += j0*j1; A[ 2] += j0*j2; A[ 3] += j0*j3;
+                            A[ 5] += j1*j1; A[ 6] += j1*j2; A[ 7] += j1*j3;
+                                            A[10] += j2*j2; A[11] += j2*j3;
+                                                            A[15] += j3*j3;
+            g[0] += j0 * r[i]; g[1] += j1 * r[i]; g[2] += j2 * r[i]; g[3] += j3 * r[i];
+        }
+        // Mirror upper to lower (keep both halves filled for cholesky/chol_solve).
+        A[ 4] = A[ 1];  A[ 8] = A[ 2];  A[12] = A[ 3];
+        A[ 9] = A[ 6];  A[13] = A[ 7];
+        A[14] = A[11];
+
+        // (A + λI) δ = g  via the generic K=4 Cholesky.
+        float Aug[16];
+        for (int i = 0; i < 16; ++i) Aug[i] = A[i];
+        Aug[ 0] += lambda; Aug[ 5] += lambda; Aug[10] += lambda; Aug[15] += lambda;
+
+        float L[16];
+        const float min_pivot_sq = cholesky(Aug, L, 4);
+        if (min_pivot_sq < 0.0f) {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+            continue;
+        }
+
+        float delta[4];
+        chol_solve(L, g, delta, 4);
+
+        // Trial point — same sign convention as FitPulseShape.
+        const float new_t0 = std::clamp(t0 - delta[0], t0_lo, t0_hi);
+        const float new_tr = std::clamp(tr - delta[1], tr_lo, tr_hi);
+        const float new_tf = std::clamp(tf - delta[2], tf_lo, tf_hi);
+        const float new_p  = std::clamp(p  - delta[3], p_lo,  p_hi);
+        const float new_chi2 = chi2_eval_two_tau_p(y, nslice, clk_ns,
+                                                   new_t0, new_tr, new_tf, new_p);
+
+        if (std::isfinite(new_chi2) && new_chi2 < chi2_best) {
+            chi2_best = new_chi2;
+            t0_best = new_t0; tr_best = new_tr; tf_best = new_tf; p_best = new_p;
+        }
+
+        if (new_chi2 < chi2) {
+            const float dpar = std::abs(delta[0]) / clk_ns
+                             + std::abs(delta[1]) / clk_ns
+                             + std::abs(delta[2]) / clk_ns
+                             + std::abs(delta[3]) / std::max(p, 0.1f);
+            t0 = new_t0; tr = new_tr; tf = new_tf; p = new_p;
+            chi2 = new_chi2;
+            lambda = std::max(lambda / LAMBDA_DN, 1.0e-12f);
+            if (dpar < TOL_PARAM) { ++iter; break; }
+        } else {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+        }
+    }
+
+    if (!std::isfinite(t0_best) || !std::isfinite(tr_best) ||
+        !std::isfinite(tf_best) || !std::isfinite(p_best))
+        return res;
+
+    const int dof = std::max(1, nslice - 4);
+    res.t0_ns        = t0_best;
+    res.tau_r_ns     = tr_best;
+    res.tau_f_ns     = tf_best;
+    res.p            = p_best;
     res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
     res.n_iter       = iter;
     res.ok           = true;

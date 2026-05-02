@@ -142,14 +142,24 @@ struct Peak {
     uint8_t  quality;
 };
 
-// Soft-analyzer peak quality bitmask (set by WaveAnalyzer::findPeaks).
+// Soft-analyzer peak quality bitmask (set by WaveAnalyzer::findPeaks
+// and Analyze).
 //
-// Q_PEAK_GOOD  = 0       no flags
-// Q_PEAK_PILED = 1 << 0  integration window is within `cfg.peak_pileup_gap`
-//                        samples of an adjacent peak's window — both peaks
-//                        in the pair get the bit set
-constexpr uint8_t Q_PEAK_GOOD  = 0;
-constexpr uint8_t Q_PEAK_PILED = 1u << 0;
+// Q_PEAK_GOOD         = 0       no flags
+// Q_PEAK_PILED        = 1 << 0  integration window is within
+//                                `cfg.peak_pileup_gap` samples of an
+//                                adjacent peak's window — both peaks in
+//                                the pair get the bit set
+// Q_PEAK_DECONVOLVED  = 1 << 1  height/integral were replaced in place
+//                                by NNLS pile-up deconvolution against
+//                                the per-channel template (instead of
+//                                the local-maxima + tail-cutoff values).
+//                                Set by WaveAnalyzer::Analyze when a
+//                                PulseTemplateStore + channel key are
+//                                bound and the deconv converged.
+constexpr uint8_t Q_PEAK_GOOD        = 0;
+constexpr uint8_t Q_PEAK_PILED       = 1u << 0;
+constexpr uint8_t Q_PEAK_DECONVOLVED = 1u << 1;
 
 // Per-channel pedestal estimate from WaveAnalyzer.
 //   mean / rms  — final values after iterative outlier rejection
@@ -249,22 +259,57 @@ struct DaqWaveResult {
 //
 // is_global: true if this is the synthesized fallback (median across all
 // "good" channels) rather than a per-channel fit.
+//
+// Precomputed grid: when filled by PulseTemplateStore::LoadFromFile() the
+// `grid[]` array holds T evaluated at i · grid_clk_ns (i = 0..GRID_N-1).
+// WaveAnalyzer::Deconvolve linearly interpolates this grid to skip the
+// per-sample exp() calls in its hot loop — a ~10× speed-up.
+//
+// The grid is fixed at 8× oversample relative to the data clock (so
+// grid_clk_ns = 0.5 ns at clk_mhz = 250).  Linear-interp error is ~0.1 %
+// worst-case across the rapidly-rising leading edge; finer doesn't
+// meaningfully help and coarser hurts accuracy without saving memory
+// (the array would be the same size anyway), so the factor is hardwired
+// rather than configurable.
+//
+// Templates constructed in Python (via dec.PulseTemplate(tr, tf)) leave
+// the grid empty (grid_clk_ns == 0) and the analyzer falls back to
+// evaluating the analytic form on the fly.
 struct PulseTemplate {
+    static constexpr int GRID_OVERSAMPLE = 8;
+    static constexpr int GRID_N          = MAX_SAMPLES * GRID_OVERSAMPLE;
+
     float   tau_r_ns;
     float   tau_f_ns;
     bool    is_global;
+    float   grid_clk_ns;                   // 0 ⇒ grid not filled
+    float   grid[GRID_N];                  // unit-amplitude T at i·grid_clk_ns
 };
 
 // Per-event deconv output, parallel to WaveResult.peaks[0..n-1].
 //
-// `state` is a single-valued enum (not a bitmask):
-//   Q_DECONV_NOT_RUN          Deconvolve() never invoked (or n_peaks==0)
-//   Q_DECONV_DISABLED         cfg.nnls_deconv.enabled == false
-//   Q_DECONV_NO_TEMPLATE      caller asked for deconv but tmpl was empty
-//   Q_DECONV_BAD_TEMPLATE     τ_r / τ_f failed range validation
-//   Q_DECONV_SINGULAR         design matrix ill-conditioned, deconv aborted
-//   Q_DECONV_APPLIED          channel template, NNLS converged
-//   Q_DECONV_FALLBACK_GLOBAL  global-median template, NNLS converged
+// `state` is a single-valued enum (not a bitmask).  Production code
+// (applyAutoDeconv inside Analyze) only needs to distinguish APPLIED /
+// FALLBACK_GLOBAL from everything else, but the diagnostic Python
+// script reports the full breakdown:
+//
+//   Q_DECONV_NOT_RUN          Deconvolve() never invoked, or pre-flight
+//                              check failed (no samples / npeaks==0 /
+//                              nsamples > MAX_SAMPLES)
+//   Q_DECONV_NO_TEMPLATE      reserved for callers that want to surface
+//                              "no template available for this channel"
+//                              (the C++ Deconvolve method itself never
+//                              sets this — it requires a template to be
+//                              passed in; applyAutoDeconv skips the call
+//                              entirely when the store returns nullptr)
+//   Q_DECONV_BAD_TEMPLATE     τ_r / τ_f outside cfg.nnls_deconv ranges
+//   Q_DECONV_SINGULAR         design matrix ill-conditioned (cond proxy
+//                              exceeds cfg.cond_number_max, or the
+//                              active-set Cholesky went indefinite);
+//                              deconv aborted, peaks left unchanged
+//   Q_DECONV_APPLIED          per-channel template, NNLS converged
+//   Q_DECONV_FALLBACK_GLOBAL  global-median fallback template,
+//                              NNLS converged
 //
 // On any non-converged outcome the amplitude/height/integral arrays are
 // zeroed so callers can safely fall back to WaveResult.peaks values
@@ -289,11 +334,10 @@ struct DeconvOutput {
 };
 
 constexpr uint8_t Q_DECONV_NOT_RUN          = 0;
-constexpr uint8_t Q_DECONV_DISABLED         = 1;
-constexpr uint8_t Q_DECONV_NO_TEMPLATE      = 2;
-constexpr uint8_t Q_DECONV_BAD_TEMPLATE     = 3;
-constexpr uint8_t Q_DECONV_SINGULAR         = 4;
-constexpr uint8_t Q_DECONV_APPLIED          = 5;
-constexpr uint8_t Q_DECONV_FALLBACK_GLOBAL  = 6;
+constexpr uint8_t Q_DECONV_NO_TEMPLATE      = 1;
+constexpr uint8_t Q_DECONV_BAD_TEMPLATE     = 2;
+constexpr uint8_t Q_DECONV_SINGULAR         = 3;
+constexpr uint8_t Q_DECONV_APPLIED          = 4;
+constexpr uint8_t Q_DECONV_FALLBACK_GLOBAL  = 5;
 
 } // namespace fdec

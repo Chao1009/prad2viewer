@@ -11,6 +11,7 @@
 #include "DaqConfig.h"
 #include "load_daq_config.h"
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 #include "Fadc250Data.h"
 #include "InstallPaths.h"
 
@@ -179,6 +180,17 @@ int main(int argc, char *argv[])
 
     static fdec::EventData evt;
     fdec::WaveAnalyzer wave(cfg.wave_cfg);
+    fdec::PulseTemplateStore template_store;
+    if (cfg.wave_cfg.nnls_deconv.enabled
+        && !cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+        // dbDir was already env-aware-resolved above (PRAD2_DATABASE_DIR
+        // → ../share/... → DATABASE_DIR), so reuse it instead of going
+        // back to the build-time DATABASE_DIR macro.
+        template_store.LoadFromFile(
+            std::string(dbDir.Data()) + "/" + cfg.wave_cfg.nnls_deconv.template_file,
+            cfg.wave_cfg);
+    }
+    wave.SetTemplateStore(&template_store);
     
     double alphaRef[N_LMS_REF] = {};
     bool   alphaValid = false;
@@ -228,6 +240,7 @@ int main(int argc, char *argv[])
                             if (cd.nsamples == 0) continue;
 
                             fdec::WaveResult wres;
+                            wave.SetChannelKey(roc.tag, s, c);
                             wave.Analyze(cd.samples, cd.nsamples, wres);
 
                             // Find peak sample index in window [40, 60]

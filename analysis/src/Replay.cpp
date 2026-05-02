@@ -5,6 +5,7 @@
 #include "Replay.h"
 #include "DaqConfig.h"
 #include "EventData_io.h"
+#include "PulseTemplateStore.h"
 #include "HyCalSystem.h"
 #include "GemSystem.h"
 #include "HyCalCluster.h"
@@ -225,6 +226,17 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
+    // NNLS pile-up template store (loaded only if config asks for it;
+    // failure is non-fatal — the analyzer falls back to local-maxima
+    // peak heights).
+    fdec::PulseTemplateStore template_store;
+    if (daq_cfg_.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg_.wave_cfg.nnls_deconv.template_file.empty()) {
+        template_store.LoadFromFile(
+            db_dir + "/" + daq_cfg_.wave_cfg.nnls_deconv.template_file,
+            daq_cfg_.wave_cfg);
+    }
+    ana.SetTemplateStore(&template_store);
     fdec::WaveResult wres;
     // Firmware-mode emulator (FADC250 Modes 1/2/3).  Configured from the
     // optional "fadc250_waveform.firmware" block in daq_config.json — defaults
@@ -306,6 +318,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                             // pedestal estimate that the firmware analyzer
                             // consumes — only run it when its output is
                             // being written.
+                            ana.SetChannelKey(roc.tag, s, c);
                             ana.Analyze(cd.samples, cd.nsamples, wres);
                             ev->ped_mean[nch]    = wres.ped.mean;
                             ev->ped_rms[nch]     = wres.ped.rms;
@@ -482,6 +495,14 @@ if(!prad1){
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
+    fdec::PulseTemplateStore template_store;
+    if (daq_cfg_.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg_.wave_cfg.nnls_deconv.template_file.empty()) {
+        template_store.LoadFromFile(
+            db_dir + "/" + daq_cfg_.wave_cfg.nnls_deconv.template_file,
+            daq_cfg_.wave_cfg);
+    }
+    ana.SetTemplateStore(&template_store);
     fdec::WaveResult wres;
 
     int total = 0;
@@ -550,6 +571,7 @@ if(!prad1){
                                 if(lms_nch >= 4) { lms_nch++; continue; } // guard against overflow
                                 if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
                                 else ev->lms_id[lms_nch] = mod_name[3] - '0';
+                                ana.SetChannelKey(roc.tag, s, c);
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->lms_npeaks[lms_nch] = wres.npeaks;
                                 if(wres.npeaks <= 0) continue;
@@ -568,6 +590,7 @@ if(!prad1){
                                 if(mod_name.length() != 2) continue;
                                 if(veto_nch >= 4) { veto_nch++; continue; } // guard against overflow
                                 ev->veto_id[veto_nch] = mod_name[1] - '0';
+                                ana.SetChannelKey(roc.tag, s, c);
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->veto_npeaks[veto_nch] = wres.npeaks;
                                 if(wres.npeaks <= 0) continue;
@@ -585,6 +608,7 @@ if(!prad1){
                                 if(prad1 == true) 
                                     adc = cd.samples[0] * 0.543; //0.543 for prad1 run1308,correct to 1.1GeV
                                 else{
+                                    ana.SetChannelKey(roc.tag, s, c);
                                     ana.Analyze(cd.samples, cd.nsamples, wres);
                                     if (wres.npeaks <= 0) continue;
                                     int bestIdx = -1;

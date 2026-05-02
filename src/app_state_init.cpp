@@ -64,6 +64,20 @@ void AppState::init(const std::string &db_dir,
                       << " (" << daq_cfg.pedestals.size() << " channels)\n";
     }
 
+    // optional NNLS pile-up deconv template store.  Loaded only when the
+    // analyzer config has nnls_deconv.enabled and a template_file path —
+    // otherwise the store stays invalid() and every WaveAnalyzer that
+    // borrows it falls back to local-maxima peak heights silently.
+    if (daq_cfg.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+        std::string tmpl_path = findFile(
+            daq_cfg.wave_cfg.nnls_deconv.template_file, db_dir);
+        if (tmpl_path.empty())
+            tmpl_path = daq_cfg.wave_cfg.nnls_deconv.template_file;
+        // LoadFromFile prints its own warning on failure.
+        template_store.LoadFromFile(tmpl_path, daq_cfg.wave_cfg);
+    }
+
     // --- resolve monitor + reconstruction config paths ---------------------
     std::string monitor_path = monitor_config_file;
     if (monitor_path.empty())

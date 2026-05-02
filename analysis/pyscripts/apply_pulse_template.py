@@ -54,14 +54,13 @@ class ChanSummary:
     channel_id: str
     template_state: str = "no_template"
 
-    n_with_peaks:        int = 0
-    n_with_piled:        int = 0
-    n_deconv_applied:    int = 0
-    n_deconv_singular:   int = 0
-    n_deconv_no_template:  int = 0
-    n_deconv_bad_template: int = 0
+    n_with_peaks:             int = 0
+    n_with_piled:             int = 0
+    n_deconv_applied:         int = 0
+    n_deconv_singular:        int = 0
+    n_deconv_no_template:     int = 0
+    n_deconv_bad_template:    int = 0
     n_deconv_fallback_global: int = 0
-    n_deconv_disabled:   int = 0
 
     height_ratio: List[float] = field(default_factory=list)
     chi2_per_dof: List[float] = field(default_factory=list)
@@ -85,7 +84,6 @@ class ChanSummary:
                 "skipped_no_template":  self.n_deconv_no_template,
                 "skipped_bad_template": self.n_deconv_bad_template,
                 "fallback_global":      self.n_deconv_fallback_global,
-                "disabled":             self.n_deconv_disabled,
             },
             "height_ratio_dec_over_wa": _stats(self.height_ratio),
             "chi2_per_dof_global":      _stats(self.chi2_per_dof),
@@ -213,19 +211,13 @@ def plot_pileup_event(plt, samples_pedsub: np.ndarray,
 # Main
 # ---------------------------------------------------------------------------
 
-# Map the C++ Q_DECONV_* state byte to a stat key on ChanSummary.
-_STATE_TO_FIELD = {
-    None: "n_deconv_applied",  # filled in main() once dec is imported
-}
-
-
+# Map the C++ Q_DECONV_* state byte to a stat-field name on ChanSummary.
 def _stat_field_for(state_byte: int) -> str:
     if state_byte == dec.Q_DECONV_APPLIED:         return "n_deconv_applied"
     if state_byte == dec.Q_DECONV_FALLBACK_GLOBAL: return "n_deconv_fallback_global"
     if state_byte == dec.Q_DECONV_SINGULAR:        return "n_deconv_singular"
     if state_byte == dec.Q_DECONV_BAD_TEMPLATE:    return "n_deconv_bad_template"
     if state_byte == dec.Q_DECONV_NO_TEMPLATE:     return "n_deconv_no_template"
-    if state_byte == dec.Q_DECONV_DISABLED:        return "n_deconv_disabled"
     return "n_deconv_no_template"  # Q_DECONV_NOT_RUN — group with no_template
 
 
@@ -314,12 +306,12 @@ def main() -> None:
     )
     p.evio_files = all_files
 
-    # Push our overrides into the C++ analyzer cfg too — so the C++ side
-    # agrees with the Python TemplateDB on what "enabled" / "all peaks"
-    # / "fallback" mean.
-    p.wave_ana.cfg.nnls_deconv.enabled                     = cfg.enabled
-    p.wave_ana.cfg.nnls_deconv.fallback_to_global_template = cfg.fallback_to_global_template
-    p.wave_ana.cfg.nnls_deconv.apply_to_all_peaks          = cfg.apply_to_all_peaks
+    # NB: this script never binds a PulseTemplateStore to the analyzer,
+    # so the auto-deconv path (inside Analyze) stays off — we deliberately
+    # use the explicit deconvolve() API below to compute the "after" values
+    # alongside the unchanged "before" peaks.  Production code paths
+    # (Replay / viewer servers) get auto-deconv via the C++ store binding;
+    # see analysis/src/Replay.cpp and src/app_state_init.cpp.
 
     clk_mhz = float(p.cfg.wave_cfg.clk_mhz)
     clk_ns  = (1000.0 / clk_mhz) if clk_mhz > 0 else 4.0
@@ -505,7 +497,7 @@ def main() -> None:
         "n_channels":    len(chans),
         "deconv": {"applied": 0, "singular": 0,
                    "skipped_no_template": 0, "skipped_bad_template": 0,
-                   "fallback_global": 0, "disabled": 0},
+                   "fallback_global": 0},
         "n_with_piled": 0,
     }
     state_counts = {"good": 0, "fallback_global": 0,
@@ -517,7 +509,6 @@ def main() -> None:
         totals["deconv"]["skipped_no_template"]  += su.n_deconv_no_template
         totals["deconv"]["skipped_bad_template"] += su.n_deconv_bad_template
         totals["deconv"]["fallback_global"]      += su.n_deconv_fallback_global
-        totals["deconv"]["disabled"]             += su.n_deconv_disabled
         state_counts[su.template_state] = state_counts.get(su.template_state, 0) + 1
 
     summary_doc: Dict = {
@@ -545,8 +536,7 @@ def main() -> None:
     print(f"  deconv applied={d['applied']}  singular={d['singular']}  "
           f"fallback_global={d['fallback_global']}  "
           f"skipped(no_template)={d['skipped_no_template']}  "
-          f"skipped(bad_template)={d['skipped_bad_template']}  "
-          f"disabled={d['disabled']}", flush=True)
+          f"skipped(bad_template)={d['skipped_bad_template']}", flush=True)
 
     if args.out_summary:
         out_path = Path(args.out_summary)

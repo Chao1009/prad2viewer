@@ -110,7 +110,7 @@
             "clk_mhz":         250.0,
 
             "nnls_deconv": {
-                "_comment": "NNLS pile-up deconvolution. When enabled, the analyzer follows the local-maxima peak finder with a per-channel two-tau template fit that solves for non-negative per-peak amplitudes, recovering height_dec / integral_dec on piled events. Channels without a usable template fall back to the WaveAnalyzer values unless fallback_to_global_template is true. See docs/technical_notes/waveform_analysis/wave_analysis.md.",
+                "_comment": "NNLS pile-up deconvolution. When enabled, the analyzer follows the local-maxima peak finder with a per-channel two-tau template fit that solves for non-negative per-peak amplitudes, overwriting peak.height/integral on piled events and marking the touched peaks with Q_PEAK_DECONVOLVED. Channels without a usable template fall back to the WaveAnalyzer values unless fallback_to_global_template is true. WARNING: apply_to_all_peaks=true runs NNLS on every channel-event (~10x slowdown) — leave false unless debugging. See docs/technical_notes/waveform_analysis/wave_analysis.md.",
                 "enabled":                     false,
                 "template_file":               "pulse_templates.json",
                 "fallback_to_global_template": false,

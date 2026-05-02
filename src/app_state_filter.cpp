@@ -167,6 +167,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
         bool any_module_pass = false;
         fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
+        ana.SetTemplateStore(&template_store);
         fdec::WaveResult wres;
 
         for (int r = 0; r < event.nrocs && !any_module_pass; ++r) {
@@ -186,6 +187,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
 
                     if (is_adc1881m) continue;  // no peak analysis for ADC1881M
 
+                    ana.SetChannelKey(roc.tag, s, c);
                     ana.Analyze(cd.samples, cd.nsamples, wres);
                     int n_qual = 0;
                     for (int p = 0; p < wres.npeaks; ++p) {
@@ -215,6 +217,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
 
         fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
+        ana.SetTemplateStore(&template_store);
         fdec::WaveResult wres;
 
         for (int r = 0; r < event.nrocs; ++r) {
@@ -239,6 +242,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
                     if (is_adc1881m) {
                         adc_val = (float)cd.samples[0];
                     } else {
+                        ana.SetChannelKey(roc.tag, s, c);
                         ana.Analyze(cd.samples, cd.nsamples, wres);
                         adc_val = bestPeakInWindow(wres, hist_cfg.threshold,
                                                    hist_cfg.time_min, hist_cfg.time_max);

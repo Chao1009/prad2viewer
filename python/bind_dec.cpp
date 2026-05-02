@@ -26,6 +26,7 @@
 #include "load_daq_config.h"
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 #include "Fadc250FwAnalyzer.h"
 #include "SspData.h"
 #include "VtpData.h"
@@ -225,6 +226,7 @@ void bind_fadc(py::module_ &m)
         "database/daq_config.json under fadc250_waveform.analyzer.nnls_deconv.")
         .def(py::init<>())
         .def_readwrite("enabled",                     &fdec::WaveConfig::NnlsDeconvConfig::enabled)
+        .def_readwrite("template_file",               &fdec::WaveConfig::NnlsDeconvConfig::template_file)
         .def_readwrite("fallback_to_global_template", &fdec::WaveConfig::NnlsDeconvConfig::fallback_to_global_template)
         .def_readwrite("apply_to_all_peaks",          &fdec::WaveConfig::NnlsDeconvConfig::apply_to_all_peaks)
         .def_readwrite("tau_r_min_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_r_min_ns)
@@ -234,6 +236,46 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("cond_number_max", &fdec::WaveConfig::NnlsDeconvConfig::cond_number_max)
         .def_readwrite("pre_samples",     &fdec::WaveConfig::NnlsDeconvConfig::pre_samples)
         .def_readwrite("post_samples",    &fdec::WaveConfig::NnlsDeconvConfig::post_samples);
+
+    py::class_<fdec::PulseTemplateStore>(m, "PulseTemplateStore",
+        "Per-channel pulse-template store loaded from the JSON written by "
+        "fit_pulse_template.py.  Bind via WaveAnalyzer.set_template_store() "
+        "and the analyzer's Analyze() method will auto-deconvolve piled "
+        "events once a per-channel template is found.")
+        .def(py::init<>())
+        .def("load_from_file", &fdec::PulseTemplateStore::LoadFromFile,
+             py::arg("path"), py::arg("wave_cfg"),
+             "Load templates from JSON.  wave_cfg is a WaveConfig used to "
+             "validate per-channel τ-range gates (via wave_cfg.nnls_deconv) "
+             "and to set the precomputed grid sample period (via "
+             "wave_cfg.clk_mhz).  Returns False on file-not-found / parse "
+             "error / empty contents (caller falls back to non-deconv mode).")
+        .def("lookup",
+             [](const fdec::PulseTemplateStore &self,
+                int roc_tag, int slot, int channel,
+                bool fallback_to_global) -> py::object {
+                 const fdec::PulseTemplate *t = self.Lookup(
+                     roc_tag, slot, channel, fallback_to_global);
+                 if (!t) return py::none();
+                 return py::cast(*t);
+             },
+             py::arg("roc_tag"), py::arg("slot"), py::arg("channel"),
+             py::arg("fallback_to_global") = false,
+             "Look up template by (roc_tag, slot, channel). Returns "
+             "None if no template is available (and fallback isn't "
+             "requested or unavailable).")
+        .def("clear", &fdec::PulseTemplateStore::Clear)
+        .def_property_readonly("valid",      &fdec::PulseTemplateStore::valid)
+        .def_property_readonly("has_global", &fdec::PulseTemplateStore::has_global)
+        .def_property_readonly("n_channels_loaded",
+            &fdec::PulseTemplateStore::n_channels_loaded)
+        .def_property_readonly("n_good", &fdec::PulseTemplateStore::n_good)
+        .def_property_readonly("global_template",
+            [](const fdec::PulseTemplateStore &self) -> py::object {
+                const fdec::PulseTemplate *t = self.global_template();
+                if (!t) return py::none();
+                return py::cast(*t);
+            });
 
     py::class_<fdec::WaveConfig>(m, "WaveConfig",
         "Knobs for WaveAnalyzer (smoothing, thresholds, pedestal window, ...).")
@@ -374,6 +416,22 @@ void bind_fadc(py::module_ &m)
             "peak finding).  Returns the smoothed buffer as a float32 "
             "numpy array — useful for plotting the curve the peak finder "
             "actually sees.")
+        .def("set_template_store",
+            [](fdec::WaveAnalyzer &self,
+               const fdec::PulseTemplateStore *store) {
+                self.SetTemplateStore(store);
+            },
+            py::arg("store").none(true),
+            py::keep_alive<1, 2>(),
+            "Bind a PulseTemplateStore so subsequent analyze() calls can "
+            "auto-deconvolve.  Pass None to detach.  The analyzer keeps "
+            "a non-owning reference; the store must outlive the analyzer.")
+        .def("set_channel_key", &fdec::WaveAnalyzer::SetChannelKey,
+            py::arg("roc_tag"), py::arg("slot"), py::arg("channel"),
+            "Tell the analyzer which channel the next analyze() call is "
+            "for, so the bound PulseTemplateStore can look up the right "
+            "template.  Pass any negative value to disable deconv.")
+        .def("clear_channel_key", &fdec::WaveAnalyzer::ClearChannelKey)
         .def("analyze_result",
             [](const fdec::WaveAnalyzer &self, py::array_t<uint16_t> samples) {
                 py::buffer_info buf = samples.request();
@@ -428,6 +486,7 @@ void bind_fadc(py::module_ &m)
     // flag.  Both peaks in a piled-up pair get the bit set.
     m.attr("Q_PEAK_GOOD")            = py::int_(fdec::Q_PEAK_GOOD);
     m.attr("Q_PEAK_PILED")           = py::int_(fdec::Q_PEAK_PILED);
+    m.attr("Q_PEAK_DECONVOLVED")     = py::int_(fdec::Q_PEAK_DECONVOLVED);
 
     // Pedestal-fit quality bitmask — exposed so callers can filter on
     // Pedestal.quality (e.g. dec.Q_PED_PULSE_IN_WINDOW).
@@ -440,10 +499,9 @@ void bind_fadc(py::module_ &m)
     m.attr("Q_PED_TRAILING_WINDOW")  = py::int_(fdec::Q_PED_TRAILING_WINDOW);
 
     // NNLS deconv state — single-valued enum (not a bitmask).  Test
-    // dec_out.state == dec.Q_DECONV_APPLIED to know whether to read
-    // dec_out.height / .integral.
+    // dec_out.state == dec.Q_DECONV_APPLIED (or _FALLBACK_GLOBAL) to know
+    // whether to read dec_out.height / .integral.
     m.attr("Q_DECONV_NOT_RUN")          = py::int_(fdec::Q_DECONV_NOT_RUN);
-    m.attr("Q_DECONV_DISABLED")         = py::int_(fdec::Q_DECONV_DISABLED);
     m.attr("Q_DECONV_NO_TEMPLATE")      = py::int_(fdec::Q_DECONV_NO_TEMPLATE);
     m.attr("Q_DECONV_BAD_TEMPLATE")     = py::int_(fdec::Q_DECONV_BAD_TEMPLATE);
     m.attr("Q_DECONV_SINGULAR")         = py::int_(fdec::Q_DECONV_SINGULAR);

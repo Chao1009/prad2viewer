@@ -172,6 +172,7 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
                 auto &nd = an["nnls_deconv"];
                 auto &dc = cfg.wave_cfg.nnls_deconv;
                 if (nd.contains("enabled"))                      dc.enabled                     = nd["enabled"].get<bool>();
+                if (nd.contains("template_file"))                dc.template_file               = nd["template_file"].get<std::string>();
                 if (nd.contains("fallback_to_global_template")) dc.fallback_to_global_template = nd["fallback_to_global_template"].get<bool>();
                 if (nd.contains("apply_to_all_peaks"))           dc.apply_to_all_peaks          = nd["apply_to_all_peaks"].get<bool>();
                 if (nd.contains("tau_r_range_ns")

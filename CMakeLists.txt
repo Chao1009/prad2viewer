@@ -51,15 +51,17 @@ get_filename_component(RESOURCE_DIR "${RESOURCE_DIR}" ABSOLUTE)
 include(GNUInstallDirs)
 
 # ---------------------------------------------------------------------------
+# HTTP/WebSocket dependencies (json, websocketpp, asio — all header-only).
+# Loaded *before* the core libraries so prad2dec / prad2det can pull
+# nlohmann_json into their own targets (e.g. PulseTemplateStore.cpp).
+# ---------------------------------------------------------------------------
+include(WebDeps)
+
+# ---------------------------------------------------------------------------
 # Core libraries (always built)
 # ---------------------------------------------------------------------------
 add_subdirectory(prad2dec)                    # libprad2dec.a + WITH_ET option
 add_subdirectory(prad2det)                    # libprad2det.a
-
-# ---------------------------------------------------------------------------
-# HTTP/WebSocket dependencies (json, websocketpp, asio — all header-only)
-# ---------------------------------------------------------------------------
-include(WebDeps)
 
 # ---------------------------------------------------------------------------
 # Diagnostic command-line tools

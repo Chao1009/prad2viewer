@@ -1,4 +1,5 @@
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 
 #include <limits>
 
@@ -394,6 +395,54 @@ void WaveAnalyzer::Analyze(const uint16_t *samples, int nsamples, WaveResult &re
             break;
         }
     }
+
+    // ── NNLS pile-up deconv.  Silent no-op unless the caller bound a
+    // template store and the current channel key — production code that
+    // doesn't care about deconv keeps its existing behaviour bit-for-bit.
+    applyAutoDeconv(samples, nsamples, result);
+}
+
+void WaveAnalyzer::applyAutoDeconv(const uint16_t *samples, int nsamples,
+                                   WaveResult &result) const
+{
+    if (!cfg.nnls_deconv.enabled)               return;
+    if (template_store_ == nullptr)             return;
+    if (ck_roc_ < 0 || ck_slot_ < 0 || ck_chan_ < 0) return;
+    if (result.npeaks <= 0)                     return;
+
+    // Cheap gate: skip clean events unless config asks otherwise.  This
+    // is the dominant cost saving — most channels see no pile-up and
+    // we'd otherwise pay an NNLS solve on every event.
+    if (!cfg.nnls_deconv.apply_to_all_peaks) {
+        bool any_piled = false;
+        for (int k = 0; k < result.npeaks; ++k) {
+            if (result.peaks[k].quality & Q_PEAK_PILED) {
+                any_piled = true; break;
+            }
+        }
+        if (!any_piled) return;
+    }
+
+    const PulseTemplate *tmpl = template_store_->Lookup(
+        ck_roc_, ck_slot_, ck_chan_,
+        cfg.nnls_deconv.fallback_to_global_template);
+    if (tmpl == nullptr) return;
+
+    DeconvOutput out;
+    Deconvolve(samples, nsamples, result, *tmpl, out);
+
+    // On success: replace each peak's height/integral with the deconv
+    // values and mark Q_PEAK_DECONVOLVED.  Failure paths
+    // (Q_DECONV_BAD_TEMPLATE / Q_DECONV_SINGULAR) leave the peaks as-is
+    // so downstream code falls back to WaveAnalyzer's tail-cutoff values.
+    if (out.state == Q_DECONV_APPLIED || out.state == Q_DECONV_FALLBACK_GLOBAL) {
+        const int K = (out.n < result.npeaks) ? out.n : result.npeaks;
+        for (int k = 0; k < K; ++k) {
+            result.peaks[k].height    = out.height[k];
+            result.peaks[k].integral  = out.integral[k];
+            result.peaks[k].quality  |= Q_PEAK_DECONVOLVED;
+        }
+    }
 }
 
 //=============================================================================
@@ -570,7 +619,10 @@ inline void template_peak(float tr, float tf, float &t_off, float &t_max)
 }
 
 // Unit-amplitude template at sample times t_i = i·clk_ns, with template
-// onset at t0 (ns).  Writes n values into `col`.
+// onset at t0 (ns).  Writes n values into `col`.  Slow path — two exp()
+// per sample.  Used for Python-constructed templates that don't carry a
+// precomputed grid; production code (which always has a grid) goes
+// through template_column_grid below.
 inline void template_column(float *col, int n, float clk_ns,
                             float t0, float tr, float tf)
 {
@@ -579,6 +631,30 @@ inline void template_column(float *col, int n, float clk_ns,
         if (t <= t0) { col[i] = 0.0f; continue; }
         const float dt = t - t0;
         col[i] = (1.0f - std::exp(-dt / tr)) * std::exp(-dt / tf);
+    }
+}
+
+// Fast path: linear-interpolate the precomputed unit-amplitude grid
+// (PulseTemplate::grid sampled at tmpl.grid_clk_ns) onto sample times
+// t_i = i·clk_ns shifted by t0.  Skips per-sample exp() — about 10×
+// faster than template_column on the deconv hot loop.
+//
+// Caller guarantees tmpl.grid_clk_ns > 0.  Samples whose shifted index
+// falls outside the grid's right edge are set to 0 (template has long
+// since decayed below noise) or 0 for negative dt (pre-onset).
+inline void template_column_grid(float *col, int n, float clk_ns,
+                                 float t0, const PulseTemplate &tmpl)
+{
+    const float inv_grid = 1.0f / tmpl.grid_clk_ns;
+    const int   last     = PulseTemplate::GRID_N - 1;
+    for (int i = 0; i < n; ++i) {
+        const float dt = i * clk_ns - t0;
+        if (dt <= 0.0f) { col[i] = 0.0f; continue; }
+        const float pos = dt * inv_grid;
+        const int   k   = static_cast<int>(pos);
+        if (k >= last) { col[i] = 0.0f; continue; }
+        const float frac = pos - static_cast<float>(k);
+        col[i] = tmpl.grid[k] + frac * (tmpl.grid[k + 1] - tmpl.grid[k]);
     }
 }
 
@@ -591,11 +667,10 @@ void WaveAnalyzer::Deconvolve(const uint16_t *samples, int nsamples,
 {
     dec_out.clear();
 
-    // Bail-out fast paths.
-    if (!cfg.nnls_deconv.enabled) {
-        dec_out.state = Q_DECONV_DISABLED;
-        return;
-    }
+    // Explicit API: always runs when given valid inputs and a usable
+    // template.  The cfg.nnls_deconv.enabled gate only governs the auto
+    // path (applyAutoDeconv inside Analyze) so the Python diagnostic
+    // can compute deconv values without flipping the production switch.
     if (!samples || nsamples <= 0 || nsamples > MAX_SAMPLES) {
         dec_out.state = Q_DECONV_NOT_RUN;
         return;
@@ -618,23 +693,37 @@ void WaveAnalyzer::Deconvolve(const uint16_t *samples, int nsamples,
 
     const float clk_ns  = (cfg.clk_mhz > 0.0f) ? (1000.0f / cfg.clk_mhz) : 4.0f;
     const float ped     = wres.ped.mean;
+    // sigma is the per-sample noise that drives chi²/dof.  We take it as
+    // the pedestal RMS (floored at 1 ADC) — purely a diagnostic value;
+    // no filtering decision is made on chi²/dof here, so the
+    // model-error-floor trick the Python fitter applies isn't needed
+    // (high-amp pulses will report large chi²/dof but still produce
+    // valid deconv values).
     const float sigma   = std::max(wres.ped.rms, 1.0f);
 
     float t_off = 0.0f, t_max = 0.0f;
     template_peak(tr, tf, t_off, t_max);
 
-    // Build pedsub vector b and design matrix M (column-major: M[i + k*N]).
-    // We size on the full waveform — keeping it simple and cheap; for K ≤ 8
-    // and N ≤ MAX_SAMPLES (200) the matrix is at most 1600 floats.
+    // Build pedsub vector b and design matrix M.  M is laid out as K
+    // back-to-back fixed-stride columns (column k at offset k*MAX_SAMPLES),
+    // so M[k*MAX_SAMPLES + i] is the value of column k (= the k-th peak's
+    // unit-amplitude template) at sample i.  We only fill / read the first
+    // nsamples of each column; the tail (nsamples..MAX_SAMPLES-1) is
+    // untouched by the AtA / Atb / chi² loops below.  Worst case 1600
+    // floats on the stack (K=8, MAX_SAMPLES=200).
     float b[MAX_SAMPLES];
     for (int i = 0; i < nsamples; ++i)
         b[i] = static_cast<float>(samples[i]) - ped;
 
     float M[MAX_SAMPLES * MAX_PEAKS];
+    const bool use_grid = (tmpl.grid_clk_ns > 0.0f);
     for (int k = 0; k < K; ++k) {
         const float t_pk = wres.peaks[k].time;       // ns from sample 0
         const float t0   = t_pk - t_off;
-        template_column(&M[k * MAX_SAMPLES], nsamples, clk_ns, t0, tr, tf);
+        if (use_grid)
+            template_column_grid(&M[k * MAX_SAMPLES], nsamples, clk_ns, t0, tmpl);
+        else
+            template_column(&M[k * MAX_SAMPLES], nsamples, clk_ns, t0, tr, tf);
     }
 
     // Normal equations.  AtA is K×K row-major, Atb is K-vector.

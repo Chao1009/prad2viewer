@@ -297,6 +297,7 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         {
             fdec::WaveAnalyzer ana(app_online_.daq_cfg.wave_cfg);
             ana.cfg.min_peak_ratio = app_online_.hist_cfg.min_peak_ratio;
+            ana.SetTemplateStore(&app_online_.template_store);
             fdec::WaveResult wres;
             for (auto &p : snap) {
                 if (!p.second) continue;
@@ -414,6 +415,7 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
 
         fdec::WaveAnalyzer ana(activeApp().daq_cfg.wave_cfg);
         ana.cfg.min_peak_ratio = activeApp().hist_cfg.min_peak_ratio;
+        ana.SetTemplateStore(&activeApp().template_store);
         fdec::WaveResult wres;
         reply(activeApp().encodeWaveformJson(*event_ptr, chan_key, ana, wres).dump());
         return;

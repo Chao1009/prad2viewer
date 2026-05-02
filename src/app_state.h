@@ -19,6 +19,7 @@ struct ReconEventData;
 #include "GemSystem.h"
 #include "GemCluster.h"
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 #include "viewer_utils.h"
 
 #include <nlohmann/json.hpp>
@@ -108,6 +109,14 @@ struct AppState {
     evc::DaqConfig daq_cfg;
     fdec::HyCalSystem hycal;
     fdec::ClusterConfig cluster_cfg;
+
+    // Per-channel pulse-template store for the NNLS pile-up deconvolver.
+    // Loaded by init() from `daq_cfg.wave_cfg.nnls_deconv.template_file`
+    // (resolved against db_dir).  When invalid (file missing / parse
+    // failure) the deconv path silently falls back to the local-maxima
+    // peak heights — every WaveAnalyzer in the app picks this up via
+    // SetTemplateStore() during the same init.
+    fdec::PulseTemplateStore template_store;
 
     // GEM system
     gem::GemSystem gem_sys;

@@ -185,6 +185,7 @@ json AppState::encodeEventJson(fdec::EventData &event, int ev_id,
                 auto &cd = slot.channels[c];
                 if (cd.nsamples <= 0) continue;
 
+                ana.SetChannelKey(roc.tag, s, c);
                 ana.Analyze(cd.samples, cd.nsamples, wres);
                 std::string key = std::to_string(roc.tag) + "_"
                                 + std::to_string(s) + "_" + std::to_string(c);
@@ -231,6 +232,7 @@ json AppState::encodeWaveformJson(fdec::EventData &event, const std::string &cha
         auto &cd = roc.slots[sl].channels[ch];
         if (cd.nsamples <= 0) break;
 
+        ana.SetChannelKey(roc_tag, sl, ch);
         ana.Analyze(cd.samples, cd.nsamples, wres);
 
         json sarr = json::array();
@@ -299,6 +301,7 @@ json AppState::computeClustersJson(fdec::EventData &event, int ev_id,
                 if (is_adc1881m) {
                     adc_val = cd.samples[0];
                 } else {
+                    ana.SetChannelKey(roc.tag, s, c);
                     ana.Analyze(cd.samples, cd.nsamples, wres);
                     adc_val = bestPeakInWindow(wres, hist_cfg.threshold,
                                                hist_cfg.time_min, hist_cfg.time_max);
@@ -432,6 +435,7 @@ void AppState::processEvent(fdec::EventData &event,
                 // ── analyze ONCE ──
                 float peak_in_window = -1;
                 if (!is_adc1881m) {
+                    ana.SetChannelKey(roc.tag, s, c);
                     ana.Analyze(cd.samples, cd.nsamples, wres);
                     peak_in_window = bestPeakInWindow(wres, hist_cfg.threshold,
                                                        hist_cfg.time_min, hist_cfg.time_max);

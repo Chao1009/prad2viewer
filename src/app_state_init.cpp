@@ -458,6 +458,7 @@ void AppState::init(const std::string &db_dir,
               << "]/" << cl_hist_step << "\n";
 
     // runinfo: a path string to a runinfo file with a "configurations" array.
+    bool runinfo_loaded = false;
     if (rcfg.contains("runinfo") && rcfg["runinfo"].is_string()) {
         std::string ri_file = findFile(rcfg["runinfo"].get<std::string>(), db_dir);
         if (ri_file.empty()) {
@@ -465,6 +466,7 @@ void AppState::init(const std::string &db_dir,
                       << rcfg["runinfo"].get<std::string>()
                       << "' not found in " << db_dir << "\n";
         } else {
+            runinfo_loaded = true;
             // Run number isn't known at init time (no event yet) — pick the
             // entry with the largest run_number ("latest").
             prad2::RunConfig rc = prad2::LoadRunConfig(ri_file, /*run_num=*/-1);
@@ -540,6 +542,15 @@ void AppState::init(const std::string &db_dir,
     } else if (rcfg.contains("runinfo")) {
         std::cerr << "Warning: 'runinfo' must be a path string to a "
                      "configurations-format JSON file\n";
+    }
+
+    if (!runinfo_loaded) {
+        std::cerr << "Warning: no runinfo loaded — target=("
+                  << target_x << "," << target_y << "," << target_z
+                  << "), HyCal/GEM geometry at code defaults, no per-run "
+                     "calibration.  Tracking and matching plots will be "
+                     "wrong.  Set 'runinfo' in reconstruction_config.json "
+                     "to a configurations-format JSON file to fix.\n";
     }
 
     // GEM per-detector ClusterConfig (default + per-id overrides).  Empty

@@ -196,6 +196,9 @@ class RunGeometry:
     fields read by ConfigSetup.h's RotateDetData / TransformDetData."""
     run_number:           int   = 0
     beam_energy:          float = 0.0
+    target_x:             float = 0.0
+    target_y:             float = 0.0
+    target_z:             float = 0.0
     hycal_x:              float = 0.0
     hycal_y:              float = 0.0
     hycal_z:              float = 0.0
@@ -244,6 +247,10 @@ def load_run_geometry(runinfo_path: str, eff_run: int) -> RunGeometry:
     g = RunGeometry()
     g.run_number  = int(cfg.get("run_number", 0))
     g.beam_energy = float(cfg.get("beam_energy", 0.0))
+
+    tgt = cfg.get("target", [0.0, 0.0, 0.0])
+    if isinstance(tgt, list) and len(tgt) >= 3:
+        g.target_x, g.target_y, g.target_z = (float(v) for v in tgt[:3])
 
     hc = cfg.get("hycal", {})
     pos  = hc.get("position", [0.0, 0.0, 0.0])

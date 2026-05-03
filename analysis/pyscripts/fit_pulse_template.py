@@ -412,6 +412,110 @@ def plot_summary(plt, summaries: List[Dict], min_pulses: int, chi2_max: float,
     plt.close(fig)
 
 
+def plot_summary_per_pulse(plt, stats: Dict[str, "ChannelStats"],
+                           min_pulses: int, out_png: Path) -> None:
+    """Same parameter grid as plot_summary, but every per-pulse fit is one
+    histogram entry — pooled by module type.  Tells us whether shape really
+    is type-uniform (tight per-pulse distributions) and resolves whether
+    bound-hits in the per-channel-median view are genuinely active per-pulse
+    or just dragging the median from the tail."""
+    chans = [s for s in stats.values() if s.n_used >= min_pulses]
+    if not chans:
+        print("[plot] no channels for per-pulse summary", flush=True)
+        return
+
+    # Pool per-pulse arrays by type.  All lists are populated only for
+    # converged fits, so they're all the same length per channel.
+    pool: Dict[str, Dict[str, List[float]]] = {}
+    for s in chans:
+        d = pool.setdefault(s.module_type, {
+            "t0": [], "tau_r": [], "tau_f": [], "p": [],
+            "peak_amp": [], "chi2": [],
+        })
+        d["t0"].extend(s.t0)
+        d["tau_r"].extend(s.tau_r)
+        d["tau_f"].extend(s.tau_f)
+        d["p"].extend(s.p_list)
+        d["peak_amp"].extend(s.peak_amp)
+        d["chi2"].extend(s.chi2)
+
+    types_present = sorted(pool.keys(),
+                           key=lambda t: -len(pool[t]["tau_r"]))
+    has_p = any(len(pool[t]["p"]) > 0 for t in types_present)
+
+    def _split_hist(ax, key, bins, xlabel, title, log=False):
+        if log:
+            ax.set_xscale("log")
+        for t in types_present:
+            arr = np.asarray(pool[t][key], dtype=np.float64)
+            if arr.size == 0:
+                continue
+            ax.hist(arr, bins=bins,
+                    color=TYPE_COLORS.get(t),
+                    alpha=0.65, label=f"{t} (n={arr.size})")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("pulses")
+        ax.set_title(title)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", fontsize=8)
+
+    # Auto-range bins from the pooled data so type-tails are visible.
+    def _range_bins(key, n=80, log=False):
+        flat = np.concatenate([np.asarray(pool[t][key]) for t in types_present
+                               if pool[t][key]])
+        lo, hi = float(np.nanmin(flat)), float(np.nanmax(flat))
+        if log:
+            lo = max(lo, 1e-2)
+            hi = max(hi, lo * 10.0)
+            return np.logspace(np.log10(lo), np.log10(hi), n)
+        return np.linspace(lo, hi, n)
+
+    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+
+    _split_hist(axes[0, 0], "t0",    _range_bins("t0"),
+                "t0 (ns) — per pulse",       "pulse onset t0")
+    _split_hist(axes[0, 1], "tau_r", _range_bins("tau_r"),
+                "τ_r (ns) — per pulse",      "rise time τ_r")
+    _split_hist(axes[0, 2], "tau_f", _range_bins("tau_f"),
+                "τ_f (ns) — per pulse",      "fall time τ_f")
+
+    if has_p:
+        _split_hist(axes[1, 0], "p", _range_bins("p"),
+                    "p — per pulse",         "rise-edge exponent p")
+    else:
+        axes[1, 0].set_visible(False)
+
+    _split_hist(axes[1, 1], "peak_amp", _range_bins("peak_amp", log=True),
+                "peak amplitude (ADC) — per pulse",
+                "peak amplitude", log=True)
+
+    _split_hist(axes[1, 2], "chi2", _range_bins("chi2", log=True),
+                "χ²/dof — per pulse", "fit quality", log=True)
+
+    # Bottom row: per-pulse τ_r vs τ_f scatter, full width, by type.
+    gs = axes[2, 0].get_gridspec()
+    for a in axes[2, :]:
+        a.remove()
+    ax_sc = fig.add_subplot(gs[2, :])
+    for t in types_present:
+        tr = np.asarray(pool[t]["tau_r"])
+        tf = np.asarray(pool[t]["tau_f"])
+        if tr.size == 0:
+            continue
+        ax_sc.scatter(tr, tf, s=2, alpha=0.25,
+                      color=TYPE_COLORS.get(t), label=f"{t} (n={tr.size})")
+    ax_sc.set_xlabel("τ_r (ns) — per pulse")
+    ax_sc.set_ylabel("τ_f (ns) — per pulse")
+    ax_sc.set_title("τ_r vs τ_f, per pulse, coloured by type")
+    ax_sc.legend(loc="best", fontsize=8, markerscale=4)
+    ax_sc.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_png, dpi=120)
+    plt.close(fig)
+
+
 def select_plot_targets(stats: Dict[str, ChannelStats], min_pulses: int,
                         chi2_max: float, n_good: int, n_bad: int
                         ) -> Tuple[List[str], List[str]]:
@@ -806,6 +910,9 @@ def main() -> None:
         plot_summary(plt, summaries, args.min_pulses, args.chi2_max,
                      plot_dir / "summary.png")
         print(f"[plot] wrote {plot_dir / 'summary.png'}", flush=True)
+        plot_summary_per_pulse(plt, stats, args.min_pulses,
+                               plot_dir / "summary_per_pulse.png")
+        print(f"[plot] wrote {plot_dir / 'summary_per_pulse.png'}", flush=True)
 
 
 if __name__ == "__main__":

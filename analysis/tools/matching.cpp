@@ -150,9 +150,9 @@ int main(int argc, char *argv[])
             gem_hits[ev.det_id[j]].push_back(GEMHit{ev.gem_x[j], ev.gem_y[j], 0.f, ev.det_id[j]});
         }
 
-        //transform detector coordinates to target and beam center coordinates
-        TransformDetData(hc_hits, gRunConfig);
-        for(int d = 0; d < 4; d++) TransformDetData(gem_hits[d], gRunConfig);
+        // ev.cl_x / ev.gem_x are already lab-frame (Replay applied the
+        // DetectorTransform before writing the tree), so no further frame
+        // change here.
 
         //then matching between GEM hits and HyCal clusters
             //optional settings

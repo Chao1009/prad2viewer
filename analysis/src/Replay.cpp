@@ -503,6 +503,9 @@ if(!prad1){
     int run_num = get_run_int(input_evio);
     auto gain_correction = prad2::ComputeGainCorrection(db_dir + "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
 
+    // Per-detector lab transforms (rotation matrices precomputed once).
+    auto xforms = analysis::BuildLabTransforms(gRunConfig);
+
     while (ch.Read() == evc::status::success) {
         if (!ch.Scan()) continue;
         if (ch.GetEventType() != evc::EventType::Physics) continue;
@@ -645,10 +648,9 @@ if(!prad1){
                 ev->cl_nblocks[i] = hits[i].nblocks;
                 ev->cl_time[i]    = hits[i].time;
                 //transform the cluster positions to the lab coordinate
-                HCHit local_hit = {hits[i].x, hits[i].y, fdec::shower_depth(hits[i].center_id, hits[i].energy), 
+                HCHit local_hit = {hits[i].x, hits[i].y, fdec::shower_depth(hits[i].center_id, hits[i].energy),
                     hits[i].energy, static_cast<uint16_t>(hits[i].center_id), hits[i].flag};
-                RotateDetData(local_hit, gRunConfig);
-                TransformDetData(local_hit, gRunConfig);
+                analysis::ApplyToLab(xforms.hycal, local_hit);
                 GetProjection(local_hit, gRunConfig.hycal_z);
                 ev->cl_x[i] = local_hit.x;
                 ev->cl_y[i] = local_hit.y;
@@ -685,8 +687,10 @@ if(!prad1){
                 ev->gem_y_mTbin[i] = h.y_max_timebin;
                 //transform the GEM hit positions to the lab coordinate
                 GEMHit local_hit = {h.x, h.y, 0.f, static_cast<uint8_t>(h.det_id)};
-                RotateDetData(local_hit, gRunConfig);
-                TransformDetData(local_hit, gRunConfig);
+                int d = local_hit.det_id;
+                if (d >= 0 && d < 4) {
+                    analysis::ApplyToLab(xforms.gem[d], local_hit);
+                }
                 ev->gem_x[i] = local_hit.x;
                 ev->gem_y[i] = local_hit.y;
                 ev->gem_z[i] = local_hit.z;

@@ -9,7 +9,7 @@
 //                     → HyCal: WaveAnalyzer → energize → HyCalCluster
 //                     → GEM:   GemSystem.ProcessEvent → Reconstruct
 //                     → coord transform to lab (per-detector tilt + offset
-//                       via prad2det's RotateDetData / TransformDetData)
+//                       via prad2det's DetectorTransform)
 //                     → GEM hits: GetProjection(hits, hycal_z) — straight
 //                       line from target through (x,y,z) to z=hycal_z
 //                     → fill the two TH2F occupancy maps
@@ -74,7 +74,7 @@
 #include "RunInfoConfig.h"
 
 #include "PhysicsTools.h"
-#include "ConfigSetup.h"      // TransformDetData, RotateDetData, gRunConfig
+#include "ConfigSetup.h"      // BuildLabTransforms, gRunConfig
 #include "MatchingTools.h"    // GetProjection
 #include "script_helpers.h"   // resolve_db_path, extract_run_number_from_path,
                               // discover_runinfo_path, build_*_crate_remap,
@@ -178,6 +178,7 @@ int plot_hits_at_hycal(const char *evio_path,
     }
     analysis::gRunConfig = prad2::LoadRunConfig(ri_path, eff_run);
     auto &geo = analysis::gRunConfig;
+    auto xforms = analysis::BuildLabTransforms(geo);
     Printf("[setup] RunInfo    : %s  beam=%.0f MeV  hycal_z=%.1f mm",
            ri_path.c_str(), geo.Ebeam, geo.hycal_z);
 
@@ -352,8 +353,7 @@ int plot_hits_at_hycal(const char *evio_path,
                 hh.flag      = h.flag;
                 hc_hits.push_back(hh);
             }
-            analysis::RotateDetData(hc_hits, geo);
-            analysis::TransformDetData(hc_hits, geo);
+            for (auto &h : hc_hits) analysis::ApplyToLab(xforms.hycal, h);
 
             for (const auto &h : hc_hits) h_hc->Fill(h.x, h.y);
             n_hc_clusters += hc_hits.size();
@@ -377,8 +377,7 @@ int plot_hits_at_hycal(const char *evio_path,
                     gh.det_id = d;
                     lab.push_back(gh);
                 }
-                analysis::RotateDetData(lab, geo);
-                analysis::TransformDetData(lab, geo);
+                for (auto &h : lab) analysis::ApplyToLab(xforms.gem[d], h);
                 analysis::GetProjection(lab, geo.hycal_z);
                 for (const auto &g : lab) h_gem->Fill(g.x, g.y);
                 n_gem_hits += lab.size();

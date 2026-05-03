@@ -61,13 +61,22 @@ struct DetectorTransform {
         prepared_ = true;
     }
 
-    // Transform a point from detector plane to lab frame.
-    // Detector plane has z_local=0; full 3D toLab takes a local 3D point.
+    // Transform a point from the detector plane (z_local = 0) to lab frame.
     void toLab(float dx, float dy, float &lx, float &ly, float &lz) const {
         prepare();
         lx = mat_.r00*dx + mat_.r01*dy + mat_.tx;
         ly = mat_.r10*dx + mat_.r11*dy + mat_.ty;
         lz = mat_.r20*dx + mat_.r21*dy + mat_.tz;
+    }
+
+    // Transform a 3D local point to lab frame (e.g. HyCal cluster with
+    // shower depth as z_local).  Equivalent to lab = R * [dx,dy,dz] + [tx,ty,tz].
+    void toLab(float dx, float dy, float dz,
+               float &lx, float &ly, float &lz) const {
+        prepare();
+        lx = mat_.r00*dx + mat_.r01*dy + mat_.r02*dz + mat_.tx;
+        ly = mat_.r10*dx + mat_.r11*dy + mat_.r12*dz + mat_.ty;
+        lz = mat_.r20*dx + mat_.r21*dy + mat_.r22*dz + mat_.tz;
     }
 
     // Inverse: lab → detector-local. R is orthonormal so R^{-1} = R^T.

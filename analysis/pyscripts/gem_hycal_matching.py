@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
                     hc_lab: list[tuple[float, float, float, float, int, int]] = []
                     for h in hc_raw:
                         z_local = det.shower_depth(h.center_id, h.energy)
-                        x, y, z = C.transform_hycal(h.x, h.y, z_local, p.geo)
+                        x, y, z = p.hycal_xform.to_lab(h.x, h.y, z_local)
                         hc_lab.append(
                             (x, y, z, float(h.energy),
                              int(h.center_id), int(h.nblocks))
@@ -202,9 +202,9 @@ def main(argv: list[str] | None = None) -> int:
                         raw = p.gem_sys.get_hits(d)
                         gem_per_det[d] += len(raw)
                         total_gem      += len(raw)
+                        xform = p.gem_xforms[d]
                         for g in raw:
-                            x, y, z = C.transform_gem(
-                                g.x, g.y, 0.0, d, p.geo)
+                            x, y, z = xform.to_lab(g.x, g.y)
                             gem_lab[d].append((
                                 x, y, z,
                                 float(g.x), float(g.y),

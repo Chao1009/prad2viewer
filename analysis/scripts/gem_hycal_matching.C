@@ -120,7 +120,7 @@
 #include "RunInfoConfig.h"
 
 #include "PhysicsTools.h"
-#include "ConfigSetup.h"      // TransformDetData, RotateDetData, gRunConfig
+#include "ConfigSetup.h"      // BuildLabTransforms, gRunConfig
 #include "script_helpers.h"   // resolve_db_path, extract_run_number_from_path,
                               // discover_runinfo_path, build_*_crate_remap
 
@@ -452,6 +452,7 @@ int gem_hycal_matching(const char *evio_path,
     }
     analysis::gRunConfig = prad2::LoadRunConfig(ri_path, eff_run);
     auto &geo = analysis::gRunConfig;
+    auto xforms = analysis::BuildLabTransforms(geo);
     Printf("[setup] RunInfo    : %s  beam=%.0f MeV  hycal_z=%.1f mm",
            ri_path.c_str(), geo.Ebeam, geo.hycal_z);
 
@@ -639,8 +640,8 @@ int gem_hycal_matching(const char *evio_path,
             std::vector<fdec::ClusterHit> hc_hits_raw;
             hc_clusterer.ReconstructHits(hc_hits_raw);
 
-            // Convert HyCal cluster list to lab-frame HCHit struct so we
-            // can use the project-wide TransformDetData / RotateDetData.
+            // Convert HyCal cluster list to HCHit so we can apply the
+            // shared lab transform via xforms.hycal.toLab().
             std::vector<analysis::HCHit> hc_hits;
             hc_hits.reserve(hc_hits_raw.size());
             for (const auto &h : hc_hits_raw) {
@@ -653,8 +654,7 @@ int gem_hycal_matching(const char *evio_path,
                 hc_hits.push_back(hh);
             }
             // detector-frame  →  lab/target-centered frame
-            analysis::RotateDetData(hc_hits, geo);
-            analysis::TransformDetData(hc_hits, geo);
+            for (auto &h : hc_hits) analysis::ApplyToLab(xforms.hycal, h);
 
             // ---------- GEM: pedestal → CM → ZS → 1D + 2D ----------
             gem_sys.Clear();
@@ -673,8 +673,7 @@ int gem_hycal_matching(const char *evio_path,
                     gh.det_id = d;
                     gem_lab[d].push_back(gh);
                 }
-                analysis::RotateDetData(gem_lab[d], geo);
-                analysis::TransformDetData(gem_lab[d], geo);
+                for (auto &h : gem_lab[d]) analysis::ApplyToLab(xforms.gem[d], h);
             }
 
             // ---------- record HyCal clusters in tree ----------

@@ -276,53 +276,31 @@ def load_run_geometry(runinfo_path: str, eff_run: int) -> RunGeometry:
 
 
 # ============================================================================
-# Coordinate transforms (port of analysis::RotateDetData / TransformDetData)
+# Coordinate transforms — use prad2det's DetectorTransform via the binding
 # ============================================================================
-# Sign convention matches ConfigSetup.h verbatim — the in-plane translation
-# is `x -= ox; y -= oy`, the out-of-plane is `z += oz`.  This matches the
-# C++ scripts' lab-frame outputs bit-for-bit.
-
-_DEG2RAD = math.pi / 180.0
-
-
-def rotate_xyz(x: float, y: float, z: float,
-               rx_deg: float, ry_deg: float, rz_deg: float
-               ) -> tuple[float, float, float]:
-    """Apply Rz then Ry then Rx (extrinsic), each in degrees.  Each axis
-    short-circuits when the angle is zero — same as RotateDetData()."""
-    if rz_deg != 0.0:
-        c = math.cos(rz_deg * _DEG2RAD); s = math.sin(rz_deg * _DEG2RAD)
-        x, y = x * c - y * s, x * s + y * c
-    if ry_deg != 0.0:
-        c = math.cos(ry_deg * _DEG2RAD); s = math.sin(ry_deg * _DEG2RAD)
-        x, z =  x * c + z * s, -x * s + z * c
-    if rx_deg != 0.0:
-        c = math.cos(rx_deg * _DEG2RAD); s = math.sin(rx_deg * _DEG2RAD)
-        y, z = y * c - z * s, y * s + z * c
-    return x, y, z
+# Single source of truth for "detector-frame → lab-frame" lives in
+# prad2det/include/DetectorTransform.h (and AppState/Replay use it directly).
+# build_lab_transforms() materializes the per-detector poses from a
+# RunGeometry and stashes them on a Pipeline; per-hit transforms then call
+# `xform.to_lab(x, y[, z])` so the rotation matrix is computed once per
+# detector instead of per hit.
 
 
-def transform_hycal(x: float, y: float, z: float, geo: RunGeometry
-                    ) -> tuple[float, float, float]:
-    """Detector-frame → lab-frame for HyCal: rotate around (0,0,0) then
-    apply (-hycal_x, -hycal_y, +hycal_z)."""
-    x, y, z = rotate_xyz(x, y, z,
-                         geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z)
-    return (x - geo.hycal_x, y - geo.hycal_y, z + geo.hycal_z)
-
-
-def transform_gem(x: float, y: float, z: float, det_id: int, geo: RunGeometry
-                  ) -> tuple[float, float, float]:
-    """Detector-frame → lab-frame for GEM detector det_id (0..3)."""
-    if not (0 <= det_id < 4):
-        return x, y, z
-    x, y, z = rotate_xyz(x, y, z,
-                         geo.gem_tilt_x[det_id],
-                         geo.gem_tilt_y[det_id],
-                         geo.gem_tilt_z[det_id])
-    return (x - geo.gem_x[det_id],
-            y - geo.gem_y[det_id],
-            z + geo.gem_z[det_id])
+def build_lab_transforms(geo: RunGeometry
+                         ) -> tuple["det.DetectorTransform",
+                                    list["det.DetectorTransform"]]:
+    """Return (hycal_xform, [gem_xform0, ...]) built from geo.  Each
+    DetectorTransform's rotation matrix is precomputed via set()."""
+    hycal_xform = det.DetectorTransform()
+    hycal_xform.set(geo.hycal_x, geo.hycal_y, geo.hycal_z,
+                    geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z)
+    gem_xforms: list[det.DetectorTransform] = []
+    for d in range(4):
+        t = det.DetectorTransform()
+        t.set(geo.gem_x[d], geo.gem_y[d], geo.gem_z[d],
+              geo.gem_tilt_x[d], geo.gem_tilt_y[d], geo.gem_tilt_z[d])
+        gem_xforms.append(t)
+    return hycal_xform, gem_xforms
 
 
 def project_to_z(x: float, y: float, z: float, target_z: float
@@ -342,7 +320,11 @@ def project_to_z(x: float, y: float, z: float, target_z: float
 @dataclass
 class Pipeline:
     """Initialized HyCal + GEM systems plus geometry & EVIO file list.  One
-    call to setup_pipeline() produces a ready-to-loop bundle."""
+    call to setup_pipeline() produces a ready-to-loop bundle.
+
+    `hycal_xform` and `gem_xforms[d]` are prad2det DetectorTransform instances
+    built from geo at setup time — call `xform.to_lab(x, y[, z])` per hit to
+    get the lab-frame position (the rotation matrix is cached inside)."""
     cfg:           "dec.DaqConfig"       = None
     crate_map:     dict[int, int]        = field(default_factory=dict)
     geo:           RunGeometry           = field(default_factory=RunGeometry)
@@ -352,6 +334,8 @@ class Pipeline:
     gem_sys:       "det.GemSystem"       = None
     gem_clusterer: "det.GemCluster"      = None
     evio_files:    list[str]             = field(default_factory=list)
+    hycal_xform:   "det.DetectorTransform" = None
+    gem_xforms:    list                  = field(default_factory=list)
 
 
 def _print(msg: str) -> None:
@@ -393,6 +377,7 @@ def setup_pipeline(*,
     else:
         _print(f"[setup] Run number : {eff_run} (caller-provided)")
     p.geo = load_run_geometry(ri_path, eff_run)
+    p.hycal_xform, p.gem_xforms = build_lab_transforms(p.geo)
     _print(f"[setup] RunInfo    : {ri_path}  beam={p.geo.beam_energy:.0f} MeV  "
            f"hycal_z={p.geo.hycal_z:.1f} mm")
 

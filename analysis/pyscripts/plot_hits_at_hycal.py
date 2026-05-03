@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
                     # HyCal face — same convention as plot_hits_at_hycal.C.
                     hc_raw = C.reconstruct_hycal(p, fadc_evt)
                     for h in hc_raw:
-                        x, y, z = C.transform_hycal(h.x, h.y, 0.0, p.geo)
+                        x, y, z = p.hycal_xform.to_lab(h.x, h.y)
                         write_row([event_num, trigger_bits, "hycal", -1,
                                    f"{x:.4f}", f"{y:.4f}", f"{z:.4f}",
                                    f"{float(h.energy):.4f}"])
@@ -152,8 +152,9 @@ def main(argv: list[str] | None = None) -> int:
                     C.reconstruct_gem(p, ssp_evt)
                     n_dets = min(p.gem_sys.get_n_detectors(), 4)
                     for d in range(n_dets):
+                        xform = p.gem_xforms[d]
                         for g in p.gem_sys.get_hits(d):
-                            x, y, z = C.transform_gem(g.x, g.y, 0.0, d, p.geo)
+                            x, y, z = xform.to_lab(g.x, g.y)
                             x, y, z = C.project_to_z(x, y, z, z_hycal)
                             write_row([event_num, trigger_bits, "gem", d,
                                        f"{x:.4f}", f"{y:.4f}", f"{z:.4f}",

@@ -6,14 +6,22 @@
 // prad2det/include/RunInfoConfig.h so they can be reused by the viewer,
 // Python bindings and ROOT scripts. This header keeps:
 //   - the analysis-only gRunConfig global + backward-compat aliases
-//   - TransformDetData() / RotateDetData() overloads (need PhysicsTools)
+//   - BuildLabTransforms() — bridge from RunConfig to DetectorTransform
+//   - TransformDetData(MollerData, ...) for explicit calibration shifts
 //   - get_run_str() / get_run_int() filename parsers
+//
+// "Detector-frame → lab-frame" is owned by prad2det's DetectorTransform —
+// build the per-detector poses once via BuildLabTransforms(), then call
+// xform.toLab(x, y[, z]) per hit.  The earlier RotateDetData/TransformDetData
+// helpers duplicated that math and have been retired.
 //=============================================================================
 
+#include "DetectorTransform.h"
 #include "PhysicsTools.h"
 #include "RunInfoConfig.h"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
@@ -36,178 +44,37 @@ using ::prad2::WriteRunConfig;
 // local RunConfig instead of relying on this global.
 inline RunConfig gRunConfig;
 
-// Transform detector-frame coordinates to the target/beam-centered frame.
-//
-// Explicit-offset overloads (float beamX, float beamY, float ZfromTarget):
-//   Always available; callers supply the numbers directly.
-//
-// RunConfig overloads (const RunConfig &geo = gRunConfig):
-//   Use the geometry loaded by LoadRunConfig().
-//   Default argument = gRunConfig, so existing single-arg calls like
-//     TransformDetData(hc_hits);
-//   still compile and use the global config unchanged.
-//   Multi-run code can pass an explicit RunConfig:
-//     TransformDetData(hc_hits, geo1);
+// HyCal + 4-GEM DetectorTransform bundle, ready for per-hit `toLab` calls.
+// Build once per run (rotation matrices precomputed inside) and reuse.
+struct LabTransforms {
+    DetectorTransform hycal;
+    std::array<DetectorTransform, 4> gem;
+};
 
-// -- single-hit primitives (used internally by the vector overloads) ---------
-inline void TransformDetData(HCHit &h, float detX, float detY, float ZfromTarget)
+inline LabTransforms BuildLabTransforms(const RunConfig &geo = gRunConfig)
 {
-    h.x += detX;
-    h.y += detY;
-    h.z += ZfromTarget;
-}
-inline void TransformDetData(HCHit &h, const RunConfig &geo = gRunConfig)
-{
-    h.x += geo.hycal_x;
-    h.y += geo.hycal_y;
-    h.z += geo.hycal_z;
-}
-inline void TransformDetData(GEMHit &h, float detX, float detY, float ZfromTarget)
-{
-    h.x += detX;
-    h.y += detY;
-    h.z += ZfromTarget;
-}
-inline void TransformDetData(GEMHit &h, const RunConfig &geo = gRunConfig)
-{
-    int det_id = h.det_id;
-    if (det_id >= 0 && det_id < 4) {
-        h.x += geo.gem_x[det_id];
-        h.y += geo.gem_y[det_id];
-        h.z += geo.gem_z[det_id];
+    LabTransforms t;
+    t.hycal.set(geo.hycal_x, geo.hycal_y, geo.hycal_z,
+                geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z);
+    for (int d = 0; d < 4; ++d) {
+        t.gem[d].set(geo.gem_x[d], geo.gem_y[d], geo.gem_z[d],
+                     geo.gem_tilt_x[d], geo.gem_tilt_y[d], geo.gem_tilt_z[d]);
     }
+    return t;
 }
 
-// Apply successive rotations Rz → Ry → Rx (extrinsic, small-angle convention).
-// Each angle is in degrees.  Only non-zero axes incur any computation cost.
-inline void RotateDetData(HCHit &h, float x_deg, float y_deg, float z_deg)
+// Apply a DetectorTransform to a hit in-place (lab = R*[x,y,z] + [tx,ty,tz]).
+template <typename Hit>
+inline void ApplyToLab(const DetectorTransform &xform, Hit &h)
 {
-    constexpr float kDeg2Rad = 3.14159265f / 180.f;
-    float x = h.x, y = h.y, z = h.z;
-
-    if (z_deg != 0.f) {
-        float c = std::cos(z_deg * kDeg2Rad), s = std::sin(z_deg * kDeg2Rad);
-        float nx = x * c - y * s;
-        float ny = x * s + y * c;
-        x = nx; y = ny;
-    }
-    if (y_deg != 0.f) {
-        float c = std::cos(y_deg * kDeg2Rad), s = std::sin(y_deg * kDeg2Rad);
-        float nx =  x * c + z * s;
-        float nz = -x * s + z * c;
-        x = nx; z = nz;
-    }
-    if (x_deg != 0.f) {
-        float c = std::cos(x_deg * kDeg2Rad), s = std::sin(x_deg * kDeg2Rad);
-        float ny = y * c - z * s;
-        float nz = y * s + z * c;
-        y = ny; z = nz;
-    }
-    h.x = x; h.y = y; h.z = z;
-}
-inline void RotateDetData(HCHit &h, const RunConfig &geo = gRunConfig)
-{
-    RotateDetData(h, geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z);
+    float lx, ly, lz;
+    xform.toLab(h.x, h.y, h.z, lx, ly, lz);
+    h.x = lx; h.y = ly; h.z = lz;
 }
 
-inline void RotateDetData(GEMHit &h, float x_deg, float y_deg, float z_deg)
-{
-    constexpr float kDeg2Rad = 3.14159265f / 180.f;
-    float x = h.x, y = h.y, z = h.z;
-
-    if (z_deg != 0.f) {
-        float c = std::cos(z_deg * kDeg2Rad), s = std::sin(z_deg * kDeg2Rad);
-        float nx = x * c - y * s;
-        float ny = x * s + y * c;
-        x = nx; y = ny;
-    }
-    if (y_deg != 0.f) {
-        float c = std::cos(y_deg * kDeg2Rad), s = std::sin(y_deg * kDeg2Rad);
-        float nx =  x * c + z * s;
-        float nz = -x * s + z * c;
-        x = nx; z = nz;
-    }
-    if (x_deg != 0.f) {
-        float c = std::cos(x_deg * kDeg2Rad), s = std::sin(x_deg * kDeg2Rad);
-        float ny = y * c - z * s;
-        float nz = y * s + z * c;
-        y = ny; z = nz;
-    }
-    h.x = x; h.y = y; h.z = z;
-}
-inline void RotateDetData(GEMHit &h, const RunConfig &geo = gRunConfig)
-{
-    int det_id = h.det_id;
-    if (det_id >= 0 && det_id < 4) {
-        RotateDetData(h, geo.gem_tilt_x[det_id], geo.gem_tilt_y[det_id], geo.gem_tilt_z[det_id]);
-    }
-}
-
-// -- HCHit vector ------------------------------------------------------------
-inline void RotateDetData(std::vector<HCHit> &hc_hits,
-                          float x_deg, float y_deg, float z_deg)
-{
-    for (auto &h : hc_hits) RotateDetData(h, x_deg, y_deg, z_deg);
-}
-
-// -- GEMHit vector -----------------------------------------------------------
-inline void RotateDetData(std::vector<GEMHit> &gem_hits,
-                          float x_deg, float y_deg, float z_deg)
-{
-    for (auto &h : gem_hits) RotateDetData(h, x_deg, y_deg, z_deg);
-}
-
-// -- RunConfig overloads (use tilting angles stored in config) -------------
-inline void RotateDetData(std::vector<HCHit> &hc_hits,
-                          const RunConfig &geo = gRunConfig)
-{
-    RotateDetData(hc_hits, geo.hycal_tilt_x, geo.hycal_tilt_y, geo.hycal_tilt_z);
-}
-
-inline void RotateDetData(std::vector<GEMHit> &gem_hits,
-                          const RunConfig &geo = gRunConfig)
-{
-    for (auto &h : gem_hits) {
-        int det_id = h.det_id;
-        if (det_id >= 0 && det_id < 4) {
-            RotateDetData(h, geo.gem_tilt_x[det_id],
-                             geo.gem_tilt_y[det_id],
-                             geo.gem_tilt_z[det_id]);
-        }
-    }
-}
-
-// -- HCHit vector ------------------------------------------------------------
-inline void TransformDetData(std::vector<HCHit> &hc_hits, float detX, float detY, float ZfromTarget)
-{
-    for (auto &h : hc_hits) TransformDetData(h, detX, detY, ZfromTarget);
-}
-
-inline void TransformDetData(std::vector<HCHit> &hc_hits, const RunConfig &geo = gRunConfig)
-{
-    TransformDetData(hc_hits, geo.hycal_x, geo.hycal_y, geo.hycal_z);
-}
-
-// -- GEMHit vector -----------------------------------------------------------
-inline void TransformDetData(std::vector<GEMHit> &gem_hits, float detX, float detY, float ZfromTarget)
-{
-    for (auto &h : gem_hits) TransformDetData(h, detX, detY, ZfromTarget);
-}
-
-// Each GEM hit is transformed using its own detector id.
-inline void TransformDetData(std::vector<GEMHit> &gem_hits, const RunConfig &geo = gRunConfig)
-{
-    for (auto &h : gem_hits) {
-        int det_id = h.det_id;
-        if (det_id >= 0 && det_id < 4) {
-            TransformDetData(h, geo.gem_x[det_id], geo.gem_y[det_id], geo.gem_z[det_id]);
-        } else {
-            std::cerr << "Warning: Invalid GEM det_id " << det_id << " for coordinate transformation\n";
-        }
-    }
-}
-
-// -- MollerData --------------------------------------------------------------
+// MollerData is a translation-only calibration shift — used by det_calib to
+// apply per-detector alignment offsets to fitted Moller pairs.  Not a
+// detector-frame transform, so it stays as plain arithmetic.
 inline void TransformDetData(MollerData &mollers, float detX, float detY, float ZfromTarget)
 {
     for (auto &moller : mollers) {

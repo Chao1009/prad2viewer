@@ -797,7 +797,7 @@ static void bind_transform(py::module_ &m)
         })
 
     py::class_<DetectorTransform>(m, "DetectorTransform",
-        "Planar detector pose (origin + tilts in degrees).  to_lab(x, y) "
+        "Planar detector pose (origin + tilts in degrees).  to_lab(x, y[, z]) "
         "returns a lab-frame 3-vector; rotate(x, y) skips the translation. "
         "Field setters auto-invalidate the cached rotation matrix; prefer "
         "set(x, y, z, rx, ry, rz) when writing all six at once.")
@@ -821,14 +821,15 @@ static void bind_transform(py::module_ &m)
              "construction or invalidate()).  Called implicitly by "
              "to_lab / rotate / matrix().")
         .def("to_lab",
-            [](const DetectorTransform &self, float dx, float dy) {
+            [](const DetectorTransform &self,
+               float dx, float dy, float dz) {
                 float lx, ly, lz;
-                self.toLab(dx, dy, lx, ly, lz);
+                self.toLab(dx, dy, dz, lx, ly, lz);
                 return py::make_tuple(lx, ly, lz);
             },
-            py::arg("dx"), py::arg("dy"),
-            "Map a (dx, dy) point on the detector plane to lab-frame "
-            "(x, y, z).")
+            py::arg("dx"), py::arg("dy"), py::arg("dz") = 0.0f,
+            "Map a local point to lab-frame (x, y, z).  dz defaults to 0 "
+            "for planar GEM hits; pass shower depth for HyCal clusters.")
         .def("rotate",
             [](const DetectorTransform &self, float dx, float dy) {
                 float ox, oy;

@@ -241,7 +241,11 @@ def main() -> int:
                         if tmpl is None:
                             continue
                         dec_out = wave_ana.deconvolve(samples, wres, tmpl)
-                        if dec_out.state != dec.Q_DECONV_OK:
+                        # Both states mean "LM converged" — APPLIED is the
+                        # historical name (per-channel template), FALLBACK_GLOBAL
+                        # is what the simplified per-type store always sets.
+                        if dec_out.state not in (dec.Q_DECONV_APPLIED,
+                                                 dec.Q_DECONV_FALLBACK_GLOBAL):
                             continue
                         # Plot.
                         title = (f"crate{crate} slot{s} ch{c}  "

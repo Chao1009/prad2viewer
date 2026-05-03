@@ -399,7 +399,7 @@ disabled) all leave the WaveAnalyzer values untouched.
     "enabled":            false,
     "template_file":      "waveform/pulse_templates_024177.json",
     "apply_to_all_peaks": false,
-    "tau_r_range_ns":     [0.5, 10.0],
+    "tau_r_range_ns":     [0.5, 15.0],
     "tau_f_range_ns":     [2.0, 100.0],
     "cond_number_max":    1.0e6,
     "pre_samples":        8,

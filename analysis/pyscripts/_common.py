@@ -121,12 +121,13 @@ def hycal_pos_resolution(A: float, B: float, C: float, energy_mev: float) -> flo
 
 
 def discover_split_files(any_path: str) -> list[str]:
-    """Three modes by input shape (mirrors discover_split_files in
-    script_helpers.h):
-      * '*' in path  → glob mode: enumerate every sibling
-        prad_<run>.evio.<digits>, sort by suffix, warn (stderr) on
-        gaps from .00000 to highest.
-      * directory    → same enumeration, sniff run from dir name.
+    """Three modes by input shape:
+      * '*' in path  → literal shell-style glob: expanded by Python's glob
+        module so users can pick a subset (e.g. 'prad_024236.evio.0000*'
+        gets splits .00000–.00009).  Quote it on the shell to keep the
+        shell from expanding it first.
+      * directory    → enumerate every prad_<run>.evio.<digits> in the dir,
+        sniff run from dir name, warn (stderr) on gaps.
       * anything else → return [any_path] unchanged (single-file mode)."""
     if not any_path:
         return []
@@ -137,14 +138,21 @@ def discover_split_files(any_path: str) -> list[str]:
     if not wants_glob and not is_dir:
         return [any_path]
 
-    if is_dir:
-        directory = p
-        run = extract_run_number(p.name)
-    else:
-        directory = p.parent if str(p.parent) else Path(".")
-        run = extract_run_number(p.name)
-        if run < 0:
-            run = extract_run_number(directory.name)
+    # ---- glob mode: honor the literal pattern ------------------------------
+    if wants_glob:
+        import glob as _glob
+        matches = sorted(_glob.glob(any_path))
+        if not matches:
+            sys.stderr.write(
+                f"[WARN] discover_split_files: glob {any_path!r} matched "
+                f"no files.\n"
+            )
+            return [any_path]
+        return matches
+
+    # ---- directory mode: enumerate by run number ---------------------------
+    directory = p
+    run = extract_run_number(p.name)
 
     if run < 0 or not directory.is_dir():
         sys.stderr.write(

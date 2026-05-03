@@ -672,42 +672,41 @@ def write_outputs(out_dir: Path,
                   n_phys: int, n_events_filter_pass: int, n_used: int
                   ) -> None:
 
-    # ---- text summary ------------------------------------------------------
-    summary = out_dir / "summary.txt"
-    with summary.open("w", encoding="utf-8") as f:
-        f.write(f"GEM tracking-efficiency audit\n")
-        f.write(f"=============================\n\n")
-        f.write(f"physics events processed : {n_phys}\n")
-        f.write(f"events passing filter    : {n_events_filter_pass}  "
-                f"(≥1 HyCal cluster AND ≥3 GEM detectors with hits)\n")
-        f.write(f"HyCal clusters considered: {n_used}\n")
-        f.write(f"match_nsigma             : {params.match_nsigma}\n")
-        f.write(f"max_chi2_per_dof         : {params.max_chi2}\n")
-        f.write(f"max_hits_per_det         : {params.max_hits_per_det}\n")
-        f.write(f"σ_GEM (mm)               : {params.gem_pos_res}\n\n")
+    # ---- text summary (stdout) --------------------------------------------
+    print()
+    print("GEM tracking-efficiency audit")
+    print("=============================")
+    print()
+    print(f"physics events processed : {n_phys}")
+    print(f"events passing filter    : {n_events_filter_pass}  "
+          f"(≥1 HyCal cluster AND ≥3 GEM detectors with hits)")
+    print(f"HyCal clusters considered: {n_used}")
+    print(f"match_nsigma             : {params.match_nsigma}")
+    print(f"max_chi2_per_dof         : {params.max_chi2}")
+    print(f"max_hits_per_det         : {params.max_hits_per_det}")
+    print(f"σ_GEM (mm)               : {params.gem_pos_res}")
+    print()
 
-        for mode in (cur, allseeds, unbiased, target):
-            f.write(f"--- {mode.name} ---\n")
-            f.write(f"  tracks accepted: {mode.n_tracks}\n")
-            for d in range(4):
-                f.write(f"  GEM{d}: {_eff(mode.num[d], mode.den[d])}\n")
-            if mode.chi2_list:
-                arr = sorted(mode.chi2_list)
-                med  = arr[len(arr)//2]
-                p90  = arr[int(0.9 * len(arr))]
-                p99  = arr[int(0.99 * len(arr))]
-                f.write(f"  χ²/dof: median={med:.3f}  "
-                        f"90%={p90:.3f}  99%={p99:.3f}\n")
-            f.write("\n")
-
-        f.write(f"--- leave-one-out (unbiased per-detector) ---\n")
-        f.write(f"  Each row: track built from the other 3 GEMs (≥2 matched),\n"
-                f"  projected onto the test detector, then matched within "
-                f"{params.match_nsigma}σ.\n")
+    for mode in (cur, allseeds, unbiased, target):
+        print(f"--- {mode.name} ---")
+        print(f"  tracks accepted: {mode.n_tracks}")
         for d in range(4):
-            f.write(f"  GEM{d}: {_eff(loo.n_matched[d], loo.n_attempted[d])}\n")
+            print(f"  GEM{d}: {_eff(mode.num[d], mode.den[d])}")
+        if mode.chi2_list:
+            arr = sorted(mode.chi2_list)
+            med  = arr[len(arr)//2]
+            p90  = arr[int(0.9 * len(arr))]
+            p99  = arr[int(0.99 * len(arr))]
+            print(f"  χ²/dof: median={med:.3f}  "
+                  f"90%={p90:.3f}  99%={p99:.3f}")
+        print()
 
-    print(f"[write] {summary}")
+    print(f"--- leave-one-out (unbiased per-detector) ---")
+    print(f"  Each row: track built from the other 3 GEMs (≥2 matched),")
+    print(f"  projected onto the test detector, then matched within "
+          f"{params.match_nsigma}σ.")
+    for d in range(4):
+        print(f"  GEM{d}: {_eff(loo.n_matched[d], loo.n_attempted[d])}")
 
     # ---- plots (matplotlib optional) --------------------------------------
     plt = _import_pyplot()

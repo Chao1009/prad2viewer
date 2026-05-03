@@ -11,8 +11,8 @@
     "cross_talk_threshold": 8.0,
     "reject_first_timebin": false,
     "reject_last_timebin": false,
-    "min_peak_adc": 30.0,
-    "min_sum_adc": 60.0,
+    "min_peak_adc": 200.0,
+    "min_sum_adc": 250.0,
     "hole": {
         "width": 52.0,
         "height": 52.0

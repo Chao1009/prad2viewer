@@ -258,73 +258,40 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
     // --- config ---
     if (uri == "/api/config") { reply(buildConfig().dump()); return; }
 
-    // --- runtime hist_cfg + peak_filter updates ---
-    // POST {threshold?, filter?, filter_enable?}.  Updates both file & online
-    // AppStates and broadcasts.  Re-clusters the online ring cache only when
-    // `threshold` actually changed — peak_filter no longer feeds clustering.
+    // --- runtime peak_filter updates ---
+    // POST {filter?, filter_enable?}.  Updates both file & online AppStates,
+    // clears accumulated histograms (so the new filter takes effect on the
+    // next refresh in online mode), and broadcasts hist_config_updated +
+    // hist_cleared.  Peak detection thresholds live in daq_config.json
+    // (fadc250_waveform.analyzer) and are not runtime-mutable here.
     if (uri == "/api/hist_config") {
         std::string body = con->get_request_body();
         auto j = json::parse(body, nullptr, false);
         if (j.is_discarded() || !j.is_object()) {
             reply("{\"error\":\"invalid JSON\"}"); return;
         }
-        const bool threshold_changed = j.contains("threshold") && j["threshold"].is_number();
+        bool changed = false;
         auto applyTo = [&](AppState &app) {
-            if (threshold_changed)
-                app.hist_cfg.threshold = j["threshold"].get<float>();
-            if (j.contains("filter") && j["filter"].is_object())
+            if (j.contains("filter") && j["filter"].is_object()) {
                 app.peak_filter.parse(j["filter"], app.peak_quality_bits_def);
-            if (j.contains("filter_enable") && j["filter_enable"].is_boolean())
+                changed = true;
+            }
+            if (j.contains("filter_enable") && j["filter_enable"].is_boolean()) {
                 app.peak_filter.enable = j["filter_enable"].get<bool>();
-            // Legacy keys: older clients may still POST {time_min, time_max}.
-            // Map them onto peak_filter.time_min/max so nothing breaks.
-            if (j.contains("time_min") && j["time_min"].is_number())
-                app.peak_filter.time_min = j["time_min"].get<float>();
-            if (j.contains("time_max") && j["time_max"].is_number())
-                app.peak_filter.time_max = j["time_max"].get<float>();
+                changed = true;
+            }
         };
         applyTo(app_file_);
         applyTo(app_online_);
-#ifdef WITH_ET
-        // Re-cluster every cached ring entry only when threshold moved —
-        // clustering is now decoupled from peak_filter, so filter-only edits
-        // no longer require a re-cluster pass.  Snapshot shared_ptrs under
-        // the lock, recompute outside, write back under the lock — keeps the
-        // ET reader thread unblocked during the heavy WaveAnalyzer pass.
-        if (threshold_changed) {
-            std::vector<std::pair<int, std::shared_ptr<fdec::EventData>>> snap;
-            {
-                std::lock_guard<std::mutex> lk(ring_mtx_);
-                snap.reserve(ring_.size());
-                for (auto &e : ring_) snap.emplace_back(e.seq, e.event_data);
-            }
-            std::vector<std::pair<int, std::string>> updated;
-            updated.reserve(snap.size());
-            {
-                fdec::WaveAnalyzer ana(app_online_.daq_cfg.wave_cfg);
-                ana.cfg.min_peak_ratio = app_online_.hist_cfg.min_peak_ratio;
-                ana.SetTemplateStore(&app_online_.template_store);
-                fdec::WaveResult wres;
-                for (auto &p : snap) {
-                    if (!p.second) continue;
-                    updated.emplace_back(p.first,
-                        app_online_.computeClustersJson(
-                            *p.second, p.first, ana, wres).dump());
-                }
-            }
-            {
-                std::lock_guard<std::mutex> lk(ring_mtx_);
-                for (auto &u : updated) {
-                    for (auto &e : ring_) {
-                        if (e.seq == u.first) { e.cluster_str = std::move(u.second); break; }
-                    }
-                }
-            }
+        if (changed) {
+            // Drop accumulated bins so future fills reflect the new filter
+            // (online mode would otherwise show old + new entries mixed).
+            app_file_.clearHistograms();
+            app_online_.clearHistograms();
+            wsBroadcast("{\"type\":\"hist_cleared\"}");
         }
-#endif
         json payload = {
             {"type",          "hist_config_updated"},
-            {"threshold",     app_file_.hist_cfg.threshold},
             {"filter",        app_file_.peak_filter.toJson(app_file_.peak_quality_bits_def)},
             {"filter_enable", app_file_.peak_filter.enable}
         };
@@ -424,7 +391,6 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         accumulate(evnum, *event_ptr, ssp_ptr.get());
 
         fdec::WaveAnalyzer ana(activeApp().daq_cfg.wave_cfg);
-        ana.cfg.min_peak_ratio = activeApp().hist_cfg.min_peak_ratio;
         ana.SetTemplateStore(&activeApp().template_store);
         fdec::WaveResult wres;
         reply(activeApp().encodeWaveformJson(*event_ptr, chan_key, ana, wres).dump());

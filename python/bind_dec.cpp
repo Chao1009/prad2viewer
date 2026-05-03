@@ -292,8 +292,8 @@ void bind_fadc(py::module_ &m)
              "snapshotting cfg.wave_cfg from a DaqConfig — direct "
              "assignment would alias the underlying field).")
         .def_readwrite("smooth_order",     &fdec::WaveConfig::smooth_order)
-        .def_readwrite("threshold",        &fdec::WaveConfig::threshold)
-        .def_readwrite("min_threshold",    &fdec::WaveConfig::min_threshold)
+        .def_readwrite("peak_nsigma",      &fdec::WaveConfig::peak_nsigma)
+        .def_readwrite("min_peak_height",  &fdec::WaveConfig::min_peak_height)
         .def_readwrite("min_peak_ratio",   &fdec::WaveConfig::min_peak_ratio)
         .def_readwrite("int_tail_ratio",   &fdec::WaveConfig::int_tail_ratio)
         .def_readwrite("tail_break_n",     &fdec::WaveConfig::tail_break_n)
@@ -413,8 +413,8 @@ void bind_fadc(py::module_ &m)
             py::arg("samples"),
             "Analyze one channel's FADC waveform (uint16 numpy array). "
             "Returns (pedestal_mean, pedestal_rms, peaks_list).  Peaks "
-            "above ``cfg.min_threshold`` / ``cfg.threshold × rms`` are "
-            "kept; up to ``MAX_PEAKS`` per call.")
+            "above ``max(cfg.peak_nsigma × ped.rms, cfg.min_peak_height)`` "
+            "are kept; up to ``MAX_PEAKS`` per call.")
         .def("analyze_full",
             [](const fdec::WaveAnalyzer &self, py::array_t<uint16_t> samples) {
                 py::buffer_info buf = samples.request();

@@ -75,7 +75,6 @@ void ViewerServer::etReaderThread()
     auto tdc_ptr = std::make_unique<tdc::TdcEventData>();
     auto &tdc_evt = *tdc_ptr;
     fdec::WaveAnalyzer ana(app_online_.daq_cfg.wave_cfg);
-    ana.cfg.min_peak_ratio = app_online_.hist_cfg.min_peak_ratio;
     ana.SetTemplateStore(&app_online_.template_store);
     fdec::WaveResult wres;
     uint64_t last_ti_ts = 0;

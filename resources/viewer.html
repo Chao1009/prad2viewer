@@ -205,17 +205,10 @@
             </div>
             <div class="cut-hint">Empty = no constraint. Accept: peak's set bits must be a subset of accepted flags. Reject: peak fails if any rejected flag is set.</div>
         </fieldset>
-        <fieldset class="cut-fieldset">
-            <legend>Threshold</legend>
-            <div class="cut-row">
-                <label>min peak height<input type="number" id="cut-threshold" step="any"></label>
-            </div>
-            <div class="cut-hint">Hard pre-filter applied before the cuts above. Also affects clustering input.</div>
-        </fieldset>
         <div class="elog-form-actions">
             <button id="cut-cancel">Cancel</button>
             <button id="cut-reset">Reset</button>
-            <button id="cut-apply-btn" class="report-btn">Apply</button>
+            <button id="cut-apply-btn" class="report-btn">Save</button>
         </div>
         <div class="elog-status" id="cut-status-msg"></div>
     </div>
@@ -287,7 +280,7 @@
             <div class="tcut-bar">
                 <button id="cut-settings-btn" class="copy-btn" title="Edit peak filter ranges">Cut Settings…</button>
                 <label class="toggle-btn" title="Apply the filter on the server (affects all clients)"><input type="checkbox" id="cut-apply"> apply</label>
-                <label class="toggle-btn" title="Show cut-range overlays on histograms and the waveform plot"><input type="checkbox" id="cut-show" checked> show</label>
+                <label class="toggle-btn" title="Show cut-range overlays on histograms and the waveform plot"><input type="checkbox" id="cut-show"> show</label>
             </div>
         </div>
         <div class="geo-toolbar" id="geo-toolbar-cl" style="display:none">

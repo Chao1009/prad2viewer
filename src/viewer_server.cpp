@@ -504,7 +504,6 @@ void ViewerServer::buildHistograms()
     if (!data_source_) return;
 
     fdec::WaveAnalyzer ana(app_file_.daq_cfg.wave_cfg);
-    ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     ana.SetTemplateStore(&app_file_.template_store);
     fdec::WaveResult wres;
 
@@ -583,7 +582,6 @@ void ViewerServer::accumulate(int ev1, fdec::EventData &event,
     if (ssp) app_file_.processGemEvent(*ssp);
 
     fdec::WaveAnalyzer ana(app_file_.daq_cfg.wave_cfg);
-    ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     ana.SetTemplateStore(&app_file_.template_store);
     fdec::WaveResult wres;
     app_file_.processEvent(event, ana, wres);
@@ -700,7 +698,6 @@ json ViewerServer::decodeEvent(int ev1)
     accumulate(ev1, event, ssp_ptr.get());
 
     fdec::WaveAnalyzer ana(app_file_.daq_cfg.wave_cfg);
-    ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     ana.SetTemplateStore(&app_file_.template_store);
     fdec::WaveResult wres;
     json result = app_file_.encodeEventJson(event, ev1, ana, wres);
@@ -752,7 +749,6 @@ json ViewerServer::computeClusters(int ev1)
     accumulate(ev1, event, ssp_ptr.get());
 
     fdec::WaveAnalyzer ana(app_file_.daq_cfg.wave_cfg);
-    ana.cfg.min_peak_ratio = app_file_.hist_cfg.min_peak_ratio;
     ana.SetTemplateStore(&app_file_.template_store);
     fdec::WaveResult wres;
     return app_file_.computeClustersJson(event, ev1, ana, wres);

@@ -1565,15 +1565,10 @@ class HyCalEventViewer(QMainWindow):
         # centres rather than at the left edge of each bar.
         self._n_cfg = {"min": -0.5, "max": 10.5, "step": 1}
 
-        thr_cfg = hist_config.get("thresholds", {})
-        self._hist_threshold = float(thr_cfg.get("min_peak_height", 10.0))
-
         # Seed the analyzer config from daq_config.json's
-        # `fadc250_waveform.analyzer` block (override layers, top to bottom):
-        #   1. WaveConfig() built-in defaults
-        #   2. daq_config.json analyzer block
-        #   3. monitor_config.json `thresholds` overrides (below)
-        #   4. Live UI dock edits
+        # `fadc250_waveform.analyzer` block.  This is the single source of
+        # truth for peak-detection knobs (peak_nsigma, min_peak_height,
+        # min_peak_ratio); monitor_config.json no longer overrides them.
         # Falls back to plain defaults if the daq_config can't be loaded —
         # opening files later will fail loudly anyway in that case.
         try:
@@ -1583,16 +1578,22 @@ class HyCalEventViewer(QMainWindow):
             self._wcfg = WaveConfig(_dc.wave_cfg)
         except Exception:
             self._wcfg = WaveConfig()
-        self._wcfg.min_peak_ratio = float(thr_cfg.get(
-            "min_secondary_peak_ratio", self._wcfg.min_peak_ratio))
+
+        # Python-side height filter for hist/cluster fills — kept in sync
+        # with the analyzer's min_peak_height by default so the dock spinbox
+        # reads the same value the analyzer is using.  Editing it past the
+        # analyzer's value tightens the cut; the analyzer-level cut is the
+        # hard floor (peaks below it never reach Python).
+        self._hist_threshold = float(self._wcfg.min_peak_height)
 
         # Peak time-cut window (ns).  Peaks whose WaveAnalyzer time falls
         # outside [time_min, time_max] are rejected when picking the
-        # per-channel energy for histograms and clustering.  Matches the
-        # server's `waveform.time_cut` behaviour (viewer_utils.h).
-        _tc = hist_config.get("time_cut", {})
-        self._time_min = float(_tc.get("min", -1e30))
-        self._time_max = float(_tc.get("max",  1e30))
+        # per-channel energy for histograms and clustering.  Defaults seeded
+        # from monitor_config.json `waveform.filter.time` (mirrors the web
+        # monitor's PeakFilter); fall back to a wide-open window if absent.
+        _flt_time = (hist_config.get("filter") or {}).get("time", {})
+        self._time_min = float(_flt_time.get("min", -1e30))
+        self._time_max = float(_flt_time.get("max",  1e30))
 
         # Debounce timer for Advanced-dock re-runs: coalesce rapid
         # slider drags into a single re-read + re-analyse.  Must exist
@@ -1878,12 +1879,12 @@ class HyCalEventViewer(QMainWindow):
         wf = QFormLayout(wg)
         self._adv_wave_spins: Dict[str, QDoubleSpinBox] = {}
         wave_fields = [
-            ("threshold",       0.0,  4096, 1.0,   "primary peak ADC thr"),
-            ("min_threshold",   0.0,  4096, 1.0,   "absolute min ADC thr"),
-            ("min_peak_ratio",  0.0,    1.0, 0.01, "secondary/primary ratio"),
-            ("int_tail_ratio",  0.0,    1.0, 0.01, "tail integration cut"),
-            ("ped_flatness",    0.0, 1000.0, 0.5,  "pedestal RMS ceiling"),
-            ("clk_mhz",         1.0,  1000, 1.0,   "FADC clock (MHz)"),
+            ("peak_nsigma",      0.0,    50.0, 0.5,  "peak detection threshold (× pedestal RMS)"),
+            ("min_peak_height",  0.0,  4096.0, 1.0,  "absolute floor on detected peak height (ADC)"),
+            ("min_peak_ratio",   0.0,     1.0, 0.01, "secondary/primary peak ratio"),
+            ("int_tail_ratio",   0.0,     1.0, 0.01, "tail integration cut"),
+            ("ped_flatness",     0.0,  1000.0, 0.5,  "pedestal RMS ceiling"),
+            ("clk_mhz",          1.0,  1000.0, 1.0,  "FADC clock (MHz)"),
         ]
         for name, lo, hi, step, tip in wave_fields:
             sp = QDoubleSpinBox()

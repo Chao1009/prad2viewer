@@ -168,6 +168,7 @@ function connectWebSocket() {
                 occData={}; occTcutData={}; occTotal=0;
                 initClHist(); plotClHist(); plotClStatHists();
                 gemResidData=null; plotGemResiduals();
+                lastHistModule = '';   // bypass refresh throttle
                 if (selectedModule) showHistograms(selectedModule);
                 clearPhysicsFrontend();
                 redrawGeo();

@@ -151,8 +151,8 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
         if (fw.contains("analyzer")) {
             auto &an = fw["analyzer"];
             if (an.contains("smooth_order"))    cfg.wave_cfg.smooth_order    = an["smooth_order"].get<int>();
-            if (an.contains("threshold"))       cfg.wave_cfg.threshold       = an["threshold"].get<float>();
-            if (an.contains("min_threshold"))   cfg.wave_cfg.min_threshold   = an["min_threshold"].get<float>();
+            if (an.contains("peak_nsigma"))     cfg.wave_cfg.peak_nsigma     = an["peak_nsigma"].get<float>();
+            if (an.contains("min_peak_height")) cfg.wave_cfg.min_peak_height = an["min_peak_height"].get<float>();
             if (an.contains("min_peak_ratio"))  cfg.wave_cfg.min_peak_ratio  = an["min_peak_ratio"].get<float>();
             if (an.contains("int_tail_ratio"))  cfg.wave_cfg.int_tail_ratio  = an["int_tail_ratio"].get<float>();
             if (an.contains("tail_break_n"))    cfg.wave_cfg.tail_break_n    = an["tail_break_n"].get<int>();

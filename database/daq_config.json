@@ -94,11 +94,11 @@
         },
 
         "analyzer": {
-            "_comment": "fdec::WaveConfig — offline soft analyzer. smooth_order: triangular kernel order (1 = identity, N gives a 2N-1 tap kernel). threshold / min_threshold: peak threshold in ped-RMS units, with absolute floor in ADC counts above pedestal. min_peak_ratio: a new peak must be ≥ this fraction of a nearby peak. int_tail_ratio: stop integration when signal drops below this fraction of peak height. tail_break_n: require N consecutive sub-threshold samples to terminate integration. peak_pileup_gap: peaks with integration bounds within this many samples are flagged Q_PEAK_PILED. ped_nsamples: max samples for the pedestal window. ped_flatness: max RMS for a 'flat' pedestal region (floors the noise estimate). ped_max_iter: σ-clip iterations for outlier rejection. overflow: ADC overflow value (12-bit FADC = 4095). clk_mhz: sample-clock frequency for time conversion.",
-            "smooth_order":    2,
-            "threshold":       5.0,
-            "min_threshold":   3.0,
-            "min_peak_ratio":  0.3,
+            "_comment": "fdec::WaveConfig — offline soft analyzer. smooth_order: triangular kernel order (1 = identity, N gives a 2N-1 tap kernel). peak_nsigma: peak detection threshold in pedestal-RMS units (5 = 5σ). min_peak_height: absolute floor on detected peak height in ADC counts above pedestal — guards against unrealistically low rms. Effective threshold = max(peak_nsigma·ped.rms, min_peak_height). min_peak_ratio: a new peak must be ≥ this fraction of a nearby peak. int_tail_ratio: stop integration when signal drops below this fraction of peak height. tail_break_n: require N consecutive sub-threshold samples to terminate integration. peak_pileup_gap: peaks with integration bounds within this many samples are flagged Q_PEAK_PILED. ped_nsamples: max samples for the pedestal window. ped_flatness: max RMS for a 'flat' pedestal region (floors the noise estimate). ped_max_iter: σ-clip iterations for outlier rejection. overflow: ADC overflow value (12-bit FADC = 4095). clk_mhz: sample-clock frequency for time conversion.",
+            "smooth_order":     2,
+            "peak_nsigma":      5.0,
+            "min_peak_height":  10.0,
+            "min_peak_ratio":   0.3,
             "int_tail_ratio":  0.1,
             "tail_break_n":    2,
             "peak_pileup_gap": 2,

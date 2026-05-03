@@ -166,7 +166,6 @@ bool AppState::evaluateFilter(fdec::EventData &event,
 
         bool any_module_pass = false;
         fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
-        ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
         ana.SetTemplateStore(&template_store);
         fdec::WaveResult wres;
 
@@ -216,7 +215,6 @@ bool AppState::evaluateFilter(fdec::EventData &event,
         clusterer.SetConfig(cluster_cfg);
 
         fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
-        ana.cfg.min_peak_ratio = hist_cfg.min_peak_ratio;
         ana.SetTemplateStore(&template_store);
         fdec::WaveResult wres;
 
@@ -246,7 +244,7 @@ bool AppState::evaluateFilter(fdec::EventData &event,
                         ana.Analyze(cd.samples, cd.nsamples, wres);
                         // Clustering input has no time cut — peak_filter is
                         // decoupled. Per-cluster cuts will reattach later.
-                        adc_val = bestPeakAboveThreshold(wres, hist_cfg.threshold);
+                        adc_val = bestPeak(wres);
                     }
                     if (adc_val > 0) {
                         float energy = (mod->cal_factor > 0.)

@@ -27,11 +27,7 @@
         },
         "height_hist": {"min": 0, "max": 4000, "step": 10},
         "integral_hist": {"min": 0, "max": 20000, "step": 100},
-        "time_hist": {"min": 0, "max": 400, "step": 4},
-        "thresholds": {
-            "min_peak_height": 10.0,
-            "min_secondary_peak_ratio": 0.3
-        }
+        "time_hist": {"min": 0, "max": 400, "step": 4}
     },
     "hycal_hist": {
         "// Trigger filter + histogram binning for the HyCal cluster monitor.": "",

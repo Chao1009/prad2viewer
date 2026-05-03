@@ -65,20 +65,19 @@ struct Histogram2D {
 };
 
 // --- Histogram config -------------------------------------------------------
+// Pure binning info — peak-detection thresholds live in WaveConfig
+// (daq_config.json fadc250_waveform.analyzer); per-tab Waveform-Tab cuts
+// live in PeakFilter (monitor_config.json waveform.filter).
 struct HistConfig {
-    float time_min  = 170;
-    float time_max  = 190;
-    float bin_min   = 0;
-    float bin_max   = 20000;
-    float bin_step  = 100;
-    float threshold = 3.0;
-    float pos_min   = 0;
-    float pos_max   = 400;
-    float pos_step  = 4;
+    float bin_min     = 0;
+    float bin_max     = 20000;
+    float bin_step    = 100;
+    float pos_min     = 0;
+    float pos_max     = 400;
+    float pos_step    = 4;
     float height_min  = 0;
     float height_max  = 4000;
     float height_step = 10;
-    float min_peak_ratio = 0.3f;
 };
 
 // --- Event-level filters (loaded from external JSON, applied per-event) ------
@@ -117,29 +116,29 @@ struct LmsEntry {
 };
 
 // --- Peak extraction helpers ------------------------------------------------
-// Find best peak integral within time window. Returns -1 if no peak found.
+// Peaks in `wres` are already gated by the analyzer's
+// max(peak_nsigma·ped.rms, min_peak_height) detection cut, so no extra
+// height filter is needed in these picks.
+
+// Best peak integral within a time window. Returns -1 if no peak qualifies.
 inline float bestPeakInWindow(const fdec::WaveResult &wres,
-                               float threshold, float time_min, float time_max)
+                               float time_min, float time_max)
 {
     float best = -1;
     for (int p = 0; p < wres.npeaks; ++p) {
         auto &pk = wres.peaks[p];
-        if (pk.height < threshold) continue;
         if (pk.time >= time_min && pk.time <= time_max)
             if (pk.integral > best) best = pk.integral;
     }
     return best;
 }
 
-// Same as bestPeakInWindow but without the time-cut — used by clustering after
-// the per-tab time-cut decoupling (clustering re-acquires its own cut later).
-inline float bestPeakAboveThreshold(const fdec::WaveResult &wres, float threshold)
+// Best peak integral across all detected peaks (no time cut) — clustering
+// input after the per-tab cut decoupling.
+inline float bestPeak(const fdec::WaveResult &wres)
 {
     float best = -1;
-    for (int p = 0; p < wres.npeaks; ++p) {
-        auto &pk = wres.peaks[p];
-        if (pk.height < threshold) continue;
-        if (pk.integral > best) best = pk.integral;
-    }
+    for (int p = 0; p < wres.npeaks; ++p)
+        if (wres.peaks[p].integral > best) best = wres.peaks[p].integral;
     return best;
 }

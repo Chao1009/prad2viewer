@@ -9,27 +9,29 @@ function initCutDialog(){
     const $ = id => document.getElementById(id);
 
     // Build quality-bit checkbox lists from histConfig.quality_bits.
-    // Idempotent: if already populated, refresh checked-state only.
+    // Always rebuilds — cheap, and avoids subtle bugs when the bit palette
+    // changes (e.g. server config reloaded between opens).
     function buildBitList(containerId, set){
         const c = $(containerId);
         if (!c) return;
         const bits = (window.histConfig && histConfig.quality_bits) || [];
-        const seen = new Set();
-        c.querySelectorAll('input[type="checkbox"]').forEach(cb => seen.add(cb.dataset.bit));
-        if (seen.size !== bits.length) {
-            c.innerHTML = '';
-            bits.forEach(d => {
-                const lbl = document.createElement('label');
-                const cb  = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.dataset.bit = d.name;
-                lbl.appendChild(cb);
-                lbl.appendChild(document.createTextNode(d.label || d.name));
-                c.appendChild(lbl);
-            });
+        c.innerHTML = '';
+        if (!bits.length) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'color:var(--dim);font-size:11px;font-style:italic';
+            empty.textContent = '(no bits exposed by server)';
+            c.appendChild(empty);
+            return;
         }
-        c.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-            cb.checked = !!(set && set.has(cb.dataset.bit));
+        bits.forEach(d => {
+            const lbl = document.createElement('label');
+            const cb  = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.dataset.bit = d.name;
+            cb.checked = !!(set && set.has(d.name));
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(d.label || d.name));
+            c.appendChild(lbl);
         });
     }
 
@@ -47,9 +49,6 @@ function initCutDialog(){
         fillAxis('time',     'cut-time-min',     'cut-time-max');
         fillAxis('integral', 'cut-integral-min', 'cut-integral-max');
         fillAxis('height',   'cut-height-min',   'cut-height-max');
-
-        $('cut-threshold').value =
-            (window.histConfig && histConfig.threshold != null) ? histConfig.threshold : '';
 
         const qb     = f.quality_bits || {};
         buildBitList('cut-accept-list', new Set(qb.accept || []));
@@ -87,7 +86,11 @@ function initCutDialog(){
 
     // Local redraw when the *show* toggle flips: pulls overlays from
     // histConfig.filter and the cut-show state.  Server isn't touched.
+    // Bypasses the histogram refresh throttle (online mode) so the toggle
+    // feels responsive — without this, showHistograms() may early-return
+    // for ~1s and the overlays don't update.
     function redrawAll(){
+        if (typeof lastHistModule !== 'undefined') lastHistModule = '';
         if (typeof selectedModule !== 'undefined' && selectedModule
             && typeof showWaveform === 'function') {
             showWaveform(selectedModule);
@@ -109,7 +112,7 @@ function initCutDialog(){
 
     $('cut-reset').onclick = () => {
         ['cut-time-min','cut-time-max','cut-integral-min','cut-integral-max',
-         'cut-height-min','cut-height-max','cut-threshold'].forEach(id => $(id).value = '');
+         'cut-height-min','cut-height-max'].forEach(id => $(id).value = '');
         ['cut-accept-list','cut-reject-list'].forEach(cid => {
             $(cid).querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
         });
@@ -120,9 +123,7 @@ function initCutDialog(){
             filter:        buildFilter(),
             filter_enable: $('cut-apply').checked
         };
-        const thr = $('cut-threshold').value;
-        if (thr !== '') body.threshold = parseFloat(thr);
-        $('cut-status-msg').textContent = 'Applying…';
+        $('cut-status-msg').textContent = 'Saving…';
         fetch('/api/hist_config', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},

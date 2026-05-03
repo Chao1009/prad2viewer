@@ -368,7 +368,7 @@ json AppState::computeClustersJson(fdec::EventData &event, int ev_id,
                     ana.Analyze(cd.samples, cd.nsamples, wres);
                     // Clustering input has no time cut — Waveform-Tab peak_filter
                     // is decoupled from clustering. See app_state.cpp main loop.
-                    adc_val = bestPeakAboveThreshold(wres, hist_cfg.threshold);
+                    adc_val = bestPeak(wres);
                 }
                 if (adc_val <= 0) continue;
 
@@ -507,27 +507,26 @@ void AppState::processEvent(fdec::EventData &event,
                 if (!is_adc1881m) {
                     ana.SetChannelKey(roc.tag, s, c);
                     ana.Analyze(cd.samples, cd.nsamples, wres);
-                    peak_for_lms_alpha = bestPeakInWindow(wres, hist_cfg.threshold,
-                                                          lms_time_min, lms_time_max);
-                    peak_for_cluster   = bestPeakAboveThreshold(wres, hist_cfg.threshold);
+                    peak_for_lms_alpha = bestPeakInWindow(wres, lms_time_min, lms_time_max);
+                    peak_for_cluster   = bestPeak(wres);
                 } else {
                     wres.npeaks = 0;
                     peak_for_lms_alpha = peak_for_cluster = cd.samples[0];
                 }
 
                 // ── histogram consumer ──
-                // Single pass: threshold gate, then peak_filter (when enabled).
-                // Time hist gets every passing peak; height/integral hists get
-                // the best-integral passing peak (preserves per-event semantics).
+                // Peaks are already gated by the analyzer's height threshold.
+                // Apply peak_filter (when enabled) on top.  Time hist gets
+                // every passing peak; height/integral hists get the
+                // best-integral passing peak (preserves per-event semantics).
                 if (do_hist && !is_adc1881m) {
                     std::string key = std::to_string(roc.tag) + "_"
                                    + std::to_string(s) + "_" + std::to_string(c);
-                    bool any_above_thr = false, any_passing = false;
+                    bool any_peak = false, any_passing = false;
                     float bestI = -1, bestH = -1;
                     for (int p = 0; p < wres.npeaks; ++p) {
                         auto &pk = wres.peaks[p];
-                        if (pk.height < hist_cfg.threshold) continue;
-                        any_above_thr = true;
+                        any_peak = true;
                         if (peak_filter.enable && !peak_filter(pk)) continue;
                         any_passing = true;
                         auto &ph = pos_histograms[key];
@@ -543,8 +542,8 @@ void AppState::processEvent(fdec::EventData &event,
                         if (hh.bins.empty()) hh.init(height_nbins);
                         hh.fill(bestH, hist_cfg.height_min, hist_cfg.height_step);
                     }
-                    if (any_above_thr) occupancy[key]++;
-                    if (any_passing)   occupancy_tcut[key]++;
+                    if (any_peak)    occupancy[key]++;
+                    if (any_passing) occupancy_tcut[key]++;
                 }
 
                 // ── cluster consumer ──

@@ -140,7 +140,7 @@ def firmware_analyze(s, *, TET=10.0, NSB_ns=8, NSA_ns=128, NPED=3,
 # ---------------------------------------------------------------------------
 # WaveAnalyzer — soft analyzer (smoothing + iterative pedestal + local maxima)
 # ---------------------------------------------------------------------------
-def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
+def soft_analyze(s, *, smooth_order=2, peak_nsigma=5.0, min_peak_height=10.0,
                  ped_nsamples=30, ped_flatness=1.0, ped_max_iter=3,
                  int_tail_ratio=0.1, tail_break_n=2, peak_pileup_gap=2,
                  clk_mhz=250.0):
@@ -153,8 +153,8 @@ def soft_analyze(s, *, smooth_order=2, threshold=5.0, min_threshold=3.0,
 
     cfg = dec.WaveConfig()
     cfg.smooth_order    = smooth_order
-    cfg.threshold       = threshold
-    cfg.min_threshold   = min_threshold
+    cfg.peak_nsigma     = peak_nsigma
+    cfg.min_peak_height = min_peak_height
     cfg.ped_nsamples    = ped_nsamples
     cfg.ped_flatness    = ped_flatness
     cfg.ped_max_iter    = ped_max_iter

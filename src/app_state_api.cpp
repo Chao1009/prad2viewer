@@ -506,7 +506,7 @@ void AppState::fillConfigJson(json &cfg) const
 {
     cfg["hist"] = {
         {"bin_min", hist_cfg.bin_min}, {"bin_max", hist_cfg.bin_max},
-        {"bin_step", hist_cfg.bin_step}, {"threshold", hist_cfg.threshold},
+        {"bin_step", hist_cfg.bin_step},
         {"pos_min", hist_cfg.pos_min}, {"pos_max", hist_cfg.pos_max},
         {"pos_step", hist_cfg.pos_step},
         {"height_min", hist_cfg.height_min}, {"height_max", hist_cfg.height_max},

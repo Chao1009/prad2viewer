@@ -114,11 +114,15 @@ void AppState::init(const std::string &db_dir,
 
     // Per-peak quality bit palette (mirrors Q_PEAK_* in Fadc250Data.h).
     // Exposed via /api/config so the GUI populates the Cut-Settings dialog
-    // dropdowns from a single source of truth.
-    peak_quality_bits_def = json::array({
-        {{"bit", 0}, {"name", "PILED"},       {"label", "Pile-up"}},
-        {{"bit", 1}, {"name", "DECONVOLVED"}, {"label", "Deconvolved"}}
-    });
+    // dropdowns from a single source of truth.  Built via push_back to
+    // sidestep nlohmann::json's brace-initializer ambiguity (a list of
+    // pair-shaped braces would otherwise be parsed as one object instead of
+    // an array of objects).
+    peak_quality_bits_def = json::array();
+    peak_quality_bits_def.push_back(json::object({
+        {"bit", 0}, {"name", "PILED"}, {"label", "Pile-up"}}));
+    peak_quality_bits_def.push_back(json::object({
+        {"bit", 1}, {"name", "DECONVOLVED"}, {"label", "Deconvolved"}}));
 
     // waveform binning + trigger filter (monitor side)
     if (mcfg.contains("waveform")) {
@@ -144,11 +148,9 @@ void AppState::init(const std::string &db_dir,
             if (hh.contains("max"))  hist_cfg.height_max  = hh["max"];
             if (hh.contains("step")) hist_cfg.height_step = hh["step"];
         }
-        if (w.contains("thresholds")) {
-            auto &t = w["thresholds"];
-            if (t.contains("min_peak_height"))          hist_cfg.threshold      = t["min_peak_height"];
-            if (t.contains("min_secondary_peak_ratio")) hist_cfg.min_peak_ratio = t["min_secondary_peak_ratio"];
-        }
+        // Note: peak detection thresholds (peak_nsigma, min_peak_height,
+        // min_peak_ratio) live in daq_config.json `fadc250_waveform.analyzer`
+        // and are loaded into wave_cfg by the prad2dec config loader.
     }
     if (mcfg.contains("ref_lines") && mcfg["ref_lines"].is_object())
         ref_lines = mcfg["ref_lines"];
@@ -160,7 +162,8 @@ void AppState::init(const std::string &db_dir,
     height_nbins = std::max(1, (int)std::ceil(
         (hist_cfg.height_max - hist_cfg.height_min) / hist_cfg.height_step));
     {
-        std::cerr << "Waveform  : threshold=" << hist_cfg.threshold
+        std::cerr << "Waveform  : peak_nsigma=" << daq_cfg.wave_cfg.peak_nsigma
+                  << " min_peak_height=" << daq_cfg.wave_cfg.min_peak_height
                   << " filter[" << (peak_filter.enable ? "on" : "off") << "]="
                   << peak_filter.toJson(peak_quality_bits_def).dump()
                   << " " << waveform_trigger << "\n";

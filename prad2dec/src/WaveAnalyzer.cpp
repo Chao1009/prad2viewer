@@ -380,7 +380,7 @@ void WaveAnalyzer::Analyze(const uint16_t *samples, int nsamples, WaveResult &re
     result.ped = P_use;
 
     // ── Peak finding uses the chosen pedestal.
-    const float thr = std::max(cfg.threshold * result.ped.rms, cfg.min_threshold);
+    const float thr = std::max(cfg.peak_nsigma * result.ped.rms, cfg.min_peak_height);
     findPeaks(samples, buf, nsamples, result.ped.mean, result.ped.rms, thr, result);
 
     // ── Post-hoc: was a real pulse inside the pedestal window we used?

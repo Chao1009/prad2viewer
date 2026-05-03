@@ -32,10 +32,13 @@ struct WaveResult {
 
 struct WaveConfig {
     // ---- core soft-analyzer knobs --------------------------------------
-    int      smooth_order  = 2;       // kernel order: 1 = identity, N gives a 2N-1 tap triangular kernel
-    float    threshold     = 5.0f;    // peak threshold in pedestal RMS units
-    float    min_threshold = 3.0f;    // absolute floor (ADC counts above pedestal)
-    float    min_peak_ratio = 0.3f;   // new peak must be ≥ this fraction of a nearby peak
+    // Effective peak-detection threshold is max(peak_nsigma·ped.rms, min_peak_height)
+    // — sigma-scaled gate with an absolute ADC floor to guard against
+    // unrealistically low rms estimates.
+    int      smooth_order   = 2;        // kernel order: 1 = identity, N gives a 2N-1 tap triangular kernel
+    float    peak_nsigma    = 5.0f;     // peak detection threshold, in pedestal-RMS units
+    float    min_peak_height = 10.0f;   // absolute floor on detected peak height (ADC counts above pedestal)
+    float    min_peak_ratio  = 0.3f;    // new peak must be ≥ this fraction of a nearby peak
     float    int_tail_ratio = 0.1f;   // stop integration when signal drops below this fraction of peak height
     int      tail_break_n  = 2;       // require N consecutive sub-threshold samples to terminate integration
     int      peak_pileup_gap = 2;     // peaks with integration bounds within this many samples are flagged Q_PEAK_PILED

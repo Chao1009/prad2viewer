@@ -29,7 +29,7 @@
             "cross_talk_width":    2.0,
             "charac_dists":        [],
             "match_mode":          1,
-            "match_adc_asymmetry": 0.8,
+            "match_adc_asymmetry": 0.7,
             "match_time_diff":     50.0,
             "match_ts_period":     25.0
         }
@@ -37,10 +37,13 @@
 
     "matching": {
         "// HyCal-GEM matching: position-resolution inputs used to build the": "",
+        "// target gas distribution, used as resolution to allow uncertainties of target point": "",
+        "target_pos_res": [0.5, 0.5, 2.0],
         "// search window.  hycal_pos_res = [A, B, C] (mm) feeds": "",
         "//   sigma_HC(E) = sqrt((A/sqrt(E_GeV))^2 + (B/E_GeV)^2 + C^2)": "",
+        "hycal_pos_res": [3.6, 0.0, 0.0],
         "// gem_pos_res = per-detector sigma in mm (ordered by detector id 0..3).": "",
-        "hycal_pos_res": [3.5, 0.0, 0.0],
-        "gem_pos_res":   [0.08, 0.08, 0.08, 0.08]
+        "// gem_pos_res is high now (supposed to be < 0.1 mm) to include coordinate shifts.": "",
+        "gem_pos_res":   [0.5, 0.5, 0.5, 0.5]
     }
 }

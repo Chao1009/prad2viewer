@@ -1,67 +1,58 @@
 #!/usr/bin/env python3
 """
-gem_eff_audit.py — offline audit of the GEM tracking-efficiency monitor.
+gem_eff_audit.py — offline LOO audit of the GEM tracking-efficiency monitor.
 
 Purpose
 -------
-The online monitor's `gem_eff_max_chi2 = 10` was tuned against a buggy
-identity-transform code path (DetectorTransform cache wasn't being
-invalidated when the runinfo block wrote the GEM poses).  After the fix,
-the χ²/dof distribution and per-detector efficiency numbers are no longer
-comparable to whatever was on screen before.  This script reads EVIO
-files offline, runs the same line-fit algorithm, and reports:
+For each test detector D in {0,1,2,3}, the OTHER 3 GEMs + HyCal define a
+straight-line anchor track; we then project the anchor to D and count
+whether D recorded a hit at the predicted position.  D itself contributes
+nothing to the anchor (matching candidate set excludes D, fit excludes D),
+so the test is genuinely unbiased.  Three LOO variants are run side-by-side
+on every event so they can be compared:
 
-  1. Distribution of χ²/dof for accepted tracks (PNG histogram).
-  2. Per-detector efficiency in five modes — to expose the seed-bias
-     that makes GEM 0/1 look ~95% and GEM 2/3 ~50%:
-       * current:   seeds only from GEM 0 and GEM 1 (mirrors
-                    AppState::runGemEfficiency).  Seed detector is
-                    *automatically* matched, biasing its efficiency up.
-       * all-seeds: seeds from every detector that has hits.
-       * unbiased:  no seed at all.  For each HyCal cluster, enumerate
-                    every GEM-subset of size ≥3 and every cluster combo
-                    within those subsets, fit HyCal + combo, take the
-                    lowest-χ²/dof fit that passes the gate.  At most one
-                    track per HyCal cluster.  Per-detector efficiency =
-                    tracks-with-this-detector / total-good-tracks.  This
-                    is the right metric — every detector competes on
-                    equal footing.
-       * target:    seed line is (target → HyCal cluster); no GEM in the
-                    seed.  Project to each GEM, take closest hit within
-                    window, fit HyCal + matched GEMs (≥3).  Same per-
-                    detector counting as `unbiased`.  Selects only
-                    target-pointing tracks — comparing target vs
-                    unbiased per detector estimates the upstream-halo
-                    fraction.  Target xyz comes from runinfo (the same
-                    "target" array the C++ replay uses).
-       * loo:       leave-one-out — for each test detector D, fit the
-                    track from HyCal + the OTHER three GEMs (≥2 of them
-                    matched), project to D, count hit-or-not within
-                    match window.  Independent unbiased estimator;
-                    should agree with `unbiased` if both algorithms
-                    are sound.
+  * loo              GEM-seeded anchor (HyCal + each OTHER GEM hit drawn as a
+                     seed line; lowest-χ² survivor wins).  Fit through
+                     HyCal + 3 OTHER GEMs.  Vertex-agnostic — accepts any
+                     straight track that lights up the 3 OTHER GEMs.
+  * loo-target-in    Same GEM-seeded matching, but the fit additionally
+                     includes (target_x, target_y, target_z) as a weighted
+                     measurement with σ = `--sigma-target` (≈ beam spot).
+                     Pulls the line toward the target → kills upstream halo
+                     and beam-gas tracks; the χ² gate then rejects anything
+                     that doesn't actually point back to (0,0,0).
+  * loo-target-seed  Single-seed variant: the seed line is
+                     (target → HyCal cluster); no GEM-pair seeding.
+                     Fit through HyCal + 3 OTHER GEMs (target only seeds,
+                     never enters the fit).  Cheapest of the three.
 
-  Event filter (applied before any of the above): require ≥1 HyCal
-  cluster AND ≥3 GEM detectors with at least one cluster — the minimum
-  to fit a 4-parameter line with non-trivial dof.
-  3. Sweep of efficiency vs `max_chi2_per_dof` so a sensible cut can be
-     picked from the data instead of a guess.
+Match definition (applied to the anchor in every variant):
+  - all 3 OTHER detectors found a hit within match_nsigma · σ_total of the
+    seed-line projection (σ_total = sqrt(σ_HC@gem² + σ_GEM²)),
+  - weighted line fit's χ²/dof ≤ max_chi2,
+  - per-detector residual against the FIT line within match_nsigma · σ_GEM[d].
 
-All matching uses the same physics as the C++ monitor:
-    σ_HC@gem = σ_HC(E_GeV) · |z_gem / z_hc|
-    σ_total  = sqrt(σ_HC@gem² + σ_GEM[d]²)
-    cut      = match_nsigma · σ_total
+Test (applied at D after the anchor passes):
+  - D has a hit within match_nsigma · σ_GEM[D] of the projection.
+  - Increment denominator[D] (anchor was good); increment numerator[D]
+    if the test hit was found.
+
+Event filter: ≥1 HyCal cluster AND ≥3 GEM detectors with at least one
+cluster — minimum to make any anchor possible.
 
 Usage
 -----
-    python analysis/pyscripts/gem_eff_audit.py <evio_path> <out_dir> \
-        [--max-events N] [--match-nsigma 3.0] [--max-chi2 10.0] \
-        [--max-hits-per-det 3]
+    python analysis/pyscripts/gem_eff_audit.py <evio_path> <out_dir> \\
+        [--match-nsigma 3.0] [--max-chi2 10.0] [--sigma-gem 0.5] \\
+        [--sigma-target 1.0] [--min-cluster-energy 500] \\
+        [--max-hits-per-det 3] [--max-events N]
 
-`<evio_path>` accepts a glob, directory, or single split (same as the
-other analysis scripts).  `<out_dir>` is created if missing; the script
-writes `summary.txt`, `chi2_per_dof.png`, `efficiency_vs_chi2.png`, and
-`residuals_loo.png`.
+`<evio_path>` accepts a glob (quote it), directory, or single split.
+`<out_dir>` is created if missing; the script writes `anchor_chi2.png`
+(two-row anchor-quality plot — χ²/dof distribution + cumulative
+acceptance, NOT detector efficiency) and one `residuals_<variant>.png`
+per LOO mode.  Detector efficiency numbers go to stdout in the text
+summary.
 """
 
 from __future__ import annotations
@@ -99,38 +90,57 @@ def seed_line(x1: float, y1: float, z1: float,
 
 
 def fit_weighted_line(z: Sequence[float], x: Sequence[float],
-                      y: Sequence[float], w: Sequence[float]
+                      y: Sequence[float],
+                      w_x: Sequence[float],
+                      w_y: Optional[Sequence[float]] = None
                       ) -> Optional[Tuple[float, float, float, float, float]]:
     """Independent (z,x) and (z,y) weighted LSQ — 4-parameter line.
-    Mirrors fitWeightedLine in app_state.cpp.  Returns
-    (ax, bx, ay, by, chi2_per_dof) or None if the normal-equations
-    determinant is degenerate.  dof = 2N − 4."""
+    `w_y` defaults to `w_x` when both axes share the same per-point σ
+    (the common case: GEM/HyCal hits, where σ_x = σ_y).  Pass distinct
+    `w_y` to handle anisotropic uncertainties (e.g. the target point in
+    `loo-target-in`, where σ_x and σ_y inherit different
+    slope×σ_target_z couplings).  Returns (ax, bx, ay, by, chi2_per_dof)
+    or None if the normal-equations determinant is degenerate.
+    dof = 2N − 4."""
     N = len(z)
     if N < 2:
         return None
-    Sw = Sz = Szz = Sx = Sxz = Sy = Syz = 0.0
-    for wi, zi, xi, yi in zip(w, z, x, y):
-        Sw  += wi
-        Sz  += wi * zi
-        Szz += wi * zi * zi
-        Sx  += wi * xi
-        Sxz += wi * xi * zi
-        Sy  += wi * yi
-        Syz += wi * yi * zi
-    delta = Sw * Szz - Sz * Sz
-    if abs(delta) < 1e-9:
+    if w_y is None:
+        w_y = w_x
+    # x-fit
+    Swx = Szx = Szzx = Sx = Sxz = 0.0
+    for wi, zi, xi in zip(w_x, z, x):
+        Swx  += wi
+        Szx  += wi * zi
+        Szzx += wi * zi * zi
+        Sx   += wi * xi
+        Sxz  += wi * xi * zi
+    delta_x = Swx * Szzx - Szx * Szx
+    if abs(delta_x) < 1e-9:
         return None
-    bx = (Sw * Sxz - Sz * Sx) / delta
-    ax = (Sx - bx * Sz) / Sw
-    by = (Sw * Syz - Sz * Sy) / delta
-    ay = (Sy - by * Sz) / Sw
+    bx = (Swx * Sxz - Szx * Sx) / delta_x
+    ax = (Sx - bx * Szx) / Swx
+    # y-fit
+    Swy = Szy = Szzy = Sy = Syz = 0.0
+    for wi, zi, yi in zip(w_y, z, y):
+        Swy  += wi
+        Szy  += wi * zi
+        Szzy += wi * zi * zi
+        Sy   += wi * yi
+        Syz  += wi * yi * zi
+    delta_y = Swy * Szzy - Szy * Szy
+    if abs(delta_y) < 1e-9:
+        return None
+    by = (Swy * Syz - Szy * Sy) / delta_y
+    ay = (Sy - by * Szy) / Swy
+    # chi2 (both axes contribute, possibly with different weights)
     dof = 2 * N - 4
-    chi2 = 0.0
     if dof > 0:
-        for wi, zi, xi, yi in zip(w, z, x, y):
+        chi2 = 0.0
+        for wxi, wyi, zi, xi, yi in zip(w_x, w_y, z, x, y):
             dxp = (ax + bx * zi) - xi
             dyp = (ay + by * zi) - yi
-            chi2 += wi * (dxp * dxp + dyp * dyp)
+            chi2 += wxi * dxp * dxp + wyi * dyp * dyp
         chi2_per_dof = chi2 / dof
     else:
         chi2_per_dof = 0.0
@@ -154,6 +164,39 @@ def find_closest(hits: Sequence[Tuple[float, float, float]],
     if best_idx < 0:
         return -1, float("inf")
     return best_idx, math.sqrt(best_d2)
+
+
+# ---------------------------------------------------------------------------
+# Match definition: a track is accepted when (a) the weighted line fit's
+# χ²/dof passes the gate, AND (b) every matched detector's hit lies within
+# `match_nsigma · σ_GEM[d]` of the fit line.  The seed-line projection
+# window stays at `σ_total = sqrt(σ_HC@gem² + σ_GEM²)` because that's the
+# uncertainty before the fit refines the line.  The post-fit gate uses just
+# σ_GEM[d] because by then HyCal is already in the fit and the projection
+# at any plane is dominated by the GEM resolution.
+# ---------------------------------------------------------------------------
+
+def fit_residuals_within_window(
+        fit_params: Tuple[float, float, float, float],
+        matched: Sequence[bool],
+        cand: Sequence[Optional[Tuple[float, float, float]]],
+        params: "TrackingParams",
+        ) -> bool:
+    ax, bx, ay, by = fit_params
+    for d, m in enumerate(matched):
+        if not m or cand[d] is None:
+            continue
+        h = cand[d]
+        pred_x = ax + bx * h[2]
+        pred_y = ay + by * h[2]
+        s_gem = (params.gem_pos_res[d]
+                 if d < len(params.gem_pos_res) else 0.1)
+        cut = params.match_nsigma * s_gem
+        dx = h[0] - pred_x
+        dy = h[1] - pred_y
+        if dx * dx + dy * dy > cut * cut:
+            return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -182,10 +225,28 @@ def _try_seed(seed_d: int, seed_idx: int,
               gem_z: Sequence[float],
               candidate_dets: Sequence[int],
               params: TrackingParams,
-              min_match: int) -> Optional[TrackResult]:
+              min_match: int,
+              target_in_fit: bool = False,
+              target_x: float = 0.0, target_y: float = 0.0,
+              target_z: float = 0.0,
+              sigma_target_x: float = 1.0,
+              sigma_target_y: float = 1.0,
+              sigma_target_z: float = 20.0,
+              ) -> Optional[TrackResult]:
     """Build a track using seed_d/seed_idx.  Match candidates only on the
     detectors listed in `candidate_dets` (always include seed_d).  Need at
-    least `min_match` matched detectors for a valid fit (counts seed)."""
+    least `min_match` matched detectors for a valid fit (counts seed).
+
+    If `target_in_fit`, append (target_x, target_y, target_z) to the
+    weighted fit as a soft "track originated at target" constraint.
+    σ_target_z (the target's longitudinal extent) couples to the
+    transverse measurement at z = target_z via the track slope:
+        σ_x_eff² = σ_target_x² + (bx_est · σ_target_z)²
+        σ_y_eff² = σ_target_y² + (by_est · σ_target_z)²
+    where the slope estimate comes from the (target → HyCal cluster)
+    line; for central tracks this leaves the σ_x,y contributions
+    unchanged, while peripheral tracks (large |HyCal x,y|) get the
+    expected σ_z lever-arm widening."""
     if seed_d not in candidate_dets:
         return None
     hits_s = hits_by_det[seed_d]
@@ -219,11 +280,32 @@ def _try_seed(seed_d: int, seed_idx: int,
     if sum(matched) < min_match:
         return None
 
-    # Weighted fit of HyCal + every matched GEM.
-    z_arr: List[float] = [hcz]
-    x_arr: List[float] = [hcx]
-    y_arr: List[float] = [hcy]
-    w_arr: List[float] = [1.0 / (sigma_hc * sigma_hc)]
+    # Weighted fit of HyCal + every matched GEM (+ target if requested).
+    # x and y use the same per-point σ except at the target: σ_target_z
+    # couples differently into σ_x_eff and σ_y_eff via the slope.
+    z_arr: List[float]  = [hcz]
+    x_arr: List[float]  = [hcx]
+    y_arr: List[float]  = [hcy]
+    w_x_arr: List[float] = [1.0 / (sigma_hc * sigma_hc)]
+    w_y_arr: List[float] = [1.0 / (sigma_hc * sigma_hc)]
+    if target_in_fit:
+        # Slope estimate from (target → HyCal cluster) — used to widen the
+        # target's transverse σ by the σ_z lever arm.  Falls back to zero
+        # slope when HyCal sits on the target plane.
+        if hcz != target_z:
+            bx_est = (hcx - target_x) / (hcz - target_z)
+            by_est = (hcy - target_y) / (hcz - target_z)
+        else:
+            bx_est = by_est = 0.0
+        sx_eff_sq = (sigma_target_x * sigma_target_x
+                     + (bx_est * sigma_target_z) ** 2)
+        sy_eff_sq = (sigma_target_y * sigma_target_y
+                     + (by_est * sigma_target_z) ** 2)
+        z_arr.append(target_z)
+        x_arr.append(target_x)
+        y_arr.append(target_y)
+        w_x_arr.append(1.0 / sx_eff_sq)
+        w_y_arr.append(1.0 / sy_eff_sq)
     for d in range(n_dets):
         if not matched[d] or cand[d] is None:
             continue
@@ -232,13 +314,16 @@ def _try_seed(seed_d: int, seed_idx: int,
         x_arr.append(h[0])
         y_arr.append(h[1])
         s_gem = params.gem_pos_res[d] if d < len(params.gem_pos_res) else 0.1
-        w_arr.append(1.0 / (s_gem * s_gem))
+        w_x_arr.append(1.0 / (s_gem * s_gem))
+        w_y_arr.append(1.0 / (s_gem * s_gem))
 
-    fit = fit_weighted_line(z_arr, x_arr, y_arr, w_arr)
+    fit = fit_weighted_line(z_arr, x_arr, y_arr, w_x_arr, w_y_arr)
     if fit is None:
         return None
     ax, bx, ay, by, chi2_per_dof = fit
     if chi2_per_dof > params.max_chi2:
+        return None
+    if not fit_residuals_within_window((ax, bx, ay, by), matched, cand, params):
         return None
     return TrackResult(chi2_per_dof, matched, cand, (ax, bx, ay, by))
 
@@ -247,9 +332,17 @@ def best_track(hcx: float, hcy: float, hcz: float, sigma_hc: float,
                hits_by_det: List[List[Tuple[float, float, float]]],
                gem_z: Sequence[float], seed_dets: Sequence[int],
                candidate_dets: Sequence[int], params: TrackingParams,
-               min_match: int) -> Optional[TrackResult]:
+               min_match: int,
+               target_in_fit: bool = False,
+               target_x: float = 0.0, target_y: float = 0.0,
+               target_z: float = 0.0,
+               sigma_target_x: float = 1.0,
+               sigma_target_y: float = 1.0,
+               sigma_target_z: float = 20.0,
+               ) -> Optional[TrackResult]:
     """Try every (seed_d, seed_idx) pair.  Return the lowest-χ²/dof
-    TrackResult that passes the chi²_max gate, or None."""
+    TrackResult that passes the chi²_max gate, or None.  All target_*
+    args are forwarded to _try_seed unchanged."""
     best: Optional[TrackResult] = None
     for seed_d in seed_dets:
         if seed_d >= len(hits_by_det):
@@ -258,7 +351,13 @@ def best_track(hcx: float, hcy: float, hcz: float, sigma_hc: float,
         for seed_idx in range(n_seeds):
             r = _try_seed(seed_d, seed_idx, hcx, hcy, hcz, sigma_hc,
                           hits_by_det, gem_z, candidate_dets, params,
-                          min_match)
+                          min_match,
+                          target_in_fit=target_in_fit,
+                          target_x=target_x, target_y=target_y,
+                          target_z=target_z,
+                          sigma_target_x=sigma_target_x,
+                          sigma_target_y=sigma_target_y,
+                          sigma_target_z=sigma_target_z)
             if r is None:
                 continue
             if best is None or r.chi2_per_dof < best.chi2_per_dof:
@@ -272,13 +371,17 @@ def best_track_target_seed(hcx: float, hcy: float, hcz: float,
                            hits_by_det: List[List[Tuple[float, float, float]]],
                            gem_z: Sequence[float],
                            params: TrackingParams,
-                           min_match: int = 3) -> Optional[TrackResult]:
+                           min_match: int = 3,
+                           candidate_dets: Optional[Sequence[int]] = None
+                           ) -> Optional[TrackResult]:
     """Target-seeded tracker — no GEM in the seed line.
 
     Seed line goes from (target_x, target_y, target_z) to the HyCal
-    cluster.  Project to each GEM plane, take the closest hit within
-    `match_nsigma · σ_total`, then fit HyCal + matched GEMs and apply the
-    χ²/dof gate.  Need ≥`min_match` GEMs to call it a "good track".
+    cluster.  Project to each candidate GEM plane, take the closest hit
+    within `match_nsigma · σ_total`, then fit HyCal + matched GEMs and
+    apply the χ²/dof gate.  Need ≥`min_match` GEMs to call it a "good
+    track".  `candidate_dets` defaults to all GEM planes; the LOO mode
+    passes the OTHER 3 detectors so the test detector is not in the fit.
 
     Per-detector efficiency built on top of this is unbiased *and*
     selects only target-pointing tracks — i.e., it rejects upstream
@@ -286,6 +389,8 @@ def best_track_target_seed(hcx: float, hcy: float, hcz: float,
     mode would still accept.  Comparing the two modes per detector is
     a clean way to estimate the halo fraction."""
     n_dets = len(hits_by_det)
+    if candidate_dets is None:
+        candidate_dets = range(n_dets)
     ax_s, bx_s, ay_s, by_s = seed_line(target_x, target_y, target_z,
                                        hcx, hcy, hcz)
 
@@ -296,7 +401,7 @@ def best_track_target_seed(hcx: float, hcy: float, hcz: float,
 
     matched = [False] * n_dets
     cand: List[Optional[Tuple[float, float, float]]] = [None] * n_dets
-    for d in range(n_dets):
+    for d in candidate_dets:
         zd = gem_z[d]
         pred_x = ax_s + bx_s * zd
         pred_y = ay_s + by_s * zd
@@ -331,6 +436,8 @@ def best_track_target_seed(hcx: float, hcy: float, hcz: float,
         return None
     ax, bx, ay, by, chi2_per_dof = fit
     if chi2_per_dof > params.max_chi2:
+        return None
+    if not fit_residuals_within_window((ax, bx, ay, by), matched, cand, params):
         return None
     return TrackResult(chi2_per_dof, matched, cand, (ax, bx, ay, by))
 
@@ -391,29 +498,57 @@ def best_track_unbiased(hcx: float, hcy: float, hcz: float, sigma_hc: float,
                 for i, d in enumerate(det_subset):
                     matched[d] = True
                     cand[d] = combo[i]
+                if not fit_residuals_within_window(
+                        (ax, bx, ay, by), matched, cand, params):
+                    continue
                 best = TrackResult(chi2, matched, cand, (ax, bx, ay, by))
     return best
 
 
 # ---------------------------------------------------------------------------
-# Per-event accumulator
+# Per-event accumulator — one set per LOO variant.  Each variant runs N times
+# per HyCal cluster (one per test detector), so the denominator is per-detector
+# (the "anchor exists" counter for that detector excluded), and the numerator
+# is per-detector too.  chi2_list aggregates anchor χ²/dof across all test
+# detectors.
 # ---------------------------------------------------------------------------
 
 @dataclass
-class ModeStats:
-    name:           str
-    n_tracks:       int = 0
-    chi2_list:      List[float] = field(default_factory=list)
-    num:            List[int]   = field(default_factory=lambda: [0]*4)
-    den:            List[int]   = field(default_factory=lambda: [0]*4)
-
-
-@dataclass
 class LooStats:
-    n_attempted:    List[int]    = field(default_factory=lambda: [0]*4)
-    n_matched:      List[int]    = field(default_factory=lambda: [0]*4)
+    name:           str
+    n_attempted:    List[int]         = field(default_factory=lambda: [0]*4)
+    n_matched:      List[int]         = field(default_factory=lambda: [0]*4)
+    chi2_list:      List[float]       = field(default_factory=list)
     residuals_x:    List[List[float]] = field(default_factory=lambda: [[],[],[],[]])
     residuals_y:    List[List[float]] = field(default_factory=lambda: [[],[],[],[]])
+
+
+def _record_loo(stats: "LooStats", test_d: int,
+                track: Optional[TrackResult],
+                hits_by_det: List[List[Tuple[float, float, float]]],
+                gem_z: Sequence[float],
+                params: TrackingParams) -> None:
+    """Bookkeeping for a single LOO test attempt.  If `track` is None the
+    anchor failed (3-GEM fit didn't pass χ²/residual gates); we don't
+    increment any counter — denominator only counts events where the
+    OTHER 3 GEMs delivered a clean anchor."""
+    if track is None:
+        return
+    stats.chi2_list.append(track.chi2_per_dof)
+    ax, bx, ay, by = track.fit
+    zd = gem_z[test_d]
+    pred_x = ax + bx * zd
+    pred_y = ay + by * zd
+    s_gem = (params.gem_pos_res[test_d]
+             if test_d < len(params.gem_pos_res) else 0.1)
+    cut = params.match_nsigma * s_gem
+    idx, _ = find_closest(hits_by_det[test_d], pred_x, pred_y, cut)
+    stats.n_attempted[test_d] += 1
+    if idx >= 0:
+        stats.n_matched[test_d] += 1
+        h = hits_by_det[test_d][idx]
+        stats.residuals_x[test_d].append(h[0] - pred_x)
+        stats.residuals_y[test_d].append(h[1] - pred_y)
 
 
 # ---------------------------------------------------------------------------
@@ -428,10 +563,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--match-nsigma",     type=float, default=3.0,
                     help="Matching window in σ_total (mirrors monitor "
                          "default).")
-    ap.add_argument("--max-chi2",         type=float, default=10.0,
-                    help="χ²/dof gate for accepting a fit.  The script "
-                         "also sweeps a range below this in the "
-                         "efficiency-vs-cut plot.")
+    ap.add_argument("--max-chi2",         type=float, default=3.5,
+                    help="χ²/dof gate for accepting an anchor fit.  Default "
+                         "3.5 — picks up real tracks while cutting the "
+                         "anchor χ² tail of pile-up combinations.  The "
+                         "anchor_chi2.png plot sweeps a range around this.")
     ap.add_argument("--max-hits-per-det", type=int,   default=3,
                     help="Cap seed/match candidates per detector (mirrors "
                          "AppState::gem_eff_max_hits_per_det = 3).")
@@ -439,6 +575,24 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="Minimum HyCal cluster energy (MeV) to enter the "
                          "denominator.  Mirrors AppState::"
                          "gem_eff_min_cluster_energy.  Default 500 MeV.")
+    ap.add_argument("--sigma-gem",        type=float, default=None,
+                    help="Override σ_GEM (mm) for ALL detectors — useful for "
+                         "absorbing residual alignment into a 'working' σ "
+                         "before per-detector calibration is applied.  "
+                         "Default: use reconstruction_config.json:matching:"
+                         "gem_pos_res.")
+    ap.add_argument("--sigma-target-x",   type=float, default=None,
+                    help="σ_target_x (mm) — transverse beam-spot size in x. "
+                         "Used by loo-target-in only.  Default: from "
+                         "reconstruction_config.json:matching:target_pos_res.")
+    ap.add_argument("--sigma-target-y",   type=float, default=None,
+                    help="σ_target_y (mm) — transverse beam-spot size in y. "
+                         "Default: from reconstruction_config.json.")
+    ap.add_argument("--sigma-target-z",   type=float, default=None,
+                    help="σ_target_z (mm) — target longitudinal extent.  "
+                         "Couples to σ_x_eff and σ_y_eff via the track "
+                         "slope at the target plane.  Default: from "
+                         "reconstruction_config.json.")
     ap.add_argument("--n-dets",           type=int,   default=4,
                     help="Number of GEM detectors to consider (default 4).")
     args = ap.parse_args(argv)
@@ -458,10 +612,20 @@ def main(argv: Optional[List[str]] = None) -> int:
         hc_map_file   = args.hc_map_file,
     )
 
-    (pr_A, pr_B, pr_C), gem_pos_res = C.load_matching_config()
+    (pr_A, pr_B, pr_C), gem_pos_res, target_pos_res = C.load_matching_config()
+    if args.sigma_gem is not None:
+        gem_pos_res = [args.sigma_gem] * 4
+    cfg_tgt_x, cfg_tgt_y, cfg_tgt_z = target_pos_res
+    sigma_target_x = (args.sigma_target_x
+                      if args.sigma_target_x is not None else cfg_tgt_x)
+    sigma_target_y = (args.sigma_target_y
+                      if args.sigma_target_y is not None else cfg_tgt_y)
+    sigma_target_z = (args.sigma_target_z
+                      if args.sigma_target_z is not None else cfg_tgt_z)
     print(f"[setup] HC σ(E) = sqrt(({pr_A:.3f}/√E_GeV)²"
           f"+({pr_B:.3f}/E_GeV)²+{pr_C:.3f}²) mm")
-    print(f"[setup] σ_GEM   = {gem_pos_res} mm")
+    print(f"[setup] σ_GEM   = {gem_pos_res} mm"
+          + ("  (overridden)" if args.sigma_gem is not None else ""))
     print(f"[setup] match_nsigma={args.match_nsigma}  "
           f"max_chi2={args.max_chi2}  max_hits_per_det={args.max_hits_per_det}")
 
@@ -479,13 +643,22 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     print(f"[setup] min HyCal cluster E = {args.min_cluster_energy:.0f} MeV")
 
-    mode_current  = ModeStats("current (seed=0,1)")
-    mode_allseeds = ModeStats("all-seeds (0,1,2,3)")
-    mode_unbiased = ModeStats("unbiased (HyCal + ≥3 GEMs, combinatorial)")
-    mode_target   = ModeStats(
-        f"target-seed (target=({p.geo.target_x:g},{p.geo.target_y:g},"
-        f"{p.geo.target_z:g}) → HyCal)")
-    loo           = LooStats()
+    overridden_target = any(a is not None for a in (
+        args.sigma_target_x, args.sigma_target_y, args.sigma_target_z))
+    print(f"[setup] σ_target = (x={sigma_target_x:.2f}, "
+          f"y={sigma_target_y:.2f}, z={sigma_target_z:.2f}) mm  "
+          f"(only used by loo-target-in"
+          f"{', overridden' if overridden_target else ''})")
+
+    loo            = LooStats("loo (GEM-seeded, HyCal + 3 OTHER GEMs in fit)")
+    loo_target_in  = LooStats(
+        f"loo-target-in (GEM-seeded, target+HyCal+3 OTHER GEMs in fit, "
+        f"σ_target=(x={sigma_target_x:.2f},y={sigma_target_y:.2f},"
+        f"z={sigma_target_z:.2f}) mm)")
+    loo_target_seed = LooStats(
+        f"loo-target-seed (target=({p.geo.target_x:g},{p.geo.target_y:g},"
+        f"{p.geo.target_z:g})→HyCal seed, HyCal + 3 OTHER GEMs in fit)")
+    loo_modes = (loo, loo_target_in, loo_target_seed)
     n_events_filter_pass = 0
 
     ch = dec.EvChannel()
@@ -546,7 +719,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                     continue
                 n_events_filter_pass += 1
 
-                all_dets = list(range(n_dets))
                 for hcx, hcy, hcz, energy in hc_lab:
                     if hcz <= 0:
                         continue
@@ -555,95 +727,52 @@ def main(argv: Optional[List[str]] = None) -> int:
                     sigma_hc = C.hycal_pos_resolution(pr_A, pr_B, pr_C, energy)
                     n_used += 1
 
-                    # current = seeds from {0, 1} only
-                    cur = best_track(hcx, hcy, hcz, sigma_hc, hits_by_det,
-                                     gem_z, seed_dets=[0, 1],
-                                     candidate_dets=all_dets,
-                                     params=params, min_match=3)
-                    if cur is not None:
-                        mode_current.n_tracks += 1
-                        mode_current.chi2_list.append(cur.chi2_per_dof)
-                        for d in range(n_dets):
-                            mode_current.den[d] += 1
-                            if cur.matched[d]:
-                                mode_current.num[d] += 1
-
-                    # all-seeds = seeds from every detector with hits
-                    seeds_all = [d for d in range(n_dets)
-                                 if hits_by_det[d]]
-                    al = best_track(hcx, hcy, hcz, sigma_hc, hits_by_det,
-                                    gem_z, seed_dets=seeds_all,
-                                    candidate_dets=all_dets,
-                                    params=params, min_match=3)
-                    if al is not None:
-                        mode_allseeds.n_tracks += 1
-                        mode_allseeds.chi2_list.append(al.chi2_per_dof)
-                        for d in range(n_dets):
-                            mode_allseeds.den[d] += 1
-                            if al.matched[d]:
-                                mode_allseeds.num[d] += 1
-
-                    # unbiased = HyCal + every k-subset of GEMs (k≥3).
-                    # No seed, no projection-and-match.  At most one track
-                    # per HyCal cluster; per-detector efficiency is
-                    # tracks-with-this-detector / total-good-tracks.
-                    ub = best_track_unbiased(hcx, hcy, hcz, sigma_hc,
-                                             hits_by_det, gem_z, params,
-                                             min_gems=3)
-                    if ub is not None:
-                        mode_unbiased.n_tracks += 1
-                        mode_unbiased.chi2_list.append(ub.chi2_per_dof)
-                        for d in range(n_dets):
-                            mode_unbiased.den[d] += 1
-                            if ub.matched[d]:
-                                mode_unbiased.num[d] += 1
-
-                    # target-seed = (target → HyCal) line, no GEM in seed.
-                    # Per-detector counting is the same as `unbiased` —
-                    # numerator is matched-in-good-track, denominator is
-                    # good tracks.  Selects target-pointing tracks only.
-                    ts = best_track_target_seed(hcx, hcy, hcz,
-                            p.geo.target_x, p.geo.target_y, p.geo.target_z,
-                            sigma_hc, hits_by_det, gem_z, params,
-                            min_match=3)
-                    if ts is not None:
-                        mode_target.n_tracks += 1
-                        mode_target.chi2_list.append(ts.chi2_per_dof)
-                        for d in range(n_dets):
-                            mode_target.den[d] += 1
-                            if ts.matched[d]:
-                                mode_target.num[d] += 1
-
-                    # leave-one-out — for each test detector D, fit using
-                    # the other 3 only (≥2 of them matched), then probe D.
+                    # Three LOO variants run per HyCal cluster, per test
+                    # detector D.  The OTHER 3 GEMs anchor the fit; D is
+                    # excluded from both the candidate matching and the fit,
+                    # so the prediction at D is genuinely unbiased.
+                    #
+                    #   loo              GEM-seeded  · fit = HyCal+3 GEMs
+                    #   loo-target-in    GEM-seeded  · fit = target+HyCal+3 GEMs
+                    #   loo-target-seed  target→HyCal seed · fit = HyCal+3 GEMs
                     for test_d in range(n_dets):
                         others = [d for d in range(n_dets) if d != test_d]
                         seeds_for_loo = [d for d in others if hits_by_det[d]]
-                        if not seeds_for_loo:
-                            continue
-                        track_loo = best_track(hcx, hcy, hcz, sigma_hc,
-                            hits_by_det, gem_z,
-                            seed_dets=seeds_for_loo,
-                            candidate_dets=others,
-                            params=params, min_match=2)
-                        if track_loo is None:
-                            continue
-                        ax, bx, ay, by = track_loo.fit
-                        zd = gem_z[test_d]
-                        pred_x = ax + bx * zd
-                        pred_y = ay + by * zd
-                        s_hc_at_gem = sigma_hc * abs(zd / hcz)
-                        s_gem = params.gem_pos_res[test_d]
-                        s_total = math.sqrt(s_hc_at_gem ** 2 + s_gem ** 2)
-                        cut = params.match_nsigma * s_total
-                        idx, _ = find_closest(hits_by_det[test_d],
-                                              pred_x, pred_y, cut)
-                        loo.n_attempted[test_d] += 1
-                        if idx >= 0:
-                            loo.n_matched[test_d] += 1
-                            h = hits_by_det[test_d][idx]
-                            loo.residuals_x[test_d].append(h[0] - pred_x)
-                            loo.residuals_y[test_d].append(h[1] - pred_y)
+
+                        # --- loo: GEM-seeded, no target ---
+                        if seeds_for_loo:
+                            track = best_track(hcx, hcy, hcz, sigma_hc,
+                                hits_by_det, gem_z,
+                                seed_dets=seeds_for_loo,
+                                candidate_dets=others,
+                                params=params, min_match=3)
+                            _record_loo(loo, test_d, track,
+                                        hits_by_det, gem_z, params)
+
+                        # --- loo-target-in: GEM-seeded, target in fit ---
+                        if seeds_for_loo:
+                            track = best_track(hcx, hcy, hcz, sigma_hc,
+                                hits_by_det, gem_z,
+                                seed_dets=seeds_for_loo,
+                                candidate_dets=others,
+                                params=params, min_match=3,
+                                target_in_fit=True,
+                                target_x=p.geo.target_x,
+                                target_y=p.geo.target_y,
+                                target_z=p.geo.target_z,
+                                sigma_target_x=sigma_target_x,
+                                sigma_target_y=sigma_target_y,
+                                sigma_target_z=sigma_target_z)
+                            _record_loo(loo_target_in, test_d, track,
+                                        hits_by_det, gem_z, params)
+
+                        # --- loo-target-seed: target→HyCal seed, no target in fit ---
+                        track = best_track_target_seed(hcx, hcy, hcz,
+                            p.geo.target_x, p.geo.target_y, p.geo.target_z,
+                            sigma_hc, hits_by_det, gem_z, params,
+                            min_match=3, candidate_dets=others)
+                        _record_loo(loo_target_seed, test_d, track,
+                                    hits_by_det, gem_z, params)
 
             if done:
                 break
@@ -656,9 +785,8 @@ def main(argv: Optional[List[str]] = None) -> int:
           f"{n_events_filter_pass} pass filter (≥1 HyCal + ≥3 GEMs), "
           f"{n_used} HyCal clusters used, {elapsed:.1f}s")
 
-    write_outputs(out_dir,
-                  mode_current, mode_allseeds, mode_unbiased, mode_target,
-                  loo, params, n_phys, n_events_filter_pass, n_used,
+    write_outputs(out_dir, loo_modes, params,
+                  n_phys, n_events_filter_pass, n_used,
                   args.min_cluster_energy)
     return 0
 
@@ -674,17 +802,16 @@ def _eff(num: int, den: int) -> str:
 
 
 def write_outputs(out_dir: Path,
-                  cur: ModeStats, allseeds: ModeStats, unbiased: ModeStats,
-                  target: ModeStats,
-                  loo: LooStats, params: TrackingParams,
+                  loo_modes: Sequence["LooStats"],
+                  params: TrackingParams,
                   n_phys: int, n_events_filter_pass: int, n_used: int,
                   min_cluster_energy: float
                   ) -> None:
 
     # ---- text summary (stdout) --------------------------------------------
     print()
-    print("GEM tracking-efficiency audit")
-    print("=============================")
+    print("GEM tracking-efficiency audit (leave-one-out)")
+    print("=============================================")
     print()
     print(f"physics events processed : {n_phys}")
     print(f"events passing filter    : {n_events_filter_pass}  "
@@ -696,27 +823,28 @@ def write_outputs(out_dir: Path,
     print(f"max_hits_per_det         : {params.max_hits_per_det}")
     print(f"σ_GEM (mm)               : {params.gem_pos_res}")
     print()
+    print("Each LOO variant runs once per (HyCal cluster, test detector D):")
+    print("  - the OTHER 3 GEMs anchor a line fit (all 3 matched in seed")
+    print("    window, χ²/dof ≤ max gate, per-det residual within "
+          f"{params.match_nsigma}·σ_GEM),")
+    print("  - the fit is projected to D and a hit is searched within "
+          f"{params.match_nsigma}·σ_GEM[D].")
+    print("Denominator = anchors that succeeded; numerator = anchors with a "
+          "hit at D.")
+    print()
 
-    for mode in (cur, allseeds, unbiased, target):
+    for mode in loo_modes:
         print(f"--- {mode.name} ---")
-        print(f"  tracks accepted: {mode.n_tracks}")
         for d in range(4):
-            print(f"  GEM{d}: {_eff(mode.num[d], mode.den[d])}")
+            print(f"  GEM{d}: {_eff(mode.n_matched[d], mode.n_attempted[d])}")
         if mode.chi2_list:
             arr = sorted(mode.chi2_list)
             med  = arr[len(arr)//2]
             p90  = arr[int(0.9 * len(arr))]
             p99  = arr[int(0.99 * len(arr))]
-            print(f"  χ²/dof: median={med:.3f}  "
-                  f"90%={p90:.3f}  99%={p99:.3f}")
+            print(f"  anchor χ²/dof: median={med:.3f}  "
+                  f"90%={p90:.3f}  99%={p99:.3f}  (n={len(arr)})")
         print()
-
-    print(f"--- leave-one-out (unbiased per-detector) ---")
-    print(f"  Each row: track built from the other 3 GEMs (≥2 matched),")
-    print(f"  projected onto the test detector, then matched within "
-          f"{params.match_nsigma}σ.")
-    for d in range(4):
-        print(f"  GEM{d}: {_eff(loo.n_matched[d], loo.n_attempted[d])}")
 
     # ---- plots (matplotlib optional) --------------------------------------
     plt = _import_pyplot()
@@ -724,11 +852,12 @@ def write_outputs(out_dir: Path,
         print("[plot] matplotlib not available; skipping PNGs")
         return
 
-    _plot_chi2(plt, [cur, allseeds, unbiased, target],
-               params, out_dir / "chi2_per_dof.png")
-    _plot_eff_vs_chi2(plt, [cur, allseeds, unbiased, target],
-                      params, out_dir / "efficiency_vs_chi2.png")
-    _plot_residuals(plt, loo, out_dir / "residuals_loo.png")
+    _plot_efficiency_bars(plt, loo_modes, out_dir / "efficiency.png")
+    _plot_anchor_chi2(plt, loo_modes, params,
+                      out_dir / "anchor_chi2.png")
+    for mode in loo_modes:
+        slug = mode.name.split()[0].replace("/", "_")
+        _plot_residuals(plt, mode, out_dir / f"residuals_{slug}.png")
 
 
 def _import_pyplot():
@@ -741,40 +870,85 @@ def _import_pyplot():
         return None
 
 
-def _plot_chi2(plt, modes: List[ModeStats], params: TrackingParams,
-               out: Path) -> None:
-    if not any(m.chi2_list for m in modes):
-        return
-    import numpy as np
-    fig, ax = plt.subplots(figsize=(9, 5))
-    bins = np.linspace(0, max(params.max_chi2, 1.0) * 1.1, 60)
-    for i, m in enumerate(modes):
-        if not m.chi2_list:
-            continue
-        ax.hist(m.chi2_list, bins=bins, color=f"C{i}", alpha=0.55,
-                label=f"{m.name}  (n={m.n_tracks})")
-    ax.axvline(params.max_chi2, color="k", ls="--", lw=1,
-               label=f"current cut = {params.max_chi2}")
-    ax.set_xlabel("χ²/dof")
-    ax.set_ylabel("tracks")
-    ax.set_title("GEM line-fit χ²/dof distribution")
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", fontsize=9)
+def _plot_efficiency_bars(plt, modes: Sequence[LooStats], out: Path) -> None:
+    """One panel per GEM (2x2 grid).  Each panel stacks one horizontal
+    progress bar per LOO variant: full width = 100%, filled portion =
+    detector efficiency, annotation = "XX.X%  (num/den)".  The bar IS the
+    efficiency — denominator goes into the count text on the right."""
+    n_dets = 4
+    n_modes = len(modes)
+    fig, axes = plt.subplots(2, 2, figsize=(11, 6.5))
+    axes_flat = axes.flatten()
+    bar_h = 0.65
+    for d in range(n_dets):
+        ax = axes_flat[d]
+        # Plot bottom-up so loo (mode 0) ends up on top
+        ys = list(range(n_modes - 1, -1, -1))
+        for i, m in enumerate(modes):
+            n_match = m.n_matched[d]
+            n_att   = m.n_attempted[d]
+            eff     = (100.0 * n_match / n_att) if n_att > 0 else 0.0
+            y       = ys[i]
+            # background "track" (full 100%)
+            ax.barh(y, 100.0, height=bar_h, color="lightgray", alpha=0.4,
+                    edgecolor="gray", linewidth=0.5, zorder=1)
+            # filled portion (efficiency)
+            ax.barh(y, eff, height=bar_h, color=f"C{i}", alpha=0.85,
+                    zorder=2)
+            # variant label on the left
+            ax.text(-2, y, m.name.split()[0], va="center", ha="right",
+                    fontsize=9, color=f"C{i}", fontweight="bold")
+            # efficiency + counts on the right
+            ann = (f"{eff:5.1f}%  ({n_match}/{n_att})"
+                   if n_att > 0 else "no anchors")
+            ax.text(102, y, ann, va="center", ha="left", fontsize=9)
+        ax.set_xlim(0, 140)
+        ax.set_ylim(-0.6, n_modes - 0.4)
+        ax.set_yticks([])
+        ax.set_xticks([0, 25, 50, 75, 100])
+        ax.set_xlabel("efficiency (%)" if d >= 2 else "")
+        ax.set_title(f"GEM{d}", fontsize=11, fontweight="bold")
+        ax.grid(True, axis="x", alpha=0.3, zorder=0)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+    fig.suptitle("LOO per-detector efficiency", fontsize=12)
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)
     print(f"[plot] {out}")
 
 
-def _plot_eff_vs_chi2(plt, modes: List[ModeStats], params: TrackingParams,
-                      out: Path) -> None:
-    """Acceptance fraction vs χ²/dof cut, per mode.  Lets you see where
-    tightening the gate starts to lose real tracks (curve flattens) vs
-    where it's still cutting noise (curve still climbs)."""
+def _plot_anchor_chi2(plt, modes: Sequence[LooStats],
+                      params: TrackingParams, out: Path) -> None:
+    """Two-row anchor-quality plot for the LOO line fits (HyCal + 3 OTHER
+    GEMs).  Top row: per-variant χ²/dof histograms.  Bottom row: cumulative
+    fraction of anchors retained as the χ²/dof cut sweeps.  Both rows show
+    *anchor* statistics — they describe the quality of the 3-GEM-anchor
+    sample, NOT detector efficiency (which is the GEM0..GEM3 numbers in the
+    text summary)."""
     if not any(m.chi2_list for m in modes):
         return
     import numpy as np
-    fig, ax = plt.subplots(figsize=(9, 5))
+    fig, (ax_hist, ax_acc) = plt.subplots(2, 1, figsize=(9, 8),
+                                          sharex=True)
+
+    # ---- top: χ²/dof histograms ------------------------------------------
+    bins = np.linspace(0, max(params.max_chi2, 1.0) * 1.1, 60)
+    for i, m in enumerate(modes):
+        if not m.chi2_list:
+            continue
+        label = f"{m.name.split()[0]}  (n={len(m.chi2_list)})"
+        ax_hist.hist(m.chi2_list, bins=bins, color=f"C{i}", alpha=0.55,
+                     label=label)
+    ax_hist.axvline(params.max_chi2, color="k", ls="--", lw=1,
+                    label=f"current cut = {params.max_chi2}")
+    ax_hist.set_ylabel("LOO anchors accepted")
+    ax_hist.set_title("LOO anchor χ²/dof distribution "
+                      "(HyCal + 3 OTHER GEMs)")
+    ax_hist.grid(True, alpha=0.3)
+    ax_hist.legend(loc="best", fontsize=9)
+
+    # ---- bottom: cumulative anchor acceptance ----------------------------
     cuts = np.linspace(0.5, max(params.max_chi2, 1.0) * 1.5, 60)
     for i, m in enumerate(modes):
         if not m.chi2_list:
@@ -783,15 +957,16 @@ def _plot_eff_vs_chi2(plt, modes: List[ModeStats], params: TrackingParams,
         accepted_at_cut = np.array(
             [(arr <= c).sum() for c in cuts], dtype=float)
         total = float(len(arr))
-        ax.plot(cuts, 100.0 * accepted_at_cut / total, color=f"C{i}",
-                lw=1.6, label=m.name)
-    ax.axvline(params.max_chi2, color="k", ls="--", lw=1,
-               label=f"current cut = {params.max_chi2}")
-    ax.set_xlabel("χ²/dof cut")
-    ax.set_ylabel("fraction of tracks kept (%)")
-    ax.set_title("Track acceptance vs χ²/dof gate")
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", fontsize=9)
+        ax_acc.plot(cuts, 100.0 * accepted_at_cut / total, color=f"C{i}",
+                    lw=1.6, label=m.name.split()[0])
+    ax_acc.axvline(params.max_chi2, color="k", ls="--", lw=1,
+                   label=f"current cut = {params.max_chi2}")
+    ax_acc.set_xlabel("χ²/dof cut")
+    ax_acc.set_ylabel("anchors retained (%)  [NOT detector efficiency]")
+    ax_acc.set_title("Cumulative anchor acceptance vs χ²/dof gate")
+    ax_acc.grid(True, alpha=0.3)
+    ax_acc.legend(loc="best", fontsize=9)
+
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)
@@ -827,7 +1002,8 @@ def _plot_residuals(plt, loo: LooStats, out: Path) -> None:
             ax.set_title(f"GEM{d}  (n={len(data)})")
             ax.legend(loc="best", fontsize=8)
             ax.grid(True, alpha=0.3)
-    fig.suptitle("Leave-one-out residuals: hit − projected (test detector)")
+    fig.suptitle(f"LOO residuals: hit − projected at test detector  "
+                 f"[{loo.name.split()[0]}]")
     fig.tight_layout()
     fig.savefig(out, dpi=120)
     plt.close(fig)

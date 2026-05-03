@@ -1322,6 +1322,23 @@ void AppState::runGemEfficiency(int event_id,
     if (!fitWeightedLine(N, zarr, xarr, yarr, warr, fit)) return;
     if (fit.chi2_per_dof > gem_eff_max_chi2) return;
 
+    // Per-detector fit-residual gate: every matched detector's hit must lie
+    // within match_nsigma · σ_GEM[d] of the FIT line.  The seed-line window
+    // (σ_total) was just for finding initial candidates; once HyCal is in
+    // the fit, the projection uncertainty at any plane is dominated by GEM
+    // resolution — anything outside that radius is more likely a noise /
+    // pile-up hit than the actual track.
+    for (int d = 0; d < n_dets; ++d) {
+        if (!matched[d]) continue;
+        const float pred_x = fit.ax + fit.bx * cand_lz[d];
+        const float pred_y = fit.ay + fit.by * cand_lz[d];
+        const float dx = cand_lx[d] - pred_x;
+        const float dy = cand_ly[d] - pred_y;
+        const float s  = sigmaGem(d);
+        const float cut = gem_eff_match_nsigma * s;
+        if (dx * dx + dy * dy > cut * cut) return;
+    }
+
     // Good track found.  Increment shared denominator and per-detector
     // numerators (one per detector that contributed to the fit).
     gem_eff_den++;

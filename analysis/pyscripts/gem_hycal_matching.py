@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[setup] Match cut  : {args.match_nsigma:.2f} · sigma_total",
           flush=True)
 
-    (pr_A, pr_B, pr_C), gem_pos_res = C.load_matching_config()
+    (pr_A, pr_B, pr_C), gem_pos_res, _ = C.load_matching_config()
     print(f"[setup] HC sigma(E)= sqrt(({pr_A:.3f}/sqrt(E_GeV))^2"
           f"+({pr_B:.3f}/E_GeV)^2+{pr_C:.3f}^2) mm", flush=True)
     print(f"[setup] GEM sigma  : {gem_pos_res} mm", flush=True)

@@ -5,6 +5,7 @@
 #include "Replay.h"
 #include "DaqConfig.h"
 #include "EventData_io.h"
+#include "PulseTemplateStore.h"
 #include "HyCalSystem.h"
 #include "GemSystem.h"
 #include "HyCalCluster.h"
@@ -26,54 +27,47 @@ using json = nlohmann::json;
 
 namespace analysis {
 
-void Replay::LoadDaqMap(const std::string &json_path)
+void Replay::LoadHyCalMap(const std::string &json_path)
 {
     std::ifstream f(json_path);
     if (!f.is_open()) {
-        std::cerr << "Replay: cannot open DAQ map: " << json_path << "\n";
+        std::cerr << "Replay: cannot open HyCal map: " << json_path << "\n";
         return;
     }
     auto j = json::parse(f, nullptr, false, true);
-    if (j.is_array()) {
-        for (auto &entry : j) {
-            std::string name = entry.value("name", "");
-            int crate   = entry.value("crate", -1);
-            int slot    = entry.value("slot", -1);
-            int channel = entry.value("channel", -1);
-            if (!name.empty() && crate >= 0)
-                daq_map_[std::to_string(crate) + "_" + std::to_string(slot) +
-                         "_" + std::to_string(channel)] = name;
-        }
-    }
-    std::cerr << "Replay: loaded " << daq_map_.size() << " DAQ map entries\n";
-}
-
-void Replay::LoadModulesInfo(const std::string &json_path)
-{
-    std::ifstream f(json_path);
-    if (!f.is_open()) {
-        std::cerr << "Replay: cannot open modules info: " << json_path << "\n";
+    if (!j.is_array()) {
+        std::cerr << "Replay: " << json_path << " is not a JSON array\n";
         return;
     }
-    auto j = json::parse(f, nullptr, false, true);
-    if (!j.is_array()) return;
 
     auto parse_t = [](const std::string &t) {
         if (t == "PbGlass") return prad2::MOD_PbGlass;
         if (t == "PbWO4")   return prad2::MOD_PbWO4;
-        if (t == "SCINT")   return prad2::MOD_SCINT;
+        if (t == "Veto")    return prad2::MOD_VETO;
         if (t == "LMS")     return prad2::MOD_LMS;
         return prad2::MOD_UNKNOWN;
     };
 
+    daq_map_.clear();
+    module_types_.clear();
     for (auto &entry : j) {
         std::string name = entry.value("n", "");
-        std::string t    = entry.value("t", "");
         if (name.empty()) continue;
-        module_types_[name] = parse_t(t);
+        module_types_[name] = parse_t(entry.value("t", ""));
+
+        if (entry.contains("daq")) {
+            const auto &d = entry["daq"];
+            int crate   = d.value("crate", -1);
+            int slot    = d.value("slot", -1);
+            int channel = d.value("channel", -1);
+            if (crate >= 0)
+                daq_map_[std::to_string(crate) + "_" + std::to_string(slot) +
+                         "_" + std::to_string(channel)] = name;
+        }
     }
     std::cerr << "Replay: loaded " << module_types_.size()
-              << " module-type entries from " << json_path << "\n";
+              << " modules (" << daq_map_.size() << " with daq) from "
+              << json_path << "\n";
 }
 
 std::string Replay::moduleName(int roc, int slot, int ch) const
@@ -98,7 +92,7 @@ int Replay::moduleID(int roc, int slot, int ch) const
     auto t = moduleType(roc, slot, ch);
     // Globally-unique ID encoding — see RawEventData docs.  The numeric
     // ranges are deliberately disjoint so HyCalSystem::module_by_id(...)
-    // returns nullptr for SCINT/LMS, letting existing HyCal consumers
+    // returns nullptr for Veto/LMS, letting existing HyCal consumers
     // skip them via their existing nullptr / is_hycal() checks.
     switch (t) {
         case prad2::MOD_PbGlass:
@@ -109,7 +103,7 @@ int Replay::moduleID(int roc, int slot, int ch) const
         case prad2::MOD_PbWO4:
             try { return std::stoi(name.substr(1)) + 1000; } catch (...) { return -1; }
 
-        case prad2::MOD_SCINT:
+        case prad2::MOD_VETO:
             // "V1".."V4" → 3001..3004
             if (name.size() >= 2 && name[0] == 'V')
                 try { return 3000 + std::stoi(name.substr(1)); } catch (...) {}
@@ -225,6 +219,17 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
+    // NNLS pile-up template store (loaded only if config asks for it;
+    // failure is non-fatal — the analyzer falls back to local-maxima
+    // peak heights).
+    fdec::PulseTemplateStore template_store;
+    if (daq_cfg_.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg_.wave_cfg.nnls_deconv.template_file.empty()) {
+        template_store.LoadFromFile(
+            db_dir + "/" + daq_cfg_.wave_cfg.nnls_deconv.template_file,
+            daq_cfg_.wave_cfg);
+    }
+    ana.SetTemplateStore(&template_store);
     fdec::WaveResult wres;
     // Firmware-mode emulator (FADC250 Modes 1/2/3).  Configured from the
     // optional "fadc250_waveform.firmware" block in daq_config.json — defaults
@@ -263,8 +268,9 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ev->ssp_raw      = ssp_raw_snapshot;
 
             // Decode FADC250 data — single pass over all channels (HyCal +
-            // Veto + LMS).  Type dispatch comes from hycal_modules.json,
-            // not module-name prefix; module_type[nch] records the category.
+            // Veto + LMS).  Type dispatch comes from hycal_map.json's "t"
+            // field, not module-name prefix; module_type[nch] records the
+            // category.
             int nch = 0;
             for (int r = 0; r < event->nrocs; ++r) {
                 auto &roc = event->rocs[r];
@@ -291,7 +297,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                             ev->samples[nch][i] = cd.samples[i];
 
                         // Gain correction is HyCal-only (PbGlass / PbWO4) —
-                        // SCINT / LMS get unity factor.  Comes from a lookup
+                        // Veto / LMS get unity factor.  Comes from a lookup
                         // table, no analyzer needed.
                         if (mod_type == prad2::MOD_PbWO4) {
                             ev->gain_factor[nch] = gain_correction.w[mod_id - 1000].avg;
@@ -306,6 +312,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
                             // pedestal estimate that the firmware analyzer
                             // consumes — only run it when its output is
                             // being written.
+                            ana.SetChannelKey(roc.tag, s, c);
                             ana.Analyze(cd.samples, cd.nsamples, wres);
                             ev->ped_mean[nch]    = wres.ped.mean;
                             ev->ped_rms[nch]     = wres.ped.rms;
@@ -413,11 +420,10 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
 
     // Setup HyCal system and clusterer
     fdec::HyCalSystem hycal;
-     std::string daq_map_file = db_dir + "/hycal_daq_map.json";
-    if(prad1 == true)
-        daq_map_file = db_dir + "/prad1/prad_hycal_daq_map.json";
-    hycal.Init(db_dir + "/hycal_modules.json", daq_map_file);
-    
+    std::string hycal_map_file = db_dir + (prad1 ? "/prad1/prad_hycal_map.json"
+                                                  : "/hycal_map.json");
+    hycal.Init(hycal_map_file);
+
     if(prad1 == true) evc::load_pedestals(db_dir + "/prad1/adc1881m_pedestals.json", daq_cfg_);
 
     std::string calib_file = db_dir + "/" + gRunConfig.energy_calib_file;
@@ -436,7 +442,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     std::unique_ptr<gem::GemCluster> gem_clusterer;
 if(!prad1){
     gem_sys = std::make_unique<gem::GemSystem>();
-    std::string gem_map_file = db_dir + "/gem_daq_map.json";
+    std::string gem_map_file = db_dir + "/gem_map.json";
     gem_sys->Init(gem_map_file);
     std::cerr << "GEM map  : " << gem_map_file
                 << " (" << gem_sys->GetNDetectors() << " detectors)\n";
@@ -482,6 +488,14 @@ if(!prad1){
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
     fdec::WaveAnalyzer ana(daq_cfg_.wave_cfg);
+    fdec::PulseTemplateStore template_store;
+    if (daq_cfg_.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg_.wave_cfg.nnls_deconv.template_file.empty()) {
+        template_store.LoadFromFile(
+            db_dir + "/" + daq_cfg_.wave_cfg.nnls_deconv.template_file,
+            daq_cfg_.wave_cfg);
+    }
+    ana.SetTemplateStore(&template_store);
     fdec::WaveResult wres;
 
     int total = 0;
@@ -550,6 +564,7 @@ if(!prad1){
                                 if(lms_nch >= 4) { lms_nch++; continue; } // guard against overflow
                                 if(mod_name[3] == 'P') ev->lms_id[lms_nch] = 0;
                                 else ev->lms_id[lms_nch] = mod_name[3] - '0';
+                                ana.SetChannelKey(roc.tag, s, c);
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->lms_npeaks[lms_nch] = wres.npeaks;
                                 if(wres.npeaks <= 0) continue;
@@ -568,6 +583,7 @@ if(!prad1){
                                 if(mod_name.length() != 2) continue;
                                 if(veto_nch >= 4) { veto_nch++; continue; } // guard against overflow
                                 ev->veto_id[veto_nch] = mod_name[1] - '0';
+                                ana.SetChannelKey(roc.tag, s, c);
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 ev->veto_npeaks[veto_nch] = wres.npeaks;
                                 if(wres.npeaks <= 0) continue;
@@ -585,6 +601,7 @@ if(!prad1){
                                 if(prad1 == true) 
                                     adc = cd.samples[0] * 0.543; //0.543 for prad1 run1308,correct to 1.1GeV
                                 else{
+                                    ana.SetChannelKey(roc.tag, s, c);
                                     ana.Analyze(cd.samples, cd.nsamples, wres);
                                     if (wres.npeaks <= 0) continue;
                                     int bestIdx = -1;

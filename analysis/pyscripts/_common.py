@@ -390,10 +390,9 @@ def setup_pipeline(*,
            f"hycal_z={p.geo.hycal_z:.1f} mm")
 
     # ---- HyCal -----------------------------------------------------------
-    hc_map = hc_map_file or resolve_db_path("hycal_modules.json")
-    daq_map = resolve_db_path("hycal_daq_map.json")
+    hc_map = hc_map_file or resolve_db_path("hycal_map.json")
     p.hycal = det.HyCalSystem()
-    p.hycal.init(hc_map, daq_map)
+    p.hycal.init(hc_map)
 
     hc_calib = hc_calib_file or resolve_db_path(p.geo.energy_calib_file)
     if hc_calib:
@@ -408,7 +407,7 @@ def setup_pipeline(*,
     p.wave_ana = dec.WaveAnalyzer(p.cfg.wave_cfg)
 
     # ---- GEM -------------------------------------------------------------
-    gem_map = gem_map_file or resolve_db_path("gem_daq_map.json")
+    gem_map = gem_map_file or resolve_db_path("gem_map.json")
     p.gem_sys = det.GemSystem()
     p.gem_sys.init(gem_map)
     _print(f"[setup] GEM map    : {gem_map}  "
@@ -517,9 +516,9 @@ def add_common_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--daq-config",    default="",
                     help='DAQ config (default "" = installed default).')
     ap.add_argument("--gem-map-file",  default="",
-                    help='GEM map (default "" = database/gem_daq_map.json).')
+                    help='GEM map (default "" = database/gem_map.json).')
     ap.add_argument("--hc-map-file",   default="",
-                    help='HyCal modules map (default "" = database/hycal_modules.json).')
+                    help='HyCal map (default "" = database/hycal_map.json).')
     ap.add_argument("--csv", action="store_true",
                     help="Emit CSV instead of TSV.")
     ap.add_argument("--no-header", action="store_true",

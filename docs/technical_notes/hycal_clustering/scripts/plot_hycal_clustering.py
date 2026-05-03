@@ -2,7 +2,7 @@
 """
 plot_hycal_clustering.py — visualisations for fdec::HyCalCluster.
 
-Loads the actual HyCal geometry from `database/hycal_modules.json` and
+Loads the actual HyCal geometry from `database/hycal_map.json` and
 illustrates the four steps of the Island clustering algorithm:
 
   plots/hycal_fig1_layout.png         — full HyCal sectors + module types
@@ -29,8 +29,14 @@ HERE   = Path(__file__).parent
 FIGS   = HERE.parent / 'plots'
 FIGS.mkdir(exist_ok=True)
 # scripts/ → hycal_clustering/ → technical_notes/ → docs/ → repo root → database/
-DB     = HERE.parent.parent.parent.parent / 'database' / 'hycal_modules.json'
+DB     = HERE.parent.parent.parent.parent / 'database' / 'hycal_map.json'
 MODS   = json.loads(DB.read_text())
+# Flatten geo into top-level keys so the existing plotting code (m['x'], m['y'],
+# m['sx'], m['sy'], m['sec'], m['row'], m['col']) keeps working unchanged.
+for _m in MODS:
+    _g = _m.get('geo') or {}
+    for _k, _v in _g.items():
+        _m.setdefault(_k, _v)
 HYCAL  = [m for m in MODS if m['t'] in ('PbGlass', 'PbWO4')]
 
 

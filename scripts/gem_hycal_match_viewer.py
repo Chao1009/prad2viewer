@@ -707,16 +707,16 @@ class GemHycalMatchViewer(QMainWindow):
             self._side.set_geom(geo.hycal_z, geo.gem_z, y_size)
 
         # Push HyCal modules into the front view.
-        modules_rel = self._pipeline.daq_cfg.modules_file or "hycal_modules.json"
-        modules_path = Path(modules_rel)
-        if not modules_path.is_absolute():
-            modules_path = self._db_dir / modules_rel
-        if modules_path.is_file():
+        map_rel = self._pipeline.daq_cfg.hycal_map_file or "hycal_map.json"
+        map_path = Path(map_rel)
+        if not map_path.is_absolute():
+            map_path = self._db_dir / map_rel
+        if map_path.is_file():
             try:
-                modules = load_geo_modules(modules_path)
+                modules = load_geo_modules(map_path)
                 self._front.set_modules(modules)
             except Exception as exc:
-                self.statusBar().showMessage(f"hycal_modules.json: {exc}")
+                self.statusBar().showMessage(f"hycal_map.json: {exc}")
 
         self._sb_idx.setRange(0, len(self._physics_index) - 1)
         self.setWindowTitle(f"GEM↔HyCal Matching Viewer — {path.name}")

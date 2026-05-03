@@ -74,7 +74,7 @@ int main(int argc, char *argv[])
         DATABASE_DIR);
     std::string daq_config_file = db_dir + "/daq_config.json"; // default DAQ config for PRad2
     if (!daq_config_file.empty()) evc::load_daq_config(daq_config_file, daq_cfg);
-    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/hycal_daq_map.json");
+    hycal.Init(db_dir + "/hycal_map.json");
 
     TH1F *peak_hist_LG_module[LG_num];
     TH1F *peakHeight_hist_LG_module[LG_num];

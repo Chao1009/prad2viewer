@@ -5,7 +5,7 @@
 #include "DaqConfig.h"
 #include "HyCalSystem.h"
 #include "PhysicsTools.h"
-#include "DaqConfig.h"
+#include "PulseTemplateStore.h"
 
 #include <TF1.h>
 #include <TMath.h>
@@ -76,11 +76,12 @@ int main(int argc, char *argv[])
 
     analysis::Replay replay;
     if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
-    replay.LoadDaqMap(db_dir + "/hycal_daq_map.json");
-    std::cerr << "Using DAQ map: " << db_dir + "/hycal_daq_map.json" << "\n";
-    
+    const std::string hycal_map = db_dir + "/hycal_map.json";
+    replay.LoadHyCalMap(hycal_map);
+    std::cerr << "Using HyCal map: " << hycal_map << "\n";
+
     fdec::HyCalSystem hycal;
-    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/hycal_daq_map.json");
+    hycal.Init(hycal_map);
     analysis::PhysicsTools physics(hycal);
 
     // build ROC tag → crate index mapping from DAQ config JSON
@@ -115,6 +116,14 @@ int main(int argc, char *argv[])
 
     auto event = std::make_unique<fdec::EventData>();
     fdec::WaveAnalyzer ana(daq_cfg.wave_cfg);
+    fdec::PulseTemplateStore template_store;
+    if (daq_cfg.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+        template_store.LoadFromFile(
+            db_dir + "/" + daq_cfg.wave_cfg.nnls_deconv.template_file,
+            daq_cfg.wave_cfg);
+    }
+    ana.SetTemplateStore(&template_store);
     fdec::WaveResult wres;
     int total = 0;
 
@@ -164,6 +173,7 @@ int main(int argc, char *argv[])
                                     int lms_id;
                                     if(mod_name[3] == 'P') lms_id = 0;
                                     else lms_id = mod_name[3] - '0';
+                                    ana.SetChannelKey(roc.tag, s, c);
                                     ana.Analyze(cd.samples, cd.nsamples, wres);
                                     //if(wres.npeaks != 1) continue;
                                     int idx = 0;
@@ -186,6 +196,7 @@ int main(int argc, char *argv[])
 
                                 int mod_id = replay.moduleID(crate, s, c);
                                 if (mod_id < 0) continue;
+                                ana.SetChannelKey(roc.tag, s, c);
                                 ana.Analyze(cd.samples, cd.nsamples, wres);
                                 if(wres.npeaks != 1) continue;;
                                 float peak_height = wres.peaks[0].height;

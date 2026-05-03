@@ -121,8 +121,7 @@ int main(int argc, char *argv[])
 
     // --- init detector system ---
     fdec::HyCalSystem hycal;
-    hycal.Init(dbDir + "/hycal_modules.json",
-               dbDir + "/hycal_daq_map.json");
+    hycal.Init(dbDir + "/hycal_map.json");
     PhysicsTools physics(hycal);
 
     // --- setup TChain and branches ---

@@ -177,7 +177,7 @@ The server reads three top-level configs from `database/`:
 
 - `monitor_config.json` (`-c`) — GUI / online server: waveform, hycal_hist, LMS, EPICS, livetime, physics display cuts, gem diagnostics, elog, color ranges, online/ET.
 - `reconstruction_config.json` (`-r`) — runinfo pointer + cluster/hit reconstruction knobs (HyCal clustering, per-detector GEM ClusterConfig with `default` + per-id overrides).
-- `daq_config.json` (`-D`) — DAQ + raw decoding: event tags, bank tags, ROC layout, sync format, and file pointers (`modules_file`, `hycal_daq_map_file`, `gem_daq_map_file`, `pedestal_file`).
+- `daq_config.json` (`-D`) — DAQ + raw decoding: event tags, bank tags, ROC layout, sync format, and file pointers (`hycal_map_file`, `gem_map_file`, `pedestal_file`).
 
 PRad support: use the `database/prad1/` mirrored set (`prad_daq_config.json`, `prad_monitor_config.json`, `prad_reconstruction_config.json`).
 

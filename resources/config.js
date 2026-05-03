@@ -87,15 +87,12 @@ function closeEtDialog(){
 
 function applyConfig(data){
     const crateRoc=data.crate_roc||{};
-    const rawMods=data.modules||[],rawDaq=data.daq||[];
-    if(rawMods.length&&rawMods[0].roc!==undefined){
-        modules=rawMods.map(m=>({...m,t:m.t==='PbGlass'?'G':(m.t==='G'?'G':'W')}));
-    }else{
-        const dm={};for(const d of rawDaq)dm[d.name]=d;modules=[];
-        for(const m of rawMods){const d=dm[m.n];if(!d)continue;
-            modules.push({n:m.n,t:m.t==='PbGlass'?'G':'W',x:m.x,y:m.y,sx:m.sx,sy:m.sy,
-                roc:crateRoc[String(d.crate)]||0,sl:d.slot,ch:d.channel});}
-    }
+    const rawMap=data.hycal_map||[];
+    modules=[];
+    for(const m of rawMap){const g=m.geo,d=m.daq;if(!g||!d)continue;
+        modules.push({n:m.n,t:m.t==='PbGlass'?'G':'W',
+            x:g.x,y:g.y,sx:g.sx,sy:g.sy,
+            roc:crateRoc[String(d.crate)]||0,sl:d.slot,ch:d.channel});}
     totalEvents=data.total_events||0;
     filterActive=data.filter_active||false;
     filteredCount=data.filtered_count||totalEvents;

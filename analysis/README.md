@@ -35,7 +35,7 @@ goes to `<output_dir>/<input_stem>_raw.root` (rawdata) or `_recon.root`
 ```bash
 prad2ana_replay_rawdata <evio_or_dir> [more...] -o <output_dir> \
     [-f max_files] [-n max_events] [-j num_threads] \
-    [-c daq_config.json] [-d hycal_daq_map.json] [-p]
+    [-c daq_config.json] [-d hycal_map.json] [-p]
 ```
 - `-p` adds peak branches: `hycal.peak_*` (soft-analyzer) **and**
   `hycal.daq_peak_*` (firmware Mode 1/2/3 emulation).  Without `-p`, only
@@ -48,7 +48,7 @@ GEM hits, HyCal↔GEM straight-line matching.
 ```bash
 prad2ana_replay_recon <evio_or_dir> [more...] -o <output_dir> \
     [-f max_files] [-n max_events] [-j num_threads] \
-    [-c daq_config.json] [-d hycal_daq_map.json] \
+    [-c daq_config.json] [-d hycal_map.json] \
     [-g gem_pedestal.json] [-z zerosup_threshold] [-p]
 ```
 - `-p` here selects **PRad-I data format** (no GEM, ADC1881M Fastbus
@@ -260,7 +260,7 @@ Two-phase study of T10R↔E49…E58 tagger pairs vs HyCal PbWO4 sums. Phase 1 ca
 
 Scans a run's EVIO files (`prad_{run}.evio.00000`–`99999`), selects only **LMS** (bit 24) and **Alpha** (bit 25) trigger events via `trigger_bits`, and normalizes HyCal LMS signals using the Alpha source as a gain reference.
 
-Uses the project's decoder (`EvChannel`, `WaveAnalyzer`, `DaqConfig`) — no manual FADC parsing needed. Channel identity (HyCal module vs LMS ref) is read from `hycal_daq_map.json`.
+Uses the project's decoder (`EvChannel`, `WaveAnalyzer`, `DaqConfig`) — no manual FADC parsing needed. Channel identity (HyCal module vs LMS ref) is read from `hycal_map.json`.
 
 | Trigger | What fires | Purpose |
 |---------|-----------|---------|
@@ -278,7 +278,7 @@ LMS events before the first Alpha event in the run are skipped. Each LMS event u
 root -l rootlogon.C 'lms_alpha_normalize.C+("/path/to/data", 1234)'
 
 # with explicit config overrides:
-root -l rootlogon.C 'lms_alpha_normalize.C+("/path/to/data", 1234, "daq_config.json", "hycal_daq_map.json")'
+root -l rootlogon.C 'lms_alpha_normalize.C+("/path/to/data", 1234, "daq_config.json", "hycal_map.json")'
 ```
 
 **Output:** `lms_alpha_run{N}.root` (per-module normalized LMS, reference time-series TGraphs) and a 6-panel summary PNG.

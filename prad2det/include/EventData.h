@@ -33,7 +33,7 @@ static constexpr int kMaxGemHits   = 400;
 // ── Module type categorisation ────────────────────────────────────────────
 //
 // Single source of truth at the data-tree level.  Values come from the "t"
-// field of hycal_modules.json (PbGlass / PbWO4 / SCINT / LMS), parsed at
+// field of hycal_map.json (PbGlass / PbWO4 / Veto / LMS), parsed at
 // load time and stored per-channel in RawEventData::module_type.  Numeric
 // values are arbitrary but stable — kept as a uint8_t so the TTree branch
 // stays compact (1 byte per channel).
@@ -45,7 +45,7 @@ enum ModuleType : uint8_t {
     MOD_UNKNOWN = 0,
     MOD_PbGlass = 1,
     MOD_PbWO4   = 2,
-    MOD_SCINT   = 3,   // Veto scintillators (V1..V4)
+    MOD_VETO    = 3,   // Veto scintillators (V1..V4)
     MOD_LMS     = 4,   // LMS reference PMTs (LMSPin, LMS1..3)
 };
 
@@ -61,7 +61,7 @@ enum ModuleType : uint8_t {
 // module_id encoding (globally unique across types):
 //   MOD_PbGlass : 1..1156      (matches HyCalSystem G-module IDs)
 //   MOD_PbWO4   : 1001..2152   (HyCal W-module IDs + 1000)
-//   MOD_SCINT   : 3001..3004   (V1..V4)
+//   MOD_VETO    : 3001..3004   (V1..V4)
 //   MOD_LMS     : 3100..3103   (LMSPin=3100, LMS1..3 = 3101..3103)
 struct RawEventData {
     int      event_num    = 0;

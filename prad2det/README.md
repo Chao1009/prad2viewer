@@ -24,7 +24,7 @@ from `prad2dec` and produces physics-level outputs (clusters, 2-D hits).
 ```cpp
 // GEM — per-event pipeline
 gem::GemSystem gsys;
-gsys.Init("database/gem_daq_map.json");
+gsys.Init("database/gem_map.json");
 gsys.LoadPedestals("gem_ped.json");     // required for full-readout data
 gem::GemCluster gcl;
 
@@ -37,7 +37,7 @@ for each event {
 
 // HyCal — feed per-module energies, cluster, read back
 fdec::HyCalSystem hsys;
-hsys.Init("database/hycal_modules.json", "database/hycal_daq_map.json");
+hsys.Init("database/hycal_map.json");
 hsys.LoadCalibration("database/hycal_calib.json");
 fdec::HyCalCluster hcl(hsys);
 

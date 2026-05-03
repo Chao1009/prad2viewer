@@ -140,7 +140,7 @@ static inline int remapCrate(int crate, const std::map<int, int> &m)
 // is ignored for matching — APVs are looked up by (crate, fiber, adc).
 //
 // crate_remap: hardware crate ID -> logical crate ID expected by
-// gem_daq_map.json (e.g. 146 -> 1, 147 -> 2). Empty = identity.
+// gem_map.json (e.g. 146 -> 1, 147 -> 2). Empty = identity.
 //=============================================================================
 
 void GemSystem::LoadPedestals(const std::string &ped_file,

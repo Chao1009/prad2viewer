@@ -11,7 +11,7 @@
 //   -p  read prad1 data and do not include GEM
 //   -j  number of threads (default: 4)
 //   -c  DAQ configuration file
-//   -d  DAQ map file (default: <db>/hycal_daq_map.json)
+//   -d  HyCal map file (default: <db>/hycal_map.json)
 //   -g  GEM pedestal file
 //   -z  zero-suppression threshold override
 //=============================================================================
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
     std::cout << "Processing " << num_files << " files with "
               << num_threads << " threads\n";
     
-    if(daq_map.empty()) daq_map = db_dir + "/hycal_daq_map.json";
+    if(daq_map.empty()) daq_map = db_dir + "/hycal_map.json";
 
     std::string run_str = get_run_str(evio_files[0]);
     int run_num = get_run_int(evio_files[0]);
@@ -145,8 +145,8 @@ int main(int argc, char *argv[])
         // each thread gets its own Replay instance (own EvChannel, own buffers)
         analysis::Replay replay;
         if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
-        replay.LoadDaqMap(daq_map);
-        std::cerr << "Using DAQ map: " << daq_map << "\n";
+        replay.LoadHyCalMap(daq_map);
+        std::cerr << "Using HyCal map: " << daq_map << "\n";
 
         while (true) {
             int idx = next_file.fetch_add(1);

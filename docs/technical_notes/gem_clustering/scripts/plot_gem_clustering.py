@@ -25,12 +25,12 @@ HERE = Path(__file__).parent
 FIGS = HERE.parent / 'plots'
 FIGS.mkdir(exist_ok=True)
 # scripts/ → gem_clustering/ → technical_notes/ → docs/ → repo root → database/
-DB   = HERE.parent.parent.parent.parent / 'database' / 'gem_daq_map.json'
+DB   = HERE.parent.parent.parent.parent / 'database' / 'gem_map.json'
 
 
 # ---------------------------------------------------------------------------
 # Strip-mapping (mirrors gem::buildStripMap in prad2det) — used to derive
-# the actual X/Y plane size and beam-hole position from gem_daq_map.json.
+# the actual X/Y plane size and beam-hole position from gem_map.json.
 # ---------------------------------------------------------------------------
 def map_strip(ch, pos, orient, pin_rotate=0, shared_pos=-1,
               hybrid_board=True, N=128, readout_center=32):

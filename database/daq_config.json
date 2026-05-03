@@ -1,9 +1,8 @@
 {
     "_comment": "DAQ configuration for prad2decoder — JLab single-event mode (tag 0xB1)",
 
-    "modules_file":       "hycal_modules.json",
-    "hycal_daq_map_file": "hycal_daq_map.json",
-    "gem_daq_map_file":   "gem_daq_map.json",
+    "hycal_map_file": "hycal_map.json",
+    "gem_map_file":   "gem_map.json",
     "adc_format": "fadc250",
     "ti_master_tag": "0x27",
     "sparsify_sigma": 0,
@@ -110,14 +109,15 @@
             "clk_mhz":         250.0,
 
             "nnls_deconv": {
-                "_comment": "NNLS pile-up deconvolution. When enabled, the analyzer follows the local-maxima peak finder with a per-channel two-tau template fit that solves for non-negative per-peak amplitudes, recovering height_dec / integral_dec on piled events. Channels without a usable template fall back to the WaveAnalyzer values unless fallback_to_global_template is true. See docs/technical_notes/waveform_analysis/wave_analysis.md.",
-                "enabled":                     false,
-                "template_file":               "pulse_templates.json",
-                "fallback_to_global_template": false,
-                "apply_to_all_peaks":          false,
+                "_comment": "Per-pulse-fit pile-up deconvolution. When enabled, the analyzer runs a per-event Levenberg-Marquardt fit that frees (a_k, t0_k, tau_r_k, tau_f_k) for each peak with the per-type template (PbGlass/PbWO4/LMS/Veto) providing the initial guess + tight bounds. Overwrites peak.height/integral on piled events and marks the touched peaks with Q_PEAK_DECONVOLVED. Channels whose module type isn't covered by the template file's _by_type block fall back to the raw WaveAnalyzer values. WARNING: apply_to_all_peaks=true runs the LM on every channel-event (~10x slowdown) — leave false unless debugging. See docs/technical_notes/waveform_analysis/wave_analysis.md. Config block name 'nnls_deconv' is historical; the underlying solver is no longer NNLS.",
+                "enabled":            false,
+                "template_file":      "waveform/pulse_templates_024177.json",
+                "apply_to_all_peaks": false,
                 "tau_r_range_ns":              [0.5, 10.0],
                 "tau_f_range_ns":              [2.0, 100.0],
-                "cond_number_max":             1.0e6,
+                "shape_window_factor":         1.5,
+                "t0_window_ns":                8.0,
+                "amp_max_factor":              2.0,
                 "pre_samples":                 8,
                 "post_samples":                40,
                 "min_pulses_override":         null,

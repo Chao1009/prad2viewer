@@ -164,16 +164,16 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
             if (an.contains("clk_mhz"))         cfg.wave_cfg.clk_mhz         = an["clk_mhz"].get<float>();
 
             // NNLS pile-up deconvolution sub-block.  Application-layer
-            // concerns (template_file, fallback_to_global_template,
-            // apply_to_all_peaks) are read here too so they survive a
-            // round-trip through the C++ struct, but the analyzer itself
-            // only acts on the numeric / bool gates.
+            // concerns (template_file, apply_to_all_peaks) are read here
+            // too so they survive a round-trip through the C++ struct,
+            // but the analyzer itself only acts on the numeric / bool
+            // gates.
             if (an.contains("nnls_deconv")) {
                 auto &nd = an["nnls_deconv"];
                 auto &dc = cfg.wave_cfg.nnls_deconv;
-                if (nd.contains("enabled"))                      dc.enabled                     = nd["enabled"].get<bool>();
-                if (nd.contains("fallback_to_global_template")) dc.fallback_to_global_template = nd["fallback_to_global_template"].get<bool>();
-                if (nd.contains("apply_to_all_peaks"))           dc.apply_to_all_peaks          = nd["apply_to_all_peaks"].get<bool>();
+                if (nd.contains("enabled"))            dc.enabled            = nd["enabled"].get<bool>();
+                if (nd.contains("template_file"))      dc.template_file      = nd["template_file"].get<std::string>();
+                if (nd.contains("apply_to_all_peaks")) dc.apply_to_all_peaks = nd["apply_to_all_peaks"].get<bool>();
                 if (nd.contains("tau_r_range_ns")
                     && nd["tau_r_range_ns"].is_array()
                     && nd["tau_r_range_ns"].size() >= 2) {
@@ -186,9 +186,11 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
                     dc.tau_f_min_ns = nd["tau_f_range_ns"][0].get<float>();
                     dc.tau_f_max_ns = nd["tau_f_range_ns"][1].get<float>();
                 }
-                if (nd.contains("cond_number_max")) dc.cond_number_max = nd["cond_number_max"].get<float>();
-                if (nd.contains("pre_samples"))     dc.pre_samples     = nd["pre_samples"].get<int>();
-                if (nd.contains("post_samples"))    dc.post_samples    = nd["post_samples"].get<int>();
+                if (nd.contains("shape_window_factor")) dc.shape_window_factor = nd["shape_window_factor"].get<float>();
+                if (nd.contains("t0_window_ns"))        dc.t0_window_ns        = nd["t0_window_ns"].get<float>();
+                if (nd.contains("amp_max_factor"))      dc.amp_max_factor      = nd["amp_max_factor"].get<float>();
+                if (nd.contains("pre_samples"))         dc.pre_samples         = nd["pre_samples"].get<int>();
+                if (nd.contains("post_samples"))        dc.post_samples        = nd["post_samples"].get<int>();
             }
         }
     }
@@ -285,10 +287,9 @@ inline bool load_daq_config(const std::string &path, DaqConfig &cfg)
     // companion-file pointers — application layer resolves them against the
     // database directory and decides which to actually load.  pedestal_file
     // is consumed by load_pedestals().
-    if (j.contains("modules_file"))       cfg.modules_file       = j["modules_file"].get<std::string>();
-    if (j.contains("hycal_daq_map_file")) cfg.hycal_daq_map_file = j["hycal_daq_map_file"].get<std::string>();
-    if (j.contains("gem_daq_map_file"))   cfg.gem_daq_map_file   = j["gem_daq_map_file"].get<std::string>();
-    if (j.contains("pedestal_file"))      cfg.pedestal_file      = j["pedestal_file"].get<std::string>();
+    if (j.contains("hycal_map_file")) cfg.hycal_map_file = j["hycal_map_file"].get<std::string>();
+    if (j.contains("gem_map_file"))   cfg.gem_map_file   = j["gem_map_file"].get<std::string>();
+    if (j.contains("pedestal_file"))  cfg.pedestal_file  = j["pedestal_file"].get<std::string>();
 
     return true;
 }

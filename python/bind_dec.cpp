@@ -26,6 +26,7 @@
 #include "load_daq_config.h"
 #include "Fadc250Data.h"
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 #include "Fadc250FwAnalyzer.h"
 #include "SspData.h"
 #include "VtpData.h"
@@ -224,16 +225,64 @@ void bind_fadc(py::module_ &m)
         "NNLS pile-up deconvolution.  Mirrors the JSON layout in "
         "database/daq_config.json under fadc250_waveform.analyzer.nnls_deconv.")
         .def(py::init<>())
-        .def_readwrite("enabled",                     &fdec::WaveConfig::NnlsDeconvConfig::enabled)
-        .def_readwrite("fallback_to_global_template", &fdec::WaveConfig::NnlsDeconvConfig::fallback_to_global_template)
-        .def_readwrite("apply_to_all_peaks",          &fdec::WaveConfig::NnlsDeconvConfig::apply_to_all_peaks)
+        .def_readwrite("enabled",            &fdec::WaveConfig::NnlsDeconvConfig::enabled)
+        .def_readwrite("template_file",      &fdec::WaveConfig::NnlsDeconvConfig::template_file)
+        .def_readwrite("apply_to_all_peaks", &fdec::WaveConfig::NnlsDeconvConfig::apply_to_all_peaks)
         .def_readwrite("tau_r_min_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_r_min_ns)
         .def_readwrite("tau_r_max_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_r_max_ns)
         .def_readwrite("tau_f_min_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_f_min_ns)
         .def_readwrite("tau_f_max_ns",    &fdec::WaveConfig::NnlsDeconvConfig::tau_f_max_ns)
-        .def_readwrite("cond_number_max", &fdec::WaveConfig::NnlsDeconvConfig::cond_number_max)
-        .def_readwrite("pre_samples",     &fdec::WaveConfig::NnlsDeconvConfig::pre_samples)
-        .def_readwrite("post_samples",    &fdec::WaveConfig::NnlsDeconvConfig::post_samples);
+        .def_readwrite("shape_window_factor", &fdec::WaveConfig::NnlsDeconvConfig::shape_window_factor)
+        .def_readwrite("t0_window_ns",        &fdec::WaveConfig::NnlsDeconvConfig::t0_window_ns)
+        .def_readwrite("amp_max_factor",      &fdec::WaveConfig::NnlsDeconvConfig::amp_max_factor)
+        .def_readwrite("pre_samples",         &fdec::WaveConfig::NnlsDeconvConfig::pre_samples)
+        .def_readwrite("post_samples",        &fdec::WaveConfig::NnlsDeconvConfig::post_samples);
+
+    py::class_<fdec::PulseTemplateStore>(m, "PulseTemplateStore",
+        "Per-type pulse-template store loaded from the JSON written by "
+        "fit_pulse_template.py.  Bind via WaveAnalyzer.set_template_store() "
+        "and the analyzer's Analyze() method will auto-deconvolve piled "
+        "events using the per-type template (PbGlass / PbWO4 / LMS / Veto) "
+        "for each channel's category.")
+        .def(py::init<>())
+        .def("load_from_file", &fdec::PulseTemplateStore::LoadFromFile,
+             py::arg("path"), py::arg("wave_cfg"),
+             "Load per-type templates from the JSON's `_by_type` block "
+             "and the (roc_tag, slot, channel) → module_type lookup from "
+             "the per-channel records.  wave_cfg's `nnls_deconv` τ-range "
+             "gates are applied to each per-type entry; `clk_mhz` sets "
+             "the precomputed grid period.  Returns False on file-not-"
+             "found / parse error / empty contents (caller falls back to "
+             "non-deconv mode).")
+        .def("lookup",
+             [](const fdec::PulseTemplateStore &self,
+                int roc_tag, int slot, int channel) -> py::object {
+                 const fdec::PulseTemplate *t = self.Lookup(
+                     roc_tag, slot, channel);
+                 if (!t) return py::none();
+                 return py::cast(*t);
+             },
+             py::arg("roc_tag"), py::arg("slot"), py::arg("channel"),
+             "Resolve the channel's module type and return the matching "
+             "per-type template. Returns None when the channel is not in "
+             "the loaded JSON or its type lacks a usable per-type entry.")
+        .def("clear", &fdec::PulseTemplateStore::Clear)
+        .def_property_readonly("valid", &fdec::PulseTemplateStore::valid)
+        .def_property_readonly("n_channels_known",
+            &fdec::PulseTemplateStore::n_channels_known)
+        .def_property_readonly("n_types_loaded",
+            &fdec::PulseTemplateStore::n_types_loaded)
+        .def("type_template",
+            [](const fdec::PulseTemplateStore &self,
+               const std::string &type_name) -> py::object {
+                const fdec::PulseTemplate *t = self.type_template(type_name);
+                if (!t) return py::none();
+                return py::cast(*t);
+            },
+            py::arg("type_name"),
+            "Per-type template (`type_name` ∈ "
+            "{'PbGlass', 'PbWO4', 'LMS', 'Veto'}) parsed from the JSON's "
+            "`_by_type` block.  Returns None if the type isn't present.");
 
     py::class_<fdec::WaveConfig>(m, "WaveConfig",
         "Knobs for WaveAnalyzer (smoothing, thresholds, pedestal window, ...).")
@@ -259,8 +308,8 @@ void bind_fadc(py::module_ &m)
     py::class_<fdec::PulseTemplate>(m, "PulseTemplate",
         "Per-channel two-tau pulse template used by WaveAnalyzer.deconvolve(). "
         "tau_r_ns / tau_f_ns are the median values from "
-        "fit_pulse_template.py.  is_global=True marks the synthesized "
-        "fallback template (median across all 'good' channels).")
+        "fit_pulse_template.py.  is_global=True marks a per-type aggregate "
+        "(the only kind currently produced by PulseTemplateStore).")
         .def(py::init<>())
         .def(py::init([](float tr, float tf, bool is_global) {
                 fdec::PulseTemplate t{tr, tf, is_global};
@@ -271,6 +320,32 @@ void bind_fadc(py::module_ &m)
         .def_readwrite("tau_r_ns",  &fdec::PulseTemplate::tau_r_ns)
         .def_readwrite("tau_f_ns",  &fdec::PulseTemplate::tau_f_ns)
         .def_readwrite("is_global", &fdec::PulseTemplate::is_global);
+
+    py::class_<fdec::WaveAnalyzer::PulseFitResult>(m, "PulseFitResult",
+        "Output of WaveAnalyzer.fit_pulse_shape() — three-parameter "
+        "Levenberg-Marquardt fit of the unit-amplitude two-tau model to "
+        "a single normalised pulse.  Inspect `.ok` before reading the "
+        "shape parameters.")
+        .def_readonly("ok",            &fdec::WaveAnalyzer::PulseFitResult::ok)
+        .def_readonly("t0_ns",         &fdec::WaveAnalyzer::PulseFitResult::t0_ns)
+        .def_readonly("tau_r_ns",      &fdec::WaveAnalyzer::PulseFitResult::tau_r_ns)
+        .def_readonly("tau_f_ns",      &fdec::WaveAnalyzer::PulseFitResult::tau_f_ns)
+        .def_readonly("peak_amp",      &fdec::WaveAnalyzer::PulseFitResult::peak_amp)
+        .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitResult::chi2_per_dof)
+        .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitResult::n_iter);
+
+    py::class_<fdec::WaveAnalyzer::PulseFitTwoTauPResult>(m, "PulseFitTwoTauPResult",
+        "Output of WaveAnalyzer.fit_pulse_shape_two_tau_p() — same as "
+        "PulseFitResult plus the rise-edge exponent `p` "
+        "(T = [1-exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f)).")
+        .def_readonly("ok",            &fdec::WaveAnalyzer::PulseFitTwoTauPResult::ok)
+        .def_readonly("t0_ns",         &fdec::WaveAnalyzer::PulseFitTwoTauPResult::t0_ns)
+        .def_readonly("tau_r_ns",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::tau_r_ns)
+        .def_readonly("tau_f_ns",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::tau_f_ns)
+        .def_readonly("p",             &fdec::WaveAnalyzer::PulseFitTwoTauPResult::p)
+        .def_readonly("peak_amp",      &fdec::WaveAnalyzer::PulseFitTwoTauPResult::peak_amp)
+        .def_readonly("chi2_per_dof",  &fdec::WaveAnalyzer::PulseFitTwoTauPResult::chi2_per_dof)
+        .def_readonly("n_iter",        &fdec::WaveAnalyzer::PulseFitTwoTauPResult::n_iter);
 
     py::class_<fdec::WaveResult>(m, "WaveResult",
         "Output of WaveAnalyzer.analyze_result(): {ped, npeaks, peaks}. "
@@ -294,7 +369,6 @@ void bind_fadc(py::module_ &m)
         .def_readonly("state",        &fdec::DeconvOutput::state)
         .def_readonly("n",            &fdec::DeconvOutput::n)
         .def_readonly("chi2_per_dof", &fdec::DeconvOutput::chi2_per_dof)
-        .def_readonly("cond_number",  &fdec::DeconvOutput::cond_number)
         .def_property_readonly("amplitude", [](const fdec::DeconvOutput &self) {
             return std::vector<float>(self.amplitude, self.amplitude + self.n);
         })
@@ -303,6 +377,15 @@ void bind_fadc(py::module_ &m)
         })
         .def_property_readonly("integral", [](const fdec::DeconvOutput &self) {
             return std::vector<float>(self.integral, self.integral + self.n);
+        })
+        .def_property_readonly("t0_ns", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.t0_ns, self.t0_ns + self.n);
+        })
+        .def_property_readonly("tau_r_ns", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.tau_r_ns, self.tau_r_ns + self.n);
+        })
+        .def_property_readonly("tau_f_ns", [](const fdec::DeconvOutput &self) {
+            return std::vector<float>(self.tau_f_ns, self.tau_f_ns + self.n);
         });
 
     py::class_<fdec::WaveAnalyzer>(m, "WaveAnalyzer",
@@ -374,6 +457,78 @@ void bind_fadc(py::module_ &m)
             "peak finding).  Returns the smoothed buffer as a float32 "
             "numpy array — useful for plotting the curve the peak finder "
             "actually sees.")
+        .def_static("fit_pulse_shape",
+            [](py::array_t<uint16_t> slice, int peak_idx,
+               float ped, float ped_rms, float clk_ns,
+               float model_err_floor) {
+                py::buffer_info buf = slice.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("slice must be a 1-D uint16 array");
+                fdec::WaveAnalyzer::PulseFitResult res;
+                {
+                    py::gil_scoped_release rel;
+                    res = fdec::WaveAnalyzer::FitPulseShape(
+                        static_cast<const uint16_t*>(buf.ptr),
+                        static_cast<int>(buf.shape[0]),
+                        peak_idx, ped, ped_rms, clk_ns,
+                        model_err_floor);
+                }
+                return res;
+            },
+            py::arg("slice"), py::arg("peak_idx"),
+            py::arg("ped"), py::arg("ped_rms"), py::arg("clk_ns"),
+            py::arg("model_err_floor") = 0.01f,
+            "Static C++ Levenberg-Marquardt fit of the unit-amplitude "
+            "two-tau pulse-shape model to one normalised pulse — orders "
+            "of magnitude faster than scipy.optimize.curve_fit on the "
+            "equivalent model.  `slice` is a uint16 waveform window "
+            "around the peak; `peak_idx` is the position of the maximum "
+            "within the slice; `ped` / `ped_rms` come from the same "
+            "WaveAnalyzer pass that produced the peak.  Returns a "
+            "PulseFitResult; check `.ok` before reading the params.")
+        .def_static("fit_pulse_shape_two_tau_p",
+            [](py::array_t<uint16_t> slice, int peak_idx,
+               float ped, float ped_rms, float clk_ns,
+               float model_err_floor) {
+                py::buffer_info buf = slice.request();
+                if (buf.ndim != 1)
+                    throw py::value_error("slice must be a 1-D uint16 array");
+                fdec::WaveAnalyzer::PulseFitTwoTauPResult res;
+                {
+                    py::gil_scoped_release rel;
+                    res = fdec::WaveAnalyzer::FitPulseShapeTwoTauP(
+                        static_cast<const uint16_t*>(buf.ptr),
+                        static_cast<int>(buf.shape[0]),
+                        peak_idx, ped, ped_rms, clk_ns,
+                        model_err_floor);
+                }
+                return res;
+            },
+            py::arg("slice"), py::arg("peak_idx"),
+            py::arg("ped"), py::arg("ped_rms"), py::arg("clk_ns"),
+            py::arg("model_err_floor") = 0.01f,
+            "Same machinery as fit_pulse_shape() but with the four-"
+            "parameter two-tau-with-rise-exponent model: "
+            "T = [1-exp(-(t-t0)/τ_r)]^p · exp(-(t-t0)/τ_f).  Allows the "
+            "rise *shape* to vary independently of the rise *timescale* — "
+            "addresses the systematic onset mismatch the standard two-tau "
+            "form has against multi-stage-shaped PMT pulses.")
+        .def("set_template_store",
+            [](fdec::WaveAnalyzer &self,
+               const fdec::PulseTemplateStore *store) {
+                self.SetTemplateStore(store);
+            },
+            py::arg("store").none(true),
+            py::keep_alive<1, 2>(),
+            "Bind a PulseTemplateStore so subsequent analyze() calls can "
+            "auto-deconvolve.  Pass None to detach.  The analyzer keeps "
+            "a non-owning reference; the store must outlive the analyzer.")
+        .def("set_channel_key", &fdec::WaveAnalyzer::SetChannelKey,
+            py::arg("roc_tag"), py::arg("slot"), py::arg("channel"),
+            "Tell the analyzer which channel the next analyze() call is "
+            "for, so the bound PulseTemplateStore can look up the right "
+            "template.  Pass any negative value to disable deconv.")
+        .def("clear_channel_key", &fdec::WaveAnalyzer::ClearChannelKey)
         .def("analyze_result",
             [](const fdec::WaveAnalyzer &self, py::array_t<uint16_t> samples) {
                 py::buffer_info buf = samples.request();
@@ -409,11 +564,12 @@ void bind_fadc(py::module_ &m)
                 return out;
             },
             py::arg("samples"), py::arg("wres"), py::arg("template_"),
-            "Run NNLS pile-up deconvolution against per-channel template "
-            "`template_`.  Caller must have already obtained `wres` from "
-            "analyze_result() with the same samples.  Returns a "
-            "DeconvOutput; check `.state` (Q_DECONV_*) before reading the "
-            "height/integral arrays.");
+            "Run pile-up deconvolution against the supplied template "
+            "`template_` (typically a per-type entry from "
+            "PulseTemplateStore.lookup() / type_template()).  Caller must "
+            "have already obtained `wres` from analyze_result() with the "
+            "same samples.  Returns a DeconvOutput; check `.state` "
+            "(Q_DECONV_*) before reading the height/integral arrays.");
 
     // ----- Firmware-faithful (Mode 1/2/3) analyzer -----------------------
     // Quality bitmask constants — exposed at module scope so callers can
@@ -428,6 +584,7 @@ void bind_fadc(py::module_ &m)
     // flag.  Both peaks in a piled-up pair get the bit set.
     m.attr("Q_PEAK_GOOD")            = py::int_(fdec::Q_PEAK_GOOD);
     m.attr("Q_PEAK_PILED")           = py::int_(fdec::Q_PEAK_PILED);
+    m.attr("Q_PEAK_DECONVOLVED")     = py::int_(fdec::Q_PEAK_DECONVOLVED);
 
     // Pedestal-fit quality bitmask — exposed so callers can filter on
     // Pedestal.quality (e.g. dec.Q_PED_PULSE_IN_WINDOW).
@@ -440,13 +597,12 @@ void bind_fadc(py::module_ &m)
     m.attr("Q_PED_TRAILING_WINDOW")  = py::int_(fdec::Q_PED_TRAILING_WINDOW);
 
     // NNLS deconv state — single-valued enum (not a bitmask).  Test
-    // dec_out.state == dec.Q_DECONV_APPLIED to know whether to read
-    // dec_out.height / .integral.
+    // dec_out.state == dec.Q_DECONV_APPLIED (or _FALLBACK_GLOBAL) to know
+    // whether to read dec_out.height / .integral.
     m.attr("Q_DECONV_NOT_RUN")          = py::int_(fdec::Q_DECONV_NOT_RUN);
-    m.attr("Q_DECONV_DISABLED")         = py::int_(fdec::Q_DECONV_DISABLED);
     m.attr("Q_DECONV_NO_TEMPLATE")      = py::int_(fdec::Q_DECONV_NO_TEMPLATE);
     m.attr("Q_DECONV_BAD_TEMPLATE")     = py::int_(fdec::Q_DECONV_BAD_TEMPLATE);
-    m.attr("Q_DECONV_SINGULAR")         = py::int_(fdec::Q_DECONV_SINGULAR);
+    m.attr("Q_DECONV_LM_NOT_CONVERGED") = py::int_(fdec::Q_DECONV_LM_NOT_CONVERGED);
     m.attr("Q_DECONV_APPLIED")          = py::int_(fdec::Q_DECONV_APPLIED);
     m.attr("Q_DECONV_FALLBACK_GLOBAL")  = py::int_(fdec::Q_DECONV_FALLBACK_GLOBAL);
 

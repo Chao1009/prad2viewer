@@ -28,7 +28,7 @@ PTRANS_Y_MAX = 2 * BEAM_CENTER_Y - _LIMIT_RB_Y
 
 # Default database path (relative to this file → ../database/)
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "..", "database", "hycal_modules.json")
+                               "..", "database", "hycal_map.json")
 
 
 # ============================================================================
@@ -81,17 +81,19 @@ class Module:
 
 
 def load_modules(json_path: str = DEFAULT_DB_PATH) -> List[Module]:
-    """Load all modules from the HyCal module database JSON."""
+    """Load all modules from hycal_map.json (entries with a "geo" block)."""
     with open(json_path) as f:
         data = json.load(f)
     modules: List[Module] = []
     for entry in data:
+        g = entry.get("geo")
+        if not g:
+            continue
         modules.append(Module(
             name=entry["n"], mod_type=entry["t"],
-            x=entry["x"], y=entry["y"],
-            sx=entry["sx"], sy=entry["sy"],
-            sector=entry.get("sec", ""),
-            row=entry.get("row", 0), col=entry.get("col", 0),
+            x=g["x"], y=g["y"], sx=g["sx"], sy=g["sy"],
+            sector=g.get("sec", ""),
+            row=g.get("row", 0), col=g.get("col", 0),
         ))
     return modules
 

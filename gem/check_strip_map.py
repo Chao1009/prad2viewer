@@ -9,7 +9,7 @@ Verifies that our config-driven pipeline produces identical plane-wide
 strip numbers as the reference code for all 128 channels of every APV.
 
 Usage:
-    python check_strip_map.py [path/to/gem_hycal_daq_map.json]
+    python check_strip_map.py [path/to/gem_map.json]
 """
 
 import argparse
@@ -130,18 +130,18 @@ def main():
         here = os.path.dirname(os.path.abspath(__file__))
         candidates = []
         if env_db:
-            candidates.append(os.path.join(env_db, "gem_hycal_daq_map.json"))
-        candidates.append(os.path.join(here, "..", "database", "gem_hycal_daq_map.json"))
-        candidates += ["database/gem_hycal_daq_map.json",
-                       "../database/gem_hycal_daq_map.json",
-                       "../../database/gem_hycal_daq_map.json",
-                       "gem_hycal_daq_map.json"]
+            candidates.append(os.path.join(env_db, "gem_map.json"))
+        candidates.append(os.path.join(here, "..", "database", "gem_map.json"))
+        candidates += ["database/gem_map.json",
+                       "../database/gem_map.json",
+                       "../../database/gem_map.json",
+                       "gem_map.json"]
         for candidate in candidates:
             if os.path.exists(candidate):
                 gem_map_path = candidate
                 break
         else:
-            print("Error: cannot find gem_daq_map.json (pass -G <path>)")
+            print("Error: cannot find gem_map.json (pass -G <path>)")
             sys.exit(1)
 
     with open(gem_map_path, encoding="utf-8") as f:

@@ -87,7 +87,7 @@ def _lut_color(lut: List[Tuple[int, int, int]], frac: float) -> QColor:
 
 
 def load_gem_map(path: str):
-    """Parse gem_daq_map.json → (layers, apvs, hole, raw)."""
+    """Parse gem_map.json → (layers, apvs, hole, raw)."""
     with open(path, encoding="utf-8") as f:
         raw = json.load(f)
     layers = {l["id"]: l for l in raw["layers"]}
@@ -206,7 +206,7 @@ def build_strip_layout(layers, apvs, hole, raw):
 
 
 def build_apv_map(gem_map_apvs: Iterable[dict]) -> Dict[Tuple[int, int, int], dict]:
-    """(crate, mpd, adc) -> APV entry from gem_daq_map.json."""
+    """(crate, mpd, adc) -> APV entry from gem_map.json."""
     return {(a["crate"], a["mpd"], a["adc"]): a
             for a in gem_map_apvs if "crate" in a}
 

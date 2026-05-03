@@ -188,7 +188,7 @@ int main(int argc, char *argv[])
     for (int tid = 0; tid < num_threads; ++tid) {
         auto res = std::make_unique<ThreadResult>();
         // Each thread initializes its own HyCalSystem
-        res->hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/hycal_daq_map.json");
+        res->hycal.Init(db_dir + "/hycal_map.json");
         int nmatched = res->hycal.LoadCalibration(input_calib_file);
         std::cerr << "[thread " << tid << "] calibration: "
                   << input_calib_file << " (" << nmatched << " modules)\n";
@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
 
     // Initialize main HyCalSystem for the fitting stage
     fdec::HyCalSystem hycal;
-    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/hycal_daq_map.json");
+    hycal.Init(db_dir + "/hycal_map.json");
     int nmatched = hycal.LoadCalibration(input_calib_file);
     std::cerr << "Main: calibration loaded (" << nmatched << " modules)\n";
 

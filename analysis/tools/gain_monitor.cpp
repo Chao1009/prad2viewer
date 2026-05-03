@@ -11,6 +11,7 @@
 #include "DaqConfig.h"
 #include "load_daq_config.h"
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 #include "Fadc250Data.h"
 #include "InstallPaths.h"
 
@@ -105,7 +106,7 @@ int main(int argc, char *argv[])
         DATABASE_DIR).c_str();
 
     TString cfgFile = Form("%s/daq_config.json", dbDir.Data());
-    TString mapFile = Form("%s/hycal_daq_map.json", dbDir.Data());
+    TString mapFile = Form("%s/hycal_map.json", dbDir.Data());
 
     printf("============================================\n");
     printf(" PRad LMS / Alpha Normalization\n");
@@ -113,7 +114,7 @@ int main(int argc, char *argv[])
     printf(" Data Dir   : %s\n", EVIODIR.data());
     printf(" Output Dir : %s\n", OUTPUTDIR.data());
     printf(" DAQ cfg    : %s\n", cfgFile.Data());
-    printf(" DAQ map    : %s\n", mapFile.Data());
+    printf(" HyCal map  : %s\n", mapFile.Data());
     printf("============================================\n");
     
     // --- load configs ---
@@ -179,6 +180,17 @@ int main(int argc, char *argv[])
 
     static fdec::EventData evt;
     fdec::WaveAnalyzer wave(cfg.wave_cfg);
+    fdec::PulseTemplateStore template_store;
+    if (cfg.wave_cfg.nnls_deconv.enabled
+        && !cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+        // dbDir was already env-aware-resolved above (PRAD2_DATABASE_DIR
+        // → ../share/... → DATABASE_DIR), so reuse it instead of going
+        // back to the build-time DATABASE_DIR macro.
+        template_store.LoadFromFile(
+            std::string(dbDir.Data()) + "/" + cfg.wave_cfg.nnls_deconv.template_file,
+            cfg.wave_cfg);
+    }
+    wave.SetTemplateStore(&template_store);
     
     double alphaRef[N_LMS_REF] = {};
     bool   alphaValid = false;
@@ -228,6 +240,7 @@ int main(int argc, char *argv[])
                             if (cd.nsamples == 0) continue;
 
                             fdec::WaveResult wres;
+                            wave.SetChannelKey(roc.tag, s, c);
                             wave.Analyze(cd.samples, cd.nsamples, wres);
 
                             // Find peak sample index in window [40, 60]
@@ -310,30 +323,33 @@ int main(int argc, char *argv[])
     return 0;
 }
 
-// Load database/hycal_daq_map.json — maps every (crate,slot,channel) to a name.
+// Load database/hycal_map.json — maps every (crate,slot,channel) to a name.
 // W* / G* names are HyCal modules; LMS1/2/3 are reference channels.
+// Records without a "daq" block (boosters, PRad-1 V1-V4) are skipped.
 static void loadDaqMap(const char *path)
 {
     std::ifstream f(path);
     if (!f.is_open()) {
-        std::cerr << "ERROR: cannot open daq_map " << path << "\n";
+        std::cerr << "ERROR: cannot open hycal_map " << path << "\n";
         return;
     }
     auto j = nlohmann::json::parse(f);
 
     int idx = 0;
     for (auto &e : j) {
-        std::string nm = e["name"].get<std::string>();
-        int cr = e["crate"].get<int>();
-        int sl = e["slot"].get<int>();
-        int ch = e["channel"].get<int>();
+        if (!e.contains("daq")) continue;
+        std::string nm = e.value("n", "");
+        const auto &d  = e["daq"];
+        int cr = d.value("crate", -1);
+        int sl = d.value("slot", -1);
+        int ch = d.value("channel", -1);
 
         ChInfo ci;
         ci.name = nm;
         if      (nm == "LMS1") { ci.is_lms = true; ci.lms_id = 0; }
         else if (nm == "LMS2") { ci.is_lms = true; ci.lms_id = 1; }
         else if (nm == "LMS3") { ci.is_lms = true; ci.lms_id = 2; }
-        else if (nm[0] == 'W' || nm[0] == 'G') { ci.idx = idx++; }
+        else if (!nm.empty() && (nm[0] == 'W' || nm[0] == 'G')) { ci.idx = idx++; }
 
         gCh[packAddr(cr, sl, ch)] = ci;
     }

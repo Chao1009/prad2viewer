@@ -3,14 +3,14 @@
 //
 // Usage: replay_rawdata <evio_file_or_dir> [more files/dirs...]
 //                       -o output_dir [-f max_files] [-n max_events] [-p] [-j num_threads]
-//                       [-c daq_config.json] [-d daq_map.json]
+//                       [-c daq_config.json] [-d hycal_map.json]
 //   -o  output directory (REQUIRED)
 //   -f  max files to process (default: all)
 //   -n  max events per file (default: all)
 //   -p  include peak analysis branches
 //   -j  number of threads (default: 4)
 //   -c  DAQ configuration file
-//   -d  DAQ map file (default: <db>/hycal_daq_map.json)
+//   -d  HyCal map file (default: <db>/hycal_map.json)
 //=============================================================================
 
 #include "Replay.h"
@@ -109,12 +109,12 @@ int main(int argc, char *argv[])
 
     if (evio_files.empty() || output_dir.empty()) {
         std::cerr << "Usage: replay_rawdata <evio_file_or_dir> [more files/dirs...] -o output_dir\n"
-                  << "       [-f max_files] [-j threads] [-c daq_config.json] [-d daq_map.json] [-n N] [-p]\n";
+                  << "       [-f max_files] [-j threads] [-c daq_config.json] [-d hycal_map.json] [-n N] [-p]\n";
         std::cerr << "  -o  output directory (REQUIRED)\n";
         std::cerr << "  -f  max files to process (default: all)\n";
         std::cerr << "  -j  number of threads (default: 4)\n";
         std::cerr << "  -c  DAQ config JSON (default: <db>/daq_config.json)\n";
-        std::cerr << "  -d  DAQ map JSON (default: <db>/hycal_daq_map.json)\n";
+        std::cerr << "  -d  HyCal map JSON (default: <db>/hycal_map.json)\n";
         std::cerr << "  -n  max events per file (default: all)\n";
         std::cerr << "  -p  include peak analysis branches (soft + firmware DAQ-mode)\n";
         return 1;
@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
     std::cout << "Processing " << num_files << " files with "
               << num_threads << " threads\n";
 
-    if(daq_map.empty()) daq_map = db_dir + "/hycal_daq_map.json";
+    if(daq_map.empty()) daq_map = db_dir + "/hycal_map.json";
     
     std::string run_str = get_run_str(evio_files[0]);
     int run_num = get_run_int(evio_files[0]);
@@ -141,13 +141,12 @@ int main(int argc, char *argv[])
         // each thread gets its own Replay instance (own EvChannel, own buffers)
         analysis::Replay replay;
         if (!daq_config.empty()) replay.LoadDaqConfig(daq_config);
-        replay.LoadDaqMap(daq_map);
-        std::cerr << "Using DAQ map: " << daq_map << "\n";
-        // Module-type dispatch comes from hycal_modules.json's "t" field —
-        // single source of truth for whether a channel is PbGlass / PbWO4 /
-        // SCINT / LMS.  Without this load, every channel falls back to
-        // MOD_UNKNOWN and only HyCal G/W modules get usable gain correction.
-        replay.LoadModulesInfo(db_dir + "/hycal_modules.json");
+        // Module-type dispatch comes from hycal_map.json's "t" field — single
+        // source of truth for whether a channel is PbGlass / PbWO4 / Veto /
+        // LMS.  LoadHyCalMap also fills the (crate,slot,ch)→name lookup; both
+        // were two separate calls before the schema merge.
+        replay.LoadHyCalMap(daq_map);
+        std::cerr << "Using HyCal map: " << daq_map << "\n";
 
         while (true) {
             int idx = next_file.fetch_add(1);

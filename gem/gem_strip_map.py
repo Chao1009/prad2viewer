@@ -93,7 +93,7 @@ def map_strip(ch, plane_index, orient, pin_rotate=0, shared_pos=-1,
 
 
 def map_apv_strips(apv, apv_channels=128, readout_center=32):
-    """Map all channels of an APV entry (from gem_daq_map.json) to plane strip
+    """Map all channels of an APV entry (from gem_map.json) to plane strip
     numbers.
 
     Returns a list of length ``apv_channels`` — the plane-wide strip number

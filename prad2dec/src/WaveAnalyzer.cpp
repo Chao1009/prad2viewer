@@ -1,4 +1,5 @@
 #include "WaveAnalyzer.h"
+#include "PulseTemplateStore.h"
 
 #include <limits>
 
@@ -394,22 +395,75 @@ void WaveAnalyzer::Analyze(const uint16_t *samples, int nsamples, WaveResult &re
             break;
         }
     }
+
+    // ── NNLS pile-up deconv.  Silent no-op unless the caller bound a
+    // template store and the current channel key — production code that
+    // doesn't care about deconv keeps its existing behaviour bit-for-bit.
+    applyAutoDeconv(samples, nsamples, result);
+}
+
+void WaveAnalyzer::applyAutoDeconv(const uint16_t *samples, int nsamples,
+                                   WaveResult &result) const
+{
+    if (!cfg.nnls_deconv.enabled)               return;
+    if (template_store_ == nullptr)             return;
+    if (ck_roc_ < 0 || ck_slot_ < 0 || ck_chan_ < 0) return;
+    if (result.npeaks <= 0)                     return;
+
+    // Cheap gate: skip clean events unless config asks otherwise.  This
+    // is the dominant cost saving — most channels see no pile-up and
+    // we'd otherwise pay an NNLS solve on every event.
+    if (!cfg.nnls_deconv.apply_to_all_peaks) {
+        bool any_piled = false;
+        for (int k = 0; k < result.npeaks; ++k) {
+            if (result.peaks[k].quality & Q_PEAK_PILED) {
+                any_piled = true; break;
+            }
+        }
+        if (!any_piled) return;
+    }
+
+    const PulseTemplate *tmpl = template_store_->Lookup(
+        ck_roc_, ck_slot_, ck_chan_);
+    if (tmpl == nullptr) return;
+
+    DeconvOutput out;
+    Deconvolve(samples, nsamples, result, *tmpl, out);
+
+    // On success: replace each peak's height/integral with the deconv
+    // values and mark Q_PEAK_DECONVOLVED.  Failure paths
+    // (Q_DECONV_BAD_TEMPLATE / Q_DECONV_SINGULAR) leave the peaks as-is
+    // so downstream code falls back to WaveAnalyzer's tail-cutoff values.
+    if (out.state == Q_DECONV_APPLIED || out.state == Q_DECONV_FALLBACK_GLOBAL) {
+        const int K = (out.n < result.npeaks) ? out.n : result.npeaks;
+        for (int k = 0; k < K; ++k) {
+            result.peaks[k].height    = out.height[k];
+            result.peaks[k].integral  = out.integral[k];
+            result.peaks[k].quality  |= Q_PEAK_DECONVOLVED;
+        }
+    }
 }
 
 //=============================================================================
-// NNLS pile-up deconvolution
+// Per-pulse-fit pile-up deconvolution
 //=============================================================================
 //
-// Given pedsub samples b[0..n-1] and K peak times τ_1..τ_K (each placed so
-// that the template peak sits at the WaveAnalyzer-reported peak time), we
-// fit non-negative amplitudes a_k by minimising ||M a - b||² subject to
-// a_k ≥ 0, where M[i,k] = T(t_i − τ_k_onset; τ_r, τ_f).
+// Given pedsub samples b[0..n-1] and K peak times τ_1..τ_K from the
+// WaveAnalyzer, we fit a 4K-parameter model
 //
-// Algorithm: Lawson-Hanson active-set NNLS.  Hand-coded for K ≤ MAX_PEAKS
-// because (a) we already need stack-only scratch, (b) external linear
-// algebra deps would be intrusive in the analyzer hot path, and (c) the
-// problem is tiny — typical K is 2..3 and Cholesky on K×K is essentially
-// free.
+//   model(t_i) = Σ_k a_k · T(t_i; t0_k, τ_r_k, τ_f_k) / T_max(τ_r_k, τ_f_k)
+//
+// via Levenberg-Marquardt with the channel template providing the
+// initial guess (a_k = WA peak.height / T_max(template), t0_k from
+// peak.time, (τ_r, τ_f) = template) and tight bounds around it
+// (cfg.nnls_deconv.shape_window_factor, t0_window_ns, amp_max_factor).
+// This handles per-pulse shape variation that a fixed-shape NNLS
+// can't capture.
+//
+// Algorithm: classical LM with forward-difference Jacobian.  The
+// shape-param FD is per-peak (each FD perturbation only recomputes
+// the k-th template column, not the whole model — analytic block
+// structure of the Jacobian).
 
 namespace {
 
@@ -438,10 +492,12 @@ inline float cholesky(const float *M, float *L, int K)
     return min_pivot_sq;
 }
 
-// Solve L L^T x = b in place using a precomputed Cholesky factor.
+// Solve L L^T x = b using a precomputed Cholesky factor.  Sized to
+// accommodate the per-pulse-fit deconvolver's 4·MAX_PEAKS-parameter
+// Hessian (so K can be up to 32, not just MAX_PEAKS=8).
 inline void chol_solve(const float *L, const float *b, float *x, int K)
 {
-    float y[MAX_PEAKS];
+    float y[4 * MAX_PEAKS];   // = 32; covers K up to 4·MAX_PEAKS
     // Forward: L y = b
     for (int i = 0; i < K; ++i) {
         float s = b[i];
@@ -456,109 +512,6 @@ inline void chol_solve(const float *L, const float *b, float *x, int K)
     }
 }
 
-// Active-set NNLS for small K (≤ MAX_PEAKS).  Inputs:
-//   AtA  K×K precomputed M^T M (row-major)
-//   Atb  K-vector M^T b
-// Output:
-//   x    K-vector solution, x_k ≥ 0
-// Returns:
-//   smallest pivot² ever encountered during the inner Cholesky solves —
-//   < 0 if the active submatrix went indefinite (caller should treat
-//   that as singular).  The conditioning proxy max_diag(AtA) / min_pivot²
-//   is left to the caller.
-inline float nnls_smallK(const float *AtA, const float *Atb, int K, float *x)
-{
-    // KKT tolerance — scale to the problem size so it's invariant to the
-    // numerical scale of b.
-    float Atb_max = 0.0f;
-    for (int j = 0; j < K; ++j)
-        Atb_max = std::max(Atb_max, std::abs(Atb[j]));
-    const float tol_kkt = 1.0e-6f * std::max(Atb_max, 1.0f);
-    const float tol_x   = 1.0e-7f * std::max(Atb_max, 1.0f);
-
-    bool inP[MAX_PEAKS];          // false = active set R, true = passive set P
-    for (int j = 0; j < K; ++j) { x[j] = 0.0f; inP[j] = false; }
-
-    float min_pivot_sq_seen = std::numeric_limits<float>::infinity();
-    constexpr int MAX_OUTER = 3 * MAX_PEAKS + 5;
-
-    for (int outer = 0; outer < MAX_OUTER; ++outer) {
-        // w = M^T (b - M x) = Atb - AtA x — KKT residual / gradient
-        float w[MAX_PEAKS];
-        for (int j = 0; j < K; ++j) {
-            float wj = Atb[j];
-            for (int k = 0; k < K; ++k) wj -= AtA[j * K + k] * x[k];
-            w[j] = wj;
-        }
-        // Pick max w over the active set; converged if all are ≤ tol.
-        int   best = -1;
-        float wmax = tol_kkt;
-        for (int j = 0; j < K; ++j) {
-            if (!inP[j] && w[j] > wmax) { wmax = w[j]; best = j; }
-        }
-        if (best < 0) return min_pivot_sq_seen;  // optimal
-        inP[best] = true;
-
-        // Inner loop: solve LS on current P, back off if any x_p went < 0.
-        constexpr int MAX_INNER = 3 * MAX_PEAKS + 5;
-        for (int inner = 0; inner < MAX_INNER; ++inner) {
-            // Build sub-matrix indexed by current P.
-            int  idx[MAX_PEAKS]; int Kp = 0;
-            for (int j = 0; j < K; ++j) if (inP[j]) idx[Kp++] = j;
-            if (Kp == 0) break;
-
-            float subM[MAX_PEAKS * MAX_PEAKS];
-            float subb[MAX_PEAKS];
-            for (int p = 0; p < Kp; ++p) {
-                subb[p] = Atb[idx[p]];
-                for (int q = 0; q < Kp; ++q)
-                    subM[p * Kp + q] = AtA[idx[p] * K + idx[q]];
-            }
-
-            float L[MAX_PEAKS * MAX_PEAKS];
-            float pivot_sq = cholesky(subM, L, Kp);
-            if (pivot_sq < 0.0f) {
-                // Sub-problem went singular — bail out and return a flag.
-                return -1.0f;
-            }
-            if (pivot_sq < min_pivot_sq_seen) min_pivot_sq_seen = pivot_sq;
-
-            float s_sub[MAX_PEAKS];
-            chol_solve(L, subb, s_sub, Kp);
-
-            float s[MAX_PEAKS];
-            for (int j = 0; j < K; ++j) s[j] = 0.0f;
-            for (int p = 0; p < Kp; ++p) s[idx[p]] = s_sub[p];
-
-            // Find the most-violating component — smallest s_k for k in P.
-            float alpha = 1.0f;
-            int blocker = -1;
-            for (int p = 0; p < Kp; ++p) {
-                int j = idx[p];
-                if (s[j] <= tol_x) {
-                    const float denom = x[j] - s[j];
-                    if (denom > tol_x) {
-                        const float a = x[j] / denom;
-                        if (a < alpha) { alpha = a; blocker = j; }
-                    }
-                }
-            }
-
-            if (blocker < 0) {
-                // All s_k > 0 — accept the LS solution.
-                for (int j = 0; j < K; ++j) x[j] = s[j];
-                break;  // exit inner loop, back to outer
-            }
-
-            // Step part-way and drop blockers from P.
-            for (int j = 0; j < K; ++j) x[j] = x[j] + alpha * (s[j] - x[j]);
-            for (int j = 0; j < K; ++j)
-                if (inP[j] && x[j] <= tol_x) { x[j] = 0.0f; inP[j] = false; }
-        }
-    }
-    return min_pivot_sq_seen;
-}
-
 // Closed-form template peak position offset (ns) and peak value.
 //   t_peak = τ_r · ln((τ_r + τ_f) / τ_r)
 //   T_max  = (τ_f / (τ_r + τ_f)) · (τ_r / (τ_r + τ_f))^(τ_r/τ_f)
@@ -570,7 +523,11 @@ inline void template_peak(float tr, float tf, float &t_off, float &t_max)
 }
 
 // Unit-amplitude template at sample times t_i = i·clk_ns, with template
-// onset at t0 (ns).  Writes n values into `col`.
+// onset at t0 (ns).  Writes n values into `col`.  Two exp() per sample.
+// In the per-pulse LM the shape parameters (τ_r, τ_f) vary per peak per
+// iteration, so the precomputed-grid optimisation that the old fixed-
+// shape NNLS used doesn't apply — every iteration computes fresh
+// templates analytically.
 inline void template_column(float *col, int n, float clk_ns,
                             float t0, float tr, float tf)
 {
@@ -591,11 +548,10 @@ void WaveAnalyzer::Deconvolve(const uint16_t *samples, int nsamples,
 {
     dec_out.clear();
 
-    // Bail-out fast paths.
-    if (!cfg.nnls_deconv.enabled) {
-        dec_out.state = Q_DECONV_DISABLED;
-        return;
-    }
+    // Explicit API: always runs when given valid inputs and a usable
+    // template.  The cfg.nnls_deconv.enabled gate only governs the auto
+    // path (applyAutoDeconv inside Analyze) so the Python diagnostic
+    // can compute deconv values without flipping the production switch.
     if (!samples || nsamples <= 0 || nsamples > MAX_SAMPLES) {
         dec_out.state = Q_DECONV_NOT_RUN;
         return;
@@ -607,96 +563,750 @@ void WaveAnalyzer::Deconvolve(const uint16_t *samples, int nsamples,
     }
 
     const auto &dcfg = cfg.nnls_deconv;
-    const float tr = tmpl.tau_r_ns;
-    const float tf = tmpl.tau_f_ns;
-    if (!(tr >= dcfg.tau_r_min_ns && tr <= dcfg.tau_r_max_ns) ||
-        !(tf >= dcfg.tau_f_min_ns && tf <= dcfg.tau_f_max_ns) ||
-        !(tr > 0.0f) || !(tf > 0.0f)) {
+    const float tr_tmpl = tmpl.tau_r_ns;
+    const float tf_tmpl = tmpl.tau_f_ns;
+    if (!(tr_tmpl >= dcfg.tau_r_min_ns && tr_tmpl <= dcfg.tau_r_max_ns) ||
+        !(tf_tmpl >= dcfg.tau_f_min_ns && tf_tmpl <= dcfg.tau_f_max_ns) ||
+        !(tr_tmpl > 0.0f) || !(tf_tmpl > 0.0f)) {
         dec_out.state = Q_DECONV_BAD_TEMPLATE;
         return;
     }
 
-    const float clk_ns  = (cfg.clk_mhz > 0.0f) ? (1000.0f / cfg.clk_mhz) : 4.0f;
-    const float ped     = wres.ped.mean;
-    const float sigma   = std::max(wres.ped.rms, 1.0f);
+    const float clk_ns = (cfg.clk_mhz > 0.0f) ? (1000.0f / cfg.clk_mhz) : 4.0f;
+    const float ped    = wres.ped.mean;
+    const float sigma  = std::max(wres.ped.rms, 1.0f);
+    const float inv_sigma2 = 1.0f / (sigma * sigma);
 
-    float t_off = 0.0f, t_max = 0.0f;
-    template_peak(tr, tf, t_off, t_max);
-
-    // Build pedsub vector b and design matrix M (column-major: M[i + k*N]).
-    // We size on the full waveform — keeping it simple and cheap; for K ≤ 8
-    // and N ≤ MAX_SAMPLES (200) the matrix is at most 1600 floats.
+    // Pedsub data.
     float b[MAX_SAMPLES];
     for (int i = 0; i < nsamples; ++i)
         b[i] = static_cast<float>(samples[i]) - ped;
 
-    float M[MAX_SAMPLES * MAX_PEAKS];
+    // Initial param vector laid out as 4K floats with the per-peak block
+    //   [a_k, t0_k, τ_r_k, τ_f_k]
+    // at index 4*k.  Bounds in p_lo / p_hi follow the same layout.
+    constexpr int NPP = 4;                          // params per peak
+    constexpr int NPMAX = NPP * MAX_PEAKS;          // 32
+    const int npar = NPP * K;
+
+    float t_off_tmpl, t_max_tmpl;
+    template_peak(tr_tmpl, tf_tmpl, t_off_tmpl, t_max_tmpl);
+    const float inv_t_max_tmpl = 1.0f / t_max_tmpl;
+
+    const float fac = std::max(dcfg.shape_window_factor, 1.001f);
+    const float t0_win = std::max(dcfg.t0_window_ns, 0.0f);
+
+    float p[NPMAX]   = {0};
+    float p_lo[NPMAX] = {0};
+    float p_hi[NPMAX] = {0};
+    float peak_t[MAX_PEAKS];
+
     for (int k = 0; k < K; ++k) {
-        const float t_pk = wres.peaks[k].time;       // ns from sample 0
-        const float t0   = t_pk - t_off;
-        template_column(&M[k * MAX_SAMPLES], nsamples, clk_ns, t0, tr, tf);
+        const float t_pk = wres.peaks[k].time;           // ns from sample 0
+        peak_t[k] = t_pk;
+        const float h_wa = std::max(wres.peaks[k].height, 1.0f);
+        const float a_init  = h_wa * inv_t_max_tmpl;     // height / T_max
+        const float t0_init = t_pk - t_off_tmpl;
+
+        p[NPP*k + 0] = a_init;
+        p[NPP*k + 1] = t0_init;
+        p[NPP*k + 2] = tr_tmpl;
+        p[NPP*k + 3] = tf_tmpl;
+
+        p_lo[NPP*k + 0] = 0.0f;
+        p_hi[NPP*k + 0] = std::max(dcfg.amp_max_factor, 1.001f) * h_wa
+                         * inv_t_max_tmpl;
+        p_lo[NPP*k + 1] = t0_init - t0_win;
+        p_hi[NPP*k + 1] = t0_init + t0_win;
+        p_lo[NPP*k + 2] = tr_tmpl / fac;
+        p_hi[NPP*k + 2] = tr_tmpl * fac;
+        p_lo[NPP*k + 3] = tf_tmpl / fac;
+        p_hi[NPP*k + 3] = tf_tmpl * fac;
     }
 
-    // Normal equations.  AtA is K×K row-major, Atb is K-vector.
-    float AtA[MAX_PEAKS * MAX_PEAKS];
-    float Atb[MAX_PEAKS];
-    float diag_max = 0.0f;
-    for (int k = 0; k < K; ++k) {
-        float s = 0.0f;
-        for (int i = 0; i < nsamples; ++i)
-            s += M[k * MAX_SAMPLES + i] * b[i];
-        Atb[k] = s;
-        for (int j = 0; j <= k; ++j) {
-            float dot = 0.0f;
-            for (int i = 0; i < nsamples; ++i)
-                dot += M[k * MAX_SAMPLES + i] * M[j * MAX_SAMPLES + i];
-            AtA[k * K + j] = dot;
-            AtA[j * K + k] = dot;
+    // Helpers to (re)compute the K template columns at given params and
+    // evaluate the residual chi².
+    auto compute_M = [&](const float *params, float *M) {
+        for (int k = 0; k < K; ++k) {
+            template_column(&M[k * MAX_SAMPLES], nsamples, clk_ns,
+                            params[NPP*k + 1],
+                            params[NPP*k + 2],
+                            params[NPP*k + 3]);
         }
-        if (AtA[k * K + k] > diag_max) diag_max = AtA[k * K + k];
+    };
+    auto eval_chi2 = [&](const float *params, const float *M) -> float {
+        float c = 0.0f;
+        for (int i = 0; i < nsamples; ++i) {
+            float fit = 0.0f;
+            for (int k = 0; k < K; ++k)
+                fit += params[NPP*k + 0] * M[k * MAX_SAMPLES + i];
+            const float rr = (b[i] - fit);
+            c += rr * rr;
+        }
+        return c * inv_sigma2;
+    };
+
+    // Initial M and chi².
+    float M[MAX_PEAKS * MAX_SAMPLES];
+    compute_M(p, M);
+    float chi2 = eval_chi2(p, M);
+
+    // Best-seen tracking (return whatever we found, scipy-style).
+    float chi2_best = chi2;
+    float p_best[NPMAX];
+    for (int j = 0; j < npar; ++j) p_best[j] = p[j];
+
+    // LM hyperparameters.
+    constexpr int   MAX_ITER  = 100;
+    constexpr float TOL_PARAM = 1e-5f;
+    constexpr float LAMBDA0   = 1.0e-3f;
+    constexpr float LAMBDA_UP = 10.0f;
+    constexpr float LAMBDA_DN = 10.0f;
+    constexpr float LAMBDA_MAX = 1.0e10f;
+
+    float lambda = LAMBDA0;
+    int iter = 0;
+    bool any_accepted = false;
+
+    // Scratch buffers reused across iterations.
+    float r_vec[MAX_SAMPLES];
+    float J[NPMAX * MAX_SAMPLES];   // J[j * MAX_SAMPLES + i] = ∂r_i/∂p_j
+    float A[NPMAX * NPMAX];
+    float Aug[NPMAX * NPMAX];
+    float L[NPMAX * NPMAX];
+    float g[NPMAX], delta[NPMAX];
+    float p_new[NPMAX];
+    float M_new[MAX_PEAKS * MAX_SAMPLES];
+    float col_perturbed[MAX_SAMPLES];
+
+    for (; iter < MAX_ITER; ++iter) {
+        // Residuals at current point.
+        for (int i = 0; i < nsamples; ++i) {
+            float fit = 0.0f;
+            for (int k = 0; k < K; ++k)
+                fit += p[NPP*k + 0] * M[k * MAX_SAMPLES + i];
+            r_vec[i] = b[i] - fit;
+        }
+
+        // Jacobian — block structure: only the k-th template column
+        // depends on (t0_k, τ_r_k, τ_f_k); all peaks contribute to a_k
+        // through the analytic ∂model/∂a_k = -T_k.
+        for (int k = 0; k < K; ++k) {
+            const float a_k  = p[NPP*k + 0];
+            const float t0_k = p[NPP*k + 1];
+            const float tr_k = p[NPP*k + 2];
+            const float tf_k = p[NPP*k + 3];
+
+            // ∂r/∂a_k = -T_k(t_i)  (analytic — reuse M).
+            for (int i = 0; i < nsamples; ++i)
+                J[(NPP*k + 0) * MAX_SAMPLES + i] = -M[k * MAX_SAMPLES + i];
+
+            const float h_t0 = std::max(1e-3f * clk_ns, 1e-6f);
+            const float h_tr = std::max(1e-3f * tr_k,    1e-6f);
+            const float h_tf = std::max(1e-3f * tf_k,    1e-6f);
+
+            // ∂r/∂t0_k = -a_k · ∂T_k/∂t0_k
+            template_column(col_perturbed, nsamples, clk_ns,
+                            t0_k + h_t0, tr_k, tf_k);
+            for (int i = 0; i < nsamples; ++i) {
+                const float dT = (col_perturbed[i] - M[k * MAX_SAMPLES + i]) / h_t0;
+                J[(NPP*k + 1) * MAX_SAMPLES + i] = -a_k * dT;
+            }
+            template_column(col_perturbed, nsamples, clk_ns,
+                            t0_k, tr_k + h_tr, tf_k);
+            for (int i = 0; i < nsamples; ++i) {
+                const float dT = (col_perturbed[i] - M[k * MAX_SAMPLES + i]) / h_tr;
+                J[(NPP*k + 2) * MAX_SAMPLES + i] = -a_k * dT;
+            }
+            template_column(col_perturbed, nsamples, clk_ns,
+                            t0_k, tr_k, tf_k + h_tf);
+            for (int i = 0; i < nsamples; ++i) {
+                const float dT = (col_perturbed[i] - M[k * MAX_SAMPLES + i]) / h_tf;
+                J[(NPP*k + 3) * MAX_SAMPLES + i] = -a_k * dT;
+            }
+        }
+
+        // Build A = J^T J (npar × npar) and g = J^T r (npar).
+        for (int j = 0; j < npar; ++j) {
+            g[j] = 0;
+            for (int j2 = 0; j2 < npar; ++j2) A[j * npar + j2] = 0;
+        }
+        for (int i = 0; i < nsamples; ++i) {
+            for (int j1 = 0; j1 < npar; ++j1) {
+                const float jj1 = J[j1 * MAX_SAMPLES + i];
+                g[j1] += jj1 * r_vec[i];
+                for (int j2 = 0; j2 <= j1; ++j2) {
+                    const float jj2 = J[j2 * MAX_SAMPLES + i];
+                    A[j1 * npar + j2] += jj1 * jj2;
+                }
+            }
+        }
+        // Mirror lower → upper.
+        for (int j1 = 0; j1 < npar; ++j1)
+            for (int j2 = j1 + 1; j2 < npar; ++j2)
+                A[j1 * npar + j2] = A[j2 * npar + j1];
+
+        // (A + λI) δ = g
+        for (int j1 = 0; j1 < npar; ++j1)
+            for (int j2 = 0; j2 < npar; ++j2)
+                Aug[j1 * npar + j2] = A[j1 * npar + j2];
+        for (int j = 0; j < npar; ++j) Aug[j * npar + j] += lambda;
+
+        const float min_pivot_sq = cholesky(Aug, L, npar);
+        if (min_pivot_sq < 0.0f) {
+            // Indefinite — back off and try a tighter LM step.
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+            continue;
+        }
+        chol_solve(L, g, delta, npar);
+
+        // Trial point — same sign convention as FitPulseShape:
+        //   p_new = p − δ, then clamp to bounds.
+        float dpar = 0.0f;
+        for (int j = 0; j < npar; ++j) {
+            p_new[j] = std::clamp(p[j] - delta[j], p_lo[j], p_hi[j]);
+            const float scale = std::max(std::abs(p[j]), 1e-3f);
+            dpar += std::abs(p_new[j] - p[j]) / scale;
+        }
+
+        compute_M(p_new, M_new);
+        const float chi2_new = eval_chi2(p_new, M_new);
+
+        if (std::isfinite(chi2_new) && chi2_new < chi2_best) {
+            chi2_best = chi2_new;
+            for (int j = 0; j < npar; ++j) p_best[j] = p_new[j];
+        }
+
+        if (chi2_new < chi2) {
+            // Accept.
+            for (int j = 0; j < npar; ++j) p[j] = p_new[j];
+            for (int idx = 0; idx < K * MAX_SAMPLES; ++idx) M[idx] = M_new[idx];
+            chi2 = chi2_new;
+            lambda = std::max(lambda / LAMBDA_DN, 1e-12f);
+            any_accepted = true;
+            if (dpar < TOL_PARAM) { ++iter; break; }
+        } else {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+        }
     }
 
-    // Conditioning gate — if any active-set Cholesky pivot drops below
-    // diag_max / cond_number_max, the system is too ill-conditioned to
-    // trust per-peak amplitudes.  We surface that as Q_DECONV_SINGULAR.
-    float a[MAX_PEAKS];
-    const float min_pivot_sq = nnls_smallK(AtA, Atb, K, a);
-    const float cond_proxy = (min_pivot_sq > 0.0f && diag_max > 0.0f)
-                           ? (diag_max / min_pivot_sq)
-                           : std::numeric_limits<float>::infinity();
-    dec_out.cond_number = cond_proxy;
-
-    if (min_pivot_sq < 0.0f || cond_proxy > dcfg.cond_number_max ||
-        !std::isfinite(cond_proxy)) {
-        dec_out.state = Q_DECONV_SINGULAR;
+    if (!any_accepted) {
+        dec_out.state = Q_DECONV_LM_NOT_CONVERGED;
         return;
     }
 
-    // Per-peak height and integral-over-window from the converged a_k.
+    // Use the best-seen params.  Recompute M one more time so the
+    // integral window sums use the converged shape.
+    for (int j = 0; j < npar; ++j) p[j] = p_best[j];
+    compute_M(p, M);
+
+    dec_out.n = K;
     for (int k = 0; k < K; ++k) {
-        dec_out.amplitude[k] = a[k];
-        dec_out.height[k]    = a[k] * t_max;
-    }
-    for (int k = 0; k < K; ++k) {
-        const int i_pk = static_cast<int>(std::lround(wres.peaks[k].time / clk_ns));
+        const float a_k  = p[NPP*k + 0];
+        const float t0_k = p[NPP*k + 1];
+        const float tr_k = p[NPP*k + 2];
+        const float tf_k = p[NPP*k + 3];
+
+        if (!std::isfinite(a_k) || !std::isfinite(t0_k) ||
+            !std::isfinite(tr_k) || !std::isfinite(tf_k)) {
+            dec_out.state = Q_DECONV_LM_NOT_CONVERGED;
+            return;
+        }
+
+        float t_off_k, t_max_k;
+        template_peak(tr_k, tf_k, t_off_k, t_max_k);
+
+        dec_out.amplitude[k] = a_k;
+        dec_out.height[k]    = a_k * t_max_k;
+        dec_out.t0_ns[k]     = t0_k;
+        dec_out.tau_r_ns[k]  = tr_k;
+        dec_out.tau_f_ns[k]  = tf_k;
+
+        // Per-peak integral: window centred on the WaveAnalyzer peak
+        // index (consistent with how downstream consumers slice raw data),
+        // summed against the per-peak fitted template.
+        const int i_pk = static_cast<int>(std::lround(peak_t[k] / clk_ns));
         const int lo   = std::max(0,        i_pk - dcfg.pre_samples);
         const int hi   = std::min(nsamples, i_pk + dcfg.post_samples + 1);
         float sum = 0.0f;
         for (int i = lo; i < hi; ++i) sum += M[k * MAX_SAMPLES + i];
-        dec_out.integral[k] = a[k] * sum;
+        dec_out.integral[k] = a_k * sum;
     }
 
-    // Global χ²/dof of the reconstructed waveform.
-    float chi2 = 0.0f;
-    for (int i = 0; i < nsamples; ++i) {
-        float fit = 0.0f;
-        for (int k = 0; k < K; ++k) fit += a[k] * M[k * MAX_SAMPLES + i];
-        const float r = (b[i] - fit) / sigma;
-        chi2 += r * r;
-    }
-    const int dof = std::max(1, nsamples - K);
-    dec_out.chi2_per_dof = chi2 / static_cast<float>(dof);
-
-    dec_out.n     = K;
-    dec_out.state = tmpl.is_global ? Q_DECONV_FALLBACK_GLOBAL : Q_DECONV_APPLIED;
+    const int dof = std::max(1, nsamples - npar);
+    dec_out.chi2_per_dof = chi2_best / static_cast<float>(dof);
+    dec_out.state = tmpl.is_global ? Q_DECONV_FALLBACK_GLOBAL
+                                   : Q_DECONV_APPLIED;
 }
+
+//=============================================================================
+// Per-pulse shape fit (Levenberg-Marquardt on normalised two-tau model)
+//=============================================================================
+//
+// Three-parameter LM solve.  Jacobian via central / forward finite
+// differences (FD) on the model itself — analytic partials are correct
+// but tedious and bring no real speed-up here since the dominant cost
+// is the exp() calls inside the model evaluator and FD reuses those.
+//
+// Replaces the scipy.optimize.curve_fit call in
+// analysis/pyscripts/fit_pulse_template.py and gives the script an
+// honest ~100× speed-up (5 ev/s → 500 ev/s territory).
+
+namespace {
+
+inline float two_tau_unit_pt(float t, float t0, float tr, float tf,
+                              float t_max_inv)
+{
+    if (t <= t0) return 0.0f;
+    const float dt = t - t0;
+    return (1.0f - std::exp(-dt / tr)) * std::exp(-dt / tf) * t_max_inv;
+}
+
+inline float t_max_value(float tr, float tf)
+{
+    const float u = tr / (tr + tf);
+    return (1.0f - u) * std::pow(u, tr / tf);
+}
+
+
+// 3×3 SPD solve via Cholesky.  Returns false if A is not positive
+// definite (caller bumps λ and retries).  A is row-major; b and x are
+// 3-vectors.
+inline bool chol3_solve(const float A[9], const float b[3], float x[3])
+{
+    if (A[0] <= 0.0f) return false;
+    const float L00 = std::sqrt(A[0]);
+    const float L10 = A[3] / L00;
+    const float v11 = A[4] - L10 * L10;
+    if (v11 <= 0.0f) return false;
+    const float L11 = std::sqrt(v11);
+    const float L20 = A[6] / L00;
+    const float L21 = (A[7] - L20 * L10) / L11;
+    const float v22 = A[8] - L20 * L20 - L21 * L21;
+    if (v22 <= 0.0f) return false;
+    const float L22 = std::sqrt(v22);
+
+    const float y0 = b[0] / L00;
+    const float y1 = (b[1] - L10 * y0) / L11;
+    const float y2 = (b[2] - L20 * y0 - L21 * y1) / L22;
+
+    x[2] = y2 / L22;
+    x[1] = (y1 - L21 * x[2]) / L11;
+    x[0] = (y0 - L10 * x[1] - L20 * x[2]) / L00;
+    return true;
+}
+
+// Sum of squared residuals on the normalised pulse for the given params.
+inline float chi2_eval(const float *y, int n, float clk_ns,
+                       float t0, float tr, float tf)
+{
+    const float t_max_inv = 1.0f / t_max_value(tr, tf);
+    float s = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const float t = i * clk_ns;
+        const float r = y[i] - two_tau_unit_pt(t, t0, tr, tf, t_max_inv);
+        s += r * r;
+    }
+    return s;
+}
+
+// ---- Two-tau with rise-edge exponent ---------------------------------
+//
+// T(t; t0, τ_r, τ_f, p) = [1 − exp(−(t−t0)/τ_r)]^p · exp(−(t−t0)/τ_f)
+//
+// Closed-form peak:
+//   u_peak  = p·τ_f / (τ_r + p·τ_f)        (= 1 − exp(−dt_peak/τ_r))
+//   dt_peak = τ_r · ln((τ_r + p·τ_f) / τ_r)
+//   T_max   = u_peak^p · (τ_r/(τ_r + p·τ_f))^(τ_r/τ_f)
+//
+// p = 1 reduces to the standard two-tau form (verify: u_peak = τ_f/(τ_r+τ_f),
+// matches t_max_value above).
+inline float two_tau_p_unit_pt(float t, float t0, float tr, float tf,
+                                float p, float t_max_inv)
+{
+    if (t <= t0) return 0.0f;
+    const float dt = t - t0;
+    const float u  = 1.0f - std::exp(-dt / tr);
+    if (u <= 0.0f) return 0.0f;
+    return std::pow(u, p) * std::exp(-dt / tf) * t_max_inv;
+}
+
+inline float t_max_value_p(float tr, float tf, float p)
+{
+    if (!(tr > 0.0f) || !(tf > 0.0f) || !(p > 0.0f)) return 1.0f;  // defensive
+    const float denom = tr + p * tf;
+    const float u_peak = p * tf / denom;            // (1 - exp(-dt_peak/τ_r))
+    return std::pow(u_peak, p) * std::pow(tr / denom, tr / tf);
+}
+
+inline float chi2_eval_two_tau_p(const float *y, int n, float clk_ns,
+                                  float t0, float tr, float tf, float p)
+{
+    const float t_max_inv = 1.0f / t_max_value_p(tr, tf, p);
+    float s = 0.0f;
+    for (int i = 0; i < n; ++i) {
+        const float t = i * clk_ns;
+        const float r = y[i] - two_tau_p_unit_pt(t, t0, tr, tf, p, t_max_inv);
+        s += r * r;
+    }
+    return s;
+}
+
+} // anon
+
+WaveAnalyzer::PulseFitResult
+WaveAnalyzer::FitPulseShape(const uint16_t *slice, int nslice,
+                            int peak_idx_in_slice,
+                            float ped, float ped_rms,
+                            float clk_ns,
+                            float model_err_floor)
+{
+    PulseFitResult res{};
+    res.ok = false;
+
+    if (!slice || nslice < 8 || nslice > MAX_SAMPLES) return res;
+    if (peak_idx_in_slice < 0 || peak_idx_in_slice >= nslice) return res;
+
+    const float peak_amp = static_cast<float>(slice[peak_idx_in_slice]) - ped;
+    if (peak_amp <= 0.0f) return res;
+    res.peak_amp = peak_amp;
+
+    // Pedsub + normalise to unit peak.
+    float y[MAX_SAMPLES];
+    const float inv_amp = 1.0f / peak_amp;
+    for (int i = 0; i < nslice; ++i)
+        y[i] = (static_cast<float>(slice[i]) - ped) * inv_amp;
+
+    // σ on the normalised pulse: relative noise, floored at the model-
+    // error scale so χ²/dof stays sane on high-amplitude pulses.
+    const float sigma_noise = std::max(ped_rms, 1.0f) * inv_amp;
+    const float sigma       = std::max(sigma_noise, model_err_floor);
+    const float w_inv2      = 1.0f / (sigma * sigma);
+
+    // Initial guesses — same as the previous Python fit.
+    float t0 = peak_idx_in_slice * clk_ns - 2.0f * clk_ns;
+    float tr = 1.0f * clk_ns;
+    float tf = 5.0f * clk_ns;
+
+    const float t0_lo = -2.0f * clk_ns;
+    const float t0_hi = (nslice - 1) * clk_ns;
+    const float tr_lo = 0.2f * clk_ns;
+    const float tr_hi = 10.0f * clk_ns;
+    const float tf_lo = 1.0f * clk_ns;
+    const float tf_hi = 80.0f * clk_ns;
+
+    constexpr int   MAX_ITER  = 100;       // ~scipy curve_fit default budget
+    constexpr float TOL_PARAM = 1e-5f;     // relative param step in clk_ns units
+    constexpr float LAMBDA0   = 1.0e-3f;
+    constexpr float LAMBDA_UP = 10.0f;
+    constexpr float LAMBDA_DN = 10.0f;
+    constexpr float LAMBDA_MAX = 1.0e10f;
+
+    float lambda = LAMBDA0;
+    float chi2   = chi2_eval(y, nslice, clk_ns, t0, tr, tf);
+
+    // Best params seen during the loop — we return these unconditionally
+    // at the end, matching scipy.optimize.curve_fit semantics ("hand back
+    // the best found, let the caller decide via χ²/dof whether the fit
+    // is useful").  Without this, ~12% of fits where the initial guess
+    // is already near-optimal silently report ok=false because no LM
+    // step strictly improves χ².
+    float chi2_best = chi2;
+    float t0_best = t0, tr_best = tr, tf_best = tf;
+
+    int iter = 0;
+    for (; iter < MAX_ITER; ++iter) {
+        // Residuals at current point.
+        float r[MAX_SAMPLES];
+        const float t_max_inv = 1.0f / t_max_value(tr, tf);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            r[i] = y[i] - two_tau_unit_pt(t, t0, tr, tf, t_max_inv);
+        }
+
+        // Forward-difference Jacobian columns (n_data × 3, column-major
+        // with stride MAX_SAMPLES).
+        float J[MAX_SAMPLES * 3];
+        const float h_t0 = std::max(1e-3f * clk_ns, 1e-6f);
+        const float h_tr = std::max(1e-3f * tr,     1e-6f);
+        const float h_tf = std::max(1e-3f * tf,     1e-6f);
+
+        const float tmi_t0 = t_max_inv;            // T_max independent of t0
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_unit_pt(t, t0,        tr, tf, tmi_t0);
+            const float fp = two_tau_unit_pt(t, t0 + h_t0, tr, tf, tmi_t0);
+            J[i + 0 * MAX_SAMPLES] = -(fp - f0) / h_t0;     // dr/dt0
+        }
+        const float tmi_trp = 1.0f / t_max_value(tr + h_tr, tf);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_unit_pt(t, t0, tr,        tf, t_max_inv);
+            const float fp = two_tau_unit_pt(t, t0, tr + h_tr, tf, tmi_trp);
+            J[i + 1 * MAX_SAMPLES] = -(fp - f0) / h_tr;     // dr/dτ_r
+        }
+        const float tmi_tfp = 1.0f / t_max_value(tr, tf + h_tf);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_unit_pt(t, t0, tr, tf,        t_max_inv);
+            const float fp = two_tau_unit_pt(t, t0, tr, tf + h_tf, tmi_tfp);
+            J[i + 2 * MAX_SAMPLES] = -(fp - f0) / h_tf;     // dr/dτ_f
+        }
+
+        // Normal equations: A = J^T J, g = J^T r  (uniform weight w_inv2
+        // factors out — same scaling on A and g, solution unchanged).
+        float A[9] = {0};
+        float g[3] = {0};
+        for (int i = 0; i < nslice; ++i) {
+            const float j0 = J[i + 0 * MAX_SAMPLES];
+            const float j1 = J[i + 1 * MAX_SAMPLES];
+            const float j2 = J[i + 2 * MAX_SAMPLES];
+            A[0] += j0 * j0; A[1] += j0 * j1; A[2] += j0 * j2;
+                              A[4] += j1 * j1; A[5] += j1 * j2;
+                                                A[8] += j2 * j2;
+            g[0] += j0 * r[i]; g[1] += j1 * r[i]; g[2] += j2 * r[i];
+        }
+        A[3] = A[1]; A[6] = A[2]; A[7] = A[5];
+
+        // Augment A with λ on the diagonal and solve for the step.
+        float Aug[9] = {A[0]+lambda, A[1], A[2],
+                        A[3], A[4]+lambda, A[5],
+                        A[6], A[7], A[8]+lambda};
+        float delta[3];
+        if (!chol3_solve(Aug, g, delta)) {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+            continue;
+        }
+
+        // Trial point, clamped to bounds.
+        //
+        // Sign: we set up J_ik = ∂r_i/∂p_k = -∂model_i/∂p_k and g = J^T r,
+        // then solved (J^T J + λI) δ = g.  The Gauss-Newton step that
+        // minimises ||r + J δ||² is δ_GN = -(J^T J + λI)^{-1} J^T r, i.e.
+        // the NEGATIVE of what chol3_solve returned — so the parameter
+        // update is `p - delta`, not `p + delta`.
+        const float new_t0 = std::clamp(t0 - delta[0], t0_lo, t0_hi);
+        const float new_tr = std::clamp(tr - delta[1], tr_lo, tr_hi);
+        const float new_tf = std::clamp(tf - delta[2], tf_lo, tf_hi);
+        const float new_chi2 = chi2_eval(y, nslice, clk_ns, new_t0, new_tr, new_tf);
+
+        // Always remember the best point we've seen, even if the strict-
+        // accept test below rejects it.
+        if (std::isfinite(new_chi2) && new_chi2 < chi2_best) {
+            chi2_best = new_chi2;
+            t0_best = new_t0; tr_best = new_tr; tf_best = new_tf;
+        }
+
+        if (new_chi2 < chi2) {
+            const float dpar = std::abs(delta[0]) / clk_ns
+                             + std::abs(delta[1]) / clk_ns
+                             + std::abs(delta[2]) / clk_ns;
+            t0 = new_t0; tr = new_tr; tf = new_tf;
+            chi2 = new_chi2;
+            lambda = std::max(lambda / LAMBDA_DN, 1.0e-12f);
+            if (dpar < TOL_PARAM) { ++iter; break; }
+        } else {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+        }
+    }
+
+    // Return the best params seen.  ok=false only if every candidate
+    // produced NaN/Inf — initial guess can't get worse than that.
+    if (!std::isfinite(t0_best) || !std::isfinite(tr_best) || !std::isfinite(tf_best))
+        return res;
+
+    const int dof = std::max(1, nslice - 3);
+    res.t0_ns        = t0_best;
+    res.tau_r_ns     = tr_best;
+    res.tau_f_ns     = tf_best;
+    res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
+    res.n_iter       = iter;
+    res.ok           = true;
+    return res;
+}
+
+WaveAnalyzer::PulseFitTwoTauPResult
+WaveAnalyzer::FitPulseShapeTwoTauP(const uint16_t *slice, int nslice,
+                                    int peak_idx_in_slice,
+                                    float ped, float ped_rms,
+                                    float clk_ns,
+                                    float model_err_floor)
+{
+    PulseFitTwoTauPResult res{};
+    res.ok = false;
+
+    if (!slice || nslice < 8 || nslice > MAX_SAMPLES) return res;
+    if (peak_idx_in_slice < 0 || peak_idx_in_slice >= nslice) return res;
+
+    const float peak_amp = static_cast<float>(slice[peak_idx_in_slice]) - ped;
+    if (peak_amp <= 0.0f) return res;
+    res.peak_amp = peak_amp;
+
+    float y[MAX_SAMPLES];
+    const float inv_amp = 1.0f / peak_amp;
+    for (int i = 0; i < nslice; ++i)
+        y[i] = (static_cast<float>(slice[i]) - ped) * inv_amp;
+
+    const float sigma_noise = std::max(ped_rms, 1.0f) * inv_amp;
+    const float sigma       = std::max(sigma_noise, model_err_floor);
+    const float w_inv2      = 1.0f / (sigma * sigma);
+
+    // Initial guesses — match FitPulseShape's, plus p starting at the
+    // sigmoidal value 2.0 (mid-range for the expected [1, 3] span; LM
+    // can drift up or down within bounds).
+    float t0 = peak_idx_in_slice * clk_ns - 2.0f * clk_ns;
+    float tr = 1.0f * clk_ns;
+    float tf = 5.0f * clk_ns;
+    float p  = 2.0f;
+
+    const float t0_lo = -2.0f * clk_ns;
+    const float t0_hi = (nslice - 1) * clk_ns;
+    const float tr_lo = 0.2f * clk_ns;
+    const float tr_hi = 10.0f * clk_ns;
+    const float tf_lo = 1.0f * clk_ns;
+    const float tf_hi = 80.0f * clk_ns;
+    const float p_lo  = 0.3f;     // < 1 = sharp/under-shoot rise (allowed but unusual)
+    const float p_hi  = 10.0f;    // > 10 = pathologically smooth
+
+    constexpr int   MAX_ITER  = 100;
+    constexpr float TOL_PARAM = 1e-5f;
+    constexpr float LAMBDA0   = 1.0e-3f;
+    constexpr float LAMBDA_UP = 10.0f;
+    constexpr float LAMBDA_DN = 10.0f;
+    constexpr float LAMBDA_MAX = 1.0e10f;
+
+    float lambda = LAMBDA0;
+    float chi2   = chi2_eval_two_tau_p(y, nslice, clk_ns, t0, tr, tf, p);
+
+    float chi2_best = chi2;
+    float t0_best = t0, tr_best = tr, tf_best = tf, p_best = p;
+
+    int iter = 0;
+    for (; iter < MAX_ITER; ++iter) {
+        // Residuals at current point.
+        float r[MAX_SAMPLES];
+        const float t_max_inv = 1.0f / t_max_value_p(tr, tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            r[i] = y[i] - two_tau_p_unit_pt(t, t0, tr, tf, p, t_max_inv);
+        }
+
+        // Forward-difference Jacobian (4 columns, n_data × 4, column-
+        // major with stride MAX_SAMPLES).
+        float J[MAX_SAMPLES * 4];
+        const float h_t0 = std::max(1e-3f * clk_ns, 1e-6f);
+        const float h_tr = std::max(1e-3f * tr,     1e-6f);
+        const float h_tf = std::max(1e-3f * tf,     1e-6f);
+        const float h_p  = std::max(1e-3f * p,      1e-6f);
+
+        const float tmi_t0 = t_max_inv;            // T_max independent of t0
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0,        tr, tf, p, tmi_t0);
+            const float fp = two_tau_p_unit_pt(t, t0 + h_t0, tr, tf, p, tmi_t0);
+            J[i + 0 * MAX_SAMPLES] = -(fp - f0) / h_t0;     // dr/dt0
+        }
+        const float tmi_trp = 1.0f / t_max_value_p(tr + h_tr, tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr,        tf, p, t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr + h_tr, tf, p, tmi_trp);
+            J[i + 1 * MAX_SAMPLES] = -(fp - f0) / h_tr;     // dr/dτ_r
+        }
+        const float tmi_tfp = 1.0f / t_max_value_p(tr, tf + h_tf, p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr, tf,        p, t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr, tf + h_tf, p, tmi_tfp);
+            J[i + 2 * MAX_SAMPLES] = -(fp - f0) / h_tf;     // dr/dτ_f
+        }
+        const float tmi_pp = 1.0f / t_max_value_p(tr, tf, p + h_p);
+        for (int i = 0; i < nslice; ++i) {
+            const float t = i * clk_ns;
+            const float f0 = two_tau_p_unit_pt(t, t0, tr, tf, p,       t_max_inv);
+            const float fp = two_tau_p_unit_pt(t, t0, tr, tf, p + h_p, tmi_pp);
+            J[i + 3 * MAX_SAMPLES] = -(fp - f0) / h_p;      // dr/dp
+        }
+
+        // Normal equations.  A is 4×4 row-major.
+        float A[16] = {0};
+        float g[4]  = {0};
+        for (int i = 0; i < nslice; ++i) {
+            const float j0 = J[i + 0 * MAX_SAMPLES];
+            const float j1 = J[i + 1 * MAX_SAMPLES];
+            const float j2 = J[i + 2 * MAX_SAMPLES];
+            const float j3 = J[i + 3 * MAX_SAMPLES];
+            A[ 0] += j0*j0; A[ 1] += j0*j1; A[ 2] += j0*j2; A[ 3] += j0*j3;
+                            A[ 5] += j1*j1; A[ 6] += j1*j2; A[ 7] += j1*j3;
+                                            A[10] += j2*j2; A[11] += j2*j3;
+                                                            A[15] += j3*j3;
+            g[0] += j0 * r[i]; g[1] += j1 * r[i]; g[2] += j2 * r[i]; g[3] += j3 * r[i];
+        }
+        // Mirror upper to lower (keep both halves filled for cholesky/chol_solve).
+        A[ 4] = A[ 1];  A[ 8] = A[ 2];  A[12] = A[ 3];
+        A[ 9] = A[ 6];  A[13] = A[ 7];
+        A[14] = A[11];
+
+        // (A + λI) δ = g  via the generic K=4 Cholesky.
+        float Aug[16];
+        for (int i = 0; i < 16; ++i) Aug[i] = A[i];
+        Aug[ 0] += lambda; Aug[ 5] += lambda; Aug[10] += lambda; Aug[15] += lambda;
+
+        float L[16];
+        const float min_pivot_sq = cholesky(Aug, L, 4);
+        if (min_pivot_sq < 0.0f) {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+            continue;
+        }
+
+        float delta[4];
+        chol_solve(L, g, delta, 4);
+
+        // Trial point — same sign convention as FitPulseShape.
+        const float new_t0 = std::clamp(t0 - delta[0], t0_lo, t0_hi);
+        const float new_tr = std::clamp(tr - delta[1], tr_lo, tr_hi);
+        const float new_tf = std::clamp(tf - delta[2], tf_lo, tf_hi);
+        const float new_p  = std::clamp(p  - delta[3], p_lo,  p_hi);
+        const float new_chi2 = chi2_eval_two_tau_p(y, nslice, clk_ns,
+                                                   new_t0, new_tr, new_tf, new_p);
+
+        if (std::isfinite(new_chi2) && new_chi2 < chi2_best) {
+            chi2_best = new_chi2;
+            t0_best = new_t0; tr_best = new_tr; tf_best = new_tf; p_best = new_p;
+        }
+
+        if (new_chi2 < chi2) {
+            const float dpar = std::abs(delta[0]) / clk_ns
+                             + std::abs(delta[1]) / clk_ns
+                             + std::abs(delta[2]) / clk_ns
+                             + std::abs(delta[3]) / std::max(p, 0.1f);
+            t0 = new_t0; tr = new_tr; tf = new_tf; p = new_p;
+            chi2 = new_chi2;
+            lambda = std::max(lambda / LAMBDA_DN, 1.0e-12f);
+            if (dpar < TOL_PARAM) { ++iter; break; }
+        } else {
+            lambda *= LAMBDA_UP;
+            if (lambda > LAMBDA_MAX) break;
+        }
+    }
+
+    if (!std::isfinite(t0_best) || !std::isfinite(tr_best) ||
+        !std::isfinite(tf_best) || !std::isfinite(p_best))
+        return res;
+
+    const int dof = std::max(1, nslice - 4);
+    res.t0_ns        = t0_best;
+    res.tau_r_ns     = tr_best;
+    res.tau_f_ns     = tf_best;
+    res.p            = p_best;
+    res.chi2_per_dof = (chi2_best * w_inv2) / static_cast<float>(dof);
+    res.n_iter       = iter;
+    res.ok           = true;
+    return res;
+}
+

@@ -318,6 +318,144 @@ the primary's — that gate is about whether a peak gets recorded at
 all; `Q_PEAK_PILED` is about whether a recorded peak sits next to
 another one.
 
+### NNLS pile-up deconvolution
+
+The local-maxima + tail-cutoff integral the previous step gives works
+well in isolation but biases both height and integral on `Q_PEAK_PILED`
+peaks: each pulse's tail bleeds into the rising edge of the next, so
+neighbour-N's apparent baseline is lifted and neighbour-N+1's apparent
+peak height is biased low (or high, depending on geometry).  When a
+per-type pulse template is available for the channel's category
+(PbGlass / PbWO4 / LMS / Veto), the analyzer can recover the underlying
+per-pulse amplitudes by solving a linear non-negative least-squares
+(NNLS) problem.
+
+**Model.**  A piled-up event with K WaveAnalyzer-found peaks at times
+`t_k` is modelled as a non-negative linear combination of K instances of
+the channel's per-type template:
+
+```
+s(t_i) = Σ_k a_k · T(t_i − τ_k; τ_r, τ_f)
+```
+
+`T(...; τ_r, τ_f)` is the same two-tau pulse fit by
+[`fit_pulse_template.py`](scripts/fit_pulse_template.py); each column is
+shifted so its analytic peak `τ_k = t_k − τ_r·ln((τ_r+τ_f)/τ_r)` lands
+on the WaveAnalyzer-reported peak time.  NNLS gives `a_k ≥ 0` from
+which the per-peak height (`a_k · T_max`) and per-peak integral (`a_k ·
+Σᵢ T(t_i − τ_k)` over a fixed window) follow.
+
+**Stack-only solver.**  Lawson-Hanson active-set NNLS over the K×K
+normal-equation submatrix; Cholesky factorisation with min-pivot
+tracking provides both the linear solve and a conditioning proxy
+(`max_diag(M^TM) / min_pivot²`) that gates against ill-conditioned
+systems where two peaks are too close together.  K ≤ `MAX_PEAKS = 8`
+in production data, so the solve is essentially free per event.
+
+**Per-type template store
+([`PulseTemplateStore`](../../../prad2dec/include/PulseTemplateStore.h)).**
+Loaded once at startup from the JSON written by `fit_pulse_template.py`.
+Two pieces are taken from the file:
+
+1. The `_by_type` block — one (τ_r, τ_f) median per category
+   (PbGlass / PbWO4 / LMS / Veto).  These are the templates the
+   deconvolver actually uses.  Each one is re-validated against the
+   analyzer's `tau_*_range_ns` gates before being accepted.
+2. Each per-channel record's `module_type` field — used only to learn
+   each channel's category.  Per-channel τ_r / τ_f are deliberately
+   ignored: pulse shapes group cleanly by crystal type, so a single
+   well-fit category aggregate is more reliable than thousands of
+   single-channel fits with varying statistics.
+
+`Lookup(roc_tag, slot, channel)` resolves the channel's category from
+the loaded metadata and returns the matching per-type template.
+Channels with `module_type = "Unknown"` (or absent from the JSON
+entirely) get a `nullptr` and are skipped by the deconv.
+File-not-found / parse errors warn to stderr and leave the store
+invalid — every WaveAnalyzer holding it falls back to the local-maxima
+peak heights silently.
+
+**In-place output, single quality flag.**  When auto-deconv runs and
+converges, the affected `Peak` objects are overwritten in place:
+
+- `peak.height`   ← `a_k · T_max`
+- `peak.integral` ← `a_k · Σ T(t_i − τ_k)` over the per-peak window
+- `peak.quality |= Q_PEAK_DECONVOLVED`
+
+Downstream code never has to choose between two parallel arrays — every
+peak in the result has the best available height/integral the analyzer
+could produce, and consumers that care can filter on the
+`Q_PEAK_DECONVOLVED` bit to know which peaks went through NNLS instead
+of the chop-off-at-valley path.  Failure paths (template missing,
+template out of range, design matrix singular, deconv globally
+disabled) all leave the WaveAnalyzer values untouched.
+
+**Configuration.**  All knobs live under
+`fadc250_waveform.analyzer.nnls_deconv` in
+[`database/daq_config.json`](../../../database/daq_config.json):
+
+```jsonc
+"nnls_deconv": {
+    "enabled":            false,
+    "template_file":      "waveform/pulse_templates_024177.json",
+    "apply_to_all_peaks": false,
+    "tau_r_range_ns":     [0.5, 10.0],
+    "tau_f_range_ns":     [2.0, 100.0],
+    "cond_number_max":    1.0e6,
+    "pre_samples":        8,
+    "post_samples":       40
+}
+```
+
+The shipping default is `enabled: false` — production replay runs
+without deconvolution while the per-type templates and gates are
+still under study.  Flip to `true` once the templates have been
+re-validated for the run you're replaying.
+
+`enabled` and `apply_to_all_peaks` are runtime gates;
+`tau_*_range_ns` and `cond_number_max` decide which templates / events
+are trustworthy enough to deconvolve.  `pre_samples` / `post_samples`
+set the window for the deconvolved integral.  `template_file` is
+resolved against `PRAD2_DATABASE_DIR` and points at the per-type
+template JSON written by `fit_pulse_template.py` (its `_by_type` block
+supplies the τ_r / τ_f for each category).
+
+**Wiring into production code.**  Every code path that already uses
+`WaveAnalyzer` picks deconv up automatically when (a) the daq_config
+enables it, (b) the application has loaded a `PulseTemplateStore`, and
+(c) the analyzer is bound to the store + the channel key for the
+current waveform:
+
+```cpp
+// once at setup
+fdec::PulseTemplateStore store;
+if (cfg.wave_cfg.nnls_deconv.enabled
+    && !cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+    store.LoadFromFile(db_dir + "/" + cfg.wave_cfg.nnls_deconv.template_file,
+                       cfg.wave_cfg.nnls_deconv);
+}
+fdec::WaveAnalyzer ana(cfg.wave_cfg);
+ana.SetTemplateStore(&store);
+
+// per channel inside the existing loop
+ana.SetChannelKey(roc.tag, slot, channel);
+ana.Analyze(samples, n, wres);   // auto-deconv when conditions met
+```
+
+No separate `Deconvolve()` call from production code; no separate
+`peak_height_dec` / `peak_integral_dec` arrays in the ROOT tree —
+existing branches already carry the deconvolved values when deconv ran,
+and `peak_quality` carries the flag that says whether it did.
+
+**Diagnostic Python script.**  For visualising the deconvolution on
+individual piled-up events, see
+[`deconv_pileup_demo.py`](../../../analysis/pyscripts/deconv_pileup_demo.py).
+It reads an EVIO file, finds channel-events that the analyzer flagged
+with `Q_PEAK_PILED`, runs the explicit `wave_ana.deconvolve()` binding
+(which always runs when given a valid template, regardless of the
+production `enabled` flag), and writes a small set of before/after PNGs
+suitable for slides or a code-review.
+
 ### Parameter sensitivity
 
 Two of the parameters above visibly change the analyzer's output on this

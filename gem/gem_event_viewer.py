@@ -1309,7 +1309,7 @@ class AdvancedDock(QDockWidget):
 
         # Reset button — emits resetRequested; the main window is
         # responsible for reverting widget values to the initial config
-        # (which may have been loaded from gem_daq_map.json + peds).
+        # (which may have been loaded from gem_map.json + peds).
         self._reset_btn = QPushButton("Reset to defaults")
         self._reset_btn.clicked.connect(lambda: self.resetRequested.emit())
         layout.addWidget(self._reset_btn)
@@ -1386,7 +1386,7 @@ def default_daq_config() -> Optional[Path]:
 
 
 def default_gem_map() -> Optional[Path]:
-    return _find_first(_search_candidates("gem_hycal_daq_map.json"))
+    return _find_first(_search_candidates("gem_map.json"))
 
 
 # NOTE: no default_gem_ped() auto-discovery.  Pedestals are per-run
@@ -1591,7 +1591,7 @@ class GemEventViewer(QMainWindow):
         act_open.triggered.connect(self._pick_evio)
         m_file.addAction(act_open)
 
-        act_map = QAction("Choose &gem_daq_map.json…", self)
+        act_map = QAction("Choose &gem_map.json…", self)
         act_map.triggered.connect(self._pick_gem_map)
         m_file.addAction(act_map)
 
@@ -1653,8 +1653,8 @@ class GemEventViewer(QMainWindow):
             return
         if not self._gem_map_path or not os.path.isfile(self._gem_map_path):
             QMessageBox.warning(
-                self, "gem_daq_map.json not found",
-                "Could not locate gem_daq_map.json — use File → Choose gem_daq_map.json to set it.")
+                self, "gem_map.json not found",
+                "Could not locate gem_map.json — use File → Choose gem_map.json to set it.")
             return
 
         try:
@@ -1664,7 +1664,7 @@ class GemEventViewer(QMainWindow):
             self._hole = hole
             self._gem_raw = raw
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.critical(self, "Bad gem_daq_map.json", str(exc))
+            QMessageBox.critical(self, "Bad gem_map.json", str(exc))
             return
 
         try:
@@ -1718,7 +1718,7 @@ class GemEventViewer(QMainWindow):
 
         # Feed the Raw APV tab its static per-APV metadata.  Skip APVs
         # without a DAQ assignment (crate/mpd/adc all -1) — those are
-        # placeholder slots in gem_daq_map.json and carry no data.
+        # placeholder slots in gem_map.json and carry no data.
         try:
             det_names = {d.id: d.name for d in self._gsys.get_detectors()}
         except Exception:
@@ -1754,7 +1754,7 @@ class GemEventViewer(QMainWindow):
 
     def _pick_gem_map(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Choose gem_daq_map.json", self._gem_map_path or "",
+            self, "Choose gem_map.json", self._gem_map_path or "",
             "JSON (*.json);;All files (*)")
         if path:
             self._gem_map_path = path
@@ -1778,7 +1778,7 @@ class GemEventViewer(QMainWindow):
             return
         if self._gsys is None:
             QMessageBox.warning(self, "GEM system not ready",
-                                "Load a gem_daq_map.json before opening an EVIO file.")
+                                "Load a gem_map.json before opening an EVIO file.")
             return
         if not os.path.isfile(path):
             QMessageBox.warning(self, "File not found", path)
@@ -2409,7 +2409,7 @@ def _resolve_path(user_value, finder):
 def _run_batch_layout(args) -> int:
     gem_map = _resolve_path(args.gem_map, default_gem_map)
     if not gem_map or not os.path.isfile(gem_map):
-        print(f"error: gem_daq_map.json not found (pass -G <path>)", file=sys.stderr)
+        print(f"error: gem_map.json not found (pass -G <path>)", file=sys.stderr)
         return 2
     layers, apvs, hole, raw = load_gem_map(gem_map)
     detectors = build_strip_layout(layers, apvs, hole, raw)
@@ -2442,7 +2442,7 @@ def _run_batch_evio(args) -> int:
     if not daq_cfg or not os.path.isfile(daq_cfg):
         print("error: daq_config.json not found (pass -D)", file=sys.stderr); return 2
     if not gem_map or not os.path.isfile(gem_map):
-        print("error: gem_daq_map.json not found (pass -G)", file=sys.stderr); return 2
+        print("error: gem_map.json not found (pass -G)", file=sys.stderr); return 2
 
     indices: List[int] = []
     if args.event is not None:
@@ -2518,7 +2518,7 @@ def _run_batch_json(args) -> int:
     import glob as globmod
     gem_map = _resolve_path(args.gem_map, default_gem_map)
     if not gem_map or not os.path.isfile(gem_map):
-        print("error: gem_daq_map.json not found (pass -G)", file=sys.stderr); return 2
+        print("error: gem_map.json not found (pass -G)", file=sys.stderr); return 2
 
     files: List[str] = []
     for arg in args.json:
@@ -2593,7 +2593,7 @@ def main():
     parser.add_argument("-D", "--daq-config", default=None,
                         help="Override daq_config.json path.")
     parser.add_argument("-G", "--gem-map", default=None,
-                        help="Override gem_daq_map.json path.")
+                        help="Override gem_map.json path.")
     parser.add_argument("-P", "--gem-ped", default=None,
                         help="Pedestal file (required for full-readout data; "
                              "ignored for online-ZS production data).")

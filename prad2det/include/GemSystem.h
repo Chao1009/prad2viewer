@@ -8,7 +8,7 @@
 //
 // Usage:
 //   gem::GemSystem sys;
-//   sys.Init("gem_daq_map.json");
+//   sys.Init("gem_map.json");
 //   sys.LoadPedestals("gem_ped.dat");
 //
 //   // per-event:
@@ -186,7 +186,7 @@ public:
     // and is ignored for matching — APVs are keyed by (crate, fiber, adc).
     //
     // crate_remap maps file-side hardware crate IDs to the logical crate
-    // IDs used by gem_daq_map.json (e.g. 146 -> 1, 147 -> 2).  Empty map = no
+    // IDs used by gem_map.json (e.g. 146 -> 1, 147 -> 2).  Empty map = no
     // remap (file IDs are used directly).
     void LoadPedestals(const std::string &ped_file,
                        const std::map<int, int> &crate_remap = {});

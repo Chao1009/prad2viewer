@@ -58,7 +58,7 @@ inline void SetRawWriteBranches(TTree *tree, RawEventData &ev, bool with_peaks)
 
     // Unified FADC250 channel array (HyCal + Veto + LMS).  Categorisation
     // is via hycal.module_type per channel — HyCal consumers using
-    // hycal.module_by_id() naturally skip SCINT/LMS entries because their
+    // hycal.module_by_id() naturally skip Veto/LMS entries because their
     // module_id values (3001+ / 3100+) are not registered in HyCalSystem.
     tree->Branch("hycal.nch",         &ev.nch,         "hycal.nch/I");
     tree->Branch("hycal.module_id",   ev.module_id,    "hycal.module_id[hycal.nch]/s");

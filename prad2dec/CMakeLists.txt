@@ -114,6 +114,7 @@ set(PRAD2DEC_SOURCES
     src/VtpDecoder.cpp
     src/TdcDecoder.cpp
     src/WaveAnalyzer.cpp
+    src/PulseTemplateStore.cpp
     src/Fadc250FwAnalyzer.cpp
     src/InstallPaths.cpp
 )
@@ -137,6 +138,12 @@ target_include_directories(prad2dec
 )
 
 target_link_libraries(prad2dec PUBLIC evio)
+
+# nlohmann::json — header-only, used by PulseTemplateStore.cpp to load
+# the per-channel pulse-template JSON.  load_daq_config.h also pulls it
+# in but only via downstream callers, so until now prad2dec didn't need
+# the dep itself.
+target_link_libraries(prad2dec PRIVATE nlohmann_json::nlohmann_json)
 
 # dladdr is used by InstallPaths.cpp for runtime module-path discovery.
 # CMAKE_DL_LIBS is the portable "dl" link name — empty on Windows,

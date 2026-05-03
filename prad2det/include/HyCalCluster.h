@@ -7,7 +7,7 @@
 //
 // Usage:
 //   HyCalSystem sys;
-//   sys.Init("hycal_modules.json", "hycal_daq_map.json");
+//   sys.Init("hycal_map.json");
 //
 //   HyCalCluster clusterer(sys);
 //   // per-event:

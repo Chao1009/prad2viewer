@@ -80,8 +80,8 @@ except ImportError:
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = SCRIPT_DIR / ".." / "database"
-MODULES_JSON  = DB_DIR / "hycal_modules.json"
-DAQ_MAP_JSON  = DB_DIR / "hycal_daq_map.json"
+MODULES_JSON  = DB_DIR / "hycal_map.json"
+DAQ_MAP_JSON  = DB_DIR / "hycal_map.json"
 DAQ_CFG_JSON  = DB_DIR / "daq_config.json"
 
 DEFAULT_URL = "http://localhost:5051"
@@ -220,19 +220,23 @@ def _load_crate_to_roc(path: Path) -> Dict[int, int]:
 
 def _load_daq_map(path: Path,
                   crate_to_roc: Optional[Dict[int, int]] = None) -> Dict[str, str]:
-    """Return {module_name: "roc_tag_slot_channel"} from hycal_daq_map.json.
+    """Return {module_name: "roc_tag_slot_channel"} from hycal_map.json.
 
     The event JSON produced by the C++ server uses the actual ROC tag (not the
     sequential crate index) as the first component of the channel key.  Pass
     crate_to_roc so the keys produced here match what the server emits.
+    Records without a "daq" block are skipped.
     """
     with open(path) as f:
         entries = json_mod.load(f)
     result: Dict[str, str] = {}
     for e in entries:
-        crate = e["crate"]
+        d = e.get("daq")
+        if not d:
+            continue
+        crate = d["crate"]
         roc = crate_to_roc.get(crate, crate) if crate_to_roc else crate
-        result[e["name"]] = f"{roc}_{e['slot']}_{e['channel']}"
+        result[e["n"]] = f"{roc}_{d['slot']}_{d['channel']}"
     return result
 
 
@@ -250,8 +254,11 @@ def _build_w_module_layers(modules_path: Path) -> Dict[str, int]:
         name = m['n']
         if not name.startswith('W'):
             continue
-        dr = max(0, 17 - m['row'], m['row'] - 18)
-        dc = max(0, 17 - m['col'], m['col'] - 18)
+        g = m.get('geo')
+        if not g or 'row' not in g or 'col' not in g:
+            continue
+        dr = max(0, 17 - g['row'], g['row'] - 18)
+        dc = max(0, 17 - g['col'], g['col'] - 18)
         result[name] = max(dr, dc)
     return result
 

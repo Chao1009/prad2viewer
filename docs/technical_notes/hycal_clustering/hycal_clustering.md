@@ -229,7 +229,7 @@ Useful flag bits (defined in `HyCalSystem.h`):
 
 ## Reproducing the plots
 
-Both the geometry (loaded from `hycal_modules.json`) and the algorithm
+Both the geometry (loaded from `hycal_map.json`) and the algorithm
 illustrations live in
 [`plot_hycal_clustering.py`](plot_hycal_clustering.py) (NumPy +
 Matplotlib only). The script implements the seed-finding and
@@ -251,7 +251,7 @@ Regenerates `plots/hycal_fig1_layout.png`, `plots/hycal_fig2_single_cluster.png`
   [`HyCalCluster.cpp`](../../../prad2det/src/HyCalCluster.cpp) — algorithm source
 - [`prad2det/include/HyCalSystem.h`](../../../prad2det/include/HyCalSystem.h) —
   geometry, neighbour grids, sector helpers
-- [`database/hycal_modules.json`](../../../database/hycal_modules.json) —
+- [`database/hycal_map.json`](../../../database/hycal_map.json) —
   per-module geometry (used by the plot script)
 - [`database/reconstruction_config.json`](../../../database/reconstruction_config.json) —
   per-run cluster-config defaults

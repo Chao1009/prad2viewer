@@ -198,12 +198,11 @@ struct DaqConfig
 
     // --- companion-file pointers (resolved relative to the database dir) ----
     // Loaded from daq_config.json; the application layer uses these to
-    // locate the HyCal modules description, channel maps, GEM mapping, and
-    // an optional pedestals JSON.  Empty strings mean "not provided" — the
-    // caller may fall back to a default name (e.g. "hycal_daq_map.json").
-    std::string modules_file;        // hycal_modules.json
-    std::string hycal_daq_map_file;  // hycal_daq_map.json
-    std::string gem_daq_map_file;    // gem_daq_map.json
+    // locate the merged HyCal/GEM maps and an optional pedestals JSON.
+    // Empty strings mean "not provided" — the caller may fall back to a
+    // default name (e.g. "hycal_map.json").
+    std::string hycal_map_file;      // hycal_map.json (merged geometry + DAQ)
+    std::string gem_map_file;        // gem_map.json
     std::string pedestal_file;       // ADC1881M pedestals (PRad legacy)
 
     // --- SYNC / control-event absolute-time decoding ------------------------

@@ -16,13 +16,13 @@ FADC250 channels (HyCal + Veto + LMS) — distinguish via `hycal.module_type`:
 | Value | Type | Source |
 |---|---|---|
 | 0 | Unknown | — |
-| 1 | PbGlass | `hycal_modules.json` `t="PbGlass"` |
-| 2 | PbWO4   | `hycal_modules.json` `t="PbWO4"`   |
-| 3 | SCINT   | `hycal_modules.json` `t="SCINT"` (Veto V1..V4) |
-| 4 | LMS     | `hycal_modules.json` `t="LMS"` (LMSPin, LMS1..3) |
+| 1 | PbGlass | `hycal_map.json` `t="PbGlass"` |
+| 2 | PbWO4   | `hycal_map.json` `t="PbWO4"`   |
+| 3 | VETO    | `hycal_map.json` `t="Veto"` (V1..V4) |
+| 4 | LMS     | `hycal_map.json` `t="LMS"` (LMSPin, LMS1..3) |
 
 `hycal.module_id` encoding (globally unique):
-PbGlass = 1..1156, PbWO4 = 1001..2152, SCINT = 3001..3004,
+PbGlass = 1..1156, PbWO4 = 1001..2152, VETO = 3001..3004,
 LMS = 3100 (Pin) / 3101..3103.
 
 ## Branches
@@ -46,7 +46,7 @@ LMS = 3100 (Pin) / 3101..3103.
 | `hycal.module_type` | `uint8[nch]`     | Category enum (legend above) |
 | `hycal.nsamples`    | `uint8[nch]`     | Samples per channel (≤ 200) |
 | `hycal.samples`     | `uint16[nch][200]` | Raw 12-bit ADC samples |
-| `hycal.gain_factor` | `float[nch]`     | Gain correction (1.0 for SCINT/LMS) |
+| `hycal.gain_factor` | `float[nch]`     | Gain correction (1.0 for Veto/LMS) |
 
 ### Soft-analyzer outputs — only with `-p`
 

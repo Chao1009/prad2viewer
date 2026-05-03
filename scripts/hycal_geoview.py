@@ -274,11 +274,20 @@ class Module:
 
 
 def load_modules(path: Path) -> List[Module]:
-    """Load modules from a JSON file (format: list of {n, t, x, y, sx, sy})."""
+    """Load modules from a hycal_map.json file.
+
+    Per-record schema: {n, t, geo:{sx,sy,x,y,...}, daq:{...}?, bst:{...}?}.
+    Records without a ``geo`` block (none in practice) are skipped.
+    """
     with open(path) as f:
         data = json.load(f)
-    return [Module(e["n"], e["t"], e["x"], e["y"], e["sx"], e["sy"])
-            for e in data]
+    out: List[Module] = []
+    for e in data:
+        g = e.get("geo")
+        if not g:
+            continue
+        out.append(Module(e["n"], e["t"], g["x"], g["y"], g["sx"], g["sy"]))
+    return out
 
 
 # ===========================================================================

@@ -43,8 +43,8 @@ cd docs/technical_notes/<topic>
 python scripts/plot_<topic>.py
 ```
 
-The HyCal and GEM scripts also read `database/hycal_modules.json` /
-`database/gem_daq_map.json` to draw the real geometry, so they need to
+The HyCal and GEM scripts also read `database/hycal_map.json` /
+`database/gem_map.json` to draw the real geometry, so they need to
 be run from a checkout of this repository (the relative paths walk up
 to the repo root).
 

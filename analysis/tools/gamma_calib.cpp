@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     evc::DaqConfig daq_cfg;
     std::string daq_config_file = db_dir + "/daq_config.json"; // default DAQ config for PRad2
     evc::load_daq_config(daq_config_file, daq_cfg);
-    hycal.Init(db_dir + "/hycal_modules.json", db_dir + "/hycal_daq_map.json");
+    hycal.Init(db_dir + "/hycal_map.json");
 
     int nmatched = hycal.LoadCalibration(in_calib_file);
     if (nmatched >= 0)

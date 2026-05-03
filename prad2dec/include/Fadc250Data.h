@@ -142,14 +142,26 @@ struct Peak {
     uint8_t  quality;
 };
 
-// Soft-analyzer peak quality bitmask (set by WaveAnalyzer::findPeaks).
+// Soft-analyzer peak quality bitmask (set by WaveAnalyzer::findPeaks
+// and Analyze).
 //
-// Q_PEAK_GOOD  = 0       no flags
-// Q_PEAK_PILED = 1 << 0  integration window is within `cfg.peak_pileup_gap`
-//                        samples of an adjacent peak's window — both peaks
-//                        in the pair get the bit set
-constexpr uint8_t Q_PEAK_GOOD  = 0;
-constexpr uint8_t Q_PEAK_PILED = 1u << 0;
+// Q_PEAK_GOOD         = 0       no flags
+// Q_PEAK_PILED        = 1 << 0  integration window is within
+//                                `cfg.peak_pileup_gap` samples of an
+//                                adjacent peak's window — both peaks in
+//                                the pair get the bit set
+// Q_PEAK_DECONVOLVED  = 1 << 1  height/integral were replaced in place
+//                                by per-pulse-fit pile-up deconvolution
+//                                against the per-type template
+//                                (PbGlass / PbWO4 / LMS / Veto) for
+//                                this channel's category, instead of
+//                                the local-maxima + tail-cutoff values.
+//                                Set by WaveAnalyzer::Analyze when a
+//                                PulseTemplateStore + channel key are
+//                                bound and the deconv converged.
+constexpr uint8_t Q_PEAK_GOOD        = 0;
+constexpr uint8_t Q_PEAK_PILED       = 1u << 0;
+constexpr uint8_t Q_PEAK_DECONVOLVED = 1u << 1;
 
 // Per-channel pedestal estimate from WaveAnalyzer.
 //   mean / rms  — final values after iterative outlier rejection
@@ -242,58 +254,107 @@ struct DaqWaveResult {
 // docs/technical_notes/waveform_analysis/wave_analysis.md and
 // fdec::WaveConfig::NnlsDeconvConfig in WaveAnalyzer.h.
 
-// Per-channel pulse template (medians from fit_pulse_template.py).  τ_r and
-// τ_f are time constants in ns of the two-tau scintillator+PMT model
+// Per-type pulse template (medians from fit_pulse_template.py's `_by_type`
+// block, one per module category).  τ_r and τ_f are time constants in ns of
+// the two-tau scintillator+PMT model
 //
 //   T(t; τ_r, τ_f) = (1 − exp(−t/τ_r)) · exp(−t/τ_f)   for t ≥ 0
 //
-// is_global: true if this is the synthesized fallback (median across all
-// "good" channels) rather than a per-channel fit.
+// is_global: kept for backwards compatibility.  Set to true on every
+// PulseTemplateStore-loaded template since the templates are category
+// aggregates rather than per-channel fits.  Templates constructed
+// directly in Python (via dec.PulseTemplate(tr, tf)) default to false.
+//
+// Precomputed grid: when filled by PulseTemplateStore::LoadFromFile() the
+// `grid[]` array holds T evaluated at i · grid_clk_ns (i = 0..GRID_N-1).
+// WaveAnalyzer::Deconvolve linearly interpolates this grid to skip the
+// per-sample exp() calls in its hot loop — a ~10× speed-up.
+//
+// The grid is fixed at 8× oversample relative to the data clock (so
+// grid_clk_ns = 0.5 ns at clk_mhz = 250).  Linear-interp error is ~0.1 %
+// worst-case across the rapidly-rising leading edge; finer doesn't
+// meaningfully help and coarser hurts accuracy without saving memory
+// (the array would be the same size anyway), so the factor is hardwired
+// rather than configurable.
+//
+// Templates constructed in Python (via dec.PulseTemplate(tr, tf)) leave
+// the grid empty (grid_clk_ns == 0) and the analyzer falls back to
+// evaluating the analytic form on the fly.
 struct PulseTemplate {
+    static constexpr int GRID_OVERSAMPLE = 8;
+    static constexpr int GRID_N          = MAX_SAMPLES * GRID_OVERSAMPLE;
+
     float   tau_r_ns;
     float   tau_f_ns;
     bool    is_global;
+    float   grid_clk_ns;                   // 0 ⇒ grid not filled
+    float   grid[GRID_N];                  // unit-amplitude T at i·grid_clk_ns
 };
 
 // Per-event deconv output, parallel to WaveResult.peaks[0..n-1].
 //
-// `state` is a single-valued enum (not a bitmask):
-//   Q_DECONV_NOT_RUN          Deconvolve() never invoked (or n_peaks==0)
-//   Q_DECONV_DISABLED         cfg.nnls_deconv.enabled == false
-//   Q_DECONV_NO_TEMPLATE      caller asked for deconv but tmpl was empty
-//   Q_DECONV_BAD_TEMPLATE     τ_r / τ_f failed range validation
-//   Q_DECONV_SINGULAR         design matrix ill-conditioned, deconv aborted
-//   Q_DECONV_APPLIED          channel template, NNLS converged
-//   Q_DECONV_FALLBACK_GLOBAL  global-median template, NNLS converged
+// `state` is a single-valued enum (not a bitmask).  Production code
+// (applyAutoDeconv inside Analyze) only needs to distinguish APPLIED /
+// FALLBACK_GLOBAL from everything else, but the diagnostic Python
+// script reports the full breakdown:
+//
+//   Q_DECONV_NOT_RUN           Deconvolve() never invoked, or pre-flight
+//                               check failed (no samples / npeaks==0 /
+//                               nsamples > MAX_SAMPLES)
+//   Q_DECONV_NO_TEMPLATE       reserved for callers that want to surface
+//                               "no template available for this channel"
+//                               (the C++ Deconvolve method itself never
+//                               sets this — it requires a template to be
+//                               passed in; applyAutoDeconv skips the call
+//                               entirely when the store returns nullptr)
+//   Q_DECONV_BAD_TEMPLATE      τ_r / τ_f outside cfg.nnls_deconv ranges
+//   Q_DECONV_LM_NOT_CONVERGED  the per-pulse LM exhausted MAX_ITER without
+//                               ever finding a step that improved on the
+//                               initial guess, OR every Cholesky in the
+//                               active set went indefinite; caller should
+//                               treat this as a deconv failure and fall
+//                               back to WaveAnalyzer's local-maxima values
+//   Q_DECONV_APPLIED           non-aggregate template, LM converged
+//                               (currently unused — every store-loaded
+//                                template is a per-type aggregate)
+//   Q_DECONV_FALLBACK_GLOBAL   per-type aggregate template, LM converged
 //
 // On any non-converged outcome the amplitude/height/integral arrays are
 // zeroed so callers can safely fall back to WaveResult.peaks values
-// without checking state per element.
+// without checking state per element.  The per-peak (t0, τ_r, τ_f)
+// arrays carry the per-pulse fit values when state ∈ {APPLIED,
+// FALLBACK_GLOBAL} — the diagnostic Python script reads them to plot
+// the actual fitted templates per peak; production consumers (replay
+// tree, viewer) ignore them.
 struct DeconvOutput {
     uint8_t state;
     int     n;                      // # peaks deconvolved (= WaveResult.npeaks at call time)
-    float   amplitude[MAX_PEAKS];   // a_k from NNLS (template-shape units)
-    float   height  [MAX_PEAKS];    // a_k · T_max(τ_r, τ_f)
+    float   amplitude[MAX_PEAKS];   // a_k from LM (peak height of unit template at this peak)
+    float   height  [MAX_PEAKS];    // = a_k · T_max(τ_r_k, τ_f_k)
     float   integral[MAX_PEAKS];    // a_k · Σ template over per-peak window
-    float   chi2_per_dof;           // residual chi² normalized by sigma=ped.rms
-    float   cond_number;            // proxy condition number of M^T M
+    float   t0_ns   [MAX_PEAKS];    // per-peak fitted onset time (ns from sample 0)
+    float   tau_r_ns[MAX_PEAKS];    // per-peak fitted rise constant
+    float   tau_f_ns[MAX_PEAKS];    // per-peak fitted fall constant
+    float   chi2_per_dof;           // residual χ²/dof of the multi-peak fit
     void clear()
     {
-        state = 0; n = 0; chi2_per_dof = 0; cond_number = 0;
+        state = 0; n = 0; chi2_per_dof = 0;
         for (int i = 0; i < MAX_PEAKS; ++i) {
             amplitude[i] = 0;
             height[i]    = 0;
             integral[i]  = 0;
+            t0_ns[i]     = 0;
+            tau_r_ns[i]  = 0;
+            tau_f_ns[i]  = 0;
         }
     }
 };
 
 constexpr uint8_t Q_DECONV_NOT_RUN          = 0;
-constexpr uint8_t Q_DECONV_DISABLED         = 1;
-constexpr uint8_t Q_DECONV_NO_TEMPLATE      = 2;
-constexpr uint8_t Q_DECONV_BAD_TEMPLATE     = 3;
-constexpr uint8_t Q_DECONV_SINGULAR         = 4;
-constexpr uint8_t Q_DECONV_APPLIED          = 5;
-constexpr uint8_t Q_DECONV_FALLBACK_GLOBAL  = 6;
+constexpr uint8_t Q_DECONV_NO_TEMPLATE      = 1;
+constexpr uint8_t Q_DECONV_BAD_TEMPLATE     = 2;
+constexpr uint8_t Q_DECONV_LM_NOT_CONVERGED = 3;
+constexpr uint8_t Q_DECONV_APPLIED          = 4;
+constexpr uint8_t Q_DECONV_FALLBACK_GLOBAL  = 5;
 
 } // namespace fdec

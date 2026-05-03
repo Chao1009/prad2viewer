@@ -15,7 +15,7 @@
 //
 // Options:
 //   -D <file>     DAQ configuration (auto-searches daq_config.json if omitted)
-//   -G <file>     GEM map file (default: gem_daq_map.json from DAQ config dir)
+//   -G <file>     GEM map file (default: gem_map.json from DAQ config dir)
 //   -P <file>     GEM pedestal file (optional, required for good hit finding)
 //   -n <N>        Max physics events to process (default: 10, 0=all)
 //   -t <bit>      Trigger bit filter (default: -1 = accept all)
@@ -595,7 +595,7 @@ static void usage(const char *prog)
         << "  -m evdump     Dump event(s) with 2D hits to JSON (-n K for first K)\n\n"
         << "Options (short / long):\n"
         << "  -D, --daq-config <file>    DAQ config (auto-searches daq_config.json if omitted)\n"
-        << "  -G, --gem-map <file>       GEM map file (default: gem_daq_map.json)\n"
+        << "  -G, --gem-map <file>       GEM map file (default: gem_map.json)\n"
         << "  -P, --gem-ped <file>       GEM pedestal file (required for full-readout data)\n"
         << "  -o, --output <file>        Output file (ped mode, default: gem_ped.json)\n"
         << "  -n, --num-events <N>       Max physics events (0 = no cap).  Default:\n"
@@ -753,13 +753,13 @@ int main(int argc, char *argv[])
     std::cerr << "DAQ config: " << daq_config_file
               << " (adc_format=" << daq_cfg.adc_format << ")\n";
 
-    // resolve GEM map file (default: gem_daq_map.json next to DAQ config)
+    // resolve GEM map file (default: gem_map.json next to DAQ config)
     if (gem_map_file.empty() && need_gem) {
         // try same directory as daq config
         auto pos = daq_config_file.rfind('/');
         if (pos == std::string::npos) pos = daq_config_file.rfind('\\');
         std::string dir = (pos != std::string::npos) ? daq_config_file.substr(0, pos + 1) : "";
-        gem_map_file = dir + "gem_daq_map.json";
+        gem_map_file = dir + "gem_map.json";
     }
 
     // initialize GEM system

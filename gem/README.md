@@ -9,7 +9,7 @@ All GEM-specific code lives here:
 | `gem_dump.cpp` | C++ CLI: raw/hits/clusters/evdump/summary/ped modes |
 | `gem_event_viewer.py` | PyQt6 event-by-event GUI (evio file → live reconstruction) |
 | `gem_cluster_view.py` | Static plotter for `gem_dump -m evdump` JSON output |
-| `gem_layout.py` | Visualize strip geometry from `gem_daq_map.json` |
+| `gem_layout.py` | Visualize strip geometry from `gem_map.json` |
 | `gem_strip_map.py` | Thin wrapper over `prad2py.det.map_strip` (library) |
 | `gem_view.py` | Matplotlib rendering + GemSystem adapters (library) |
 | `check_strip_map.py` | Dev: cross-validate pipeline vs PRadAnalyzer and mpd_gem_view_ssp |
@@ -23,7 +23,7 @@ the config files:
 | Short | Long | Meaning |
 |---|---|---|
 | `-D` | `--daq-config` | `daq_config.json` (gem_dump) |
-| `-G` | `--gem-map` | `gem_daq_map.json` (all tools) |
+| `-G` | `--gem-map` | `gem_map.json` (all tools) |
 | `-P` | `--gem-ped` | `gem_ped.json` (gem_dump, gem_event_viewer) |
 | `-o` | `--output` | output file (gem_dump, gem_cluster_view) |
 
@@ -41,7 +41,7 @@ via `prad2::resolve_data_dir()`.
 - **Active area:** 12 X-APVs × 128 ch @ 0.4 mm pitch (X), 24 Y-APVs × 128 ch @ 0.4 mm (Y).
 - **Beam hole:** 52 × 52 mm rectangle on the beam side, centered in Y (exact
   location derived from the "match" APV strip positions at runtime — see
-  `gem_daq_map.json`'s `hole` block).
+  `gem_map.json`'s `hole` block).
 
 ### Readout
 - **2 crates** — `0x31` (`gemroc1`) and `0x34` (`gemroc2`), 72 APVs each
@@ -71,7 +71,7 @@ See `prad2det/src/GemSystem.cpp`.
 Shared between online reconstruction (`gem::MapStrip` in
 `prad2det/src/GemSystem.cpp`) and these scripts (`gem_strip_map.py`
 wraps the same C++ entry via `prad2py.det`). Per-APV config in
-`gem_daq_map.json`:
+`gem_map.json`:
 
 | Field | Default | Meaning |
 |---|---|---|
@@ -163,7 +163,7 @@ matching is succeeding).
 ### Visualize strip layout
 
 ```bash
-gem_layout                          # auto-find gem_daq_map.json via $PRAD2_DATABASE_DIR
+gem_layout                          # auto-find gem_map.json via $PRAD2_DATABASE_DIR
 gem_layout -G path/to/alt_map.json  # override
 ```
 
@@ -177,7 +177,7 @@ python gem/check_strip_map.py               # from source tree
 python $PRAD2_DIR/share/prad2evviewer/gem/check_strip_map.py   # from install
 ```
 
-For every APV in `gem_daq_map.json`, maps all 128 channels through both
+For every APV in `gem_map.json`, maps all 128 channels through both
 mpd_gem_view_ssp's and PRadAnalyzer's reference implementations and our
 own, asserts they match. Run this after any change to the strip-mapping
 pipeline.
@@ -187,6 +187,6 @@ pipeline.
 - `prad2det/src/GemSystem.cpp` — pedestal/CM/ZS + strip mapping implementation.
 - `prad2det/src/GemCluster.cpp` — strip clustering + XY matching.
 - `prad2dec/src/SspDecoder.cpp` — SSP/MPD/APV bitfield decoder.
-- `database/gem_daq_map.json` — detector geometry + per-APV mapping (source of truth).
+- `database/gem_map.json` — detector geometry + per-APV mapping (source of truth).
 - `docs/rols/banktags.md` — bank-tag reference including MPD `0x0DE9`.
 - `memory/project_gem_geometry.md` — deep-dive on the 6-step mapping pipeline.

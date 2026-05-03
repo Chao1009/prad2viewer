@@ -210,7 +210,7 @@ source checkout). The CMake install step excludes this directory.
 ### trigger_mask_editor.py
 
 PyQt6 visual editor for FAV3 trigger masks. Displays a HyCal geo view
-(with LMS1-3, LMSP, V1-V4 below) and lets you click or drag modules to
+(with LMS1-3, V1-V4 below) and lets you click or drag modules to
 toggle channels off/on. Generates trigger mask `.cnf` files — only slots
 with disabled channels are written. Unmapped DAQ channels (slot
 positions with no module) are always masked off.
@@ -319,13 +319,13 @@ ch  = dec.EvChannel(); ch.set_config(cfg); ch.open("run.evio.00000")
 
 # --- GEM reconstruction -----------------------------------------------
 gsys = det.GemSystem()
-gsys.init("database/gem_daq_map.json")
+gsys.init("database/gem_map.json")
 gsys.load_pedestals("database/gem_ped.json")    # optional
 gcl  = det.GemCluster()
 
 # --- HyCal reconstruction ---------------------------------------------
 hsys = det.HyCalSystem()
-hsys.init("database/hycal_modules.json", "database/hycal_daq_map.json")
+hsys.init("database/hycal_map.json")
 hsys.load_calibration("database/hycal_calib.json")
 hcl  = det.HyCalCluster(hsys)
 

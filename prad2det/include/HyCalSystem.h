@@ -24,7 +24,7 @@ static constexpr int HYCAL_MAX_MODULES  = 1800;  // 1728 real + margin
 static constexpr int MAX_NEIGHBORS      = 12;    // max neighbors per module
 
 // --- module types -----------------------------------------------------------
-enum class ModuleType : int8_t { PbGlass = 0, PbWO4 = 1, LMS = 2, Unknown = -1 };
+enum class ModuleType : int8_t { PbGlass = 0, PbWO4 = 1, LMS = 2, Veto = 3, Unknown = -1 };
 
 // crystal module IDs start from 1000 (PrimEx convention)
 static constexpr int PWO_ID0 = 1000;
@@ -176,11 +176,13 @@ class HyCalSystem
 public:
     HyCalSystem() = default;
 
-    // Initialize from JSON config files.
-    // modules_path: hycal_modules.json (geometry)
-    // daq_path:     hycal_daq_map.json (crate/slot/channel mapping)
+    // Initialize from the merged HyCal map JSON.
+    // map_path: hycal_map.json — array of per-module records of the form
+    //   {"n": ..., "t": ..., "geo": {sx,sy,x,y,sec,row,col},
+    //                          "daq": {crate,slot,channel}}.
+    // The "daq" block is optional (e.g. PRad-1 has no daq for V1-V4).
     // Returns false on error.
-    bool Init(const std::string &modules_path, const std::string &daq_path);
+    bool Init(const std::string &map_path);
 
     // Load per-module calibration from JSON file.
     // Format: [{"name":"W735","factor":0.37,"base_energy":2138.67,"non_linear":0.006}, ...]

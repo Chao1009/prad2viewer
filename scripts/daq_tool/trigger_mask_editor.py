@@ -47,8 +47,7 @@ from hycal_geoview import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = SCRIPT_DIR / ".." / ".." / "database"
-MODULES_JSON = DB_DIR / "hycal_modules.json"
-DAQ_MAP_JSON = DB_DIR / "hycal_daq_map.json"
+HYCAL_MAP_JSON = DB_DIR / "hycal_map.json"
 
 NUM_CRATES = 7
 CRATE_NAMES = [f"adchycal{i}" for i in range(1, NUM_CRATES + 1)]
@@ -58,10 +57,10 @@ CHANNELS_PER_SLOT = 16
 _BOTTOM_Y = -640.0
 _BOTTOM_SZ = 50.0
 _LMS_V_XPOS = {
-    "LMS1": -200.0, "LMS2": -145.0, "LMS3": -90.0, "LMSP": -35.0,
+    "LMS1": -200.0, "LMS2": -145.0, "LMS3": -90.0,
     "V1": 35.0, "V2": 90.0, "V3": 145.0, "V4": 200.0,
 }
-_LABEL_NAMES = set(_LMS_V_XPOS.keys()) | {"LMSP"}
+_LABEL_NAMES = set(_LMS_V_XPOS.keys())
 
 # Colours — resolved against the active :class:`THEME` at paint time.
 def _col_on()       -> QColor: return QColor(THEME.SUCCESS)        # enabled
@@ -102,42 +101,23 @@ class ModuleInfo:
 
 
 def load_data() -> List[ModuleInfo]:
-    with open(MODULES_JSON) as f:
-        mods_json = json.load(f)
-    with open(DAQ_MAP_JSON) as f:
-        daq_json = json.load(f)
-
-    daq_by_name: Dict[str, Tuple[int, int, int]] = {}
-    for d in daq_json:
-        daq_by_name[d["name"]] = (d["crate"], d["slot"], d["channel"])
+    with open(HYCAL_MAP_JSON) as f:
+        entries = json.load(f)
 
     modules: List[ModuleInfo] = []
-    for m in mods_json:
+    for m in entries:
         name = m["n"]
-        # Reposition LMS below HyCal
+        d = m.get("daq") or {}
+        g = m.get("geo") or {}
+        # Reposition LMS below HyCal for the editor display
         if name in _LMS_V_XPOS:
             x, y, sx, sy = _LMS_V_XPOS[name], _BOTTOM_Y, _BOTTOM_SZ, _BOTTOM_SZ
         else:
-            x, y, sx, sy = m["x"], m["y"], m["sx"], m["sy"]
-        crate, slot, ch = daq_by_name.get(name, (-1, -1, -1))
+            x, y, sx, sy = g.get("x", 0.0), g.get("y", 0.0), g.get("sx", 0.0), g.get("sy", 0.0)
+        crate = d.get("crate", -1)
+        slot  = d.get("slot",  -1)
+        ch    = d.get("channel", -1)
         modules.append(ModuleInfo(name, m["t"], x, y, sx, sy, crate, slot, ch))
-
-    # Add V1-V4 scintillators (already in daq_map but not in modules json)
-    for vname in ("V1", "V2", "V3", "V4"):
-        if not any(m.name == vname for m in modules):
-            crate, slot, ch = daq_by_name.get(vname, (-1, -1, -1))
-            modules.append(ModuleInfo(vname, "Scintillator",
-                                      _LMS_V_XPOS[vname], _BOTTOM_Y,
-                                      _BOTTOM_SZ, _BOTTOM_SZ,
-                                      crate, slot, ch))
-    # LMSP (if not already placed via _LMS_V_XPOS from modules json)
-    if not any(m.name == "LMSP" for m in modules):
-        crate, slot, ch = daq_by_name.get("LMSP", (-1, -1, -1))
-        if crate >= 0:
-            modules.append(ModuleInfo("LMSP", "LMS",
-                                      _LMS_V_XPOS["LMSP"], _BOTTOM_Y,
-                                      _BOTTOM_SZ, _BOTTOM_SZ,
-                                      crate, slot, ch))
 
     return modules
 

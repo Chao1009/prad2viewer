@@ -250,7 +250,7 @@ These map directly onto the `gem_*` branches of the recon tree (see
 ## Reproducing the plots
 
 The detector geometry is read from
-[`database/gem_daq_map.json`](../../../database/gem_daq_map.json); the
+[`database/gem_map.json`](../../../database/gem_map.json); the
 strip-clustering and matching algorithms are re-implemented in pure
 Python in [`plot_gem_clustering.py`](plot_gem_clustering.py) (NumPy +
 Matplotlib only).
@@ -271,7 +271,7 @@ reconstructed cluster table to stdout.
 - [`prad2det/include/GemSystem.h`](../../../prad2det/include/GemSystem.h) —
   hierarchy, pedestal/CM/zero-suppression, strip mapping, per-detector
   `ClusterConfig` storage
-- [`database/gem_daq_map.json`](../../../database/gem_daq_map.json) —
+- [`database/gem_map.json`](../../../database/gem_map.json) —
   APV mapping + plane / pitch / hole geometry
 - [`database/reconstruction_config.json`](../../../database/reconstruction_config.json) —
   per-run cluster-config defaults

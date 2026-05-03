@@ -40,9 +40,9 @@ NUM_CRATES = 7
 CRATE_NAMES = [f"adchycal{i}" for i in range(1, NUM_CRATES + 1)]
 CHANNELS_PER_SLOT = 16
 
-DEFAULT_UNMAPPED_GAIN = 1.0
-DEFAULT_LMS_GAIN = 1.0
-DEFAULT_SCINT_GAIN = 1.0
+DEFAULT_UNMAPPED_GAIN = 0.0    # nonexistent channel — disable
+DEFAULT_LMS_GAIN  = 1.0
+DEFAULT_VETO_GAIN = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -62,24 +62,33 @@ def find_database_dir(explicit: Optional[str] = None) -> Path:
         Path.cwd(),
     ]
     for c in candidates:
-        if (c / "hycal_daq_map.json").is_file() and (c / "hycal_modules.json").is_file():
+        if (c / "hycal_map.json").is_file():
             return c.resolve()
     sys.exit("error: could not locate database directory "
-             "(looked for hycal_daq_map.json + hycal_modules.json)")
+             "(looked for hycal_map.json)")
 
 
 def load_modules(db_dir: Path) -> Dict[str, str]:
     """Return {module_name: module_type} for all HyCal modules."""
-    with open(db_dir / "hycal_modules.json") as f:
+    with open(db_dir / "hycal_map.json") as f:
         mods = json.load(f)
     return {m["n"]: m["t"] for m in mods}
 
 
 def load_daq_map(db_dir: Path) -> List[Tuple[str, int, int, int]]:
-    """Return list of (name, crate, slot, channel)."""
-    with open(db_dir / "hycal_daq_map.json") as f:
+    """Return list of (name, crate, slot, channel) from hycal_map.json.
+
+    Records without a "daq" block (boosters, V1-V4 in PRad-1) are skipped.
+    """
+    with open(db_dir / "hycal_map.json") as f:
         entries = json.load(f)
-    return [(e["name"], e["crate"], e["slot"], e["channel"]) for e in entries]
+    out: List[Tuple[str, int, int, int]] = []
+    for e in entries:
+        d = e.get("daq")
+        if not d:
+            continue
+        out.append((e["n"], d["crate"], d["slot"], d["channel"]))
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -113,8 +122,8 @@ def resolve_gain(name: str,
         return pbglass_gain
     if mod_type == "LMS":
         return DEFAULT_LMS_GAIN
-    # V1-V4 scintillators and anything else
-    return DEFAULT_SCINT_GAIN
+    # V1-V4 vetos and anything else
+    return DEFAULT_VETO_GAIN
 
 
 def safe_cap_gains(gains: Dict[str, float],
@@ -243,7 +252,7 @@ def parse_cnf_text(text: str,
 _BOTTOM_Y = -640.0
 _BOTTOM_SZ = 50.0
 _LMS_V_XPOS = {
-    "LMS1": -200.0, "LMS2": -145.0, "LMS3": -90.0, "LMSP": -35.0,
+    "LMS1": -200.0, "LMS2": -145.0, "LMS3": -90.0,
     "V1":     35.0, "V2":     90.0, "V3":   145.0, "V4":  200.0,
 }
 _LABEL_NAMES = set(_LMS_V_XPOS.keys())
@@ -268,32 +277,37 @@ class _ModuleInfo:
 
 def _load_module_info(db_dir: Path) -> List[_ModuleInfo]:
     """Load HyCal modules joined with the DAQ map for the GUI."""
-    with open(db_dir / "hycal_modules.json") as f:
-        mods_json = json.load(f)
-    with open(db_dir / "hycal_daq_map.json") as f:
-        daq_json = json.load(f)
+    with open(db_dir / "hycal_map.json") as f:
+        entries = json.load(f)
 
-    daq_by_name: Dict[str, Tuple[int, int, int]] = {
-        d["name"]: (d["crate"], d["slot"], d["channel"]) for d in daq_json
-    }
+    daq_by_name: Dict[str, Tuple[int, int, int]] = {}
+    for e in entries:
+        d = e.get("daq")
+        if d:
+            daq_by_name[e["n"]] = (d["crate"], d["slot"], d["channel"])
 
     modules: List[_ModuleInfo] = []
-    for m in mods_json:
+    for m in entries:
         name = m["n"]
+        g = m.get("geo") or {}
         if name in _LMS_V_XPOS:
             x, y, sx, sy = _LMS_V_XPOS[name], _BOTTOM_Y, _BOTTOM_SZ, _BOTTOM_SZ
         else:
-            x, y, sx, sy = m["x"], m["y"], m["sx"], m["sy"]
+            x, y, sx, sy = g.get("x", 0.0), g.get("y", 0.0), g.get("sx", 0.0), g.get("sy", 0.0)
         crate, slot, ch = daq_by_name.get(name, (-1, -1, -1))
         modules.append(_ModuleInfo(name, m["t"], x, y, sx, sy, crate, slot, ch))
 
+    # Defensive backfill for any _LMS_V_XPOS name that has a daq mapping but
+    # somehow isn't in the modules array.  In practice every deployed
+    # hycal_map.json carries LMS1-3 + V1-V4 as full records, and LMSP has no
+    # daq entry, so this loop is usually a no-op — kept for robustness.
     have = {m.name for m in modules}
     for name in _LMS_V_XPOS:
         if name in have:
             continue
         crate, slot, ch = daq_by_name.get(name, (-1, -1, -1))
         if crate >= 0:
-            t = "Scintillator" if name.startswith("V") else "LMS"
+            t = "Veto" if name.startswith("V") else "LMS"
             modules.append(_ModuleInfo(name, t, _LMS_V_XPOS[name],
                                        _BOTTOM_Y, _BOTTOM_SZ, _BOTTOM_SZ,
                                        crate, slot, ch))

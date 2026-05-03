@@ -510,7 +510,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="HyCal Scan Path Editor")
     parser.add_argument("--database", default=DEFAULT_DB_PATH,
-                        help="Path to hycal_modules.json")
+                        help="Path to hycal_map.json")
     parser.add_argument("--paths", default=PATHS_FILE,
                         help="Path to paths.json")
     args = parser.parse_args()

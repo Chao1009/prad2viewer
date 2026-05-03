@@ -7,7 +7,7 @@ Keeps the original CLI shape:
     gem_cluster_view.py <event.json> [<event.json>...]
     gem_cluster_view.py <dir_with_gem_event*.json>
     gem_cluster_view.py '*.json'
-    gem_cluster_view.py -G gem_daq_map.json --det N -o out.png <event.json>
+    gem_cluster_view.py -G gem_map.json --det N -o out.png <event.json>
 """
 
 from __future__ import annotations

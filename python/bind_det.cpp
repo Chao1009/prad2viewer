@@ -17,7 +17,7 @@
 //     ch  = dec.EvChannel(); ch.set_config(cfg); ch.open(path)
 //
 //     gsys = det.GemSystem()
-//     gsys.init("database/gem_daq_map.json")
+//     gsys.init("database/gem_map.json")
 //     gsys.load_pedestals("database/gem_ped.json")    # optional
 //     gcl = det.GemCluster()
 //
@@ -112,7 +112,7 @@ static void bind_gem(py::module_ &m)
 
     py::class_<gem::ApvConfig>(m, "ApvConfig",
         "Per-APV configuration: DAQ address + detector mapping + strip-mapping "
-        "params + per-strip pedestals.  One entry per APV in the gem_daq_map.json.")
+        "params + per-strip pedestals.  One entry per APV in the gem_map.json.")
         .def_readwrite("crate_id",     &gem::ApvConfig::crate_id)
         .def_readwrite("mpd_id",       &gem::ApvConfig::mpd_id)
         .def_readwrite("adc_ch",       &gem::ApvConfig::adc_ch)
@@ -246,7 +246,7 @@ static void bind_gem(py::module_ &m)
     // --- GemSystem (the main entry point) -----------------------------------
 
     py::class_<gem::GemSystem>(m, "GemSystem",
-        "PRad-II GEM detector system: loads the gem_daq_map.json / gem_ped.json, "
+        "PRad-II GEM detector system: loads gem_map.json / gem_ped.json, "
         "processes SspEventData (pedestal subtraction, common-mode correction, "
         "zero suppression, strip mapping), and hands off to GemCluster for "
         "2-D reconstruction.")
@@ -260,7 +260,7 @@ static void bind_gem(py::module_ &m)
             },
             py::arg("map_file"),
             "Load the detector hierarchy and APV mapping from a JSON file "
-            "(typically database/gem_daq_map.json).")
+            "(typically database/gem_map.json).")
         .def("load_pedestals",
             [](gem::GemSystem &self, const std::string &path) {
                 py::gil_scoped_release rel;
@@ -543,14 +543,13 @@ static void bind_hycal(py::module_ &m)
         "per job and then immutable — no per-event state lives here.")
         .def(py::init<>())
         .def("init",
-            [](fdec::HyCalSystem &self, const std::string &modules_path,
-               const std::string &daq_path) {
+            [](fdec::HyCalSystem &self, const std::string &map_path) {
                 py::gil_scoped_release rel;
-                return self.Init(modules_path, daq_path);
+                return self.Init(map_path);
             },
-            py::arg("modules_path"), py::arg("daq_path"),
-            "Load module geometry (hycal_modules.json) and DAQ map "
-            "(hycal_daq_map.json).  Returns True on success.")
+            py::arg("map_path"),
+            "Load HyCal module geometry + DAQ map from hycal_map.json.  "
+            "Returns True on success.")
         .def("load_calibration",
             [](fdec::HyCalSystem &self, const std::string &path) {
                 py::gil_scoped_release rel;

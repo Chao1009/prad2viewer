@@ -171,11 +171,19 @@ class ChannelHists:
 # ===========================================================================
 
 def load_daq_map(path: Path) -> Dict[Tuple[int, int, int], str]:
-    """(crate, slot, channel) -> module_name."""
+    """(crate, slot, channel) -> module_name from hycal_map.json.
+
+    Records without a "daq" block (boosters, PRad-1 V1-V4) are skipped.
+    """
     with open(path, encoding="utf-8") as f:
         entries = json.load(f)
-    return {(int(e["crate"]), int(e["slot"]), int(e["channel"])): e["name"]
-            for e in entries}
+    out: Dict[Tuple[int, int, int], str] = {}
+    for e in entries:
+        d = e.get("daq")
+        if not d:
+            continue
+        out[(int(d["crate"]), int(d["slot"]), int(d["channel"]))] = e["n"]
+    return out
 
 
 def load_roc_tag_map(path: Path) -> Dict[int, int]:
@@ -1075,7 +1083,7 @@ class WaveformPlotWidget(QWidget):
 
 # Module types that should get a small name label painted on top of the cell
 # (so the tiny LMS / V blocks off to the left of HyCal are identifiable).
-_LABEL_TYPES = {"LMS", "SCINT"}
+_LABEL_TYPES = {"LMS", "Veto"}
 
 class WaveformGeoView(HyCalMapWidget):
     """Compact HyCal geo view with two colour-coding modes.
@@ -1535,8 +1543,7 @@ class HyCalEventViewer(QMainWindow):
                  reject_mask: int,
                  daq_config_path: str,
                  hycal_modules: Optional[List] = None,
-                 hycal_modules_path: Optional[str] = None,
-                 daq_map_path: Optional[str] = None):
+                 hycal_map_path: Optional[str] = None):
         super().__init__()
         self._hist_config   = hist_config
         self._daq_map       = daq_map
@@ -1545,8 +1552,7 @@ class HyCalEventViewer(QMainWindow):
         self._reject_mask   = reject_mask
         self._daq_cfg_path  = daq_config_path
         self._hycal_modules = hycal_modules or []
-        self._hycal_modules_path = hycal_modules_path
-        self._daq_map_path       = daq_map_path
+        self._hycal_map_path = hycal_map_path
 
         # Bin configs — merge user config with defaults, add n-peaks hist
         self._h_cfg = hist_config.get("height_hist",
@@ -1632,11 +1638,10 @@ class HyCalEventViewer(QMainWindow):
         # True once LoadCalibration has been called with >0 matches.
         # Gates the "no calibration" warning banner on the cluster tab.
         self._hycal_calib_loaded = False
-        if _HAVE_PRAD2PY and self._hycal_modules_path and self._daq_map_path:
+        if _HAVE_PRAD2PY and self._hycal_map_path:
             try:
                 self._hcsys = prad2py.det.HyCalSystem()
-                ok = self._hcsys.init(str(self._hycal_modules_path),
-                                      str(self._daq_map_path))
+                ok = self._hcsys.init(str(self._hycal_map_path))
                 if ok:
                     self._hccl = prad2py.det.HyCalCluster(self._hcsys)
                 else:
@@ -2145,8 +2150,7 @@ class HyCalEventViewer(QMainWindow):
         if self._hcsys is None:
             QMessageBox.warning(self, "HyCal system not ready",
                 "Cannot load calibration — HyCalSystem.init() did not "
-                "complete.  Check that hycal_modules.json and hycal_daq_map.json "
-                "are present.")
+                "complete.  Check that hycal_map.json is present.")
             return
         path_str, _ = QFileDialog.getOpenFileName(
             self, "Load HyCal calibration", str(Path.cwd()),
@@ -2555,7 +2559,7 @@ class HyCalEventViewer(QMainWindow):
                               cache_key: Tuple[int, int, int]):
         """Look up a HyCal Module by DAQ address, caching on the ROC-tag key.
         Returns the Module or None if this channel isn't a HyCal module
-        (LMS / SCINT / scaler channels return None and are silently ignored)."""
+        (LMS / Veto / scaler channels return None and are silently ignored)."""
         if self._hcsys is None:
             return None
         if cache_key in self._hc_cache:
@@ -2879,12 +2883,9 @@ def main():
     ap.add_argument("--daq-config", type=Path,
                     default=_REPO_DIR / "database" / "daq_config.json",
                     help="daq_config.json (ROC-tag → crate mapping).")
-    ap.add_argument("--daq-map", type=Path,
-                    default=_REPO_DIR / "database" / "hycal_daq_map.json",
-                    help="hycal_daq_map.json (module-name lookup).")
-    ap.add_argument("--hycal-modules", type=Path,
-                    default=_REPO_DIR / "database" / "hycal_modules.json",
-                    help="hycal_modules.json (module geometry for the geo selector).")
+    ap.add_argument("--hycal-map", type=Path,
+                    default=_REPO_DIR / "database" / "hycal_map.json",
+                    help="hycal_map.json (module geometry + DAQ map).")
     ap.add_argument("--trigger-bits", type=Path,
                     default=_REPO_DIR / "database" / "trigger_bits.json",
                     help="trigger_bits.json (for --accept/--reject-trigger).")
@@ -2903,10 +2904,10 @@ def main():
 
     hist_cfg      = load_hist_config(args.config)      if args.config.is_file()      else {}
     roc_to_crate  = load_roc_tag_map(args.daq_config)  if args.daq_config.is_file()  else {}
-    daq_map       = load_daq_map(args.daq_map)         if args.daq_map.is_file()     else {}
+    daq_map       = load_daq_map(args.hycal_map)       if args.hycal_map.is_file()   else {}
     bit_map       = load_trigger_bit_map(args.trigger_bits)
-    hycal_modules = (load_geo_modules(args.hycal_modules)
-                     if args.hycal_modules.is_file() else [])
+    hycal_modules = (load_geo_modules(args.hycal_map)
+                     if args.hycal_map.is_file() else [])
 
     accept_names = args.accept_trigger or hist_cfg.get("accept_trigger_bits", []) or []
     reject_names = (args.reject_trigger if args.reject_trigger is not None
@@ -2916,17 +2917,15 @@ def main():
 
     app = QApplication(sys.argv)
     win = HyCalEventViewer(
-        hist_config        = hist_cfg,
-        daq_map            = daq_map,
-        roc_to_crate       = roc_to_crate,
-        accept_mask        = accept_mask,
-        reject_mask        = reject_mask,
-        daq_config_path    = str(args.daq_config) if args.daq_config.is_file() else "",
-        hycal_modules      = hycal_modules,
-        hycal_modules_path = (str(args.hycal_modules)
-                              if args.hycal_modules.is_file() else None),
-        daq_map_path       = (str(args.daq_map)
-                              if args.daq_map.is_file() else None),
+        hist_config     = hist_cfg,
+        daq_map         = daq_map,
+        roc_to_crate    = roc_to_crate,
+        accept_mask     = accept_mask,
+        reject_mask     = reject_mask,
+        daq_config_path = str(args.daq_config) if args.daq_config.is_file() else "",
+        hycal_modules   = hycal_modules,
+        hycal_map_path  = (str(args.hycal_map)
+                           if args.hycal_map.is_file() else None),
     )
     win.show()
     if args.path is not None:

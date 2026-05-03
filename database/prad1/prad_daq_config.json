@@ -48,7 +48,6 @@
 
     "ti_master_tag": "0x01",
 
-    "pedestal_file":      "prad1/adc1881m_pedestals.json",
-    "modules_file":       "hycal_modules.json",
-    "hycal_daq_map_file": "prad1/prad_hycal_daq_map.json"
+    "pedestal_file":  "prad1/adc1881m_pedestals.json",
+    "hycal_map_file": "prad1/prad_hycal_map.json"
 }

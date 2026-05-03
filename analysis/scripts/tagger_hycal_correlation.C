@@ -18,7 +18,7 @@
 //         W_sum_height     sum of peak heights over all W modules
 //         W_sum_integral   sum of peak integrals over all W modules
 //     The "W" subset is the PbWO4 crystal modules; the DAQ map at
-//     ``database/hycal_daq_map.json`` identifies them by name (entries starting
+//     ``database/hycal_map.json`` identifies them by name (entries with "n"
 //     with 'W').  PbGlass ("G"), LMS references, veto, etc. are excluded.
 //
 //   The summary canvas shows all 10 ΔT spectra with their fitted μ/±Nσ
@@ -172,7 +172,7 @@ static bool hycal_peak(const fdec::ChannelData &c,
 }
 
 // W-channel lookup table indexed by [crate_idx][slot][channel].  Populated
-// from database/hycal_daq_map.json at startup: every entry whose "name" starts
+// from database/hycal_map.json at startup: every entry whose "n" starts
 // with 'W' (PbWO4 modules) sets a flag here.  Non-W channels (PbGlass "G",
 // LMS references, veto, etc.) are left false.
 struct WMap {
@@ -186,11 +186,13 @@ struct WMap {
         try { j = nlohmann::json::parse(f); }
         catch (...) { return false; }
         for (auto &e : j) {
-            std::string name = e.value("name", "");
+            std::string name = e.value("n", "");
             if (name.empty() || name[0] != 'W') continue;
-            int crate = e.value("crate",   -1);
-            int slot  = e.value("slot",    -1);
-            int ch    = e.value("channel", -1);
+            if (!e.contains("daq")) continue;
+            const auto &d = e["daq"];
+            int crate = d.value("crate",   -1);
+            int slot  = d.value("slot",    -1);
+            int ch    = d.value("channel", -1);
             if (crate < 0 || crate >= N_HYCAL_CRATES) continue;
             if (slot  < 0 || slot  >= fdec::MAX_SLOTS) continue;
             if (ch    < 0 || ch    >= fdec::MAX_CHANNELS) continue;
@@ -285,29 +287,29 @@ int tagger_hycal_correlation(const char *evio_path,
         return 1;
     }
 
-    //---- load the W-channel lookup from hycal_daq_map.json ------------------------
-    std::string daq_map_path;
+    //---- load the W-channel lookup from hycal_map.json ------------------------
+    std::string hycal_map_path;
     {
         const char *db = std::getenv("PRAD2_DATABASE_DIR");
         std::string dir = db ? db : "database";
-        // honour the daq_map_file override in daq_config.json if present
+        // honour the hycal_map_file override in daq_config.json if present
         std::ifstream dcf(cfg_path);
         if (dcf.is_open()) {
             auto dcj = nlohmann::json::parse(dcf, nullptr, false, true);
-            if (!dcj.is_discarded() && dcj.contains("daq_map_file"))
-                daq_map_path = dir + "/"
-                               + dcj["daq_map_file"].get<std::string>();
+            if (!dcj.is_discarded() && dcj.contains("hycal_map_file"))
+                hycal_map_path = dir + "/"
+                                 + dcj["hycal_map_file"].get<std::string>();
         }
-        if (daq_map_path.empty()) daq_map_path = dir + "/hycal_daq_map.json";
+        if (hycal_map_path.empty()) hycal_map_path = dir + "/hycal_map.json";
     }
     WMap wmap;
-    if (!wmap.load(daq_map_path)) {
+    if (!wmap.load(hycal_map_path)) {
         std::cerr << "ERROR: cannot load W-channel map from "
-                  << daq_map_path << "\n";
+                  << hycal_map_path << "\n";
         return 1;
     }
     std::cout << "loaded " << wmap.n_entries
-              << " W-type HyCal channels from " << daq_map_path << "\n";
+              << " W-type HyCal channels from " << hycal_map_path << "\n";
 
     //---- open evio ----------------------------------------------------------
     EvChannel ch;

@@ -66,8 +66,8 @@ from hycal_geoview import (          # noqa: E402  (after sys.path tweak)
 
 # ── database path  ────────────────────────────────────────────────────────────
 _DB_CANDIDATES = [
-    _SCRIPT_DIR.parent / "database" / "hycal_modules.json",
-    _SCRIPT_DIR.parent / "build"    / "database" / "hycal_modules.json",
+    _SCRIPT_DIR.parent / "database" / "hycal_map.json",
+    _SCRIPT_DIR.parent / "build"    / "database" / "hycal_map.json",
 ]
 MODULES_JSON = next((p for p in _DB_CANDIDATES if p.is_file()), None)
 

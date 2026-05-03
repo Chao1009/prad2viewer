@@ -26,9 +26,9 @@ static void setTransform(DetectorTransform &t,
 //   daq_config.json            DAQ + raw decoding (event tags, bank tags,
 //                              ROC layout, sync format, file pointers).
 //                              Loaded once via evc::load_daq_config(); the
-//                              file pointers (modules_file, hycal_daq_map_file,
-//                              gem_daq_map_file, pedestal_file) tell us where
-//                              the channel maps + pedestal JSON live.
+//                              file pointers (hycal_map_file, gem_map_file,
+//                              pedestal_file) tell us where the merged
+//                              detector maps + pedestal JSON live.
 //   monitor_config.json        GUI + online server (waveform/hycal_hist
 //                              binning, lms_monitor, livetime, epics, physics
 //                              display cuts, gem diagnostics, elog, etc.).
@@ -62,6 +62,20 @@ void AppState::init(const std::string &db_dir,
         if (!ped_file.empty() && evc::load_pedestals(ped_file, daq_cfg))
             std::cerr << "Pedestals : " << ped_file
                       << " (" << daq_cfg.pedestals.size() << " channels)\n";
+    }
+
+    // optional NNLS pile-up deconv template store.  Loaded only when the
+    // analyzer config has nnls_deconv.enabled and a template_file path —
+    // otherwise the store stays invalid() and every WaveAnalyzer that
+    // borrows it falls back to local-maxima peak heights silently.
+    if (daq_cfg.wave_cfg.nnls_deconv.enabled
+        && !daq_cfg.wave_cfg.nnls_deconv.template_file.empty()) {
+        std::string tmpl_path = findFile(
+            daq_cfg.wave_cfg.nnls_deconv.template_file, db_dir);
+        if (tmpl_path.empty())
+            tmpl_path = daq_cfg.wave_cfg.nnls_deconv.template_file;
+        // LoadFromFile prints its own warning on failure.
+        template_store.LoadFromFile(tmpl_path, daq_cfg.wave_cfg);
     }
 
     // --- resolve monitor + reconstruction config paths ---------------------
@@ -148,14 +162,11 @@ void AppState::init(const std::string &db_dir,
 
     // --- HyCal system ------------------------------------------------------
     {
-        const std::string mods = daq_cfg.modules_file.empty()
-            ? std::string("hycal_modules.json") : daq_cfg.modules_file;
-        const std::string daqm = daq_cfg.hycal_daq_map_file.empty()
-            ? std::string("hycal_daq_map.json") : daq_cfg.hycal_daq_map_file;
-        std::string mod_file = findFile(mods, db_dir);
-        std::string daq_file = findFile(daqm, db_dir);
-        if (!mod_file.empty() && !daq_file.empty()) {
-            if (hycal.Init(mod_file, daq_file))
+        const std::string map_name = daq_cfg.hycal_map_file.empty()
+            ? std::string("hycal_map.json") : daq_cfg.hycal_map_file;
+        std::string map_file = findFile(map_name, db_dir);
+        if (!map_file.empty()) {
+            if (hycal.Init(map_file))
                 std::cerr << "HyCal     : " << hycal.module_count() << " modules\n";
             else
                 std::cerr << "Warning: HyCal system initialization failed\n";
@@ -163,8 +174,8 @@ void AppState::init(const std::string &db_dir,
     }
 
     // --- GEM system (optional) --------------------------------------------
-    if (!daq_cfg.gem_daq_map_file.empty()) {
-        std::string gem_map_file = findFile(daq_cfg.gem_daq_map_file, db_dir);
+    if (!daq_cfg.gem_map_file.empty()) {
+        std::string gem_map_file = findFile(daq_cfg.gem_map_file, db_dir);
         if (!gem_map_file.empty()) {
             gem_sys.Init(gem_map_file);
             gem_enabled = (gem_sys.GetNDetectors() > 0);
@@ -496,7 +507,7 @@ void AppState::init(const std::string &db_dir,
 
                 // hardware-crate -> logical-crate remap from daq_cfg.roc_tags
                 // so upstream pedestal/CM files (keyed by EVIO bank tag, e.g.
-                // 146/147) line up with gem_daq_map.json (logical 1/2).
+                // 146/147) line up with gem_map.json (logical 1/2).
                 std::map<int, int> gem_crate_remap;
                 for (const auto &re : daq_cfg.roc_tags) {
                     if (re.type == "gem")

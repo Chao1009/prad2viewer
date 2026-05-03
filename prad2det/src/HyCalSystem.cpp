@@ -29,6 +29,7 @@ ModuleType HyCalSystem::parse_type(const std::string &t)
     if (t == "PbGlass") return ModuleType::PbGlass;
     if (t == "PbWO4")   return ModuleType::PbWO4;
     if (t == "LMS")     return ModuleType::LMS;
+    if (t == "Veto")    return ModuleType::Veto;
     return ModuleType::Unknown;
 }
 
@@ -80,88 +81,71 @@ int HyCalSystem::line_intersect(double x1, double y1, double x2, double y2,
 }
 
 //=============================================================================
-// Init — load modules from JSON, compute sectors, build neighbors
+// Init — load modules + daq from one merged JSON, compute sectors, build neighbors
 //=============================================================================
 
-bool HyCalSystem::Init(const std::string &modules_path, const std::string &daq_path)
+bool HyCalSystem::Init(const std::string &map_path)
 {
-    // --- load module geometry -----------------------------------------------
-    {
-        std::ifstream f(modules_path);
-        if (!f.is_open()) {
-            std::cerr << "HyCalSystem: cannot open " << modules_path << std::endl;
-            return false;
-        }
-
-        json jdata;
-        try { jdata = json::parse(f); }
-        catch (const json::parse_error &e) {
-            std::cerr << "HyCalSystem: JSON parse error in " << modules_path
-                      << ": " << e.what() << std::endl;
-            return false;
-        }
-
-        modules_.clear();
-        modules_.reserve(jdata.size());
-        name_map_.clear();
-        id_map_.clear();
-
-        for (auto &jm : jdata) {
-            Module m;
-            m.name   = jm.at("n").get<std::string>();
-            m.type   = parse_type(jm.at("t").get<std::string>());
-            m.size_x = jm.at("sx").get<double>();
-            m.size_y = jm.at("sy").get<double>();
-            m.x      = jm.at("x").get<double>();
-            m.y      = jm.at("y").get<double>();
-            m.id     = name_to_id(m.name);
-            m.index  = static_cast<int>(modules_.size());
-
-            // skip non-HyCal modules (LMS etc.) for neighbor/clustering purposes
-            // but still store them for lookup
-            modules_.push_back(std::move(m));
-        }
-
-        n_modules_ = static_cast<int>(modules_.size());
-
-        // build lookup maps
-        for (int i = 0; i < n_modules_; ++i) {
-            name_map_[modules_[i].name] = i;
-            if (modules_[i].id >= 0)
-                id_map_[modules_[i].id] = i;
-        }
+    std::ifstream f(map_path);
+    if (!f.is_open()) {
+        std::cerr << "HyCalSystem: cannot open " << map_path << std::endl;
+        return false;
     }
 
-    // --- load DAQ mapping ---------------------------------------------------
-    {
-        std::ifstream f(daq_path);
-        if (!f.is_open()) {
-            std::cerr << "HyCalSystem: cannot open " << daq_path << std::endl;
-            return false;
+    json jdata;
+    try { jdata = json::parse(f); }
+    catch (const json::parse_error &e) {
+        std::cerr << "HyCalSystem: JSON parse error in " << map_path
+                  << ": " << e.what() << std::endl;
+        return false;
+    }
+
+    if (!jdata.is_array()) {
+        std::cerr << "HyCalSystem: " << map_path
+                  << " is not a JSON array" << std::endl;
+        return false;
+    }
+
+    modules_.clear();
+    modules_.reserve(jdata.size());
+    name_map_.clear();
+    id_map_.clear();
+    daq_map_.clear();
+
+    for (auto &jm : jdata) {
+        Module m;
+        m.name   = jm.at("n").get<std::string>();
+        m.type   = parse_type(jm.at("t").get<std::string>());
+        const auto &geo = jm.at("geo");
+        m.size_x = geo.at("sx").get<double>();
+        m.size_y = geo.at("sy").get<double>();
+        m.x      = geo.at("x").get<double>();
+        m.y      = geo.at("y").get<double>();
+        m.id     = name_to_id(m.name);
+        m.index  = static_cast<int>(modules_.size());
+
+        // DAQ block is optional — entries without it (e.g. boosters in
+        // prad2hvmon, V1-V4 in PRad-1) leave m.daq at the default {-1,-1,-1}.
+        if (jm.contains("daq")) {
+            const auto &d = jm["daq"];
+            m.daq = {d.at("crate").get<int>(),
+                     d.at("slot").get<int>(),
+                     d.at("channel").get<int>()};
         }
 
-        json jdata;
-        try { jdata = json::parse(f); }
-        catch (const json::parse_error &e) {
-            std::cerr << "HyCalSystem: JSON parse error in " << daq_path
-                      << ": " << e.what() << std::endl;
-            return false;
-        }
+        modules_.push_back(std::move(m));
+    }
 
-        daq_map_.clear();
-        for (auto &jm : jdata) {
-            std::string name = jm.at("name").get<std::string>();
-            int crate   = jm.at("crate").get<int>();
-            int slot    = jm.at("slot").get<int>();
-            int channel = jm.at("channel").get<int>();
+    n_modules_ = static_cast<int>(modules_.size());
 
-            auto it = name_map_.find(name);
-            if (it != name_map_.end()) {
-                auto &mod    = modules_[it->second];
-                mod.daq      = {crate, slot, channel};
-                daq_map_[pack_daq(crate, slot, channel)] = it->second;
-            }
-        }
+    // build lookup maps now that all modules are in their final positions
+    for (int i = 0; i < n_modules_; ++i) {
+        name_map_[modules_[i].name] = i;
+        if (modules_[i].id >= 0)
+            id_map_[modules_[i].id] = i;
+        const auto &d = modules_[i].daq;
+        if (d.crate >= 0)
+            daq_map_[pack_daq(d.crate, d.slot, d.channel)] = i;
     }
 
     // --- compute sectors, layout, grids, and neighbors ----------------------

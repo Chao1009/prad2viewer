@@ -46,8 +46,8 @@ from hycal_geoview import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = SCRIPT_DIR / ".." / "database"
-MODULES_JSON = DB_DIR / "hycal_modules.json"
-DAQ_MAP_JSON = DB_DIR / "hycal_daq_map.json"
+MODULES_JSON = DB_DIR / "hycal_map.json"
+DAQ_MAP_JSON = DB_DIR / "hycal_map.json"
 PEDESTALS_DIR = SCRIPT_DIR / ".." / "pedestals"
 ORIGINAL_PED_DIR = Path("/usr/clas12/release/2.0.0/parms/fadc250/peds")
 
@@ -95,17 +95,26 @@ def prepare_modules(modules: List[Module]) -> List[Module]:
         else:
             result.append(m)
     for name in ("V1", "V2", "V3", "V4"):
-        result.append(Module(name, "Scintillator",
+        result.append(Module(name, "Veto",
                              _LMS_V_XPOS[name], _BOTTOM_Y,
                              _BOTTOM_SZ, _BOTTOM_SZ))
     return result
 
 
 def load_daq_map(path: Path) -> Dict[Tuple[int, int, int], str]:
-    """(crate_index, slot, channel) -> module_name."""
+    """(crate_index, slot, channel) -> module_name from hycal_map.json.
+
+    Records without a ``daq`` block (boosters, PRad-1 V1-V4) are skipped.
+    """
     with open(path) as f:
         data = json.load(f)
-    return {(d["crate"], d["slot"], d["channel"]): d["name"] for d in data}
+    out: Dict[Tuple[int, int, int], str] = {}
+    for e in data:
+        d = e.get("daq")
+        if not d:
+            continue
+        out[(d["crate"], d["slot"], d["channel"])] = e["n"]
+    return out
 
 
 # ===========================================================================

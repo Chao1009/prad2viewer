@@ -56,7 +56,7 @@ from hycal_geoview import (
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 DB_DIR = SCRIPT_DIR / ".." / "database"
-MODULES_JSON = DB_DIR / "hycal_modules.json"
+MODULES_JSON = DB_DIR / "hycal_map.json"
 
 LMS_NAMES = ["LMS1", "LMS2", "LMS3"]              # data keys (file/ROOT/geometry)
 LMS_DISPLAY = ["Ref1", "Ref2", "Ref3"]            # user-facing labels for the same modules

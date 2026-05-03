@@ -4,8 +4,8 @@ Back-compat wrapper: forwards to ``gem_event_viewer.py --layout`` so the
 rendering code lives in a single place.
 
 Keeps the original CLI shape:
-    gem_layout.py                      # uses default gem_daq_map.json, writes gem_layout.png
-    gem_layout.py -G path/to/gem_hycal_daq_map.json
+    gem_layout.py                      # uses default gem_map.json, writes gem_layout.png
+    gem_layout.py -G path/to/gem_map.json
     gem_layout.py -o layout.png
 """
 

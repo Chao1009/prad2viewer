@@ -64,6 +64,7 @@ def resolve_db_path(p: str) -> str:
 
 def plot_one(samples: np.ndarray,
              ped: float,
+             clk_ns: float,
              wres,
              dec_out,
              tmpl,
@@ -72,64 +73,57 @@ def plot_one(samples: np.ndarray,
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
 
     n = samples.size
-    t_ns = np.arange(n) * 4.0     # 250 MHz FADC
+    t_ns = np.arange(n) * clk_ns
 
     fig, ax = plt.subplots(figsize=(8, 4))
-    ax.plot(t_ns, samples.astype(np.float64) - ped,
-            color="0.3", lw=1.2, label="raw (pedsub)")
+    raw_line, = ax.plot(t_ns, samples.astype(np.float64) - ped,
+                        color="0.3", lw=1.2, label="raw (pedsub)")
     ax.axhline(0, color="0.85", lw=0.6)
 
-    # WaveAnalyzer peaks (before deconv): vertical lines at the peak time,
-    # height marker at peak.height (raw, not deconvolved).
+    # WaveAnalyzer peaks (red triangles at peak.time, height = peak.height).
     wa_peaks = list(wres.peaks)
     for pk in wa_peaks:
-        ax.plot([pk.time], [pk.height], "v", color="C3", ms=8, mfc="white",
-                label="_nolegend_")
+        ax.plot([pk.time], [pk.height], "v", color="C3", ms=8, mfc="white")
         ax.axvline(pk.time, color="C3", ls=":", lw=0.7, alpha=0.7)
 
-    # Deconvolution result: per-peak amplitude + integral, plus the model
-    # reconstruction (Σ a_k T(t - τ_k)).
-    npk = dec_out.n
-    amps = np.array(dec_out.amplitude[:npk], dtype=np.float64)
-    heights = np.array(dec_out.height[:npk],  dtype=np.float64)
-    times = [wa_peaks[k].time for k in range(npk)]
+    # Deconv per-peak fit: a_k, t0_k, τ_r_k, τ_f_k.  height[k] = a_k·T_max,
+    # which equals the peak of a_k·T(t-t0_k; τ_r_k, τ_f_k) — so the blue
+    # markers below sit on the model trace by construction.
+    amps    = list(dec_out.amplitude)
+    heights = list(dec_out.height)
+    t0s     = list(dec_out.t0_ns)
+    tau_rs  = list(dec_out.tau_r_ns)
+    tau_fs  = list(dec_out.tau_f_ns)
+    times = [wa_peaks[k].time for k in range(dec_out.n)]
     for tk, hk in zip(times, heights):
-        ax.plot([tk], [hk], "o", color="C0", ms=6, label="_nolegend_")
+        ax.plot([tk], [hk], "o", color="C0", ms=6)
 
-    # Synthesise the deconvolved model on a dense grid for visual
-    # comparison — same continuous-time form as the C++ template.
-    t_dense = np.linspace(0, t_ns[-1], 4 * n)
-    tau_r = float(tmpl.tau_r_ns)
-    tau_f = float(tmpl.tau_f_ns)
-    # Analytic peak offset of the unit-amplitude template.
-    t_peak_offset = tau_r * np.log((tau_r + tau_f) / tau_r)
-    t_max = (1.0 - np.exp(-t_peak_offset / tau_r)) * np.exp(-t_peak_offset / tau_f)
+    # Model trace Σ a_k · T(t-t0_k; τ_r_k, τ_f_k) on a dense grid using
+    # the LM-refined per-peak shape (not the template's), so the trace
+    # matches the deconv output exactly.
+    t_dense = np.linspace(0.0, float(t_ns[-1]), 4 * n)
     model = np.zeros_like(t_dense)
-    for ak, tk in zip(amps, times):
-        # The C++ deconv anchors each pulse so its analytic peak lands on
-        # tk (= WaveAnalyzer peak time); shift the template the same way.
-        t0 = tk - t_peak_offset
+    for ak, t0, tr, tf in zip(amps, t0s, tau_rs, tau_fs):
         m = t_dense > t0
         if m.any():
             dt = t_dense[m] - t0
-            model[m] += (ak * t_max
-                         * (1.0 - np.exp(-dt / tau_r))
-                         * np.exp(-dt / tau_f))
-    ax.plot(t_dense, model, color="C0", lw=1.4, alpha=0.85,
-            label=f"deconv model  τ_r={tau_r:.1f}  τ_f={tau_f:.1f} ns")
+            model[m] += ak * (1.0 - np.exp(-dt / tr)) * np.exp(-dt / tf)
+    model_line, = ax.plot(
+        t_dense, model, color="C0", lw=1.4, alpha=0.85,
+        label=(f"deconv model  init τ_r={float(tmpl.tau_r_ns):.1f} "
+               f"τ_f={float(tmpl.tau_f_ns):.1f} ns"))
 
-    # Legend bookkeeping — proxy artists for the per-peak markers.
-    from matplotlib.lines import Line2D
     extra = [
         Line2D([], [], marker="v", color="C3", ls="None",
                mfc="white", ms=8, label=f"WA peaks (n={len(wa_peaks)})"),
         Line2D([], [], marker="o", color="C0", ls="None", ms=6,
-               label=f"deconv heights (n={npk})"),
+               label=f"deconv heights (n={dec_out.n})"),
     ]
-    ax.legend(handles=ax.lines[:1] + extra + ax.lines[-1:], loc="upper right",
-              fontsize=8)
+    ax.legend(handles=[raw_line] + extra + [model_line],
+              loc="upper right", fontsize=8)
 
     ax.set_xlabel("time (ns)")
     ax.set_ylabel("ADC − ped")
@@ -188,6 +182,7 @@ def main() -> int:
           flush=True)
 
     wave_ana = dec.WaveAnalyzer(wcfg)
+    clk_ns = 1000.0 / wcfg.clk_mhz if wcfg.clk_mhz > 0 else 4.0
 
     # ---- Crate map (roc tag → crate index) for naming output files ------
     roc_to_crate: dict[int, int] = {}
@@ -226,8 +221,7 @@ def main() -> int:
                         cd = slot.channel(c)
                         if cd.nsamples <= 0:
                             continue
-                        samples = np.array(cd.samples[:cd.nsamples],
-                                           dtype=np.uint16)
+                        samples = np.asarray(cd.samples, dtype=np.uint16)
                         wres = wave_ana.analyze_result(samples)
                         peaks = list(wres.peaks)
                         if len(peaks) < args.min_peaks:
@@ -254,7 +248,7 @@ def main() -> int:
                         out_path = (args.out_dir
                                     / f"deconv_c{crate}_s{s:02d}_ch{c:02d}"
                                       f"_ev{n_events:06d}.png")
-                        plot_one(samples, wres.ped.mean,
+                        plot_one(samples, wres.ped.mean, clk_ns,
                                  wres, dec_out, tmpl, title, out_path)
                         n_plotted += 1
                         print(f"[plot {n_plotted:3d}/{args.max_plots}] "

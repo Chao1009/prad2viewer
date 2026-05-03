@@ -310,6 +310,26 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 }
 .copy-btn:hover { opacity:1; background:var(--accent); color:var(--theme-on-accent); }
 
+/* Toggle-button: a checkbox label styled as a button.  Visually matches
+   .copy-btn; the underlying <input type="checkbox"> is kept (so the JS
+   .checked / .onchange contract is unchanged) but visually hidden, and
+   :has(:checked) drives the active highlight. */
+.toggle-btn {
+    background:var(--border); color:var(--dim);
+    padding:2px 8px; border-radius:3px; cursor:pointer; font-size:12px;
+    opacity:0.7; user-select:none;
+    transition:background 0.1s, color 0.1s, opacity 0.1s;
+}
+.toggle-btn input[type="checkbox"] {
+    appearance:none; -webkit-appearance:none;
+    width:0; height:0; margin:0; padding:0; border:0;
+    position:absolute; opacity:0; pointer-events:none;
+}
+.toggle-btn:hover { opacity:1; }
+.toggle-btn:has(input:checked) {
+    background:var(--accent); color:var(--theme-on-accent); opacity:1;
+}
+
 .peaks-table { width:100%; border-collapse:collapse; }
 .peaks-table th {
     position:sticky; top:0; background:var(--panel); padding:4px 8px;

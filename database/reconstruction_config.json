@@ -40,7 +40,7 @@
         "// search window.  hycal_pos_res = [A, B, C] (mm) feeds": "",
         "//   sigma_HC(E) = sqrt((A/sqrt(E_GeV))^2 + (B/E_GeV)^2 + C^2)": "",
         "// gem_pos_res = per-detector sigma in mm (ordered by detector id 0..3).": "",
-        "hycal_pos_res": [0.0, 0.0, 5.0],
+        "hycal_pos_res": [3.5, 0.0, 0.0],
         "gem_pos_res":   [0.08, 0.08, 0.08, 0.08]
     }
 }

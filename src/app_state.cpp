@@ -1159,12 +1159,14 @@ void AppState::runGemEfficiency(int event_id,
     n_dets = std::min(n_dets, GEM_EFF_MAX_DETS);
     if (n_dets < 3) return;
 
-    // Detector resolutions (mm) — σ_HC(E) at HyCal face, σ_GEM[d] at GEM plane.
-    // The fit is in lab frame so weights are 1/σ² in mm⁻².  findClosest below
-    // gates each detector at match_nsigma · σ_total at the GEM plane:
-    //   σ_HC@gem = σ_HC · |z_gem / z_hc|,  σ_total = sqrt(σ_HC@gem² + σ_GEM²).
+    // Resolutions (mm) — σ_HC(E) at HyCal face, σ_GEM[d] at GEM plane.
+    // Target-seeded line goes (target → HyCal), so the projection error at
+    // depth z scales linearly from 0 at the target to σ_HC at HyCal:
+    //   σ_HC@gem = σ_HC · |(z_gem - z_target) / (z_hc - z_target)|
+    //   σ_total  = sqrt(σ_HC@gem² + σ_GEM²),  cut = match_nsigma · σ_total
     const float sigma_hc = hycal.PositionResolution(hc_energy);
     const float w_h      = 1.f / (sigma_hc * sigma_hc);
+    const float lever_hc = (hcz != target_z) ? (hcz - target_z) : 1.f;
     auto sigmaGem = [&](int d) -> float {
         return (d >= 0 && d < (int)gem_pos_res.size()) ? gem_pos_res[d] : 0.1f;
     };
@@ -1180,9 +1182,8 @@ void AppState::runGemEfficiency(int event_id,
         int max_n = std::min((int)hits.size(), gem_eff_max_hits_per_det);
         if (max_n == 0) return;
         const auto &xform = gem_transforms[d];
-        const float z_gem        = (xform.z != 0.f) ? xform.z : 1.f;
-        const float z_hc_safe    = (hcz != 0.f) ? hcz : 1.f;
-        const float s_hc_at_gem  = sigma_hc * std::abs(z_gem / z_hc_safe);
+        const float z_gem        = xform.z;
+        const float s_hc_at_gem  = sigma_hc * std::abs((z_gem - target_z) / lever_hc);
         const float s_gem        = sigmaGem(d);
         const float s_total      = std::sqrt(s_hc_at_gem*s_hc_at_gem
                                             + s_gem*s_gem);
@@ -1210,102 +1211,54 @@ void AppState::runGemEfficiency(int event_id,
         return std::abs(lx) <= xmax && std::abs(ly) <= ymax;
     };
 
-    // One try: seed line through (HyCal, GEM-S hit_idx).  Gathers all GEMs
-    // with a hit within match_window of the seed line, then fits the line
-    // through HyCal + matched GEMs.  Requires ≥3 matched GEMs (good track).
-    // Updates `best` if this fit has the lowest χ²/dof so far.
-    struct Best {
-        bool   valid = false;
-        float  chi2_per_dof = std::numeric_limits<float>::infinity();
-        Line3D fit;
-        bool   used[GEM_EFF_MAX_DETS]    = {false,false,false,false};
-        float  used_lx[GEM_EFF_MAX_DETS] = {0,0,0,0};
-        float  used_ly[GEM_EFF_MAX_DETS] = {0,0,0,0};
-        float  used_lz[GEM_EFF_MAX_DETS] = {0,0,0,0};
-    };
-    Best best;
+    // Target-seed: line from (target_x, target_y, target_z) → HyCal cluster.
+    // No GEM in the seed → every detector competes on equal footing for
+    // matching, so per-detector numerators aren't biased by an auto-matched
+    // seed detector (the prior GEM0/1-seeded mode inflated their numbers by
+    // ~3-5%).  Tracks that don't point back to the target are rejected,
+    // removing beam halo / upstream interactions from the sample.
+    Line3D seed = seedLine(target_x, target_y, target_z, hcx, hcy, hcz);
 
-    auto trySeed = [&](int S, int seed_idx) {
-        if (S < 0 || S >= n_dets) return;
-        const auto &hits_s = hits_by_det[S];
-        if (seed_idx < 0 || seed_idx >= (int)hits_s.size()) return;
-        const auto &g0 = hits_s[seed_idx];
-
-        Line3D seed = seedLine(hcx, hcy, hcz, g0[0], g0[1], g0[2]);
-
-        // Match candidates on every detector — including S itself, which is
-        // matched by construction (its seed hit is the candidate).
-        bool  matched[GEM_EFF_MAX_DETS] = {false,false,false,false};
-        float cand_lx[GEM_EFF_MAX_DETS] = {0,0,0,0};
-        float cand_ly[GEM_EFF_MAX_DETS] = {0,0,0,0};
-        float cand_lz[GEM_EFF_MAX_DETS] = {0,0,0,0};
-        matched[S] = true;
-        cand_lx[S] = g0[0]; cand_ly[S] = g0[1]; cand_lz[S] = g0[2];
-        for (int d = 0; d < n_dets; ++d) {
-            if (d == S) continue;
-            float pred_lx, pred_ly;
-            projectLineToLocal(gem_transforms[d], seed, pred_lx, pred_ly);
-            int idx; float lab_x, lab_y, lab_z;
-            findClosest(d, pred_lx, pred_ly, idx, lab_x, lab_y, lab_z);
-            if (idx >= 0) {
-                matched[d] = true;
-                cand_lx[d] = lab_x; cand_ly[d] = lab_y; cand_lz[d] = lab_z;
-            }
+    bool  matched[GEM_EFF_MAX_DETS] = {false,false,false,false};
+    float cand_lx[GEM_EFF_MAX_DETS] = {0,0,0,0};
+    float cand_ly[GEM_EFF_MAX_DETS] = {0,0,0,0};
+    float cand_lz[GEM_EFF_MAX_DETS] = {0,0,0,0};
+    for (int d = 0; d < n_dets; ++d) {
+        float pred_lx, pred_ly;
+        projectLineToLocal(gem_transforms[d], seed, pred_lx, pred_ly);
+        int idx; float lab_x, lab_y, lab_z;
+        findClosest(d, pred_lx, pred_ly, idx, lab_x, lab_y, lab_z);
+        if (idx >= 0) {
+            matched[d] = true;
+            cand_lx[d] = lab_x; cand_ly[d] = lab_y; cand_lz[d] = lab_z;
         }
-
-        int nmatch = 0;
-        for (int d = 0; d < n_dets; ++d) if (matched[d]) nmatch++;
-        if (nmatch < 3) return;     // need ≥3 GEMs for a "good track"
-
-        // Fit: HyCal + every matched GEM.
-        constexpr int CAP = GEM_EFF_MAX_DETS + 1;
-        float zarr[CAP], xarr[CAP], yarr[CAP], warr[CAP];
-        int N = 0;
-        zarr[N] = hcz; xarr[N] = hcx; yarr[N] = hcy; warr[N] = w_h; ++N;
-        for (int d = 0; d < n_dets; ++d) {
-            if (!matched[d]) continue;
-            zarr[N] = cand_lz[d]; xarr[N] = cand_lx[d]; yarr[N] = cand_ly[d];
-            const float s = sigmaGem(d);
-            warr[N] = 1.f / (s * s); ++N;
-        }
-
-        Line3D fit;
-        if (!fitWeightedLine(N, zarr, xarr, yarr, warr, fit)) return;
-        if (fit.chi2_per_dof > gem_eff_max_chi2) return;
-        if (fit.chi2_per_dof >= best.chi2_per_dof) return;
-
-        best.valid = true;
-        best.chi2_per_dof = fit.chi2_per_dof;
-        best.fit = fit;
-        for (int d = 0; d < GEM_EFF_MAX_DETS; ++d) {
-            best.used[d] = matched[d];
-            if (matched[d]) {
-                best.used_lx[d] = cand_lx[d];
-                best.used_ly[d] = cand_ly[d];
-                best.used_lz[d] = cand_lz[d];
-            }
-        }
-    };
-
-    // Try GEM0 seeds — covers the bulk of cases (any track with a GEM0 hit).
-    if (n_dets >= 1 && !hits_by_det[0].empty()) {
-        int max_seeds = std::min((int)hits_by_det[0].size(), gem_eff_max_hits_per_det);
-        for (int s = 0; s < max_seeds; ++s) trySeed(0, s);
-    }
-    // Try GEM1 seeds — covers the GEM0-missing case (and refines fits when
-    // GEM0's seed line is noisy).  Lowest χ²/dof across both passes wins.
-    if (n_dets >= 2 && !hits_by_det[1].empty()) {
-        int max_seeds = std::min((int)hits_by_det[1].size(), gem_eff_max_hits_per_det);
-        for (int s = 0; s < max_seeds; ++s) trySeed(1, s);
     }
 
-    if (!best.valid) return;
+    int nmatch = 0;
+    for (int d = 0; d < n_dets; ++d) if (matched[d]) nmatch++;
+    if (nmatch < 3) return;     // need ≥3 GEMs for a "good track"
+
+    // Fit: HyCal + every matched GEM.
+    constexpr int CAP = GEM_EFF_MAX_DETS + 1;
+    float zarr[CAP], xarr[CAP], yarr[CAP], warr[CAP];
+    int N = 0;
+    zarr[N] = hcz; xarr[N] = hcx; yarr[N] = hcy; warr[N] = w_h; ++N;
+    for (int d = 0; d < n_dets; ++d) {
+        if (!matched[d]) continue;
+        zarr[N] = cand_lz[d]; xarr[N] = cand_lx[d]; yarr[N] = cand_ly[d];
+        const float s = sigmaGem(d);
+        warr[N] = 1.f / (s * s); ++N;
+    }
+
+    Line3D fit;
+    if (!fitWeightedLine(N, zarr, xarr, yarr, warr, fit)) return;
+    if (fit.chi2_per_dof > gem_eff_max_chi2) return;
 
     // Good track found.  Increment shared denominator and per-detector
     // numerators (one per detector that contributed to the fit).
     gem_eff_den++;
     for (int R = 0; R < n_dets; ++R) {
-        if (best.used[R]) gem_eff_num[R]++;
+        if (matched[R]) gem_eff_num[R]++;
     }
 
     // Snapshot — overwrite previous "last good".
@@ -1314,24 +1267,24 @@ void AppState::runGemEfficiency(int event_id,
     snap.valid = true;
     snap.event_id = event_id;
     snap.hycal_x = hcx; snap.hycal_y = hcy; snap.hycal_z = hcz;
-    snap.chi2_per_dof = best.chi2_per_dof;
-    snap.ax = best.fit.ax; snap.bx = best.fit.bx;
-    snap.ay = best.fit.ay; snap.by = best.fit.by;
+    snap.chi2_per_dof = fit.chi2_per_dof;
+    snap.ax = fit.ax; snap.bx = fit.bx;
+    snap.ay = fit.ay; snap.by = fit.by;
 
     for (int R = 0; R < GEM_EFF_MAX_DETS; ++R) {
         auto &dx = snap.dets[R];
         dx = {};
         if (R >= n_dets) continue;
-        dx.used_in_fit = best.used[R];
-        dx.hit_present = best.used[R];
-        if (best.used[R]) {
-            dx.hit_lab_x = best.used_lx[R];
-            dx.hit_lab_y = best.used_ly[R];
-            dx.hit_lab_z = best.used_lz[R];
+        dx.used_in_fit = matched[R];
+        dx.hit_present = matched[R];
+        if (matched[R]) {
+            dx.hit_lab_x = cand_lx[R];
+            dx.hit_lab_y = cand_ly[R];
+            dx.hit_lab_z = cand_lz[R];
         }
         // Predict on R from the fit.
         float pred_lx, pred_ly;
-        projectLineToLocal(gem_transforms[R], best.fit, pred_lx, pred_ly);
+        projectLineToLocal(gem_transforms[R], fit, pred_lx, pred_ly);
         dx.predicted_local_x = pred_lx;
         dx.predicted_local_y = pred_ly;
         float plab_x, plab_y, plab_z;
@@ -1340,9 +1293,9 @@ void AppState::runGemEfficiency(int event_id,
         dx.predicted_lab_y = plab_y;
         dx.predicted_lab_z = plab_z;
         dx.inside = inside(R, pred_lx, pred_ly);
-        if (best.used[R]) {
+        if (matched[R]) {
             float hl_x, hl_y, hl_z;
-            gem_transforms[R].labToLocal(best.used_lx[R], best.used_ly[R], best.used_lz[R],
+            gem_transforms[R].labToLocal(cand_lx[R], cand_ly[R], cand_lz[R],
                                           hl_x, hl_y, hl_z);
             dx.resid_dx = hl_x - pred_lx;
             dx.resid_dy = hl_y - pred_ly;

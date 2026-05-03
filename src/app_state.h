@@ -221,14 +221,17 @@ struct AppState {
     // dependent resolution lives on HyCalSystem (PositionResolution(E)).
     std::vector<float> gem_pos_res;
 
-    // GEM tracking-efficiency monitor (HyCal-anchored straight-line fits).
+    // GEM tracking-efficiency monitor (target-seeded straight-line fits).
     //
-    // A "good track" is one where the fit through HyCal + ≥3 GEM hits (each
-    // within match_nsigma · σ_total of the seed line) passes the χ² gate.  Each
-    // good track increments the shared denominator gem_eff_den.  Per-detector
-    // numerator gem_eff_num[R] increments for every detector R whose hit is
-    // included in that fit (i.e. R was matched within the window).  See
-    // runGemEfficiency().
+    // A "good track" is one where the fit through HyCal + ≥3 GEM hits passes
+    // the χ² gate.  The seed line is (target → HyCal cluster) — no GEM is in
+    // the seed, so every detector competes on equal footing for matching and
+    // the per-detector numerator isn't biased by an "auto-matched seed".
+    // Tracks that don't point back to the target are rejected, removing
+    // beam halo from the sample.  Each good track increments the shared
+    // denominator gem_eff_den; per-detector numerator gem_eff_num[R]
+    // increments for every detector R that contributed a matched hit.
+    // See runGemEfficiency().
     float gem_eff_min_cluster_energy = 100.f;
     float gem_eff_match_nsigma       = 3.f;
     float gem_eff_max_chi2           = 10.f;

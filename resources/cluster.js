@@ -456,20 +456,32 @@ function plotGemResiduals(){
         const meanN=events>0 ? (det.matched_hits||0)/events : 0;
         const fmt=v=>(v>=0?' ':'')+v.toFixed(2);
         const titleText=
-            `<span style="color:${gemColor}">${det.name||'GEM'+d}</span> `
-            +`<span style="color:#4dabf7">μₓ${fmt(sx.mean)} σₓ${sx.sigma.toFixed(2)}</span>  `
-            +`<span style="color:#ff6b6b">μᵧ${fmt(sy.mean)} σᵧ${sy.sigma.toFixed(2)}</span>  `
+            `<span style="color:${gemColor}">${det.name||'GEM'+d}</span>  `
             +`⟨N⟩=${meanN.toFixed(2)}`;
+        // Mean/σ panel anchored to the top-right of the plot area.  Larger
+        // font than the title so the numbers are legible at a glance; one
+        // colored line per axis (X = blue, Y = red — matches the trace).
+        const statsAnnotation={
+            xref:'paper',yref:'paper',
+            x:0.98,y:0.97,xanchor:'right',yanchor:'top',
+            align:'right',showarrow:false,
+            text:
+                `<span style="color:#4dabf7">μₓ=${fmt(sx.mean)} σₓ=${sx.sigma.toFixed(2)}</span><br>`
+               +`<span style="color:#ff6b6b">μᵧ=${fmt(sy.mean)} σᵧ=${sy.sigma.toFixed(2)}</span>`,
+            font:{size:12,color:THEME.text},
+            bgcolor:'rgba(0,0,0,0)',
+        };
         Plotly.react(div,[
             _residTrace(det.dx_hist,'#4dabf7','ΔX'),
             _residTrace(det.dy_hist,'#ff6b6b','ΔY'),
         ],{...PL,
-            title:{text:titleText,font:{size:10,color:THEME.text}},
+            title:{text:titleText,font:{size:11,color:THEME.text}},
             xaxis:{...PL.xaxis,title:'Residual (mm)',
                 range:[det.dx_hist.min, det.dx_hist.min+det.dx_hist.bins.length*det.dx_hist.step]},
             yaxis:{...PL.yaxis,title:'Counts'},
             margin:{l:38,r:8,t:24,b:30},
             showlegend:false,
+            annotations:[statsAnnotation],
         },PC2);
     }
 }

@@ -38,7 +38,7 @@
             "run_number": 24185,
             "beam_energy": 3488.43,
             "calibration": {
-                "file": "calibration/calibration_factor_1.json",
+                "file": "calibration/calibration_factor_2_0.json",
                 "default_adc2mev": 0.078
             },
             "target": [0.0, 0.0, 0.0],

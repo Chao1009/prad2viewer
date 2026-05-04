@@ -1929,7 +1929,7 @@ class HyCalEventViewer(QMainWindow):
             "Peaks with time < this (ns) are ignored when picking the "
             "per-channel integral.")
         self._adv_time_min_spin.valueChanged.connect(self._on_advanced_changed)
-        wf.addRow("time_cut.min (ns)", self._adv_time_min_spin)
+        wf.addRow("filter.time.min (ns)", self._adv_time_min_spin)
 
         self._adv_time_max_spin = QDoubleSpinBox()
         self._adv_time_max_spin.setRange(-1e5, 1e5)
@@ -1940,7 +1940,7 @@ class HyCalEventViewer(QMainWindow):
             "Peaks with time > this (ns) are ignored when picking the "
             "per-channel integral.")
         self._adv_time_max_spin.valueChanged.connect(self._on_advanced_changed)
-        wf.addRow("time_cut.max (ns)", self._adv_time_max_spin)
+        wf.addRow("filter.time.max (ns)", self._adv_time_max_spin)
 
         rlay.addWidget(wg)
 

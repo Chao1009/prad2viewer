@@ -273,20 +273,20 @@ function modVal(m){
     const d=eventChannels[key];
     if(!d)return null;
     if(mt==='pedestal')return d.pm||0;
-    // 'integral' picks the peak with the largest integral.  Time window and
-    // threshold are honoured only when the show-cut checkbox is on AND the
-    // filter has a time range, so the color map matches what the user
-    // explicitly asked for (overlay off ⇒ show the full event).
+    // 'integral' picks the peak with the largest integral.  Time window
+    // is honoured only when the show-cut checkbox is on AND the filter
+    // has a time range, so the color map matches what the user explicitly
+    // asked for (overlay off ⇒ show the full event).  The peaks coming
+    // from the analyzer are already gated by min_peak_height, so no
+    // separate threshold check is needed here.
     if(mt==='integral'){
         if(!d.pk||!d.pk.length) return null;
         const useTcut = isTimeCut();
         const f = useTcut ? histConfig.waveform_filter.time : null;
         const tmin = (f && f.min != null) ? f.min : undefined;
         const tmax = (f && f.max != null) ? f.max : undefined;
-        const thr  = useTcut && histConfig.threshold !== undefined ? histConfig.threshold : 0;
         let best=-1;
         for(const p of d.pk){
-            if(thr>0 && p.h<thr) continue;
             if(tmin!==undefined && p.t<tmin) continue;
             if(tmax!==undefined && p.t>tmax) continue;
             if(p.i>best) best=p.i;

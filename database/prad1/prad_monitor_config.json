@@ -17,13 +17,11 @@
     },
     "waveform": {
         "accept_trigger_bits": [],
-        "time_cut": {"min": 160, "max": 220},
+        "filter": {
+            "time": {"min": 160, "max": 220}
+        },
         "integral_hist": {"min": 0, "max": 20000, "step": 100},
-        "time_hist": {"min": 0, "max": 400, "step": 4},
-        "thresholds": {
-            "min_peak_height": 10.0,
-            "min_secondary_peak_ratio": 0.3
-        }
+        "time_hist":     {"min": 0, "max": 400,   "step": 4}
     },
     "hycal_hist": {
         "accept_trigger_bits": [0, 1],

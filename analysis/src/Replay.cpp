@@ -10,7 +10,8 @@
 #include "GemSystem.h"
 #include "HyCalCluster.h"
 #include "GemCluster.h"
-#include "MatchingTools.h"
+#include "TrackMatcher.h"
+#include "TrackGeometry.h"
 #include "ConfigSetup.h"
 #include "InstallPaths.h"
 #include "gain_factor.h"
@@ -435,7 +436,35 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     fdec::ClusterConfig cl_cfg;
     clusterer.SetConfig(cl_cfg);
 
-    MatchingTools matching;
+    // Lab transforms for the matcher (built once, rotation matrices cached).
+    auto match_xforms = analysis::BuildLabTransforms(gRunConfig);
+
+    // TrackMatcher — single source of truth for HyCal↔GEM matching.  σ_GEM
+    // and (A, B, C) coefficients aren't in the per-run RunConfig (they live
+    // in reconstruction_config.json:matching, which Replay doesn't load),
+    // so we use working defaults that approximately reproduce the legacy
+    // 15 mm cut at the GEM planes.  Tools that need per-run tuning can
+    // either load reconstruction_config.json explicitly or push the values
+    // into RunConfig when they get added there.
+    namespace trk = prad2::trk;
+    trk::MatcherConfig mcfg;
+    mcfg.planes.resize(4);
+    for (int d = 0; d < 4; ++d) {
+        mcfg.planes[d].id      = d;
+        mcfg.planes[d].z       = gRunConfig.gem_z[d];
+        mcfg.planes[d].sigma_x = 0.5f;
+        mcfg.planes[d].sigma_y = 0.5f;
+        mcfg.planes[d].xform   = match_xforms.gem[d];
+    }
+    mcfg.hc_sigma_A = hycal.GetPositionResolutionA();
+    mcfg.hc_sigma_B = hycal.GetPositionResolutionB();
+    mcfg.hc_sigma_C = hycal.GetPositionResolutionC();
+    mcfg.target_x = gRunConfig.target_x;
+    mcfg.target_y = gRunConfig.target_y;
+    mcfg.target_z = gRunConfig.target_z;
+    mcfg.match_nsigma = 3.0f;
+    mcfg.max_chi2     = 5.0f;
+    trk::TrackMatcher matcher(std::move(mcfg));
 
     // Initialize GEM system and clusterer
     std::unique_ptr<gem::GemSystem> gem_sys;
@@ -696,47 +725,124 @@ if(!prad1){
                 ev->gem_z[i] = local_hit.z;
             }
 
-            // Perform matching between HyCal clusters and GEM hits
-            //store all the hits on HyCal and GEMs in this event
-            std::vector<HCHit> hc_hits;
-            std::vector<GEMHit> gem_hits[4]; // separate vector for each GEM
-            for (int i = 0; i < ev->n_clusters; ++i)
-                hc_hits.push_back({ev->cl_x[i], ev->cl_y[i], ev->cl_z[i], ev->cl_energy[i], ev->cl_center[i], ev->cl_flag[i]});
-            for (int i = 0; i < ev->n_gem_hits; ++i)
-                gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], ev->gem_z[i], ev->det_id[i]});
-            
-            // already transform to the coordinates
-
-            matching.SetMatchRange(gRunConfig.matching_radius); // matching radius in mm, 15mm default
-            matching.SetSquareSelection(gRunConfig.matching_use_square); // square/circular cut
-            std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
-            std::vector<MatchHit_perChamber> matched_hits_chamber = matching.MatchPerChamber(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]); 
-            
-            for(int i = 0; i < matched_hits_chamber.size(); i++){
-                auto &m = matched_hits_chamber[i];
-                int cl_idx = m.hycal_idx;
-                if( cl_idx != i) std::cerr << "Warning: cluster index mismatch in matched_hits_chamber: " << cl_idx << " vs " << i << "\n";
-                for(int j = 0; j < 4; j++){
-                    ev->matchGEMx[i][j] = m.gem_hits[j][0];
-                    ev->matchGEMy[i][j] = m.gem_hits[j][1];
-                    ev->matchGEMz[i][j] = m.gem_hits[j][2];
-                }
-                ev->matchFlag[i] = 0;
-                ev->matchFlag[i] = m.mflag;
+            // -------- Matching: HyCal clusters ↔ GEM hits ---------------
+            // Repackage clusters / GEM hits as TrackMatcher inputs.  ev->cl_*
+            // and ev->gem_* are already lab-frame (DetectorTransform applied
+            // above), so no further coordinate change here.
+            std::vector<std::vector<trk::PlaneHit>> hits_by_plane(4);
+            for (int i = 0; i < ev->n_gem_hits; ++i) {
+                int d = ev->det_id[i];
+                if (d < 0 || d >= 4) continue;
+                trk::PlaneHit ph;
+                ph.plane_idx = d;
+                ph.hit_idx   = (int)hits_by_plane[d].size();
+                ph.x = ev->gem_x[i];
+                ph.y = ev->gem_y[i];
+                ph.z = ev->gem_z[i];
+                hits_by_plane[d].push_back(ph);
             }
 
-            ev->matchNum = std::min((int)matched_hits.size(), prad2::kMaxClusters);
-            for (int i = 0; i < ev->matchNum; i++){
-                // save the matched GEM hit (must 2 matchings) info in mHit_ arrays for quick check
-                ev->mHit_E[i] = matched_hits[i].hycal_hit.energy;
-                ev->mHit_x[i] = matched_hits[i].hycal_hit.x;
-                ev->mHit_y[i] = matched_hits[i].hycal_hit.y;
-                ev->mHit_z[i] = matched_hits[i].hycal_hit.z;
-                for(int j = 0; j < 2; j++) {
-                    ev->mHit_gx[i][j] =  matched_hits[i].gem[j].x;
-                    ev->mHit_gy[i][j] =  matched_hits[i].gem[j].y;
-                    ev->mHit_gz[i][j] =  matched_hits[i].gem[j].z;
-                    ev->mHit_gid[i][j] = matched_hits[i].gem[j].det_id; // placeholder for GEM hit ID if needed
+            // Per-cluster per-chamber best match (no exclusivity, no fit) —
+            // populates matchGEMx/y/z[i][d] and matchFlag[i].  Direct
+            // successor of the legacy MatchingTools::MatchPerChamber.
+            for (int i = 0; i < ev->n_clusters; ++i) {
+                trk::ClusterHit hc;
+                hc.x = ev->cl_x[i]; hc.y = ev->cl_y[i]; hc.z = ev->cl_z[i];
+                hc.energy = ev->cl_energy[i];
+                hc.center_id = ev->cl_center[i];
+                hc.flag      = ev->cl_flag[i];
+
+                auto pp = matcher.findPerPlaneMatches(hc, hits_by_plane);
+                ev->matchFlag[i] = 0;
+                for (int d = 0; d < 4; ++d) {
+                    if (pp.matched[d]) {
+                        ev->matchGEMx[i][d] = pp.hit[d].x;
+                        ev->matchGEMy[i][d] = pp.hit[d].y;
+                        ev->matchGEMz[i][d] = pp.hit[d].z;
+                        ev->matchFlag[i] |= (1u << d);
+                    } else {
+                        ev->matchGEMx[i][d] = -999.f;
+                        ev->matchGEMy[i][d] = -999.f;
+                        ev->matchGEMz[i][d] = -999.f;
+                    }
+                }
+            }
+
+            // mHit_*: track-style match (target-seed χ²-gated single track,
+            // greedy-by-E exclusivity across HyCal clusters, requires both
+            // upstream + downstream pair to contribute).  Successor of the
+            // legacy MatchingTools::Match.
+            struct ClusterIdx { int idx; float energy; };
+            std::vector<ClusterIdx> order;
+            order.reserve(ev->n_clusters);
+            for (int j = 0; j < ev->n_clusters; ++j)
+                order.push_back({j, ev->cl_energy[j]});
+            std::sort(order.begin(), order.end(),
+                      [](const ClusterIdx &a, const ClusterIdx &b) {
+                          return a.energy > b.energy;
+                      });
+
+            ev->matchNum = 0;
+            auto remaining = hits_by_plane;
+            for (auto [cl_idx, _e] : order) {
+                if (ev->matchNum >= prad2::kMaxClusters) break;
+                trk::ClusterHit hc;
+                hc.x = ev->cl_x[cl_idx]; hc.y = ev->cl_y[cl_idx]; hc.z = ev->cl_z[cl_idx];
+                hc.energy = ev->cl_energy[cl_idx];
+
+                auto track = matcher.findBestTrack(hc, remaining,
+                                                   /*free_seed=*/false,
+                                                   /*require_planes=*/2);
+                if (!track) continue;
+
+                // Both pairs (downstream {0,1} and upstream {2,3}) must
+                // contribute — otherwise we don't have a real track, just a
+                // cluster of hits in one layer.
+                bool has_down = track->matched[0] || track->matched[1];
+                bool has_up   = track->matched[2] || track->matched[3];
+                if (!has_down || !has_up) continue;
+
+                auto pick_pair = [&](int a, int b) -> trk::PlaneHit {
+                    trk::PlaneHit none{}; none.plane_idx = -1;
+                    bool ha = track->matched[a], hb = track->matched[b];
+                    if (!ha && !hb) return none;
+                    if (!ha) return track->hit[b];
+                    if (!hb) return track->hit[a];
+                    auto rs = [&](const trk::PlaneHit &h) {
+                        float px = track->fit.ax + track->fit.bx * h.z;
+                        float py = track->fit.ay + track->fit.by * h.z;
+                        float dx = h.x - px, dy = h.y - py;
+                        return dx*dx + dy*dy;
+                    };
+                    return rs(track->hit[a]) < rs(track->hit[b])
+                           ? track->hit[a] : track->hit[b];
+                };
+                trk::PlaneHit g_down = pick_pair(0, 1);
+                trk::PlaneHit g_up   = pick_pair(2, 3);
+
+                int slot = ev->matchNum;
+                ev->mHit_E[slot] = hc.energy;
+                ev->mHit_x[slot] = hc.x;
+                ev->mHit_y[slot] = hc.y;
+                ev->mHit_z[slot] = hc.z;
+                const trk::PlaneHit *gp[2] = {&g_down, &g_up};
+                for (int j = 0; j < 2; ++j) {
+                    ev->mHit_gx[slot][j]  = gp[j]->x;
+                    ev->mHit_gy[slot][j]  = gp[j]->y;
+                    ev->mHit_gz[slot][j]  = gp[j]->z;
+                    ev->mHit_gid[slot][j] = gp[j]->plane_idx;
+                }
+                ev->matchNum = slot + 1;
+
+                // Greedy-by-E exclusivity: drop the claimed GEM hits so a
+                // lower-energy cluster can't reuse them.
+                for (int d = 0; d < 4; ++d) {
+                    if (!track->matched[d]) continue;
+                    int hi = track->hit[d].hit_idx;
+                    auto &v = remaining[d];
+                    for (auto it = v.begin(); it != v.end(); ++it) {
+                        if (it->hit_idx == hi) { v.erase(it); break; }
+                    }
                 }
             }
 

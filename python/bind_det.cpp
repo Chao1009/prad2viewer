@@ -47,6 +47,8 @@
 #include "PipelineBuilder.h"
 #include "RunInfoConfig.h"
 #include "SspData.h"
+#include "TrackMatcher.h"
+#include "TrackGeometry.h"
 
 #include <cstring>
 #include <cstdio>
@@ -1085,6 +1087,342 @@ static void bind_pipeline(py::module_ &m)
 }
 
 // -------------------------------------------------------------------------
+// TrackMatcher bindings — single-source-of-truth HyCal↔GEM straight-line
+// matcher.  Mirrors prad2det/include/TrackMatcher.h verbatim; see that
+// header for the algorithm.  Replaces the Python re-implementations in
+// analysis/pyscripts/{gem_eff_audit,gem_hycal_matching}.py.
+//
+// Usage (Python):
+//
+//   from prad2py import det
+//   cfg = det.MatcherConfig()
+//   cfg.planes = [det.Plane(id=d, z=p.geo.gem_z[d],
+//                           sigma_x=0.5, sigma_y=0.5,
+//                           xform=p.gem_xforms[d])
+//                 for d in range(4)]
+//   cfg.hc_sigma_A, cfg.hc_sigma_B, cfg.hc_sigma_C = (2.5, 0.0, 0.0)
+//   cfg.target_x, cfg.target_y, cfg.target_z = (0.0, 0.0, 0.0)
+//   cfg.match_nsigma = 3.0
+//   cfg.max_chi2     = 3.5
+//   m = det.TrackMatcher(cfg)
+//
+//   hc = det.ClusterHit(x=hcx, y=hcy, z=hcz, energy=E)
+//   hits_by_plane = [[det.PlaneHit(plane_idx=d, hit_idx=i, x=h[0], y=h[1], z=h[2])
+//                     for i, h in enumerate(plane_hits)]
+//                    for d, plane_hits in enumerate(per_plane_lists)]
+//   track = m.find_best_track(hc, hits_by_plane)         # optional[Track]
+//   loo   = m.run_loo(test_d, hc, hits_by_plane,
+//                     det.Seed.HCAndPlaneHit, target_in_fit=False)
+// -------------------------------------------------------------------------
+static void bind_track_matcher(py::module_ &m)
+{
+    using namespace prad2::trk;
+
+    py::class_<Line3D>(m, "Line3D",
+        "Straight line in lab frame: x(z) = ax + bx·z, y(z) = ay + by·z, "
+        "with χ²/dof from the most recent fit (0 for seed lines).")
+        .def(py::init<>())
+        .def_readwrite("ax", &Line3D::ax)
+        .def_readwrite("bx", &Line3D::bx)
+        .def_readwrite("ay", &Line3D::ay)
+        .def_readwrite("by", &Line3D::by)
+        .def_readwrite("chi2_per_dof", &Line3D::chi2_per_dof);
+
+    py::class_<Plane>(m, "Plane",
+        "One detector layer in the matcher's plane list (lab z, per-axis σ, "
+        "and a DetectorTransform for local-frame projection).")
+        .def(py::init<>())
+        .def(py::init([](int id, float z, float sigma_x, float sigma_y,
+                         const DetectorTransform &xform) {
+            Plane p;
+            p.id = id; p.z = z;
+            p.sigma_x = sigma_x; p.sigma_y = sigma_y;
+            p.xform   = xform;
+            return p;
+        }), py::arg("id") = -1, py::arg("z") = 0.f,
+            py::arg("sigma_x") = 0.1f, py::arg("sigma_y") = 0.1f,
+            py::arg("xform") = DetectorTransform{})
+        .def_readwrite("id",      &Plane::id)
+        .def_readwrite("z",       &Plane::z)
+        .def_readwrite("sigma_x", &Plane::sigma_x)
+        .def_readwrite("sigma_y", &Plane::sigma_y)
+        .def_readwrite("xform",   &Plane::xform);
+
+    py::class_<PlaneHit>(m, "PlaneHit",
+        "One reconstructed hit on a plane, lab coords.  hit_idx threads the "
+        "caller's original index through so auxiliary payload (charge, "
+        "size, timing) can be looked up via (plane_idx, hit_idx).")
+        .def(py::init<>())
+        .def(py::init([](int plane_idx, int hit_idx,
+                         float x, float y, float z) {
+            PlaneHit h;
+            h.plane_idx = plane_idx; h.hit_idx = hit_idx;
+            h.x = x; h.y = y; h.z = z;
+            return h;
+        }), py::arg("plane_idx") = -1, py::arg("hit_idx") = -1,
+            py::arg("x") = 0.f, py::arg("y") = 0.f, py::arg("z") = 0.f)
+        .def_readwrite("plane_idx", &PlaneHit::plane_idx)
+        .def_readwrite("hit_idx",   &PlaneHit::hit_idx)
+        .def_readwrite("x",         &PlaneHit::x)
+        .def_readwrite("y",         &PlaneHit::y)
+        .def_readwrite("z",         &PlaneHit::z);
+
+    py::class_<ClusterHit>(m, "ClusterHit",
+        "One HyCal cluster — anchor of every track.")
+        .def(py::init<>())
+        .def(py::init([](float x, float y, float z, float energy,
+                         uint16_t center_id, uint32_t flag) {
+            ClusterHit h;
+            h.x = x; h.y = y; h.z = z;
+            h.energy = energy;
+            h.center_id = center_id; h.flag = flag;
+            return h;
+        }), py::arg("x") = 0.f, py::arg("y") = 0.f, py::arg("z") = 0.f,
+            py::arg("energy") = 0.f, py::arg("center_id") = 0,
+            py::arg("flag") = 0)
+        .def_readwrite("x",         &ClusterHit::x)
+        .def_readwrite("y",         &ClusterHit::y)
+        .def_readwrite("z",         &ClusterHit::z)
+        .def_readwrite("energy",    &ClusterHit::energy)
+        .def_readwrite("center_id", &ClusterHit::center_id)
+        .def_readwrite("flag",      &ClusterHit::flag);
+
+    py::class_<MatcherConfig>(m, "MatcherConfig",
+        "Per-event matcher configuration.  Build planes with .planes, set "
+        "HC σ via (A, B, C), target coords + sigmas, and the cut/χ² gates.")
+        .def(py::init<>())
+        .def_readwrite("planes",            &MatcherConfig::planes)
+        .def_readwrite("hc_sigma_A",        &MatcherConfig::hc_sigma_A)
+        .def_readwrite("hc_sigma_B",        &MatcherConfig::hc_sigma_B)
+        .def_readwrite("hc_sigma_C",        &MatcherConfig::hc_sigma_C)
+        .def_readwrite("target_x",          &MatcherConfig::target_x)
+        .def_readwrite("target_y",          &MatcherConfig::target_y)
+        .def_readwrite("target_z",          &MatcherConfig::target_z)
+        .def_readwrite("target_sigma_x",    &MatcherConfig::target_sigma_x)
+        .def_readwrite("target_sigma_y",    &MatcherConfig::target_sigma_y)
+        .def_readwrite("target_sigma_z",    &MatcherConfig::target_sigma_z)
+        .def_readwrite("max_hits_per_plane",&MatcherConfig::max_hits_per_plane)
+        .def_readwrite("match_nsigma",      &MatcherConfig::match_nsigma)
+        .def_readwrite("max_chi2",          &MatcherConfig::max_chi2);
+
+    py::enum_<Seed>(m, "Seed",
+        "Seeding strategy for findBestTrack.")
+        .value("TargetToHC",        Seed::TargetToHC,
+               "Seed line goes (target_x, target_y, target_z) → HyCal cluster.  "
+               "No GEM contributes to the seed line.")
+        .value("HCAndPlaneHit",     Seed::HCAndPlaneHit,
+               "Try every (HC, plane-d hit) pair as a seed line; keep the "
+               "lowest-χ² survivor.  seed_planes_mask selects which planes "
+               "may donate seed hits.")
+        .value("FreeCombinatorial", Seed::FreeCombinatorial,
+               "No seed line: enumerate every fit-plane subset × hit cross-"
+               "product, fit, take the lowest-χ² survivor.  Slowest mode.");
+
+    py::class_<Stats>(m, "Stats",
+        "Per-call funnel counters (caller owns reset).")
+        .def(py::init<>())
+        .def_readwrite("n_call",       &Stats::n_call)
+        .def_readwrite("n_seed_tried", &Stats::n_seed_tried)
+        .def_readwrite("n_min_match",  &Stats::n_min_match)
+        .def_readwrite("n_pass_chi2",  &Stats::n_pass_chi2)
+        .def_readwrite("n_pass_resid", &Stats::n_pass_resid);
+
+    py::class_<Track>(m, "Track",
+        "Result of a successful match.  matched[d] / hit[d] are indexed by "
+        "the plane index in MatcherConfig.planes.")
+        .def(py::init<>())
+        .def_readonly("fit",            &Track::fit)
+        .def_property_readonly("matched",
+            [](const Track &t) {
+                std::vector<bool> v(t.matched.begin(), t.matched.end());
+                return v;
+            },
+            "List of length kMaxPlanes (8) — matched[d] is True if plane d "
+            "contributed to the fit.")
+        .def_property_readonly("hit",
+            [](const Track &t) {
+                return std::vector<PlaneHit>(t.hit.begin(), t.hit.end());
+            },
+            "List of length kMaxPlanes (8) — hit[d] is the PlaneHit used "
+            "from plane d (only meaningful where matched[d] is True).")
+        .def_readonly("n_matched",     &Track::n_matched)
+        .def_readonly("seed_plane",    &Track::seed_plane)
+        .def_readonly("seed_hit_idx",  &Track::seed_hit_idx)
+        .def_readonly("target_in_fit", &Track::target_in_fit);
+
+    py::class_<PerPlaneMatch>(m, "PerPlaneMatch",
+        "Per-plane independent matching against a target → HC seed line.  "
+        "matched[d] / hit[d] / residual[d] per plane in MatcherConfig.planes "
+        "— each plane's decision is independent (no fit, no χ²/dof gate).")
+        .def_readonly("seed", &PerPlaneMatch::seed)
+        .def_property_readonly("matched",
+            [](const PerPlaneMatch &p) {
+                return std::vector<bool>(p.matched.begin(), p.matched.end());
+            })
+        .def_property_readonly("hit",
+            [](const PerPlaneMatch &p) {
+                return std::vector<PlaneHit>(p.hit.begin(), p.hit.end());
+            })
+        .def_property_readonly("residual",
+            [](const PerPlaneMatch &p) {
+                return std::vector<float>(p.residual.begin(), p.residual.end());
+            },
+            "Plane-local distance from seed-line projection to the matched "
+            "hit, in mm.  Zero where matched[d] is False.");
+
+    py::class_<TrackMatcher::LooResult>(m, "LooResult",
+        "Output of TrackMatcher.run_loo.  hit_at_test is None when the test "
+        "plane was inefficient at the predicted point.")
+        .def_readonly("anchor",      &TrackMatcher::LooResult::anchor)
+        .def_readonly("test_plane",  &TrackMatcher::LooResult::test_plane)
+        .def_readonly("pred_x",      &TrackMatcher::LooResult::pred_x,
+                      "Lab-frame x at z = z_test_plane (line crosses the "
+                      "horizontal plane, NOT the on-surface point — re-"
+                      "project via project_line_to_local + xform.to_lab if "
+                      "you need on-surface lab coords).")
+        .def_readonly("pred_y",      &TrackMatcher::LooResult::pred_y)
+        .def_property_readonly("hit_at_test",
+            [](const TrackMatcher::LooResult &r) -> py::object {
+                if (r.hit_at_test) return py::cast(*r.hit_at_test);
+                return py::none();
+            });
+
+    py::class_<TrackMatcher>(m, "TrackMatcher",
+        "Single-HC, stateless matcher.  Multi-cluster contention (greedy-"
+        "by-E or Hungarian) is the caller's job — sort HC by energy "
+        "descending, call find_best_track per HC, remove claimed hits "
+        "between calls.  See project_track_matcher.md for the full spec.")
+        .def(py::init<MatcherConfig>(), py::arg("config"))
+        .def_property_readonly("config", &TrackMatcher::config,
+                               py::return_value_policy::reference_internal)
+        .def("hc_sigma", &TrackMatcher::hcSigma, py::arg("energy_MeV"),
+             "σ_HC at the HyCal face for the given cluster energy (MeV).")
+        .def("find_best_track",
+            [](const TrackMatcher &self,
+               const ClusterHit &hc,
+               const std::vector<std::vector<PlaneHit>> &hits_by_plane,
+               Seed seed_mode,
+               uint32_t seed_planes_mask,
+               uint32_t fit_planes_mask,
+               bool require_target_in_fit,
+               int  require_planes,
+               Stats *diag) -> py::object {
+                auto t = self.findBestTrack(hc, hits_by_plane,
+                                            seed_mode, seed_planes_mask,
+                                            fit_planes_mask,
+                                            require_target_in_fit,
+                                            require_planes, diag);
+                if (t) return py::cast(*t);
+                return py::none();
+            },
+            py::arg("hc"), py::arg("hits_by_plane"), py::arg("seed_mode"),
+            py::arg("seed_planes_mask"), py::arg("fit_planes_mask"),
+            py::arg("require_target_in_fit"), py::arg("require_planes"),
+            py::arg("diag") = nullptr,
+            "Full-control overload — returns Track | None.  See header for "
+            "argument semantics.")
+        .def("find_best_track",
+            [](const TrackMatcher &self,
+               const ClusterHit &hc,
+               const std::vector<std::vector<PlaneHit>> &hits_by_plane,
+               bool free_seed,
+               int  require_planes,
+               Stats *diag) -> py::object {
+                auto t = self.findBestTrack(hc, hits_by_plane, free_seed,
+                                            require_planes, diag);
+                if (t) return py::cast(*t);
+                return py::none();
+            },
+            py::arg("hc"), py::arg("hits_by_plane"),
+            py::arg("free_seed") = false,
+            py::arg("require_planes") = 3,
+            py::arg("diag") = nullptr,
+            "Convenience overload — target-seed (free_seed=False) or free-"
+            "combinatorial (free_seed=True), all planes eligible for fit.  "
+            "Returns Track | None.")
+        .def("run_loo",
+            [](const TrackMatcher &self,
+               int test_plane,
+               const ClusterHit &hc,
+               const std::vector<std::vector<PlaneHit>> &hits_by_plane,
+               Seed seed_mode,
+               bool target_in_fit,
+               Stats *diag) -> py::object {
+                auto r = self.runLoo(test_plane, hc, hits_by_plane,
+                                     seed_mode, target_in_fit, diag);
+                if (r) return py::cast(*r);
+                return py::none();
+            },
+            py::arg("test_plane"), py::arg("hc"), py::arg("hits_by_plane"),
+            py::arg("seed_mode"), py::arg("target_in_fit") = false,
+            py::arg("diag") = nullptr,
+            "Leave-one-out: fit excludes test_plane, then probe test_plane "
+            "for a hit within match_nsigma · σ_plane.  Returns LooResult | "
+            "None (None when the anchor fit failed).")
+        .def("find_per_plane_matches",
+             &TrackMatcher::findPerPlaneMatches,
+             py::arg("hc"), py::arg("hits_by_plane"),
+             "Per-plane independent best-match against a target → HC seed "
+             "line.  No fit, no χ²/dof gate — each plane's decision is "
+             "independent.  Returns PerPlaneMatch.");
+
+    // Math helpers — exposed as module-level free functions so callers can
+    // do their own line projection / fitting (handy for residual plots and
+    // alignment scripts).
+    m.def("seed_line",
+        [](float x1, float y1, float z1,
+           float x2, float y2, float z2) {
+            return prad2::trk::seedLine(x1, y1, z1, x2, y2, z2);
+        },
+        py::arg("x1"), py::arg("y1"), py::arg("z1"),
+        py::arg("x2"), py::arg("y2"), py::arg("z2"),
+        "Two-point seed line in lab frame.  Returns Line3D.");
+
+    m.def("project_line_to_local",
+        [](const DetectorTransform &xform, const Line3D &L) {
+            float px, py_;
+            prad2::trk::projectLineToLocal(xform, L, px, py_);
+            return py::make_tuple(px, py_);
+        },
+        py::arg("xform"), py::arg("line"),
+        "Project a lab-frame Line3D onto a detector's local plane "
+        "(z_local = 0).  Returns (px, py) in local coords.");
+
+    m.def("fit_weighted_line",
+        [](const std::vector<float> &z,
+           const std::vector<float> &x,
+           const std::vector<float> &y,
+           const std::vector<float> &wx,
+           py::object wy_obj) -> py::object {
+            const int N = (int)z.size();
+            if ((int)x.size() != N || (int)y.size() != N
+                || (int)wx.size() != N) {
+                throw py::value_error(
+                    "z, x, y, wx must have the same length");
+            }
+            const float *wy_ptr = nullptr;
+            std::vector<float> wy_buf;
+            if (!wy_obj.is_none()) {
+                wy_buf = wy_obj.cast<std::vector<float>>();
+                if ((int)wy_buf.size() != N)
+                    throw py::value_error("wy must match length of z");
+                wy_ptr = wy_buf.data();
+            }
+            Line3D out;
+            bool ok = prad2::trk::fitWeightedLine(N, z.data(), x.data(),
+                                                  y.data(), wx.data(),
+                                                  wy_ptr, out);
+            if (!ok) return py::none();
+            return py::cast(out);
+        },
+        py::arg("z"), py::arg("x"), py::arg("y"), py::arg("wx"),
+        py::arg("wy") = py::none(),
+        "Weighted-LSQ 4-parameter line fit through N ≥ 2 points.  wy=None "
+        "reuses wx for both axes (isotropic case).  Returns Line3D | None "
+        "(None on degenerate normal-equations determinant).");
+}
+
+// -------------------------------------------------------------------------
 // Submodule entry point — called from prad2py.cpp
 // -------------------------------------------------------------------------
 void register_det(py::module_ &m)
@@ -1093,9 +1431,10 @@ void register_det(py::module_ &m)
         "prad2det bindings — GEM + HyCal reconstruction and slow-control "
         "helpers.");
 
-    bind_gem(det);       // 2a
-    bind_hycal(det);     // 2b
-    bind_transform(det); // 2c
-    bind_epics(det);     // 2c
-    bind_pipeline(det);  // 2d — one-stop wiring (PipelineBuilder)
+    bind_gem(det);            // 2a
+    bind_hycal(det);          // 2b
+    bind_transform(det);      // 2c
+    bind_epics(det);          // 2c
+    bind_pipeline(det);       // 2d — one-stop wiring (PipelineBuilder)
+    bind_track_matcher(det);  // 2e — straight-line track matcher (HyCal↔GEM)
 }

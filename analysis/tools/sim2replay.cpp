@@ -8,7 +8,8 @@
 // Example:
 //   sim2replay ep.root ee.root 1e6 1e6 -o sim_recon.root -n 100000 
 
-#include "MatchingTools.h"
+#include "TrackMatcher.h"
+#include "TrackGeometry.h"
 #include "PhysicsTools.h"
 #include "HyCalSystem.h"
 #include "EventData.h"
@@ -145,7 +146,25 @@ int main (int argc, char *argv[])
     fdec::HyCalSystem hycal;
     hycal.Init(dbDir + "/hycal_map.json");
     PhysicsTools physics(hycal);
-    MatchingTools matching;
+
+    // --- TrackMatcher (target-seed, χ²-gated) -----------------------------
+    namespace trk = prad2::trk;
+    trk::MatcherConfig mcfg;
+    mcfg.planes.resize(4);
+    for (int d = 0; d < 4; ++d) {
+        mcfg.planes[d].id      = d;
+        mcfg.planes[d].z       = gem_z[d];
+        mcfg.planes[d].sigma_x = 0.5f;          // mm — typical PRad-II GEM σ
+        mcfg.planes[d].sigma_y = 0.5f;
+        mcfg.planes[d].xform.set(0.f, 0.f, gem_z[d], 0.f, 0.f, 0.f);
+    }
+    mcfg.hc_sigma_A = 2.5f;
+    mcfg.hc_sigma_B = 0.f;
+    mcfg.hc_sigma_C = 0.f;
+    mcfg.target_x = 0.f; mcfg.target_y = 0.f; mcfg.target_z = 0.f;
+    mcfg.match_nsigma = 3.0f;
+    mcfg.max_chi2     = 5.0f;
+    trk::TrackMatcher matcher(std::move(mcfg));
 
     // --- setup TChain and branches ---
     auto sim = std::make_unique<SimEventData>();
@@ -256,22 +275,23 @@ int main (int argc, char *argv[])
             ev->n_gem_hits++;
         }
 
-        //do matching between HyCal clusters and GEM hits
-        //store all the hits on HyCal and GEMs in this event
-        std::vector<HCHit> hc_hits;
-        std::vector<GEMHit> gem_hits[4]; // separate vector for each GEM
-        for (int i = 0; i < ev->n_clusters; i++)
-            hc_hits.push_back({ev->cl_x[i], ev->cl_y[i], ev->cl_z[i], ev->cl_energy[i], ev->cl_center[i], ev->cl_flag[i]});
-        for (int i = 0; i < ev->n_gem_hits; ++i)
-            gem_hits[ev->det_id[i]].push_back(GEMHit{ev->gem_x[i], ev->gem_y[i], gem_z[ev->det_id[i]], ev->det_id[i]});
+        // Repackage clusters / GEM hits for TrackMatcher.  Sim positions
+        // are already lab-frame (no detector pose applied), so PlaneHit
+        // and ClusterHit get them directly.
+        std::vector<std::vector<trk::PlaneHit>> hits_by_plane(4);
+        for (int i = 0; i < ev->n_gem_hits; ++i) {
+            int d = ev->det_id[i];
+            if (d < 0 || d >= 4) continue;
+            trk::PlaneHit ph;
+            ph.plane_idx = d;
+            ph.hit_idx   = (int)hits_by_plane[d].size();
+            ph.x = ev->gem_x[i];
+            ph.y = ev->gem_y[i];
+            ph.z = gem_z[d];
+            hits_by_plane[d].push_back(ph);
+        }
 
-        //GetProjection(hc_hits, 6225.f);
-
-        matching.SetMatchRange(10.f); // matching radius in mm, 15mm default
-        //matching.SetSquareSelection(true); // use square cut instead of circular cut
-        std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
-
-        // save transformed HyCal positions for all clusters (regardless of match)
+        // Reset all cluster match fields (default = no match).
         for (int i = 0; i < ev->n_clusters; ++i) {
             for (int j = 0; j < 2; j++) {
                 ev->matchGEMx[i][j] = -999.f;
@@ -280,25 +300,86 @@ int main (int argc, char *argv[])
             }
             ev->matchFlag[i] = 0;
         }
-        ev->matchNum = std::min((int)matched_hits.size(), prad2::kMaxClusters);
-        for (int i = 0; i < ev->matchNum; i++) {
-            int cl_idx = matched_hits[i].hycal_idx;
-            ev->matchFlag[cl_idx] = matched_hits[i].mflag;
-            for (int j = 0; j < 2; j++) {
-                ev->matchGEMx[cl_idx][j] = matched_hits[i].gem[j].x;
-                ev->matchGEMy[cl_idx][j] = matched_hits[i].gem[j].y;
-                ev->matchGEMz[cl_idx][j] = matched_hits[i].gem[j].z;
+
+        // Greedy-by-energy: highest-E cluster gets first claim on
+        // overlapping GEM hits — same exclusivity policy MatchingTools::Match
+        // applied.
+        struct Idx { int i; float E; };
+        std::vector<Idx> order;
+        order.reserve(ev->n_clusters);
+        for (int i = 0; i < ev->n_clusters; ++i)
+            order.push_back({i, ev->cl_energy[i]});
+        std::sort(order.begin(), order.end(),
+                  [](const Idx &a, const Idx &b) { return a.E > b.E; });
+
+        ev->matchNum = 0;
+        for (auto [cl_idx, _] : order) {
+            trk::ClusterHit hc;
+            hc.x = ev->cl_x[cl_idx]; hc.y = ev->cl_y[cl_idx]; hc.z = ev->cl_z[cl_idx];
+            hc.energy = ev->cl_energy[cl_idx];
+            hc.center_id = ev->cl_center[cl_idx];
+            hc.flag      = ev->cl_flag[cl_idx];
+
+            auto track = matcher.findBestTrack(hc, hits_by_plane,
+                                               /*free_seed=*/false,
+                                               /*require_planes=*/3);
+            if (!track) continue;
+
+            // Pair-best (smallest residual) for the down (0,1) and up (2,3) layers.
+            auto pick_pair = [&](int a, int b) -> trk::PlaneHit {
+                trk::PlaneHit none{}; none.plane_idx = -1;
+                bool ha = track->matched[a], hb = track->matched[b];
+                if (!ha && !hb) return none;
+                if (!ha) return track->hit[b];
+                if (!hb) return track->hit[a];
+                auto rs = [&](const trk::PlaneHit &h) {
+                    float px = track->fit.ax + track->fit.bx * h.z;
+                    float py = track->fit.ay + track->fit.by * h.z;
+                    float dx = h.x - px, dy = h.y - py;
+                    return dx*dx + dy*dy;
+                };
+                return rs(track->hit[a]) < rs(track->hit[b])
+                       ? track->hit[a] : track->hit[b];
+            };
+            trk::PlaneHit g_down = pick_pair(0, 1);
+            trk::PlaneHit g_up   = pick_pair(2, 3);
+
+            // Set per-cluster match arrays (j=0 down, j=1 up — matches the
+            // historical mHit_g* / matchGEM* layout).
+            const trk::PlaneHit *gp[2] = {&g_down, &g_up};
+            uint32_t mflag = 0;
+            for (int j = 0; j < 2; ++j) {
+                if (gp[j]->plane_idx < 0) continue;
+                ev->matchGEMx[cl_idx][j] = gp[j]->x;
+                ev->matchGEMy[cl_idx][j] = gp[j]->y;
+                ev->matchGEMz[cl_idx][j] = gp[j]->z;
+                mflag |= (1u << gp[j]->plane_idx);
             }
-            // quick access arrays
-            ev->mHit_E[i]  = matched_hits[i].hycal_hit.energy;
-            ev->mHit_x[i]  = matched_hits[i].hycal_hit.x;
-            ev->mHit_y[i]  = matched_hits[i].hycal_hit.y;
-            ev->mHit_z[i]  = matched_hits[i].hycal_hit.z;
-            for (int j = 0; j < 2; j++) {
-                ev->mHit_gx[i][j]  = matched_hits[i].gem[j].x;
-                ev->mHit_gy[i][j]  = matched_hits[i].gem[j].y;
-                ev->mHit_gz[i][j]  = matched_hits[i].gem[j].z;
-                ev->mHit_gid[i][j] = matched_hits[i].gem[j].det_id;
+            ev->matchFlag[cl_idx] = mflag;
+
+            int slot = ev->matchNum;
+            if (slot < prad2::kMaxClusters) {
+                ev->mHit_E[slot] = hc.energy;
+                ev->mHit_x[slot] = hc.x;
+                ev->mHit_y[slot] = hc.y;
+                ev->mHit_z[slot] = hc.z;
+                for (int j = 0; j < 2; ++j) {
+                    ev->mHit_gx[slot][j]  = (gp[j]->plane_idx >= 0) ? gp[j]->x : -999.f;
+                    ev->mHit_gy[slot][j]  = (gp[j]->plane_idx >= 0) ? gp[j]->y : -999.f;
+                    ev->mHit_gz[slot][j]  = (gp[j]->plane_idx >= 0) ? gp[j]->z : -999.f;
+                    ev->mHit_gid[slot][j] = (gp[j]->plane_idx >= 0) ? gp[j]->plane_idx : 0;
+                }
+                ev->matchNum = slot + 1;
+            }
+
+            // Remove claimed GEM hits to enforce greedy-by-E exclusivity.
+            for (int d = 0; d < 4; ++d) {
+                if (!track->matched[d]) continue;
+                int hi = track->hit[d].hit_idx;
+                auto &v = hits_by_plane[d];
+                for (auto it = v.begin(); it != v.end(); ++it) {
+                    if (it->hit_idx == hi) { v.erase(it); break; }
+                }
             }
         }
 

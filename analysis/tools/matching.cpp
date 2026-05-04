@@ -9,7 +9,8 @@
 
 #include "PhysicsTools.h"
 #include "HyCalSystem.h"
-#include "MatchingTools.h"
+#include "TrackMatcher.h"
+#include "TrackGeometry.h"
 #include "EventData.h"
 #include "EventData_io.h"
 #include "ConfigSetup.h"
@@ -85,8 +86,34 @@ int main(int argc, char *argv[])
     fdec::HyCalSystem hycal;
     hycal.Init(dbDir + "/hycal_map.json");
     PhysicsTools physics(hycal);
-    MatchingTools matching;
-    
+
+    // --- TrackMatcher (target-seed, χ²-gated) -----------------------------
+    // gRunConfig provides target + GEM placements; per-plane σ_GEM and HC
+    // (A, B, C) coefficients aren't in RunConfig (they live in
+    // reconstruction_config.json:matching), so we use working defaults
+    // here.  Tools that need per-run tuning should load matching params
+    // explicitly the way AppState does in src/app_state_init.cpp.
+    namespace trk = prad2::trk;
+    auto xforms = analysis::BuildLabTransforms(gRunConfig);
+    trk::MatcherConfig mcfg;
+    mcfg.planes.resize(4);
+    for (int d = 0; d < 4; ++d) {
+        mcfg.planes[d].id      = d;
+        mcfg.planes[d].z       = gRunConfig.gem_z[d];
+        mcfg.planes[d].sigma_x = 0.5f;          // mm — typical PRad-II GEM σ
+        mcfg.planes[d].sigma_y = 0.5f;
+        mcfg.planes[d].xform   = xforms.gem[d];
+    }
+    mcfg.hc_sigma_A = hycal.GetPositionResolutionA();
+    mcfg.hc_sigma_B = hycal.GetPositionResolutionB();
+    mcfg.hc_sigma_C = hycal.GetPositionResolutionC();
+    mcfg.target_x = gRunConfig.target_x;
+    mcfg.target_y = gRunConfig.target_y;
+    mcfg.target_z = gRunConfig.target_z;
+    mcfg.match_nsigma = 3.0f;
+    mcfg.max_chi2     = 5.0f;        // loose; this is a quick-look tool
+    trk::TrackMatcher matcher(std::move(mcfg));
+
     // --- setup TChain and branches ---
     TChain *chain = new TChain("recon");
     for (const auto &f : root_files) {
@@ -113,6 +140,7 @@ int main(int argc, char *argv[])
     float HC_X[100], HC_Y[100], HC_Z[100], HC_Energy[100];
     float Gup_X[100], Gup_Y[100], Gup_Z[100];
     float Gdown_X[100], Gdown_Y[100], Gdown_Z[100];
+    float chi2[100];
     uint16_t center_id[100];
     uint32_t flag[100];
 
@@ -128,6 +156,7 @@ int main(int argc, char *argv[])
     outTree->Branch("Gdown_X", Gdown_X, "Gdown_X[hitN]/F");
     outTree->Branch("Gdown_Y", Gdown_Y, "Gdown_Y[hitN]/F");
     outTree->Branch("Gdown_Z", Gdown_Z, "Gdown_Z[hitN]/F");
+    outTree->Branch("chi2_per_dof", chi2, "chi2_per_dof[hitN]/F");
     outTree->Branch("center_id", center_id, "center_id[hitN]/s");
     outTree->Branch("flag", flag, "flag[hitN]/i");
 
@@ -139,59 +168,106 @@ int main(int argc, char *argv[])
         if (i % 1000 == 0)
             std::cerr << "Reading " << i << " events / " << N << " total events\r" << std::flush;
 
-        //store all the hits on HyCal and GEMs in this event
-        std::vector<HCHit> hc_hits;
-        std::vector<GEMHit> gem_hits[4]; // separate vector for each GEM
-        for( int j = 0; j < ev.n_clusters; j++) {
-            hc_hits.push_back(HCHit{ev.cl_x[j], ev.cl_y[j], ev.cl_z[j],
-                               ev.cl_energy[j], ev.cl_center[j], ev.cl_flag[j]});
-        }
+        // Repackage clusters and GEM hits for TrackMatcher.  ev.cl_x /
+        // ev.gem_x are already lab-frame (Replay applied DetectorTransform
+        // before writing the tree), so no further frame change here.
+        std::vector<std::vector<trk::PlaneHit>> hits_by_plane(4);
         for (int j = 0; j < ev.n_gem_hits; j++) {
-            gem_hits[ev.det_id[j]].push_back(GEMHit{ev.gem_x[j], ev.gem_y[j], 0.f, ev.det_id[j]});
+            int d = ev.det_id[j];
+            if (d < 0 || d >= 4) continue;
+            trk::PlaneHit ph;
+            ph.plane_idx = d;
+            ph.hit_idx   = (int)hits_by_plane[d].size();
+            ph.x = ev.gem_x[j]; ph.y = ev.gem_y[j]; ph.z = ev.gem_z[j];
+            hits_by_plane[d].push_back(ph);
         }
 
-        // ev.cl_x / ev.gem_x are already lab-frame (Replay applied the
-        // DetectorTransform before writing the tree), so no further frame
-        // change here.
+        // One track per HyCal cluster.  Greedy-by-energy keeps the same
+        // exclusivity policy the old MatchingTools::Match used: the highest-E
+        // cluster gets first claim on overlapping GEM hits.
+        struct ClusterIdx { int idx; float energy; };
+        std::vector<ClusterIdx> order;
+        order.reserve(ev.n_clusters);
+        for (int j = 0; j < ev.n_clusters; ++j)
+            order.push_back({j, ev.cl_energy[j]});
+        std::sort(order.begin(), order.end(),
+                  [](const ClusterIdx &a, const ClusterIdx &b) {
+                      return a.energy > b.energy;
+                  });
 
-        //then matching between GEM hits and HyCal clusters
-            //optional settings
-        //matching.SetMatchRange(5.0f); // matching radius in mm
-        //matching.SetSquareSelection(true); // use square cut instead of circular cut
-        std::vector<MatchHit> matched_hits = matching.Match(hc_hits, gem_hits[0], gem_hits[1], gem_hits[2], gem_hits[3]);
-        //show how to access the matching result
-        for (auto &m : matched_hits) {
-            HCHit hycal_hit = m.hycal_hit;  //the HyCal cluster be matched
-            GEMHit gem_up_hit = m.gem[0];    //best-matched GEM hit from upstream pair (GEM1/GEM2)
-            GEMHit gem_down_hit = m.gem[1]; //best-matched GEM hit from downstream pair (GEM3/GEM4)
-            std::vector<GEMHit> gem1_matches = m.gem1_hits;
-            std::vector<GEMHit> gem2_matches = m.gem2_hits;
-            std::vector<GEMHit> gem3_matches = m.gem3_hits;
-            std::vector<GEMHit> gem4_matches = m.gem4_hits;
+        for (auto [j, _] : order) {
+            trk::ClusterHit hc;
+            hc.x = ev.cl_x[j]; hc.y = ev.cl_y[j]; hc.z = ev.cl_z[j];
+            hc.energy = ev.cl_energy[j];
+            hc.center_id = ev.cl_center[j];
+            hc.flag      = ev.cl_flag[j];
 
-            int hycal_idx = m.hycal_idx;  //index of the cluster in the original vector
+            // Target-seeded, all 4 GEM planes eligible, ≥3 matched required
+            // (downstream + upstream pair must both contribute).
+            auto track = matcher.findBestTrack(hc, hits_by_plane,
+                                               /*free_seed=*/false,
+                                               /*require_planes=*/3);
+            if (!track || hitN >= 100) continue;
 
-            //projection to same z plane (e.g. Hycal crystal surface)
-            GetProjection(hycal_hit, gRunConfig.hycal_z);
-            GetProjection(gem_up_hit, gRunConfig.hycal_z);
-            GetProjection(gem_down_hit, gRunConfig.hycal_z);
+            // Pick best of {GEM1, GEM2} for "down" and {GEM3, GEM4} for
+            // "up" — smaller post-fit residual (in lab frame at the
+            // plane's z) wins the pair.  Falls back to whichever plane
+            // has a hit when only one of the pair contributed.
+            auto pick_pair = [&](int a, int b) -> trk::PlaneHit {
+                trk::PlaneHit none{}; none.plane_idx = -1;
+                bool ha = track->matched[a], hb = track->matched[b];
+                if (!ha && !hb) return none;
+                if (!ha) return track->hit[b];
+                if (!hb) return track->hit[a];
+                auto residSq = [&](const trk::PlaneHit &h) {
+                    float px = track->fit.ax + track->fit.bx * h.z;
+                    float py = track->fit.ay + track->fit.by * h.z;
+                    float dx = h.x - px, dy = h.y - py;
+                    return dx*dx + dy*dy;
+                };
+                return residSq(track->hit[a]) < residSq(track->hit[b])
+                       ? track->hit[a] : track->hit[b];
+            };
+            trk::PlaneHit g_down = pick_pair(0, 1);
+            trk::PlaneHit g_up   = pick_pair(2, 3);
 
-            //save the matching result into output tree
-            if (hitN < 100) { // safety check for array size
-                HC_X[hitN] = hycal_hit.x;
-                HC_Y[hitN] = hycal_hit.y;
-                HC_Z[hitN] = hycal_hit.z;
-                HC_Energy[hitN] = hycal_hit.energy;
-                Gup_X[hitN] = gem_up_hit.x;
-                Gup_Y[hitN] = gem_up_hit.y;
-                Gup_Z[hitN] = gem_up_hit.z;
-                Gdown_X[hitN] = gem_down_hit.x;
-                Gdown_Y[hitN] = gem_down_hit.y;
-                Gdown_Z[hitN] = gem_down_hit.z;
-                center_id[hitN] = hycal_hit.center_id;
-                flag[hitN] = hycal_hit.flag;
-                hitN++;
-            }
+            // Remove claimed GEM hits from `hits_by_plane` so a lower-E
+            // cluster can't reuse them — preserves the greedy-by-E
+            // exclusivity of the old MatchingTools::Match.
+            auto erase_from = [&](int d, int hit_idx) {
+                if (d < 0 || hit_idx < 0) return;
+                auto &v = hits_by_plane[d];
+                for (auto it = v.begin(); it != v.end(); ++it) {
+                    if (it->hit_idx == hit_idx) { v.erase(it); break; }
+                }
+            };
+            for (int d = 0; d < 4; ++d)
+                if (track->matched[d])
+                    erase_from(d, track->hit[d].hit_idx);
+
+            // Project onto the HyCal face for downstream plotting (same
+            // convention as the legacy tool).
+            HCHit hc_proj{hc.x, hc.y, hc.z, hc.energy, hc.center_id, hc.flag};
+            GEMHit gu{g_up.x,   g_up.y,   g_up.z,   2};
+            GEMHit gd{g_down.x, g_down.y, g_down.z, 0};
+            GetProjection(hc_proj, gRunConfig.hycal_z);
+            if (g_up.plane_idx >= 0)   GetProjection(gu, gRunConfig.hycal_z);
+            if (g_down.plane_idx >= 0) GetProjection(gd, gRunConfig.hycal_z);
+
+            HC_X[hitN] = hc_proj.x;
+            HC_Y[hitN] = hc_proj.y;
+            HC_Z[hitN] = hc_proj.z;
+            HC_Energy[hitN] = hc_proj.energy;
+            Gup_X[hitN]   = (g_up.plane_idx   >= 0) ? gu.x : -999.f;
+            Gup_Y[hitN]   = (g_up.plane_idx   >= 0) ? gu.y : -999.f;
+            Gup_Z[hitN]   = (g_up.plane_idx   >= 0) ? gu.z : -999.f;
+            Gdown_X[hitN] = (g_down.plane_idx >= 0) ? gd.x : -999.f;
+            Gdown_Y[hitN] = (g_down.plane_idx >= 0) ? gd.y : -999.f;
+            Gdown_Z[hitN] = (g_down.plane_idx >= 0) ? gd.z : -999.f;
+            chi2[hitN]    = track->fit.chi2_per_dof;
+            center_id[hitN] = hc_proj.center_id;
+            flag[hitN]      = hc_proj.flag;
+            hitN++;
         }
         outTree->Fill();
         hitN = 0; // reset for next event

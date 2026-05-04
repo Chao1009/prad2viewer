@@ -18,6 +18,14 @@
 
 namespace analysis {
 
+// Result of a linear target→hit projection — see GetProjectionHits below.
+struct ProjectHit {
+    float x_proj;
+    float y_proj;
+    float z_proj;
+    ProjectHit(float x, float y, float z) : x_proj(x), y_proj(y), z_proj(z) {}
+};
+
 // two simple data structures used in physics analysis
 struct GEMHit {
     float x = 0.f;
@@ -34,6 +42,21 @@ struct HCHit {
     uint16_t center_id = 0; // index of central block
     uint32_t flag = -1;
 };
+
+// --- linear projection helpers ----------------------------------------------
+// Project (x, y) along the target→hit line to a different z plane:
+//   x_proj = x · (projection_z / z),  same for y.
+// Returns the projected point; the in-place overloads mutate HCHit / GEMHit
+// (positions overwritten, energy / det_id preserved).  Used by replay tools
+// to bring HC clusters and GEM hits to a common z for visualization or for
+// the simple straight-line projection use cases.  Not used by prad2::trk
+// (TrackMatcher works directly in the lab frame and projects via the seed
+// line model).
+ProjectHit GetProjectionHits(float x, float y, float z, float projection_z);
+void GetProjection(HCHit &hc, float projection_z);
+void GetProjection(std::vector<HCHit> &hc, float projection_z);
+void GetProjection(GEMHit &gem, float projection_z);
+void GetProjection(std::vector<GEMHit> &gem, float projection_z);
 
 //data structure for storing reconstructed Moller events used for analysis
 struct DataPoint

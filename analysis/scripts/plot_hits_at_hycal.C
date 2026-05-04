@@ -73,9 +73,8 @@
 #include "GemCluster.h"
 #include "RunInfoConfig.h"
 
-#include "PhysicsTools.h"
+#include "PhysicsTools.h"     // analysis::GetProjection (moved here from MatchingTools.h)
 #include "ConfigSetup.h"      // analysis::ApplyToLab
-#include "MatchingTools.h"    // GetProjection
 #include "PipelineBuilder.h"  // prad2::PipelineBuilder — one-stop wiring
 #include "script_helpers.h"   // discover_split_files, strip_extension
 

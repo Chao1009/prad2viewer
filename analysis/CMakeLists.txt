@@ -7,7 +7,8 @@ message(STATUS "ROOT: ${ROOT_VERSION} at ${ROOT_DIR}")
 include(GNUInstallDirs)
 
 # ---------------------------------------------------------------------------
-# Shared analysis library — Replay, PhysicsTools, MatchingTools.
+# Shared analysis library — Replay, PhysicsTools.  HyCal↔GEM matching
+# now lives in prad2det/include/TrackMatcher.h (single source of truth).
 #
 # Was previously a list of .cpp files inlined into every executable's
 # source list (each tool got its own copy of every shared symbol).  Now a
@@ -18,8 +19,7 @@ include(GNUInstallDirs)
 # ---------------------------------------------------------------------------
 add_library(prad2ana STATIC
     src/Replay.cpp
-    src/PhysicsTools.cpp
-    src/MatchingTools.cpp)
+    src/PhysicsTools.cpp)
 
 # PIC so this archive can be pulled into ACLiC-built shared objects.
 set_target_properties(prad2ana PROPERTIES POSITION_INDEPENDENT_CODE ON)
@@ -73,7 +73,7 @@ install(TARGETS replay_rawdata replay_recon epCalib
 install(TARGETS prad2ana ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 # Install analysis/include headers so installed-tree ACLiC scripts can
-# include "PhysicsTools.h" / "MatchingTools.h" / "Replay.h" / "ConfigSetup.h"
+# include "PhysicsTools.h" / "Replay.h" / "ConfigSetup.h"
 # the same way they do from the build tree.
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/prad2ana
         FILES_MATCHING PATTERN "*.h")

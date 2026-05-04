@@ -352,8 +352,8 @@
         Printf("[link]  %s", linkLibs.Data());
         if (libAna.IsNull())
             Printf("[note]  libprad2ana.a not found — scripts that call "
-                   "analysis::* (PhysicsTools / MatchingTools / Replay) will "
-                   "fail to link.  Build the analysis target.");
+                   "analysis::* (PhysicsTools / Replay) or prad2::trk:: "
+                   "(TrackMatcher) will fail to link.  Build the analysis target.");
     }
 
     // -------------------------------------------------------------------------

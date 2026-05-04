@@ -39,6 +39,8 @@ add_library(prad2det STATIC
     src/GemCluster.cpp
     src/GemPedestal.cpp
     src/PipelineBuilder.cpp
+    src/TrackGeometry.cpp
+    src/TrackMatcher.cpp
 )
 
 # PIC so the archive can be pulled into shared objects (pybind11 module,
@@ -69,3 +71,14 @@ include(GNUInstallDirs)
 
 install(TARGETS prad2det ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/prad2det)
+
+# ---------------------------------------------------------------------------
+# Optional tests
+# ---------------------------------------------------------------------------
+option(PRAD2DET_BUILD_TESTS "Build prad2det unit tests" OFF)
+if(PRAD2DET_BUILD_TESTS)
+    enable_testing()
+    add_executable(prad2det_test_track_matcher test/test_track_matcher.cpp)
+    target_link_libraries(prad2det_test_track_matcher PRIVATE prad2det)
+    add_test(NAME prad2det.track_matcher COMMAND prad2det_test_track_matcher)
+endif()

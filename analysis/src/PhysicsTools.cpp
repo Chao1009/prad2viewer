@@ -23,6 +23,46 @@ static constexpr float M_PROTON  = 938.272f;   // MeV
 static constexpr float M_ELECTRON = 0.511f;    // MeV
 static constexpr float DEG2RAD = 3.14159265f / 180.f;
 
+// ---------------------------------------------------------------------------
+// Linear projection helpers — moved from MatchingTools so callers that need
+// to bring hits to a common z-plane can include just PhysicsTools.h.  Used
+// by Replay.cpp, plot_hits_at_hycal.C, and the legacy simple-cut matcher.
+// (prad2::trk::TrackMatcher does its own projection internally and does not
+// need these.)
+// ---------------------------------------------------------------------------
+
+ProjectHit GetProjectionHits(float x, float y, float z, float projection_z)
+{
+    float scale = projection_z / z;
+    return ProjectHit(x * scale, y * scale, projection_z);
+}
+
+void GetProjection(HCHit &hc, float projection_z)
+{
+    ProjectHit proj = GetProjectionHits(hc.x, hc.y, hc.z, projection_z);
+    hc.x = proj.x_proj;
+    hc.y = proj.y_proj;
+    hc.z = proj.z_proj;
+}
+
+void GetProjection(std::vector<HCHit> &hc, float projection_z)
+{
+    for (auto &hit : hc) GetProjection(hit, projection_z);
+}
+
+void GetProjection(GEMHit &gem, float projection_z)
+{
+    ProjectHit proj = GetProjectionHits(gem.x, gem.y, gem.z, projection_z);
+    gem.x = proj.x_proj;
+    gem.y = proj.y_proj;
+    gem.z = proj.z_proj;
+}
+
+void GetProjection(std::vector<GEMHit> &gem, float projection_z)
+{
+    for (auto &hit : gem) GetProjection(hit, projection_z);
+}
+
 PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
     : hycal_(hycal)
 {

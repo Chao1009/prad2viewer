@@ -66,7 +66,6 @@ Usage
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 import time
 
@@ -74,6 +73,9 @@ import time
 # import it first so we don't surface the bare ImportError instead.
 import _common as C
 from prad2py import dec, det  # noqa: E402  (after _common, intentionally)
+# det.TrackMatcher.find_per_plane_matches is the C++ matcher's per-plane
+# independent best-match — successor of the Python loop below.
+trk = det
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -104,6 +106,28 @@ def main(argv: list[str] | None = None) -> int:
     print(f"[setup] HC sigma(E)= sqrt(({pr_A:.3f}/sqrt(E_GeV))^2"
           f"+({pr_B:.3f}/E_GeV)^2+{pr_C:.3f}^2) mm", flush=True)
     print(f"[setup] GEM sigma  : {gem_pos_res} mm", flush=True)
+
+    # Build a TrackMatcher up front — same C++ class AppState and the
+    # other analysis tools call.  match_nsigma / σ_GEM / σ_HC(E) all
+    # flow into MatcherConfig; per-plane independent matching uses only
+    # the seed-window cut (no fit, no χ²/dof gate), preserving this
+    # script's "one row per (HC, plane)" semantics.
+    n_dets_init = min(p.gem_sys.get_n_detectors(), 4)
+    mcfg = trk.MatcherConfig()
+    mcfg.planes = [
+        trk.Plane(id      = d,
+                  z       = float(p.geo.gem_z[d]),
+                  sigma_x = float(gem_pos_res[d] if d < len(gem_pos_res) else 0.1),
+                  sigma_y = float(gem_pos_res[d] if d < len(gem_pos_res) else 0.1),
+                  xform   = p.gem_xforms[d])
+        for d in range(n_dets_init)
+    ]
+    mcfg.hc_sigma_A, mcfg.hc_sigma_B, mcfg.hc_sigma_C = pr_A, pr_B, pr_C
+    mcfg.target_x = p.geo.target_x
+    mcfg.target_y = p.geo.target_y
+    mcfg.target_z = p.geo.target_z
+    mcfg.match_nsigma = float(args.match_nsigma)
+    matcher = trk.TrackMatcher(mcfg)
 
     cols = [
         "event_num", "trigger_bits",
@@ -187,27 +211,26 @@ def main(argv: list[str] | None = None) -> int:
                     # ---- GEM: pedestal → CM → ZS → 1D + 2D --------------
                     C.reconstruct_gem(p, ssp_evt)
 
-                    # Per-detector lab-frame hit lists, plus the raw GEMHit
-                    # for charge / size / peak / timing lookup at write time.
-                    # Tuple layout (positional, frozen):
-                    #   0: x_lab     1: y_lab     2: z_lab
-                    #   3: x_local   4: y_local
-                    #   5: x_charge  6: y_charge
-                    #   7: x_peak    8: y_peak
-                    #   9: x_max_tb 10: y_max_tb
-                    #  11: x_size   12: y_size
-                    gem_lab: list[list[tuple]] = [[], [], [], []]
+                    # Per-detector lab-frame PlaneHit lists for the matcher
+                    # + parallel aux arrays that carry the GEM cluster
+                    # payload (charge / size / peak / timing) the matcher
+                    # doesn't know about.  hit_idx in PlaneHit indexes into
+                    # the aux array.
+                    hits_by_plane: list[list] = [[], [], [], []]
+                    aux_by_plane:  list[list[tuple]] = [[], [], [], []]
                     n_dets = min(p.gem_sys.get_n_detectors(), 4)
                     for d in range(n_dets):
                         raw = p.gem_sys.get_hits(d)
                         gem_per_det[d] += len(raw)
                         total_gem      += len(raw)
                         xform = p.gem_xforms[d]
-                        for g in raw:
+                        for i, g in enumerate(raw):
                             x, y, z = xform.to_lab(g.x, g.y)
-                            gem_lab[d].append((
-                                x, y, z,
-                                float(g.x), float(g.y),
+                            hits_by_plane[d].append(
+                                trk.PlaneHit(plane_idx=d, hit_idx=i,
+                                             x=x, y=y, z=z))
+                            aux_by_plane[d].append((
+                                float(g.x), float(g.y),                    # local
                                 float(g.x_charge), float(g.y_charge),
                                 float(g.x_peak),   float(g.y_peak),
                                 int(g.x_max_timebin), int(g.y_max_timebin),
@@ -215,42 +238,36 @@ def main(argv: list[str] | None = None) -> int:
                             ))
 
                     # ---- best match per HC × GEM detector ---------------
+                    # find_per_plane_matches projects the target → HC seed
+                    # to each plane and picks the closest hit within
+                    # match_nsigma · σ_total — bit-equivalent to the
+                    # previous Python inline loop, but the math now runs in
+                    # one shared C++ implementation.
                     for k, (hx, hy, hz, he, hc_center, hc_nblocks) in enumerate(hc_lab):
                         if hz <= 0.0:
                             continue
-                        # σ_HC at HyCal face — see _common.hycal_pos_resolution
-                        sig_face = C.hycal_pos_resolution(pr_A, pr_B, pr_C, he)
+                        sig_face = matcher.hc_sigma(he)
+
+                        hc = trk.ClusterHit(x=hx, y=hy, z=hz, energy=he,
+                                            center_id=hc_center,
+                                            flag=0)
+                        pp = matcher.find_per_plane_matches(hc, hits_by_plane)
 
                         for d in range(n_dets):
-                            gl = gem_lab[d]
-                            if not gl:
+                            if not pp.matched[d]:
                                 continue
-                            z_gem = gl[0][2]
-                            if z_gem <= 0.0:
-                                continue
-                            scale         = z_gem / hz
-                            proj_x        = hx * scale
-                            proj_y        = hy * scale
+                            ph = pp.hit[d]
+                            aux = aux_by_plane[d][ph.hit_idx]
+                            # σ at the GEM plane for the diag column.
+                            scale = ph.z / hz if hz != 0.0 else 1.0
+                            proj_x = hx * scale
+                            proj_y = hy * scale
                             sig_hc_at_gem = sig_face * scale
-                            sig_gem       = (gem_pos_res[d] if d < len(gem_pos_res)
-                                             else 0.1)
-                            sig_total     = math.sqrt(
-                                sig_hc_at_gem * sig_hc_at_gem + sig_gem * sig_gem)
-                            cut           = args.match_nsigma * sig_total
+                            sig_gem = (gem_pos_res[d] if d < len(gem_pos_res)
+                                       else 0.1)
+                            sig_total = (sig_hc_at_gem * sig_hc_at_gem
+                                         + sig_gem * sig_gem) ** 0.5
 
-                            best_gi = -1
-                            best_dr = cut
-                            for gi, g in enumerate(gl):
-                                dx = g[0] - proj_x
-                                dy = g[1] - proj_y
-                                dr = math.sqrt(dx * dx + dy * dy)
-                                if dr <= best_dr:
-                                    best_dr = dr
-                                    best_gi = gi
-                            if best_gi < 0:
-                                continue
-
-                            g = gl[best_gi]
                             write_row([
                                 event_num, trigger_bits,
                                 k,
@@ -259,14 +276,14 @@ def main(argv: list[str] | None = None) -> int:
                                 hc_center, hc_nblocks,
                                 f"{sig_face:.4f}",
                                 d,
-                                f"{g[0]:.4f}", f"{g[1]:.4f}", f"{g[2]:.4f}",
-                                f"{g[3]:.4f}", f"{g[4]:.4f}",
-                                f"{g[5]:.4f}", f"{g[6]:.4f}",
-                                f"{g[7]:.4f}", f"{g[8]:.4f}",
-                                g[9], g[10],
-                                g[11], g[12],
+                                f"{ph.x:.4f}", f"{ph.y:.4f}", f"{ph.z:.4f}",
+                                f"{aux[0]:.4f}", f"{aux[1]:.4f}",
+                                f"{aux[2]:.4f}", f"{aux[3]:.4f}",
+                                f"{aux[4]:.4f}", f"{aux[5]:.4f}",
+                                aux[6], aux[7],
+                                aux[8], aux[9],
                                 f"{proj_x:.4f}", f"{proj_y:.4f}",
-                                f"{best_dr:.4f}", f"{sig_total:.4f}",
+                                f"{pp.residual[d]:.4f}", f"{sig_total:.4f}",
                             ])
                             n_match += 1
 

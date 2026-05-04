@@ -1,8 +1,7 @@
-// quick_check.C — ROOT script version 
+// quick_check.C — ROOT script version
 //
 // Reads reconstructed ROOT tree (output of replay_recon), runs physics
-// analysis using PhysicsTools and MatchingTools from prad2det, and saves
-// histograms to an output ROOT file.
+// analysis using PhysicsTools, and saves histograms to an output ROOT file.
 // Usage:
 //   quick_check <input_recon.root|dir> [more files...] [-o out.root] [-n max_events]
 //   -o  output ROOT file (default: input filename with _quick_check.root suffix)
@@ -13,7 +12,6 @@
 
 #include "PhysicsTools.h"
 #include "HyCalSystem.h"
-#include "MatchingTools.h"
 #include "EventData.h"
 #include "EventData_io.h"
 #include "InstallPaths.h"
@@ -94,8 +92,7 @@ int main(int argc, char *argv[])
     fdec::HyCalSystem hycal;
     hycal.Init(dbDir + "/hycal_map.json");
     PhysicsTools physics(hycal);
-    MatchingTools matching;
-    
+
     // --- setup TChain and branches ---
     TChain *chain = new TChain("recon");
     for (const auto &f : root_files) {

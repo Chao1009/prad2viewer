@@ -8,6 +8,7 @@
 
 #include "Fadc250Data.h"
 #include "SspData.h"
+#include "DscData.h"
 #include "DaqConfig.h"   // evc::EventType (small POD enum, cheap to include)
 
 #include <functional>
@@ -103,11 +104,11 @@ public:
     using ControlCallback = std::function<void(uint32_t unix_time, uint64_t last_ti_ts)>;
     using EpicsCallback   = std::function<void(const std::string &text,
                                                 int32_t ev_num, uint64_t timestamp)>;
-    // Raw scaler bank (e.g. DSC2 0xE115).  Fired on every scanned event where
-    // the configured bank tag is present (Sync events typically; some sites
-    // also embed the bank in physics events).  EVIO-only — ROOT sources
-    // ignore the parameters.
-    using DscCallback     = std::function<void(const uint32_t *data, size_t nwords)>;
+    // Decoded DSC2 scaler record.  Fired on every Sync/Physics event whose
+    // configured DSC2 bank decodes to a record with `present == true`
+    // (Sync events typically; some sites also embed the bank in physics
+    // events).  EVIO-only — ROOT sources ignore the parameter.
+    using DscCallback     = std::function<void(const dsc::DscEventData &dsc)>;
 
     virtual void iterateAll(EventCallback ev_cb,
                             ReconCallback recon_cb = nullptr,

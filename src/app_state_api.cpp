@@ -374,91 +374,26 @@ void AppState::clearEpics()
 }
 
 // ---------- DSC2 scaler bank → measured livetime --------------------------
-// 67-word DSC2 payload layout (per slot):
-//   [0]      header (legacy: 0xDCA00000|(slot<<8)|rflag; rflag=1 form: zero)
-//   [1..16]  TRG  Grp1 — 16 channels
-//   [17..32] TDC  Grp1 — 16 channels
-//   [33..48] TRG  Grp2 — 16 channels
-//   [49..64] TDC  Grp2 — 16 channels
-//   [65]     Ref  Grp1
-//   [66]     Ref  Grp2
-//
-// Two physical bank formats are observed:
-//   • Legacy 67-word: payload at offset 0, slot in 0xDCA0... magic header.
-//   • PRad-II run 024246 (rflag=1): JLab-wrapped, 72 words = 3-word
-//     BLKHDR/EVTHDR/TRGTIME prefix, 67-word payload (offset 2 in the bank),
-//     2-word FILLER/BLKTLR trailer.  Slot lives in BLKHDR bits 26:22.
-//
-// Group A (gated) is configured with the BUSY signal so it counts during
-// LIVE time; Group B (ungated) is free-running.  Therefore in this DAQ
-// live_time = gated/ungated (not 1 - gated/ungated).  Real-time live time
-// for the last sync interval is derived as a delta vs. the previous sync's
-// values (cached in dsc_prev_*); the cumulative form is used until two
-// reads have arrived.
-void AppState::processDscBank(const uint32_t *data, size_t nwords)
+// Bank parsing + (source, channel) selection live in dsc::Dsc2Decoder
+// (see prad2dec/include/Dsc2Decoder.h).  This method only adds the
+// AppState-side concern: convert two consecutive cumulative readings into a
+// realtime live-time fraction and broadcast it.  Convention: gated counts
+// LIVE time in this DAQ (Group A enabled while NOT busy), so
+// live = gated / ungated.  Until a second read arrives we display the
+// cumulative ratio.
+void AppState::processDsc(const dsc::DscEventData &dsc)
 {
-    const auto &ds = daq_cfg.dsc_scaler;
-    if (!ds.enabled() || data == nullptr) return;
+    if (!dsc.present || dsc.ungated == 0) return;
 
-    static constexpr int WPS = 67;
-    static constexpr int NCH = 16;
-    using DSrc = evc::DaqConfig::DscScaler::Source;
-
-    // Try the two known offsets; accept the first one whose ref pair is sane.
-    static const size_t kOffsets[] = {0, 2};
-    int    matched_slot = -1;
-    size_t matched_off  = 0;
-    for (size_t off : kOffsets) {
-        if (off + WPS > nwords) continue;
-        uint32_t hdr = data[off];
-        int slot = -1;
-        if ((hdr & 0xFFFF0000u) == 0xDCA00000u)
-            slot = (int)((hdr >> 8) & 0xFFu);
-        else if (off >= 1 && nwords >= 1 && (data[0] >> 27) == 0x10u)
-            slot = (int)((data[0] >> 22) & 0x1Fu);
-        else
-            continue;
-        if (slot != ds.slot) continue;
-
-        // sanity: ref_ungated must be ≥ ref_gated and non-zero
-        const uint32_t *p = &data[off + 1];
-        if (p[65] == 0 || p[65] < p[64]) continue;
-        matched_slot = slot;
-        matched_off  = off;
-        break;
-    }
-    if (matched_slot < 0) return;
-
-    const uint32_t *p = &data[matched_off + 1];
-    uint32_t gated = 0, ungated = 0;
-    switch (ds.source) {
-    case DSrc::Ref:
-        gated   = p[64];
-        ungated = p[65];
-        break;
-    case DSrc::Trg:
-        if (ds.channel < 0 || ds.channel >= NCH) return;
-        gated   = p[ds.channel];
-        ungated = p[32 + ds.channel];
-        break;
-    case DSrc::Tdc:
-        if (ds.channel < 0 || ds.channel >= NCH) return;
-        gated   = p[16 + ds.channel];
-        ungated = p[48 + ds.channel];
-        break;
-    }
-    if (ungated == 0) return;
-
-    // Real-time live time: delta against the previous SYNC's reading.
-    // Falls back to cumulative until we've had two reads.
-    uint32_t prev_g = dsc_prev_gated.load();
-    uint32_t prev_u = dsc_prev_ungated.load();
-    double lt = (gated >= prev_g && ungated > prev_u)
-        ? (double)(gated - prev_g) / (double)(ungated - prev_u) * 100.0
-        : (double)gated / (double)ungated * 100.0;
+    const uint32_t prev_g = dsc_prev_gated.load();
+    const uint32_t prev_u = dsc_prev_ungated.load();
+    const double lt = (dsc.gated >= prev_g && dsc.ungated > prev_u)
+        ? (double)(dsc.gated   - prev_g) /
+          (double)(dsc.ungated - prev_u) * 100.0
+        : (double)dsc.gated / (double)dsc.ungated * 100.0;
     measured_livetime.store(lt);
-    dsc_prev_gated.store(gated);
-    dsc_prev_ungated.store(ungated);
+    dsc_prev_gated.store(dsc.gated);
+    dsc_prev_ungated.store(dsc.ungated);
 }
 
 json AppState::apiEpicsChannels() const

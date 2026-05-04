@@ -209,13 +209,14 @@ void EvioDataSource::iterateAll(EventCallback ev_cb, ReconCallback /*recon_cb*/,
         }
 
         // DSC2 scaler bank — Sync events typically; some sites also embed it
-        // in physics events.
+        // in physics events.  Bank-format detection + (source, channel)
+        // selection live in EvChannel::Dsc() (dsc::Dsc2Decoder under the
+        // hood); we only fire the callback when a configured slot matched.
         if (dsc_cb && dsc_bank_tag >= 0) {
             auto et = ch.GetEventType();
             if (et == EventType::Sync || et == EventType::Physics) {
-                const auto *node = ch.FindFirstByTag((uint32_t)dsc_bank_tag);
-                if (node && node->data_words > 0)
-                    dsc_cb(ch.GetData(*node), node->data_words);
+                const auto &dsc = ch.Dsc();
+                if (dsc.present) dsc_cb(dsc);
             }
         }
 

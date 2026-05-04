@@ -207,14 +207,11 @@ void ViewerServer::etReaderThread()
 
                 // DSC2 scaler bank → measured livetime (Sync events typically;
                 // some sites embed it in physics events too, so check both).
+                // Decoding lives in EvChannel::Dsc() — see Dsc2Decoder.h.
                 if (app_online_.daq_cfg.dsc_scaler.enabled()) {
                     auto et = ch.GetEventType();
-                    if (et == EventType::Sync || et == EventType::Physics) {
-                        const auto *node = ch.FindFirstByTag(
-                            (uint32_t)app_online_.daq_cfg.dsc_scaler.bank_tag);
-                        if (node && node->data_words > 0)
-                            app_online_.processDscBank(ch.GetData(*node), node->data_words);
-                    }
+                    if (et == EventType::Sync || et == EventType::Physics)
+                        app_online_.processDsc(ch.Dsc());
                 }
 
                 for (int i = 0; i < ch.GetNEvents(); ++i) {

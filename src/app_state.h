@@ -14,6 +14,7 @@ struct ReconEventData;
 #include "HyCalCluster.h"
 #include "EpicsStore.h"
 #include "DaqConfig.h"
+#include "DscData.h"
 #include "Fadc250Data.h"
 #include "SspData.h"
 #include "GemSystem.h"
@@ -604,10 +605,12 @@ struct AppState {
     nlohmann::json gemEffSnapshotJson() const;  // assumes data_mtx held
 
     // ---- DSC2 scaler processing --------------------------------------------
-    // Parse a DSC2 bank from sync/physics events and update measured_livetime
-    // atomically.  Bank/slot/source/channel come from daq_cfg.dsc_scaler.
-    // No-op when daq_cfg.dsc_scaler.enabled() is false.
-    void processDscBank(const uint32_t *data, size_t nwords);
+    // Update measured_livetime from an already-decoded DSC2 record.  Caller
+    // is expected to obtain it via EvChannel::Dsc() (which routes through
+    // dsc::Dsc2Decoder for both bank-format detection and the configured
+    // source/channel selection).  No-op when `dsc.present` is false or no
+    // ungated counts have been seen yet.
+    void processDsc(const dsc::DscEventData &dsc);
 
     // ---- Clearing ----------------------------------------------------------
     void clearHistograms();   // locks data_mtx

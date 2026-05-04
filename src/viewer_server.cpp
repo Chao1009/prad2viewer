@@ -540,8 +540,8 @@ void ViewerServer::buildHistograms()
             app_file_.processEpics(text, app_file_.events_processed.load(), ts);
         },
         // DSC2 scaler bank → measured livetime
-        [&](const uint32_t *data, size_t nwords) {
-            app_file_.processDscBank(data, nwords);
+        [&](const dsc::DscEventData &dsc) {
+            app_file_.processDsc(dsc);
         },
         app_file_.daq_cfg.dsc_scaler.bank_tag
     );

@@ -85,7 +85,7 @@
             "_comment": "Hall-D V3 firmware API (faV3HallDSetProcMode); NPEAK is accepted as an alias for MAX_PULSES. TET = Trigger Energy Threshold in ADC counts above per-channel pedestal. NSB / NSA = window before / after threshold crossing in ns (floored to whole samples = CLK_NS). NPEAK / MAX_PULSES = pulses kept per channel per window (1..4). NSAT = consecutive samples above TET required for a valid pulse (1 = legacy single-sample crossing). NPED = leading samples summed for Vnoise (firmware: 4..15; default 4 reproduces legacy manual). MAXPED = pedestal-subtracted threshold above which samples are excluded from the pedestal sum (online outlier rejection; 0 disables). CLK_NS = sample period in ns (4 ns at 250 MHz). Values below match the real DAQ run settings.",
             "TET":        10.0,
             "NSB":        8,
-            "NSA":        128,
+            "NSA":        56,
             "NPEAK":      1,
             "NSAT":       4,
             "NPED":       3,

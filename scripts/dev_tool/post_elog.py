@@ -54,7 +54,8 @@ def find_xml_for_run(reports_dir: str, run: int):
     return xmls[0] if xmls else None
 
 
-def run_from_path(path) -> int | None:
+def run_from_path(path):
+    """Run number embedded in a path (e.g. .../run_024364/...), or None."""
     m = re.search(r"run_0*(\d+)", str(path))
     return int(m.group(1)) if m else None
 

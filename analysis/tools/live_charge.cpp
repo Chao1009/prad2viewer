@@ -1,34 +1,41 @@
 // =============================================================================
-// live_charge.cpp — accumulate live charge from any replayed ROOT file.
+// live_charge.cpp — accumulate live charge from replayed ROOT files OR raw
+// split EVIO files (auto-detected per input).
 //
-// Inputs: one or more replayed ROOT files (output of replay_rawdata,
-// replay_recon, OR replay_filter — anything that carries the `scalers`
-// and `epics` side trees).  The integrator does the same arithmetic
-// replay_filter applies internally to its passing checkpoint pairs:
+// Inputs (mixed paths allowed):
+//   - replayed ROOT files (`scalers` + `epics` side trees from
+//     replay_rawdata / replay_recon / replay_filter), OR
+//   - raw EVIO files (split-file sequences or directories thereof).
+//
+// In both cases the integrator does the same arithmetic replay_filter
+// applies internally to its passing checkpoint pairs:
 //
 //     Q = Σ live_fraction · Δt · ½(I_i + I_{i+1})
 //
 // where live_fraction is the slice-local DSC2 livetime (Δgated / Δungated
-// since the previous scaler readout), Δt is the gap between adjacent
-// merged checkpoints (TI ticks via the row-stamped `ti_ticks` and
+// since the previous scaler readout), Δt is the gap between adjacent merged
+// checkpoints (TI ticks via the row-stamped `ti_ticks` and
 // `ti_ticks_at_arrival`), and I is forward-filled from the configured
 // EPICS beam-current channel.
 //
-// `good` filtering: when the `epics` and `scalers` trees carry the per-
-// row `good` bool replay_filter writes (i.e. the input is a filter
-// output), the tool integrates only over passing-passing pairs — yielding
-// post-cut live charge.  When the column is absent (raw / recon), every
-// adjacent pair contributes — yielding total live charge over the run,
-// no quality cuts applied.
+// `good` filtering: when ROOT inputs carry the per-row `good` bool that
+// replay_filter writes, only passing-passing pairs contribute (post-cut
+// live charge).  When the column is absent (raw / recon / EVIO), every
+// adjacent pair contributes (total live charge over the run, no quality
+// cuts applied).  Mixing replay_filter ROOT outputs with raw EVIO is
+// allowed but probably not what you want — the EVIO rows always pass and
+// will inflate the "kept" count.
 //
 // Beam current is assumed to publish in nA (true for the Hall B IPM
 // scalers); the resulting charge is therefore in nC.
 // =============================================================================
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -48,12 +55,64 @@
 #include "EventData.h"
 #include "EventData_io.h"
 
-using json = nlohmann::json;
+#include "EvChannel.h"
+#include "DaqConfig.h"
+#include "load_daq_config.h"
+#include "InstallPaths.h"
+
+#ifndef DATABASE_DIR
+#define DATABASE_DIR "."
+#endif
+
+namespace fs = std::filesystem;
+using json   = nlohmann::json;
 
 namespace {
 
 constexpr double TI_TICK_SEC = 4.0e-9;
 constexpr int    DSC_NCH     = 16;
+
+// ── Per-input dispatch ──────────────────────────────────────────────────────
+
+enum class InputKind { Root, Evio, Unknown };
+
+InputKind classify(const std::string &p)
+{
+    const std::string fname = fs::path(p).filename().string();
+    if (fname.size() >= 5 && fname.substr(fname.size() - 5) == ".root")
+        return InputKind::Root;
+    if (fname.find(".evio") != std::string::npos)
+        return InputKind::Evio;
+    return InputKind::Unknown;
+}
+
+// Expand a user-supplied path: file paths pass through, directories are
+// listed and each child is classified individually so a single directory can
+// contribute both ROOT and EVIO files (rare, but cheap to support).
+struct InputFile {
+    std::string path;
+    InputKind   kind;
+};
+
+std::vector<InputFile> collect_inputs(const std::string &arg)
+{
+    std::vector<InputFile> out;
+    auto push = [&](const std::string &p) {
+        InputKind k = classify(p);
+        if (k != InputKind::Unknown) out.push_back({p, k});
+    };
+    if (fs::is_directory(arg)) {
+        std::vector<std::string> children;
+        for (auto &entry : fs::directory_iterator(arg))
+            if (entry.is_regular_file())
+                children.push_back(entry.path().string());
+        std::sort(children.begin(), children.end());
+        for (auto &c : children) push(c);
+    } else {
+        push(arg);
+    }
+    return out;
+}
 
 // ── In-memory rows ──────────────────────────────────────────────────────────
 
@@ -76,14 +135,13 @@ struct EpicsRow {
     std::map<std::string, double> updates;
 };
 
-// ── Tree readers ────────────────────────────────────────────────────────────
+// ── ROOT-tree readers (replayed `scalers` / `epics` side trees) ─────────────
 
-bool load_scalers(const std::vector<std::string> &files,
-                  std::vector<ScalerRow>          &out,
-                  bool                            &any_good_col)
+bool load_scalers_root(const std::vector<std::string> &files,
+                       std::vector<ScalerRow>          &out,
+                       bool                            &any_good_col)
 {
     prad2::RawScalerData sc;
-    any_good_col = false;
     for (const auto &path : files) {
         std::unique_ptr<TFile> f(TFile::Open(path.c_str(), "READ"));
         if (!f || f->IsZombie()) {
@@ -118,9 +176,9 @@ bool load_scalers(const std::vector<std::string> &files,
     return true;
 }
 
-bool load_epics(const std::vector<std::string> &files,
-                std::vector<EpicsRow>           &out,
-                bool                            &any_good_col)
+bool load_epics_root(const std::vector<std::string> &files,
+                     std::vector<EpicsRow>           &out,
+                     bool                            &any_good_col)
 {
     for (const auto &path : files) {
         std::unique_ptr<TFile> f(TFile::Open(path.c_str(), "READ"));
@@ -166,6 +224,81 @@ bool load_epics(const std::vector<std::string> &files,
     return true;
 }
 
+// ── EVIO walker (raw split-file sequences) ──────────────────────────────────
+//
+// One EvChannel reused across every input file — its persistent
+// last_physics_event_number_ / last_sync_info_ snapshots survive the
+// per-file Close()/OpenAuto() cycle, so EPICS rows arriving at the start of
+// file N+1 still get stamped with the last physics event_number from file N
+// rather than -1.  Calls only the cheap Info()/Dsc()/Epics() accessors —
+// no FADC waveform decode.
+
+bool load_from_evio(const std::vector<std::string> &files,
+                    const evc::DaqConfig            &daq_cfg,
+                    std::vector<ScalerRow>          &scalers,
+                    std::vector<EpicsRow>           &epics_rows,
+                    int                              max_events_per_file)
+{
+    evc::EvChannel ch;
+    ch.SetConfig(daq_cfg);
+
+    for (const auto &path : files) {
+        if (ch.OpenAuto(path) != evc::status::success) {
+            std::cerr << "live_charge: cannot open " << path << "\n";
+            return false;
+        }
+        const size_t sc_before = scalers.size();
+        const size_t ep_before = epics_rows.size();
+        int total = 0;
+
+        while (ch.Read() == evc::status::success) {
+            if (max_events_per_file > 0 && total >= max_events_per_file) break;
+            if (!ch.Scan()) continue;
+
+            const auto et = ch.GetEventType();
+
+            if (et == evc::EventType::Epics) {
+                const auto &rec = ch.Epics();
+                if (!rec.present) continue;
+                EpicsRow r;
+                r.event_number = rec.event_number_at_arrival;
+                r.ti_ticks     = static_cast<int64_t>(rec.timestamp_at_arrival);
+                const size_t k_max = std::min(rec.channel.size(), rec.value.size());
+                for (size_t k = 0; k < k_max; ++k)
+                    r.updates[rec.channel[k]] = rec.value[k];
+                epics_rows.push_back(std::move(r));
+                continue;
+            }
+
+            if (et != evc::EventType::Physics) continue;
+
+            ch.SelectEvent(0);
+            const auto &info = ch.Info();
+            const auto &dsc  = ch.Dsc();
+            if (dsc.present) {
+                ScalerRow r;
+                r.event_number = info.event_number;
+                r.ti_ticks     = static_cast<int64_t>(info.timestamp);
+                r.ref_gated    = dsc.ref_gated;
+                r.ref_ungated  = dsc.ref_ungated;
+                std::memcpy(r.trg_gated,   dsc.trg_gated,   DSC_NCH * sizeof(uint32_t));
+                std::memcpy(r.trg_ungated, dsc.trg_ungated, DSC_NCH * sizeof(uint32_t));
+                std::memcpy(r.tdc_gated,   dsc.tdc_gated,   DSC_NCH * sizeof(uint32_t));
+                std::memcpy(r.tdc_ungated, dsc.tdc_ungated, DSC_NCH * sizeof(uint32_t));
+                scalers.push_back(r);
+            }
+            ++total;
+        }
+
+        std::cerr << "  [evio] " << path
+                  << "  events=" << total
+                  << "  +scaler=" << (scalers.size() - sc_before)
+                  << "  +epics="  << (epics_rows.size() - ep_before) << "\n";
+        ch.Close();
+    }
+    return true;
+}
+
 // ── Delta-livetime + integration ────────────────────────────────────────────
 
 inline std::pair<uint32_t, uint32_t>
@@ -188,7 +321,6 @@ std::vector<size_t> sort_by_event(const std::vector<T> &v)
     return idx;
 }
 
-// One full integration pass.  Returns the live-charge sum and side info.
 struct ChargeResult {
     double  value_nC          = 0.0;
     double  live_seconds      = 0.0;
@@ -270,7 +402,7 @@ ChargeResult integrate(const std::vector<ScalerRow> &scalers,
     }
 
     // 3. integrate over passing-passing pairs (or every pair when the input
-    //    has no `good` column — raw/recon outputs).
+    //    has no `good` column — raw / recon / EVIO).
     for (size_t k = 1; k < tl.size(); ++k) {
         ++r.n_pairs_total;
         const auto &a = tl[k - 1];
@@ -298,20 +430,27 @@ ChargeResult integrate(const std::vector<ScalerRow> &scalers,
 void print_usage(const char *argv0)
 {
     std::cerr <<
-"usage: " << argv0 << " <input.root> [more.root ...]\n"
+"usage: " << argv0 << " <input.(root|evio*)|dir> [more inputs ...]\n"
 "        [-c|--beam-current CHAN]   EPICS channel (default hallb_IPM2C21A_CUR)\n"
 "        [-s|--source ref|trg|tdc]  livetime DSC2 source (default ref)\n"
 "        [-n|--channel N]           DSC2 channel for trg/tdc (default 0)\n"
+"        [-d|--daq-config PATH]     EVIO DAQ config (default <db>/daq_config.json)\n"
+"        [-N|--max-events N]        max events per file (EVIO only)\n"
 "        [-j|--json PATH]           also write a JSON summary to PATH\n"
 "        [-h|--help]\n"
 "\n"
-"Reads the `scalers` and `epics` side trees from one or more replayed\n"
-"ROOT files and integrates Σ live_fraction · Δt · ½(Iₐ + I_b) over\n"
-"adjacent slow-event checkpoints.  When the trees carry the per-row\n"
-"`good` bool that replay_filter writes, only passing-passing pairs\n"
-"contribute (post-cut live charge); otherwise every adjacent pair\n"
-"contributes (total live charge over the run).  Beam current is assumed\n"
-"to publish in nA, so the result is reported in nC.\n";
+"Each input is dispatched by extension: *.root → reads `scalers` and\n"
+"`epics` side trees from a replayed file; *.evio* → walks the raw EVIO\n"
+"stream via EvChannel and pulls the same DSC2 / EPICS records directly\n"
+"(no replay step needed).  Directories are expanded; mixing ROOT and\n"
+"EVIO inputs is allowed but rarely useful.\n"
+"\n"
+"Integrates Σ live_fraction · Δt · ½(Iₐ + I_b) over adjacent slow-event\n"
+"checkpoints.  When the ROOT trees carry the per-row `good` bool that\n"
+"replay_filter writes, only passing-passing pairs contribute (post-cut\n"
+"live charge); otherwise every adjacent pair contributes (total live\n"
+"charge over the run).  Beam current is assumed to publish in nA, so\n"
+"the result is reported in nC.\n";
 }
 
 } // namespace
@@ -322,36 +461,70 @@ int main(int argc, char **argv)
     std::string source       = "ref";
     int         channel      = 0;
     std::string json_path;
+    std::string daq_config;
+    int         max_events   = -1;
 
     static struct option long_opts[] = {
         {"beam-current", required_argument, nullptr, 'c'},
         {"source",       required_argument, nullptr, 's'},
         {"channel",      required_argument, nullptr, 'n'},
+        {"daq-config",   required_argument, nullptr, 'd'},
+        {"max-events",   required_argument, nullptr, 'N'},
         {"json",         required_argument, nullptr, 'j'},
         {"help",         no_argument,       nullptr, 'h'},
         {nullptr, 0, nullptr, 0},
     };
     int opt;
-    while ((opt = getopt_long(argc, argv, "c:s:n:j:h", long_opts, nullptr)) != -1) {
+    while ((opt = getopt_long(argc, argv, "c:s:n:d:N:j:h", long_opts, nullptr)) != -1) {
         switch (opt) {
-        case 'c': beam_current = optarg;        break;
-        case 's': source       = optarg;        break;
+        case 'c': beam_current = optarg;            break;
+        case 's': source       = optarg;            break;
         case 'n': channel      = std::atoi(optarg); break;
-        case 'j': json_path    = optarg;        break;
+        case 'd': daq_config   = optarg;            break;
+        case 'N': max_events   = std::atoi(optarg); break;
+        case 'j': json_path    = optarg;            break;
         case 'h': print_usage(argv[0]); return 0;
         default:  print_usage(argv[0]); return 2;
         }
     }
-    std::vector<std::string> inputs;
-    for (int i = optind; i < argc; ++i) inputs.emplace_back(argv[i]);
-    if (inputs.empty()) { print_usage(argv[0]); return 2; }
+
+    std::vector<std::string> root_inputs, evio_inputs, all_inputs;
+    for (int i = optind; i < argc; ++i) {
+        for (auto &in : collect_inputs(argv[i])) {
+            all_inputs.push_back(in.path);
+            if (in.kind == InputKind::Root) root_inputs.push_back(in.path);
+            else                            evio_inputs.push_back(in.path);
+        }
+    }
+    if (all_inputs.empty()) { print_usage(argv[0]); return 2; }
 
     std::vector<ScalerRow> scalers;
     std::vector<EpicsRow>  epics_rows;
-    bool any_good_sc = false, any_good_ep = false;
-    if (!load_scalers(inputs, scalers,    any_good_sc)) return 1;
-    if (!load_epics  (inputs, epics_rows, any_good_ep)) return 1;
-    const bool any_good_col = any_good_sc || any_good_ep;
+    bool any_good_col = false;
+
+    if (!root_inputs.empty()) {
+        if (!load_scalers_root(root_inputs, scalers,    any_good_col)) return 1;
+        if (!load_epics_root  (root_inputs, epics_rows, any_good_col)) return 1;
+    }
+
+    if (!evio_inputs.empty()) {
+        const std::string db_dir = prad2::resolve_data_dir(
+            "PRAD2_DATABASE_DIR",
+            {"../share/prad2evviewer/database"},
+            DATABASE_DIR);
+        if (daq_config.empty()) daq_config = db_dir + "/daq_config.json";
+
+        evc::DaqConfig daq_cfg;
+        if (!evc::load_daq_config(daq_config, daq_cfg)) {
+            std::cerr << "live_charge: failed to load DAQ config "
+                      << daq_config << "\n";
+            return 1;
+        }
+        std::cerr << "live_charge: " << evio_inputs.size()
+                  << " EVIO file(s) — DAQ config " << daq_config << "\n";
+        if (!load_from_evio(evio_inputs, daq_cfg, scalers, epics_rows, max_events))
+            return 1;
+    }
 
     if (scalers.empty()) {
         std::cerr << "live_charge: no scaler rows in input — cannot compute "
@@ -378,6 +551,8 @@ int main(int argc, char **argv)
         << "  beam current channel   : " << beam_current << "\n"
         << "  livetime source        : " << source
         << (source == "ref" ? "" : (" ch " + std::to_string(channel))) << "\n"
+        << "  ROOT inputs            : " << root_inputs.size() << "\n"
+        << "  EVIO inputs            : " << evio_inputs.size() << "\n"
         << "  scaler rows            : " << scalers.size() << "\n"
         << "  EPICS rows             : " << epics_rows.size() << "\n"
         << "  adjacent pairs (total) : " << r.n_pairs_total << "\n"
@@ -402,6 +577,8 @@ int main(int argc, char **argv)
                                      ? r.live_seconds / r.real_seconds : 0.0},
             {"average_current_nA",   r.live_seconds > 0
                                      ? r.value_nC / r.live_seconds : 0.0},
+            {"n_root_inputs",        root_inputs.size()},
+            {"n_evio_inputs",        evio_inputs.size()},
             {"n_scaler_rows",        scalers.size()},
             {"n_epics_rows",         epics_rows.size()},
             {"n_pairs_total",        r.n_pairs_total},
@@ -409,7 +586,7 @@ int main(int argc, char **argv)
             {"n_pairs_integrated",   r.n_pairs_integrated},
             {"n_pairs_skipped",      r.n_pairs_skipped},
             {"good_column_present",  any_good_col},
-            {"input_files",          inputs},
+            {"input_files",          all_inputs},
         };
         std::ofstream of(json_path);
         if (!of) {

@@ -854,28 +854,56 @@ int run(const std::vector<std::string> &input_files,
     // the two endpoints' beam currents.  Only pairs where every input
     // is finite contribute — missing data on either side is treated as
     // unknown, not zero.
+    //
+    // Both gated and ungated charge are accumulated in the same pass:
+    //   * gated (live_charge / live_charge_secs / real_secs) — only
+    //     adjacent pairs where both endpoints' overall_pass is true.
+    //     This is the canonical post-cut number and matches the
+    //     keep-interval physics events written to the output ROOT file.
+    //   * ungated (ungated_*) — every valid-data pair, ignoring the cut
+    //     verdict.  Reported alongside so users can see how much charge
+    //     the cuts threw away (= live_charge when no cuts reject any
+    //     point).
     std::vector<std::pair<int32_t, int32_t>> keep;
-    double live_charge      = 0.0;
-    double live_charge_secs = 0.0;
-    int    n_charge_pairs   = 0;
-    int    n_charge_skipped = 0;
+    double live_charge              = 0.0;
+    double live_charge_secs         = 0.0;
+    double real_secs                = 0.0;
+    double ungated_live_charge      = 0.0;
+    double ungated_live_charge_secs = 0.0;
+    double ungated_real_secs        = 0.0;
+    int    n_charge_pairs           = 0;
+    int    n_charge_skipped         = 0;
+    int    n_ungated_charge_pairs   = 0;
+    int    n_ungated_charge_skipped = 0;
     for (size_t i = 1; i < timeline.size(); ++i) {
         const auto &a = timeline[i - 1];
         const auto &b = timeline[i];
-        if (!(a.overall_pass && b.overall_pass)) continue;
-        keep.emplace_back(a.event_number, b.event_number);
+        const bool good_pair = (a.overall_pass && b.overall_pass);
+        if (good_pair)
+            keep.emplace_back(a.event_number, b.event_number);
         if (!cuts.charge.enabled) continue;
-        if (a.ti_ticks <= 0 || b.ti_ticks <= 0 || b.ti_ticks <= a.ti_ticks
+        const bool data_ok = !(a.ti_ticks <= 0 || b.ti_ticks <= 0 || b.ti_ticks <= a.ti_ticks
             || !std::isfinite(b.live_fraction) || b.live_fraction < 0
-            || !std::isfinite(a.beam_current)  || !std::isfinite(b.beam_current)) {
-            ++n_charge_skipped;
+            || !std::isfinite(a.beam_current)  || !std::isfinite(b.beam_current));
+        if (!data_ok) {
+            if (good_pair) ++n_charge_skipped;
+            ++n_ungated_charge_skipped;
             continue;
         }
         const double dt = (b.ti_ticks - a.ti_ticks) * TI_TICK_SEC;
         const double I  = 0.5 * (a.beam_current + b.beam_current);
-        live_charge      += b.live_fraction * dt * I;
-        live_charge_secs += b.live_fraction * dt;
-        ++n_charge_pairs;
+        const double dQ = b.live_fraction * dt * I;
+        const double dL = b.live_fraction * dt;
+        ungated_live_charge      += dQ;
+        ungated_live_charge_secs += dL;
+        ungated_real_secs        += dt;
+        ++n_ungated_charge_pairs;
+        if (good_pair) {
+            live_charge      += dQ;
+            live_charge_secs += dL;
+            real_secs        += dt;
+            ++n_charge_pairs;
+        }
     }
     auto is_kept = [&](int32_t evn) -> bool {
         if (keep.empty()) return false;
@@ -1144,15 +1172,30 @@ int run(const std::vector<std::string> &input_files,
     // hallb_IPM2C21A_CUR and the other Hall B IPM scalers), so
     // value = Σ live_fraction · Δt · I  ⇒  nA · s = nC.  Also emit the
     // accumulated live time so the average current is recoverable.
+    //
+    // value_nC / live_seconds / real_seconds are the gated (post-cut)
+    // numbers — only adjacent pairs where every cut passed on both
+    // endpoints contribute, matching the keep-interval physics events
+    // written to the output ROOT file.  ungated_* are the same
+    // quantities accumulated over every valid-data pair (no cut
+    // applied), reported so users can see how much charge the cuts
+    // threw away.  When the cuts reject nothing, ungated_* equals the
+    // gated values.
     if (cuts.charge.enabled) {
         report["live_charge"] = {
-            {"value_nC",             live_charge},
-            {"unit",                 "nC"},
-            {"beam_current_channel", cuts.charge.beam_current_channel},
-            {"beam_current_unit",    "nA"},
-            {"live_seconds",         live_charge_secs},
-            {"n_pairs_integrated",   n_charge_pairs},
-            {"n_pairs_skipped",      n_charge_skipped},
+            {"value_nC",                   live_charge},
+            {"unit",                       "nC"},
+            {"beam_current_channel",       cuts.charge.beam_current_channel},
+            {"beam_current_unit",          "nA"},
+            {"live_seconds",               live_charge_secs},
+            {"real_seconds",               real_secs},
+            {"ungated_value_nC",           ungated_live_charge},
+            {"ungated_live_seconds",       ungated_live_charge_secs},
+            {"ungated_real_seconds",       ungated_real_secs},
+            {"n_pairs_integrated",         n_charge_pairs},
+            {"n_pairs_skipped",            n_charge_skipped},
+            {"n_ungated_pairs_integrated", n_ungated_charge_pairs},
+            {"n_ungated_pairs_skipped",    n_ungated_charge_skipped},
         };
     }
 

@@ -19,12 +19,17 @@
 // EPICS beam-current channel.
 //
 // `good` filtering: when ROOT inputs carry the per-row `good` bool that
-// replay_filter writes, only passing-passing pairs contribute (post-cut
-// live charge).  When the column is absent (raw / recon / EVIO), every
-// adjacent pair contributes (total live charge over the run, no quality
-// cuts applied).  Mixing replay_filter ROOT outputs with raw EVIO is
-// allowed but probably not what you want — the EVIO rows always pass and
-// will inflate the "kept" count.
+// replay_filter writes, only passing-passing pairs contribute to the
+// canonical live charge (`value_nC` / `live_seconds` / `real_seconds`),
+// which is the post-cut quantity downstream tools should use.  An
+// ungated counterpart (`ungated_value_nC` / `ungated_live_seconds` /
+// `ungated_real_seconds`) is also computed over every valid-data pair
+// and reported alongside, so consumers can see how much charge the cut
+// throws away.  When the `good` column is absent (raw / recon / EVIO),
+// every pair counts as good and the gated values equal the ungated
+// values.  Mixing replay_filter ROOT outputs with raw EVIO is allowed
+// but probably not what you want — the EVIO rows always pass and will
+// inflate the "kept" count.
 //
 // Beam current is assumed to publish in nA (true for the Hall B IPM
 // scalers); the resulting charge is therefore in nC.
@@ -265,14 +270,28 @@ std::vector<size_t> sort_by_event(const std::vector<T> &v)
 }
 
 struct ChargeResult {
-    double  value_nC          = 0.0;
-    double  live_seconds      = 0.0;
-    double  real_seconds      = 0.0;   // Σ Δt over integrated pairs (wall clock)
-    int64_t n_pairs_total     = 0;     // adjacent (i, i+1) pairs walked
-    int64_t n_pairs_kept      = 0;     // both endpoints had good=true
-    int64_t n_pairs_integrated = 0;    // contributed to Q
-    int64_t n_pairs_skipped   = 0;     // kept but missing data on either side
-    bool    any_good_col      = false; // input carried the `good` bool
+    // Gated (post-cut): only adjacent pairs where both endpoints have
+    // good=true.  When the input has no `good` column (raw EVIO / recon /
+    // unfiltered ROOT) every pair is treated as good, so the gated values
+    // equal the ungated values below.  These are the canonical "live
+    // charge" numbers downstream tools should consume.
+    double  value_nC                   = 0.0;
+    double  live_seconds               = 0.0;
+    double  real_seconds               = 0.0;   // Σ Δt over integrated pairs
+    int64_t n_pairs_kept               = 0;     // both endpoints good=true
+    int64_t n_pairs_integrated         = 0;     // contributed to Q
+    int64_t n_pairs_skipped            = 0;     // kept but missing data
+    // Ungated (pre-cut): every adjacent pair with valid data, ignoring the
+    // `good` column.  Reported alongside the gated values so users can see
+    // how much charge the cut throws away.  Equal to the gated values when
+    // the input has no `good` column.
+    double  ungated_value_nC           = 0.0;
+    double  ungated_live_seconds       = 0.0;
+    double  ungated_real_seconds       = 0.0;
+    int64_t n_ungated_pairs_integrated = 0;
+    int64_t n_ungated_pairs_skipped    = 0;
+    int64_t n_pairs_total              = 0;     // adjacent (i, i+1) pairs walked
+    bool    any_good_col               = false; // input carried the `good` bool
 };
 
 ChargeResult integrate(const std::vector<ScalerRow> &scalers,
@@ -344,26 +363,42 @@ ChargeResult integrate(const std::vector<ScalerRow> &scalers,
         tl.push_back(cp);
     }
 
-    // 3. integrate over passing-passing pairs (or every pair when the input
-    //    has no `good` column — raw / recon / EVIO).
+    // 3. integrate.  Walk every adjacent pair once and accumulate into
+    //    both buckets:
+    //      * ungated_*  — every pair with valid data, ignoring the `good`
+    //        column (always populated; equals the gated values when the
+    //        input has no `good` column).
+    //      * value_nC / live_seconds / real_seconds (gated) — only pairs
+    //        where both endpoints had good=true.  When the input lacks a
+    //        `good` column every pair is treated as good.
     for (size_t k = 1; k < tl.size(); ++k) {
         ++r.n_pairs_total;
         const auto &a = tl[k - 1];
         const auto &b = tl[k];
-        if (any_good_col && !(a.good && b.good)) continue;
-        ++r.n_pairs_kept;
-        if (a.ticks <= 0 || b.ticks <= 0 || b.ticks <= a.ticks
+        const bool good_pair = !any_good_col || (a.good && b.good);
+        if (good_pair) ++r.n_pairs_kept;
+        const bool data_ok = !(a.ticks <= 0 || b.ticks <= 0 || b.ticks <= a.ticks
             || !std::isfinite(b.live_fraction) || b.live_fraction < 0
-            || !std::isfinite(a.beam_current)  || !std::isfinite(b.beam_current)) {
-            ++r.n_pairs_skipped;
+            || !std::isfinite(a.beam_current)  || !std::isfinite(b.beam_current));
+        if (!data_ok) {
+            if (good_pair) ++r.n_pairs_skipped;
+            ++r.n_ungated_pairs_skipped;
             continue;
         }
         const double dt = (b.ticks - a.ticks) * TI_TICK_SEC;
         const double I  = 0.5 * (a.beam_current + b.beam_current);
-        r.value_nC     += b.live_fraction * dt * I;
-        r.live_seconds += b.live_fraction * dt;
-        r.real_seconds += dt;
-        ++r.n_pairs_integrated;
+        const double dQ = b.live_fraction * dt * I;
+        const double dL = b.live_fraction * dt;
+        r.ungated_value_nC     += dQ;
+        r.ungated_live_seconds += dL;
+        r.ungated_real_seconds += dt;
+        ++r.n_ungated_pairs_integrated;
+        if (good_pair) {
+            r.value_nC     += dQ;
+            r.live_seconds += dL;
+            r.real_seconds += dt;
+            ++r.n_pairs_integrated;
+        }
     }
     return r;
 }
@@ -587,13 +622,24 @@ int main(int argc, char **argv)
                              source, channel, beam_current);
 
     std::cout
-        << "live_charge: " << r.value_nC << " nC\n"
+        << "live_charge: " << r.value_nC << " nC"
+        << (any_good_col ? " (gated by `good` column)" : "") << "\n"
         << "  real time              : " << r.real_seconds << " s\n"
         << "  live time              : " << r.live_seconds << " s\n"
         << "  ⟨livetime⟩             : "
         << (r.real_seconds > 0 ? r.live_seconds / r.real_seconds : 0.0) << "\n"
         << "  ⟨I⟩                    : "
         << (r.live_seconds > 0 ? r.value_nC / r.live_seconds : 0.0) << " nA\n"
+        << "  ungated live charge    : " << r.ungated_value_nC << " nC"
+        << (any_good_col ? "" : " (= gated; no `good` column)") << "\n"
+        << "  ungated real time      : " << r.ungated_real_seconds << " s\n"
+        << "  ungated live time      : " << r.ungated_live_seconds << " s\n"
+        << "  ungated ⟨livetime⟩     : "
+        << (r.ungated_real_seconds > 0
+            ? r.ungated_live_seconds / r.ungated_real_seconds : 0.0) << "\n"
+        << "  ungated ⟨I⟩            : "
+        << (r.ungated_live_seconds > 0
+            ? r.ungated_value_nC / r.ungated_live_seconds : 0.0) << " nA\n"
         << "  beam current channel   : " << beam_current << "\n"
         << "  livetime source        : " << source
         << (source == "ref" ? "" : (" ch " + std::to_string(channel))) << "\n"
@@ -607,32 +653,51 @@ int main(int argc, char **argv)
         << "\n"
         << "  pairs integrated       : " << r.n_pairs_integrated << "\n"
         << "  pairs skipped          : " << r.n_pairs_skipped
+        << " (missing tick / livetime / current on either side)\n"
+        << "  ungated pairs integ.   : " << r.n_ungated_pairs_integrated << "\n"
+        << "  ungated pairs skipped  : " << r.n_ungated_pairs_skipped
         << " (missing tick / livetime / current on either side)\n";
 
     if (!json_path.empty()) {
+        // value_nC / live_seconds / real_seconds are gated by the `good`
+        // column when present (canonical post-cut numbers).  The
+        // ungated_* counterparts are computed over every valid-data pair
+        // and are emitted unconditionally so consumers always see both —
+        // for raw / recon inputs without a `good` column they are equal.
         json j = {
-            {"value_nC",             r.value_nC},
-            {"unit",                 "nC"},
-            {"beam_current_channel", beam_current},
-            {"beam_current_unit",    "nA"},
-            {"livetime_source",      source},
-            {"livetime_channel",     channel},
-            {"live_seconds",         r.live_seconds},
-            {"real_seconds",         r.real_seconds},
-            {"average_livetime",     r.real_seconds > 0
-                                     ? r.live_seconds / r.real_seconds : 0.0},
-            {"average_current_nA",   r.live_seconds > 0
-                                     ? r.value_nC / r.live_seconds : 0.0},
-            {"n_root_inputs",        root_inputs.size()},
-            {"n_evio_inputs",        evio_inputs.size()},
-            {"n_scaler_rows",        scalers.size()},
-            {"n_epics_rows",         epics_rows.size()},
-            {"n_pairs_total",        r.n_pairs_total},
-            {"n_pairs_kept",         r.n_pairs_kept},
-            {"n_pairs_integrated",   r.n_pairs_integrated},
-            {"n_pairs_skipped",      r.n_pairs_skipped},
-            {"good_column_present",  any_good_col},
-            {"input_files",          all_inputs},
+            {"value_nC",                   r.value_nC},
+            {"unit",                       "nC"},
+            {"beam_current_channel",       beam_current},
+            {"beam_current_unit",          "nA"},
+            {"livetime_source",            source},
+            {"livetime_channel",           channel},
+            {"live_seconds",               r.live_seconds},
+            {"real_seconds",               r.real_seconds},
+            {"average_livetime",           r.real_seconds > 0
+                                           ? r.live_seconds / r.real_seconds : 0.0},
+            {"average_current_nA",         r.live_seconds > 0
+                                           ? r.value_nC / r.live_seconds : 0.0},
+            {"ungated_value_nC",           r.ungated_value_nC},
+            {"ungated_live_seconds",       r.ungated_live_seconds},
+            {"ungated_real_seconds",       r.ungated_real_seconds},
+            {"ungated_average_livetime",   r.ungated_real_seconds > 0
+                                           ? r.ungated_live_seconds / r.ungated_real_seconds
+                                           : 0.0},
+            {"ungated_average_current_nA", r.ungated_live_seconds > 0
+                                           ? r.ungated_value_nC / r.ungated_live_seconds
+                                           : 0.0},
+            {"n_root_inputs",              root_inputs.size()},
+            {"n_evio_inputs",              evio_inputs.size()},
+            {"n_scaler_rows",              scalers.size()},
+            {"n_epics_rows",               epics_rows.size()},
+            {"n_pairs_total",              r.n_pairs_total},
+            {"n_pairs_kept",               r.n_pairs_kept},
+            {"n_pairs_integrated",         r.n_pairs_integrated},
+            {"n_pairs_skipped",            r.n_pairs_skipped},
+            {"n_ungated_pairs_integrated", r.n_ungated_pairs_integrated},
+            {"n_ungated_pairs_skipped",    r.n_ungated_pairs_skipped},
+            {"good_column_present",        any_good_col},
+            {"input_files",                all_inputs},
         };
         std::ofstream of(json_path);
         if (!of) {

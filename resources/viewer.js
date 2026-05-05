@@ -890,9 +890,9 @@ function init(){
     // Clear All — resets all tabs' data for new run
     document.getElementById('btn-clear-all').onclick=()=>doClearAll();
 
-    // Auto Report toggle — END → post, PRESTART → clear, run-number-change as
-    // fallback. Hard-rate-limited on POST so a buggy run cycling rapidly does
-    // not flood elog. Online-mode only.
+    // Auto-report status pill — server picks the chosen client per END /
+    // run-change; pill reflects auto_report.enabled and lights green
+    // while we're the chosen reporter.
     initAutoReport();
 
     // mode toggle button — opens ET dialog when going online

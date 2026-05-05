@@ -437,133 +437,6 @@ json ViewerServer::handleElogPost(const std::string &body)
 }
 
 // =========================================================================
-// Elog dedup check — actual elog REST query
-// =========================================================================
-// JLab logbook server exposes a JSON read API at
-//   <elog_url>/api/elog/entries?book=<logbook>&title=<substring>&field=...
-// Response shape (success):
-//   {"stat":"ok","data":{"entries":[{"lognumber":"...","title":"..."}, ...],
-//                        "currentItems":N, "totalItems":"M", ...}}
-// Error: {"stat":"error","message":"..."}
-//
-// `title=` is a substring match — we always do an exact-match comparison
-// client-side after the response comes back so a similarly-named entry
-// from a different run can't false-positive the dedup.
-// =========================================================================
-
-namespace {
-std::string _urlEncode(const std::string &s)
-{
-    std::string out;
-    out.reserve(s.size() * 3);
-    auto isUnreserved = [](unsigned char c){
-        return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-               (c >= '0' && c <= '9') ||
-               c == '-' || c == '_' || c == '.' || c == '~';
-    };
-    char buf[4];
-    for (unsigned char c : s) {
-        if (isUnreserved(c)) { out += static_cast<char>(c); }
-        else { std::snprintf(buf, sizeof(buf), "%%%02X", c); out += buf; }
-    }
-    return out;
-}
-
-// Capture stdout of `cmd` (popen wrapper).
-std::string _runCapture(const std::string &cmd)
-{
-    std::string out;
-    FILE *p = popen(cmd.c_str(), "r");
-    if (!p) return out;
-    char buf[4096];
-    size_t n;
-    while ((n = fread(buf, 1, sizeof(buf), p)) > 0) out.append(buf, n);
-    pclose(p);
-    return out;
-}
-}  // namespace
-
-json ViewerServer::handleElogCheck(const std::string &title)
-{
-    auto &app = activeApp();
-    if (app.elog_url.empty())
-        return {{"exists", false}, {"checked", false},
-                {"detail", "elog.url not configured"}};
-    if (title.empty())
-        return {{"exists", false}, {"checked", false},
-                {"detail", "no title given"}};
-
-    std::string url = app.elog_url + "/api/elog/entries"
-                    + "?title=" + _urlEncode(title)
-                    + "&field=lognumber&field=title"
-                    + "&limit=20";
-    if (!app.elog_logbook.empty())
-        url += "&book=" + _urlEncode(app.elog_logbook);
-
-    std::string cert_flag;
-    if (!app.elog_cert.empty())
-        cert_flag = " --cert '" + app.elog_cert + "' --key '" + app.elog_key + "'";
-    // -m 10 caps the round-trip so a slow/hung elog server doesn't stall
-    // the auto-post pipeline; -w writes the HTTP code on its own line at
-    // the end so we can tell apart connection failures (000) from auth /
-    // server errors (4xx/5xx) from a real empty result.
-    std::string cmd = "curl -s -m 10" + cert_flag
-                    + " -w '\\n__HTTP__%{http_code}'"
-                    + " '" + url + "' 2>/dev/null";
-    std::string raw = _runCapture(cmd);
-
-    // Split body and HTTP code.
-    std::string body, http_code;
-    auto marker = raw.rfind("\n__HTTP__");
-    if (marker != std::string::npos) {
-        body = raw.substr(0, marker);
-        http_code = raw.substr(marker + 9);  // strlen("\n__HTTP__")
-        while (!http_code.empty() &&
-               (http_code.back() == '\n' || http_code.back() == '\r'))
-            http_code.pop_back();
-    } else {
-        body = raw;
-    }
-
-    if (http_code != "200") {
-        return {{"exists", false}, {"checked", false},
-                {"detail", std::string("HTTP ") +
-                    (http_code.empty() ? "(no response)" : http_code)}};
-    }
-
-    auto j = json::parse(body, nullptr, false);
-    if (j.is_discarded())
-        return {{"exists", false}, {"checked", false},
-                {"detail", "JSON parse failed"}};
-    if (j.value("stat", std::string()) != "ok") {
-        std::string msg = j.value("message", std::string("non-ok stat"));
-        return {{"exists", false}, {"checked", false}, {"detail", msg}};
-    }
-    json entries = json::array();
-    if (j.contains("data") && j["data"].is_object()
-        && j["data"].contains("entries") && j["data"]["entries"].is_array())
-        entries = j["data"]["entries"];
-
-    bool found = false;
-    std::string lognumber;
-    for (auto &e : entries) {
-        if (!e.is_object() || !e.contains("title") || !e["title"].is_string()) continue;
-        if (e["title"].get<std::string>() == title) {
-            found = true;
-            if (e.contains("lognumber")) {
-                if (e["lognumber"].is_string()) lognumber = e["lognumber"].get<std::string>();
-                else if (e["lognumber"].is_number()) lognumber = std::to_string(e["lognumber"].get<int64_t>());
-            }
-            break;
-        }
-    }
-    json out = {{"exists", found}, {"checked", true},
-                {"matched_count", entries.size()}};
-    if (found && !lognumber.empty()) out["lognumber"] = lognumber;
-    return out;
-}
-
-// =========================================================================
 // On-demand auto-report dispatch
 // =========================================================================
 
@@ -636,7 +509,7 @@ void ViewerServer::appendAutoReportSummary(uint32_t run,
         }
     }
     doc["updated"]            = _isoNowZ();
-    doc["auto_post_enabled"]  = app.auto_report_enabled_by_default;
+    doc["auto_post_enabled"]  = app.auto_report_enabled;
     doc["post_to_elog"]       = app.auto_report_post_to_elog;
     doc["save_dir_writable"]  = save_dir_writable_;
     doc["min_interval_ms"]    = app.auto_report_min_interval_ms;
@@ -666,7 +539,7 @@ bool ViewerServer::dispatchCapture(uint32_t run, const std::string &reason,
                                    const std::string &request_id_in)
 {
     auto &app = activeApp();
-    if (!app.auto_report_enabled_by_default) return false;
+    if (!app.auto_report_enabled) return false;
     if (!save_dir_writable_) {
         std::cerr << "AutoReport: dispatch skipped (save_dir not writable)\n";
         appendAutoReportSummary(run, std::string(), false, std::string(),
@@ -1221,33 +1094,6 @@ void ViewerServer::onHttp(WsServer *srv, websocketpp::connection_hdl hdl)
         loadFile(fullpath, do_hist);
         reply(json({{"status", "loading"}, {"file", relpath},
                      {"hist_enabled", do_hist}}).dump());
-        return;
-    }
-
-    // --- elog dedup check (REST query against logbook server) ---
-    if (uri.rfind("/api/elog/check", 0) == 0) {
-        std::string title;
-        auto qpos = uri.find('?');
-        if (qpos != std::string::npos) {
-            std::string q = uri.substr(qpos + 1);
-            size_t kpos = q.find("title=");
-            if (kpos != std::string::npos) {
-                size_t e = q.find('&', kpos);
-                std::string val = q.substr(kpos + 6,
-                    e == std::string::npos ? std::string::npos : e - (kpos + 6));
-                // URL-decode (percent + plus)
-                title.reserve(val.size());
-                for (size_t i = 0; i < val.size(); ++i) {
-                    if (val[i] == '+') title += ' ';
-                    else if (val[i] == '%' && i + 2 < val.size()) {
-                        char buf[3] = {val[i+1], val[i+2], 0};
-                        title += static_cast<char>(std::strtol(buf, nullptr, 16));
-                        i += 2;
-                    } else title += val[i];
-                }
-            }
-        }
-        reply(handleElogCheck(title).dump());
         return;
     }
 

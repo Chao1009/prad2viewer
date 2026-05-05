@@ -217,7 +217,6 @@ function applyConfig(data){
     document.getElementById('nav-online').style.display = mode==='online'?'flex':'none';
     // Monitor status (livetime + beam) — start/stop polling per mode.
     if(mode==='online') startMonitorStatusPolling(); else stopMonitorStatusPolling();
-    if(typeof autoUpdateBtn==='function') autoUpdateBtn();
     document.getElementById('btn-open').style.display='';
 
     // mode toggle button — visible whenever ET is available

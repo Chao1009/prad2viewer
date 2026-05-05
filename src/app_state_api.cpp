@@ -591,7 +591,7 @@ void AppState::fillConfigJson(json &cfg) const
         }},
     };
     cfg["auto_report"] = {
-        {"enabled",         auto_report_enabled_by_default},
+        {"enabled",         auto_report_enabled},
         {"post_to_elog",    auto_report_post_to_elog},
         {"local_save_dir",  auto_report_local_save_dir},
         {"min_interval_ms", auto_report_min_interval_ms},

@@ -252,7 +252,6 @@ private:
     std::string resolveDataFile(const std::string &relpath);
     nlohmann::json buildConfig();
     nlohmann::json handleElogPost(const std::string &body);
-    nlohmann::json handleElogCheck(const std::string &title);
     void onHttp(WsServer *srv, websocketpp::connection_hdl hdl);
 
     // ---- Auto-report dispatch (on-demand) ----------------------------------

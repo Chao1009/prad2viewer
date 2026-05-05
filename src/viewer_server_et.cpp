@@ -212,7 +212,7 @@ void ViewerServer::etReaderThread()
                             };
                             wsBroadcast(msg.dump());
                             if (et == EventType::End &&
-                                app_online_.auto_report_enabled_by_default &&
+                                app_online_.auto_report_enabled &&
                                 s.run_number > 0)
                             {
                                 dispatchCapture(s.run_number, "end");
@@ -261,7 +261,7 @@ void ViewerServer::etReaderThread()
                         event.info.run_number != last_seen_run_)
                     {
                         if (last_seen_run_ > 0 &&
-                            app_online_.auto_report_enabled_by_default)
+                            app_online_.auto_report_enabled)
                         {
                             dispatchCapture(last_seen_run_, "run-change");
                         }

@@ -373,24 +373,23 @@ struct AppState {
     std::string elog_cert;         // SSL client certificate path
     std::string elog_key;          // SSL client key path
 
-    // Auto-report defaults — server-controlled. Frontend uses this as the
-    // initial state of the Auto toggle when the user has not explicitly
-    // toggled it on this browser; once a user toggles, their localStorage
-    // override wins so the next reload doesn't flip back on them.
-    bool        auto_report_enabled_by_default = true;
-    // Hard server-side guard. When false, /api/elog/post still saves the
-    // report XML + image attachments under auto_report_local_save_dir but
-    // skips the actual elog upload — used to validate the auto pipeline
-    // end-to-end without polluting the (non-deletable) logbook.
-    bool        auto_report_post_to_elog       = false;
-    // If non-empty, every elog post is mirrored on disk under
+    // Master enable for the on-demand auto-report pipeline. Reflected
+    // in the header status pill on every connected client; gates
+    // dispatchCapture on END / run-change in the ET reader thread.
+    bool        auto_report_enabled = true;
+    // Dry-run guard. When false, /api/elog/post still saves the report
+    // XML + image attachments under auto_report_local_save_dir but
+    // skips the curl upload — used to validate the pipeline end-to-end
+    // without polluting the (non-deletable) logbook.
+    bool        auto_report_post_to_elog = false;
+    // Required.  Each capture is mirrored under
     // <local_save_dir>/run_NNNNNN/ so the body can be inspected and
     // replayed manually with curl.
     std::string auto_report_local_save_dir;
-    // Frontend-side hard rate limit (ms) between auto posts. Default 15
-    // min (900_000 ms). Exposed in /api/config so a single config knob
-    // controls all instances.
-    int         auto_report_min_interval_ms    = 900000;
+    // Server-side dedup window (ms) between auto posts for the same
+    // run; absorbs the END + run-change double-fire and multi-browser
+    // races. Default 15 min.
+    int         auto_report_min_interval_ms = 900000;
 
     // color range defaults: key "tab:metric" → [min, max]
     std::map<std::string, std::pair<float, float>> color_range_defaults;

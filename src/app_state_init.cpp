@@ -401,12 +401,8 @@ void AppState::init(const std::string &db_dir,
     // pipeline — no manual Post-to-Elog dialog).
     if (mcfg.contains("auto_report")) {
         auto &ar = mcfg["auto_report"];
-        // Accept both "enabled" (current) and "enabled_by_default"
-        // (legacy) for backward compatibility.
         if (ar.contains("enabled"))
-            auto_report_enabled_by_default = ar["enabled"].get<bool>();
-        else if (ar.contains("enabled_by_default"))
-            auto_report_enabled_by_default = ar["enabled_by_default"].get<bool>();
+            auto_report_enabled = ar["enabled"].get<bool>();
         if (ar.contains("post_to_elog"))
             auto_report_post_to_elog = ar["post_to_elog"].get<bool>();
         if (ar.contains("local_save_dir"))
@@ -424,7 +420,7 @@ void AppState::init(const std::string &db_dir,
             if (el.contains("key"))  elog_key  = el["key"];
         }
     }
-    std::cerr << "AutoReport: default=" << (auto_report_enabled_by_default ? "ON" : "OFF")
+    std::cerr << "AutoReport: enabled=" << (auto_report_enabled ? "ON" : "OFF")
               << " post_to_elog=" << (auto_report_post_to_elog ? "yes" : "no")
               << " min_interval_ms=" << auto_report_min_interval_ms
               << (auto_report_local_save_dir.empty() ? std::string()

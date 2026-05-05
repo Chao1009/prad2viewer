@@ -172,13 +172,15 @@ function updateEpicsTable(){
 // =========================================================================
 
 function clearEpicsFrontend(){
+    // Slot configuration (epicsSlots) is user/config state — preserve it across
+    // run boundaries so the preset charts refill when EPICS data resumes.
+    // Only the data caches + visible plots/table are reset.
     epicsLatestData=null;
-    epicsSlots=[[],[],[],[],[],[]];
+    epicsSlotData=new Array(EPICS_NUM_SLOTS).fill(null);
     for(let s=0;s<EPICS_NUM_SLOTS;s++){
-        renderEpicsChips(s);
         try{Plotly.react('epics-plot-'+s,[],{...PL},PC_EPICS);}catch(e){}
     }
-    document.getElementById('epics-tbody').innerHTML='';
+    updateEpicsTable();
 }
 
 // =========================================================================

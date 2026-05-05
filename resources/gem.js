@@ -343,12 +343,15 @@ function plotGemEffView(snap) {
         });
 
         // Per-detector overlays: filled circle at the hit, star at the
-        // prediction (drawn even when no in-window hit, so the user sees
-        // where a missing detector should have fired).
+        // prediction.  Both are gated by hit_present so a no-hit (dimmed)
+        // detector leaves the Z–Y plane blank, matching the dim/active
+        // state shown by the GEM✓/✗ flags above the plot.  When a hit is
+        // present we draw both markers so the residual is visible.
         (snap.dets || []).forEach(d => {
+            if (!d.hit_present) return;
             const R = d.id;
             const c = GEM_COLORS[R] || THEME.text;
-            if (d.hit_present && d.hit_lab) {
+            if (d.hit_lab) {
                 tracesZY.push({
                     x: [d.hit_lab[2]], y: [d.hit_lab[1]],
                     mode: 'markers', type: 'scatter', name: 'GEM' + R,

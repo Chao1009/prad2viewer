@@ -178,7 +178,7 @@
             "// z_target_hist: distribution of inferred vertex z (DOCA of the": "",
             "// fit line to the lab z-axis, minus target_z) accumulated over": "",
             "// matched events.  Range/step in mm.": "",
-            "z_target_hist":          {"min": -50.0, "max": 50.0, "step": 1.0},
+            "z_target_hist":          {"min": -200.0, "max": 200.0, "step": 4.0},
             "// local_grid: per-detector eff-vs-position 2D heatmap.  nx/ny": "",
             "// bins span the full active area (xstep = det.size_x/nx).  Live": "",
             "// monitor renders this as a 2x2 panel of GEM-local heatmaps; the": "",

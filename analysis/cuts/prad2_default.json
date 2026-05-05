@@ -1,9 +1,9 @@
 {
-    "_comment": "Default slow-control cuts for replay_filter (PRad-II). The livetime block selects the (source, channel) pair from the scalers tree (source ∈ 'ref'|'trg'|'tdc'; channel only used for trg/tdc). 'abs' is a hard threshold; 'rel_rms: N' keeps points within N·σ̂ of the channel's median, where σ̂ = 1.4826·MAD (robust to outliers). 'gated_by' restricts the rel_rms median/MAD to points where the named channel's cut passed — useful when a channel is only physically meaningful in a specific regime (e.g. beam position is meaningless when the current is too low). The cut itself still applies to every checkpoint; only the stats are conditioned. EPICS channel names must match what the slow-control feeder writes into the 'epics' tree's `channel` branch.",
+    "_comment": "Default slow-control cuts for replay_filter (PRad-II). The livetime block selects the (source, channel) pair from the scalers tree (source ∈ 'ref'|'trg'|'tdc'; channel only used for trg/tdc). DSC2 cabling note: PRad-II runs sampled so far (024246, 024340) have the Faraday signal on trg/tdc channel 2 (channels 0 and 1 are unwired in the data). Switch the channel here if a future run moves the cable. 'abs' is a hard threshold; 'rel_rms: N' keeps points within N·σ̂ of the channel's median, where σ̂ = 1.4826·MAD (robust to outliers). 'gated_by' restricts the rel_rms median/MAD to points where the named channel's cut passed — useful when a channel is only physically meaningful in a specific regime (e.g. beam position is meaningless when the current is too low). The cut itself still applies to every checkpoint; only the stats are conditioned. EPICS channel names must match what the slow-control feeder writes into the 'epics' tree's `channel` branch.",
 
     "livetime": {
         "source":  "trg",
-        "channel": 0,
+        "channel": 2,
         "abs":     { "min": 90, "max": 100 }
     },
 

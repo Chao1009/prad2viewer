@@ -156,7 +156,7 @@
         "bank_tag": "0xE115",
         "slot":     18,
         "source":   "trg",
-        "channel":  0
+        "channel":  2
     },
 
     "sync_format": {

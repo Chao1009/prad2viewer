@@ -40,6 +40,7 @@ import matplotlib
 matplotlib.use("QtAgg")
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.widgets import SpanSelector
 
 try:
     import uproot
@@ -451,6 +452,7 @@ class ModuleDetailPanel(QWidget):
         self._refit_sigma:     float = 0.0
         self._refit_chi2:      float = 0.0
         self._refit_new_factor:float = 0.0
+        self._span_selector:   object = None   # matplotlib SpanSelector instance
         self._build_ui()
 
     def _build_ui(self):
@@ -496,6 +498,16 @@ class ModuleDetailPanel(QWidget):
         self._rf_mu0.setFixedWidth(72)
         self._rf_mu0.setPlaceholderText("μ₀ (MeV)")
         range_row.addWidget(self._rf_mu0)
+        range_row.addSpacing(16)
+        range_row.addWidget(QLabel("On drag:"))
+        self._span_action = QComboBox()
+        self._span_action.addItems(["Fill range only", "Auto Refit", "Auto Mean"])
+        self._span_action.setToolTip(
+            "Action to perform after dragging a range on the histogram:\n"
+            "  Fill range only — populate Xmin/Xmax/\u03bc\u2080 without triggering a calculation\n"
+            "  Auto Refit     — immediately run Gaussian refit\n"
+            "  Auto Mean      — immediately compute weighted mean")
+        range_row.addWidget(self._span_action)
         range_row.addStretch()
         rf_lay.addLayout(range_row)
 
@@ -645,6 +657,49 @@ class ModuleDetailPanel(QWidget):
         self._canvas._style_ax(f"{name}  energy histogram",
                                 "Energy (MeV)", "Counts")
         self._canvas.redraw()
+        self._setup_span_selector()
+
+    # ── Interactive span selector ──────────────────────────────────────────
+
+    def _setup_span_selector(self) -> None:
+        """Attach (or re-attach) a SpanSelector to the current axes.
+
+        The selector is re-created every time the histogram is redrawn so that
+        it stays bound to the live Axes object.
+        """
+        # Disconnect the old selector to avoid ghost callbacks
+        if self._span_selector is not None:
+            try:
+                self._span_selector.disconnect_events()
+            except Exception:
+                pass
+            self._span_selector = None
+
+        ax = self._canvas.ax
+        self._span_selector = SpanSelector(
+            ax,
+            self._on_span_select,
+            direction="horizontal",
+            useblit=True,
+            props=dict(alpha=0.25, facecolor=THEME.WARN),
+            interactive=True,
+            drag_from_anywhere=True,
+        )
+
+    def _on_span_select(self, xmin: float, xmax: float) -> None:
+        """Called by SpanSelector after the user finishes dragging."""
+        if xmax - xmin < 1.0:   # ignore accidental single-clicks
+            return
+        mu0 = 0.5 * (xmin + xmax)
+        self._rf_xmin.setText(f"{xmin:.1f}")
+        self._rf_xmax.setText(f"{xmax:.1f}")
+        self._rf_mu0.setText(f"{mu0:.1f}")
+
+        action = self._span_action.currentIndex()
+        if action == 1:    # Auto Refit
+            self._do_refit()
+        elif action == 2:  # Auto Mean
+            self._do_use_mean()
 
     _HIST_CACHE_MAX = 30
 
@@ -999,6 +1054,7 @@ class ModuleDetailPanel(QWidget):
         self._canvas._style_ax(f"{name}  energy histogram (refit)",
                                 "Energy (MeV)", "Counts")
         self._canvas.redraw()
+        self._setup_span_selector()
 
     def _apply_and_save(self) -> None:
         """Update in-memory IterData metrics and write calibration JSON to disk."""
@@ -1469,7 +1525,8 @@ class EpCalibViewerWindow(QMainWindow):
         self._multiselect_btn.setToolTip(
             "Toggle multi-select mode\n"
             "Click modules to add/remove from selection (blue circle)\n"
-            "Then set a factor for all selected modules at once")
+            "Then set a factor for all selected modules at once,\n"
+            "or restore old factors (from .dat) for all selected modules")
         self._multiselect_btn.toggled.connect(self._map.set_multi_select_mode)
         batch_bar.addWidget(self._multiselect_btn)
         self._sel_count_lbl = QLabel("0 selected")
@@ -1495,6 +1552,13 @@ class EpCalibViewerWindow(QMainWindow):
             "Write the given factor to all selected modules and save JSON")
         self._batch_apply_btn.clicked.connect(self._do_batch_set_factor)
         batch_bar.addWidget(self._batch_apply_btn)
+        self._batch_restore_btn = QPushButton("\u21a9 Restore Old Factor")
+        self._batch_restore_btn.setEnabled(False)
+        self._batch_restore_btn.setToolTip(
+            "Restore old_factor (pre-iteration value from .dat) for all selected modules\n"
+            "and save JSON.  Modules without a .dat entry are skipped.")
+        self._batch_restore_btn.clicked.connect(self._do_batch_restore_old_factor)
+        batch_bar.addWidget(self._batch_restore_btn)
         self._batch_clear_btn = QPushButton("Clear Selection")
         self._batch_clear_btn.setEnabled(False)
         self._batch_clear_btn.clicked.connect(self._do_batch_clear_selection)
@@ -1739,6 +1803,7 @@ class EpCalibViewerWindow(QMainWindow):
         n = len(selected)
         self._sel_count_lbl.setText(f"{n} selected")
         self._batch_apply_btn.setEnabled(n > 0)
+        self._batch_restore_btn.setEnabled(n > 0)
         self._batch_clear_btn.setEnabled(n > 0)
 
     def _do_batch_clear_selection(self) -> None:
@@ -1792,6 +1857,59 @@ class EpCalibViewerWindow(QMainWindow):
 
         self.statusBar().showMessage(
             f"Set factor={value:.5f} for {len(updated)} module(s).  {note}", 6000)
+
+        # turn off multi-select mode, clear selection, refresh display
+        self._multiselect_btn.setChecked(False)
+        self._map.clear_selection()
+        self._refresh_map()
+        self._map.set_marked_modules(data.modified_modules)
+
+    def _do_batch_restore_old_factor(self) -> None:
+        """Restore old_factor (from .dat) for all multi-selected modules and save JSON."""
+        data = self._cur_data
+        if data is None:
+            return
+        selected = self._map.get_selected_modules()
+        if not selected:
+            return
+
+        updated: List[str] = []
+        skipped: List[str] = []
+        for name in selected:
+            mm = data.metrics.get(name)
+            if mm is None or mm.old_factor <= 0.0:
+                skipped.append(name)
+                continue
+            mm.factor = mm.old_factor
+            entry = data.factors.get(name)
+            if entry is not None:
+                entry["factor"] = mm.old_factor
+            data.modified_modules.add(name)
+            updated.append(name)
+
+        if not updated:
+            self.statusBar().showMessage(
+                "Batch restore: no modules had old_factor available (.dat not loaded?)", 6000)
+            return
+
+        jpath = data.json_path
+        if jpath is not None:
+            try:
+                entries = list(data.factors.values())
+                with open(jpath, "w") as fj:
+                    json.dump(entries, fj, indent=2)
+                note = f"saved {jpath.name}"
+            except Exception as exc:
+                self.statusBar().showMessage(
+                    f"Batch restore: save failed: {exc}", 6000)
+                return
+        else:
+            note = "JSON path not found — not saved"
+
+        msg = f"Restored old_factor for {len(updated)} module(s).  {note}"
+        if skipped:
+            msg += f"  ({len(skipped)} skipped — no old_factor)"
+        self.statusBar().showMessage(msg, 6000)
 
         # turn off multi-select mode, clear selection, refresh display
         self._multiselect_btn.setChecked(False)

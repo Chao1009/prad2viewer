@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
 
     std::string input_calib_file, output_calib_file;
     if (iteration == 1)
-        input_calib_file = db_dir + "/calibration/calibration_factor_0.json";
+        input_calib_file = db_dir + "/calibration/calibration_factor_2_0.json";
     else if (iteration > 1)
         input_calib_file = run_out_dir + Form("/calib_iter%d.json", iteration - 1);
     else {
@@ -271,9 +271,9 @@ int main(int argc, char *argv[])
                 prad2::SetRawReadBranches(tree, ev);
 
                 int run_num = get_run_int(root_files[fi]);
-                gRunConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
-                //auto gain_correction = prad2::ComputeGainCorrection(db_dir + 
-                //    "/" + gRunConfig.gain_data_dir, run_num, gRunConfig.gain_ref_run);
+                auto localConfig = LoadRunConfig(db_dir + "/runinfo/2p1_general.json", run_num);
+                //auto gain_correction = prad2::ComputeGainCorrection(db_dir +
+                //    "/" + localConfig.gain_data_dir, run_num, localConfig.gain_ref_run);
 
                 fdec::HyCalCluster clusterer(res->hycal);
                 fdec::ClusterConfig cl_cfg;
@@ -304,8 +304,8 @@ int main(int argc, char *argv[])
                             int bestIdx = -1;
                             float bestHeight = -1.f;
                             for(int p = 0; p < ev.npeaks[j]; ++p){
-                                if(ev.peak_time[j][p] > gRunConfig.hc_time_win_lo &&
-                                    ev.peak_time[j][p] < gRunConfig.hc_time_win_hi) {
+                                if(ev.peak_time[j][p] > localConfig.hc_time_win_lo &&
+                                    ev.peak_time[j][p] < localConfig.hc_time_win_hi) {
                                     if(ev.peak_integral[j][p] > bestHeight) {
                                         bestHeight = ev.peak_integral[j][p];
                                         bestIdx = p;

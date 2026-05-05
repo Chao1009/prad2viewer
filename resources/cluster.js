@@ -487,7 +487,8 @@ function plotGemResiduals(){
         if(!det || !det.dx_hist || !det.dx_hist.bins || !det.dx_hist.bins.length){
             Plotly.react(div,[],{...PL,
                 title:{text:`<span style="color:${gemColor}">GEM${d}</span> — No data`,
-                       font:{size:10,color:THEME.textDim}},
+                       font:{size:10,color:THEME.textDim},
+                       x:0.5,xanchor:'center',xref:'paper'},
                 margin:{l:35,r:8,t:24,b:24}},PC2);
             continue;
         }
@@ -515,7 +516,8 @@ function plotGemResiduals(){
             _residTrace(det.dx_hist,'#4dabf7','ΔX'),
             _residTrace(det.dy_hist,'#ff6b6b','ΔY'),
         ],{...PL,
-            title:{text:titleText,font:{size:11,color:THEME.text}},
+            title:{text:titleText,font:{size:11,color:THEME.text},
+                   x:0.5,xanchor:'center',xref:'paper'},
             xaxis:{...PL.xaxis,title:'Residual (mm)',
                 range:[det.dx_hist.min, det.dx_hist.min+det.dx_hist.bins.length*det.dx_hist.step]},
             yaxis:{...PL.yaxis,title:'Counts'},

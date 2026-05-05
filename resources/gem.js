@@ -126,14 +126,19 @@ function plotGemOccupancy(data) {
             yRange = [-det.y_size / 2 - padY, det.y_size / 2 + padY];
         }
 
+        // scaleanchor keeps mm in x and y at the same screen scale, so the
+        // detector frame is drawn at its true geometric ratio (matches the
+        // efficiency-grid panel on the right).
         const layout = Object.assign({}, PL_GEM_OCC(), {
             title: { text: titleText, font: { size: 11, color: THEME.text } },
             xaxis: { gridcolor: THEME.grid, zerolinecolor: THEME.border,
                      ticks: 'outside', ticklen: 3,
-                     range: xRange, autorange: xRange ? false : true },
+                     range: xRange, autorange: xRange ? false : true,
+                     constrain: 'domain' },
             yaxis: { gridcolor: THEME.grid, zerolinecolor: THEME.border,
                      ticks: 'outside', ticklen: 3,
-                     range: yRange, autorange: yRange ? false : true },
+                     range: yRange, autorange: yRange ? false : true,
+                     scaleanchor: 'x', scaleratio: 1, constrain: 'domain' },
             margin: showBar ? compactMarginR : compactMargin,
             shapes: shapes,
         });
@@ -432,17 +437,20 @@ function plotGemEffGrid(data) {
             yRange = [-det.y_size / 2 - padY, det.y_size / 2 + padY];
         }
 
-        // No scaleanchor here — GEM frames are ~1:2 portrait so locking aspect
-        // would leave wide margins inside the cell.  Each axis fills its half
-        // of the panel (matches plotGemOccupancy behavior).
+        // scaleanchor keeps mm in x and y at the same screen scale so the
+        // detector frame is drawn at its true geometric ratio.  GEM frames
+        // are ~1:2 portrait, so a wider cell will leave horizontal margin
+        // around the data area — that's the correct trade-off for accuracy.
         const layout = Object.assign({}, PL_GEM_EFF(), {
             title: { text: detName, font: { size: 11, color: frameColor } },
             xaxis: { gridcolor: THEME.grid, zerolinecolor: THEME.border,
                      ticks: 'outside', ticklen: 3,
-                     range: xRange, autorange: xRange ? false : true },
+                     range: xRange, autorange: xRange ? false : true,
+                     constrain: 'domain' },
             yaxis: { gridcolor: THEME.grid, zerolinecolor: THEME.border,
                      ticks: 'outside', ticklen: 3,
-                     range: yRange, autorange: yRange ? false : true },
+                     range: yRange, autorange: yRange ? false : true,
+                     scaleanchor: 'x', scaleratio: 1, constrain: 'domain' },
             margin: showBar ? compactMarginR : compactMargin,
             shapes: shapes,
         });

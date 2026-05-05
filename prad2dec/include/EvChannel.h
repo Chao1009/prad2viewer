@@ -201,6 +201,15 @@ public:
     // Returns empty string if no EPICS data found.
     std::string ExtractEpicsText() const;
 
+    // --- DAQ config extraction (call when GetEventType() == Prestart) -------
+    //
+    // PRESTART events carry a 0xE10E STRING bank that holds the full
+    // concatenated DAQ configuration text used by the run (TI / DSC2 /
+    // FADC / TDC / SSP / VTP / TS settings, per-channel pedestals & gains,
+    // trigger masks, etc.).  Returns the text payload (newline-separated
+    // lines as written by CODA), or empty if the bank is absent.
+    std::string ExtractDaqConfigText() const;
+
     // debug
     void PrintTree(std::ostream &os) const;
 

@@ -536,4 +536,48 @@ inline void SetEpicsReadBranches(TTree *tree, RawEpicsData &ep)
     // (Pointers must outlive each GetEntry call.)
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Run-info tree ("runinfo") — write / read
+//
+// One row per CODA control event (PRESTART / GO / END); the PRESTART row
+// is the one carrying the long `daq_config` text.  The string branch is
+// stored directly (ROOT serializes std::string fine) — readers bind via
+// std::string* like the EPICS vector branches.
+// ─────────────────────────────────────────────────────────────────────────
+inline void SetRunInfoWriteBranches(TTree *tree, RawRunInfo &ri)
+{
+    tree->Branch("run_number", &ri.run_number, "run_number/i");
+    tree->Branch("unix_time",  &ri.unix_time,  "unix_time/i");
+    tree->Branch("run_type",   &ri.run_type,   "run_type/b");
+    tree->Branch("event_tag",  &ri.event_tag,  "event_tag/b");
+    tree->Branch("daq_config", &ri.daq_config);
+}
+
+inline void SetRunInfoReadBranches(TTree *tree, RawRunInfo &ri)
+{
+    auto bind = [&](const char *name, void *addr) {
+        if (tree->GetBranch(name)) tree->SetBranchAddress(name, addr);
+    };
+    bind("run_number", &ri.run_number);
+    bind("unix_time",  &ri.unix_time);
+    bind("run_type",   &ri.run_type);
+    bind("event_tag",  &ri.event_tag);
+    // String branch: callers that need to read should bind their own
+    // held pointer, e.g.
+    //   auto *sp = &ri.daq_config;
+    //   tree->SetBranchAddress("daq_config", &sp);
+}
+
+inline void FillRunInfoRow(const psync::SyncInfo &sync,
+                           const std::string     &daq_config_text,
+                           RawRunInfo            &out)
+{
+    out = RawRunInfo{};
+    out.run_number = sync.run_number;
+    out.unix_time  = sync.unix_time;
+    out.run_type   = sync.run_type;
+    out.event_tag  = static_cast<uint8_t>(sync.event_tag & 0xFFu);
+    out.daq_config = daq_config_text;
+}
+
 } // namespace prad2

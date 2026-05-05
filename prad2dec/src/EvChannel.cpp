@@ -935,6 +935,38 @@ std::string EvChannel::ExtractEpicsText() const
     return std::string(raw, len);
 }
 
+// === DAQ config text extraction =============================================
+//
+// PRESTART events carry a 0xE10E STRING bank with the full concatenated DAQ
+// configuration file the run was started with (TI / DSC / FADC / TDC / SSP /
+// VTP / TS settings, pedestals & gains, trigger masks).  We pull the text by
+// configured tag and strip null padding, mirroring ExtractEpicsText().
+
+std::string EvChannel::ExtractDaqConfigText() const
+{
+    auto cfg_nodes = FindByTag(config.daq_config_tag);
+    if (cfg_nodes.empty()) return {};
+
+    // First STRING-typed bank wins (0xE10E is declared STRING in the
+    // bank-structure JSON, but tolerate CHAR8 in case a future format
+    // change relabels the type).
+    const EvNode *picked = nullptr;
+    for (const EvNode *n : cfg_nodes) {
+        if (n->type == DATA_CHARSTAR8 || n->type == DATA_CHAR8) {
+            picked = n;
+            break;
+        }
+    }
+    if (!picked) picked = cfg_nodes.front();
+    if (picked->data_words == 0) return {};
+
+    const char *raw = reinterpret_cast<const char*>(&buffer[picked->data_begin]);
+    size_t max_len = picked->data_words * sizeof(uint32_t);
+    size_t len = 0;
+    while (len < max_len && raw[len] != '\0') ++len;
+    return std::string(raw, len);
+}
+
 // === PrintTree ==============================================================
 void EvChannel::PrintTree(std::ostream &os) const
 {

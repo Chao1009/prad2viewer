@@ -223,10 +223,17 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     // EventData_io.h for the format and the join-by-event_number scheme.
     TTree *scalers_tree = new TTree("scalers", "PRad2 DSC2 scaler readouts");
     TTree *epics_tree   = new TTree("epics",   "PRad2 EPICS slow control");
+    // One row per CODA control event.  The PRESTART row is the one that
+    // carries the long DAQ-config text (0xE10E STRING bank); GO and END
+    // are recorded too so analysis can recover the run start/end time
+    // even when no PRESTART is in the input.
+    TTree *runinfo_tree = new TTree("runinfo", "PRad2 control events / DAQ config");
     auto sc_row = std::make_unique<prad2::RawScalerData>();
     auto ep_row = std::make_unique<prad2::RawEpicsData>();
-    prad2::SetScalerWriteBranches(scalers_tree, *sc_row);
-    prad2::SetEpicsWriteBranches  (epics_tree,  *ep_row);
+    auto ri_row = std::make_unique<prad2::RawRunInfo>();
+    prad2::SetScalerWriteBranches (scalers_tree, *sc_row);
+    prad2::SetEpicsWriteBranches  (epics_tree,   *ep_row);
+    prad2::SetRunInfoWriteBranches(runinfo_tree, *ri_row);
 
     auto event = std::make_unique<fdec::EventData>();
     auto ssp_evt = std::make_unique<ssp::SspEventData>();
@@ -262,7 +269,23 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
         // (parsing, anchoring with last_physics_event_number, applying the
         // DSC2 source/channel selection) lives in prad2dec; this is just a
         // copy step.
-        if (ch.GetEventType() == evc::EventType::Epics) {
+        const auto et = ch.GetEventType();
+        if (et == evc::EventType::Prestart ||
+            et == evc::EventType::Go       ||
+            et == evc::EventType::End)
+        {
+            // ch.Sync() is auto-updated by Scan() on every control event,
+            // so it carries this event's run_number / unix_time / run_type.
+            // The 0xE10E DAQ-config STRING bank only ships on PRESTART;
+            // ExtractDaqConfigText() returns "" for GO/END, which is fine.
+            std::string cfg_text;
+            if (et == evc::EventType::Prestart)
+                cfg_text = ch.ExtractDaqConfigText();
+            prad2::FillRunInfoRow(ch.Sync(), cfg_text, *ri_row);
+            runinfo_tree->Fill();
+            continue;
+        }
+        if (et == evc::EventType::Epics) {
             const auto &rec = ch.Epics();
             if (rec.present) {
                 prad2::FillEpicsRow(rec, *ep_row);
@@ -270,7 +293,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             }
             continue;
         }
-        if (ch.GetEventType() != evc::EventType::Physics) continue;
+        if (et != evc::EventType::Physics) continue;
 
         // Snapshot raw 0xE10C SSP trigger bank for this read group (one bank
         // per CODA event, shared by all sub-events from this Read()).
@@ -424,6 +447,7 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
     tree->Write();
     scalers_tree->Write();
     epics_tree->Write();
+    runinfo_tree->Write();
     delete outfile;
     return true;
 }
@@ -548,10 +572,13 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     // working regardless of which replay output the user opens.
     TTree *scalers_tree = new TTree("scalers", "PRad2 DSC2 scaler readouts");
     TTree *epics_tree   = new TTree("epics",   "PRad2 EPICS slow control");
+    TTree *runinfo_tree = new TTree("runinfo", "PRad2 control events / DAQ config");
     auto sc_row = std::make_unique<prad2::RawScalerData>();
     auto ep_row = std::make_unique<prad2::RawEpicsData>();
-    prad2::SetScalerWriteBranches(scalers_tree, *sc_row);
-    prad2::SetEpicsWriteBranches  (epics_tree,  *ep_row);
+    auto ri_row = std::make_unique<prad2::RawRunInfo>();
+    prad2::SetScalerWriteBranches (scalers_tree, *sc_row);
+    prad2::SetEpicsWriteBranches  (epics_tree,   *ep_row);
+    prad2::SetRunInfoWriteBranches(runinfo_tree, *ri_row);
 
     //initialize tools for event decoder and cluster reconstruction
     auto event = std::make_unique<fdec::EventData>();
@@ -581,7 +608,19 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
         if (!ch.Scan()) continue;
 
         // Slow-control side trees (see Process() for the rationale).
-        if (ch.GetEventType() == evc::EventType::Epics) {
+        const auto et = ch.GetEventType();
+        if (et == evc::EventType::Prestart ||
+            et == evc::EventType::Go       ||
+            et == evc::EventType::End)
+        {
+            std::string cfg_text;
+            if (et == evc::EventType::Prestart)
+                cfg_text = ch.ExtractDaqConfigText();
+            prad2::FillRunInfoRow(ch.Sync(), cfg_text, *ri_row);
+            runinfo_tree->Fill();
+            continue;
+        }
+        if (et == evc::EventType::Epics) {
             const auto &rec = ch.Epics();
             if (rec.present) {
                 prad2::FillEpicsRow(rec, *ep_row);
@@ -589,7 +628,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
             }
             continue;
         }
-        if (ch.GetEventType() != evc::EventType::Physics) continue;
+        if (et != evc::EventType::Physics) continue;
 
         // Snapshot raw 0xE10C SSP trigger bank for this read group.
         std::vector<uint32_t> ssp_raw_snapshot;
@@ -835,6 +874,7 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
     tree->Write();
     scalers_tree->Write();
     epics_tree->Write();
+    runinfo_tree->Write();
     delete outfile;
 
     return true;

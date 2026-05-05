@@ -1070,6 +1070,33 @@ int run(const std::vector<std::string> &input_files,
         out_ep->Write();
     }
 
+    // Pass through the runinfo tree (1 row per CODA control event,
+    // including the long DAQ-config text on PRESTART).  No filtering
+    // applied — the whole point of this tree is run-scoped metadata.
+    {
+        prad2::RawRunInfo ri;
+        std::string      *sp = &ri.daq_config;
+        out->cd();
+        TTree *out_ri = new TTree("runinfo",
+                                  "PRad2 control events / DAQ config (concatenated)");
+        prad2::SetRunInfoWriteBranches(out_ri, ri);
+        for (const auto &path : input_files) {
+            std::unique_ptr<TFile> f(TFile::Open(path.c_str(), "READ"));
+            TTree *t = dynamic_cast<TTree *>(f->Get("runinfo"));
+            if (!t) continue;
+            prad2::SetRunInfoReadBranches(t, ri);
+            t->SetBranchAddress("daq_config", &sp);
+            Long64_t n = t->GetEntries();
+            for (Long64_t i = 0; i < n; ++i) {
+                ri.daq_config.clear();
+                t->GetEntry(i);
+                out->cd();
+                out_ri->Fill();
+            }
+        }
+        out_ri->Write();
+    }
+
     out->Close();
 
     // ---------- Phase 6: write the JSON report ----------

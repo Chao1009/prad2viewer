@@ -266,4 +266,25 @@ struct RawEpicsData {
     std::vector<double>      value;
 };
 
+// ── Run-start metadata ("runinfo" tree) ──────────────────────────────────
+//
+// One row per CODA control event encountered (PRESTART / GO / END), but
+// in normal practice only the PRESTART row carries a non-empty
+// `daq_config` payload — that's the 0xE10E STRING bank holding the full
+// concatenated DAQ configuration text the run was started with.  GO and
+// END are emitted with `daq_config` empty so analysis can reconstruct
+// the run's start/stop times even when no PRESTART is in the input
+// (e.g. processing a non-zero split file in isolation).
+//
+// `event_tag` distinguishes which control event this row came from:
+//   0x11 = PRESTART, 0x12 = GO, 0x14 = END (CODA2 tags; CODA3 0xFFD1/2/4
+// are normalized down to these by SyncInfo).
+struct RawRunInfo {
+    uint32_t    run_number  = 0;
+    uint32_t    unix_time   = 0;     // absolute Unix seconds
+    uint8_t     run_type    = 0;     // 0 for GO/END; non-zero on PRESTART
+    uint8_t     event_tag   = 0;     // 0x11 / 0x12 / 0x14
+    std::string daq_config;          // full 0xE10E text (empty on GO/END)
+};
+
 } // namespace prad2

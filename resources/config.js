@@ -139,6 +139,11 @@ function applyConfig(data){
         nblocksMax=data.nblocks_hist.max||40;
         nblocksStep=data.nblocks_hist.step||1;
     }
+    if(data.raw_energy_hist){
+        rawEnergyMin=data.raw_energy_hist.min||0;
+        rawEnergyMax=data.raw_energy_hist.max||6000;
+        rawEnergyStep=data.raw_energy_hist.step||20;
+    }
     initClHist();
     if(data.lms){
         g_lmsWarnThresh=data.lms.warn_threshold||0.1;

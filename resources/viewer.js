@@ -531,6 +531,7 @@ function init(){
     };
 
     registerPlot('cl-energy-hist',  'cluster', 'Cluster Energy');
+    registerPlot('cl-rawe-hist',   'cluster', 'Raw Energy Sum');
     registerPlot('cl-nclust-hist', 'cluster', 'Clusters per Event');
     registerPlot('cl-nblocks-hist','cluster', 'Blocks per Cluster');
     for (let d = 0; d < 4; d++)
@@ -538,8 +539,18 @@ function init(){
     registerPlot('gem-eff-xy', 'gem', null);
     registerPlot('gem-eff-zy', 'gem', null);
     setupCopyBtn('btn-copy-cl-hist', ()=>currentClHist);
+    setupCopyBtn('btn-copy-cl-rawe', ()=>currentRawEnergyHist);
     setupCopyBtn('btn-copy-nclust', ()=>currentNclustHist);
     setupCopyBtn('btn-copy-nblocks', ()=>currentNblocksHist);
+
+    // cluster energy / raw energy column divider (sibling of cl-stat-row).
+    setupDivider('div-cl-eh','x',
+        ()=>document.querySelector('.cl-hist-cell'),
+        ()=>document.querySelector('.cl-hist-row'),
+        ()=>0, 80, 80, ()=>{
+            try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}
+            try{Plotly.Plots.resize('cl-rawe-hist');}catch(e){}
+        });
 
     // cluster stat row column divider
     setupDivider('div-cl-stat','x',
@@ -597,6 +608,7 @@ function init(){
     document.getElementById('heighthist-logy').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };
     document.getElementById('inthist-logy').onchange=()=>{ if(selectedModule) showHistograms(selectedModule); };
     document.getElementById('clhist-logy').onchange=plotClHist;
+    document.getElementById('clrawe-logy').onchange=plotRawEnergyHist;
     setupCopyBtn('btn-copy-lms', ()=>currentLmsData);
 
     // cluster panel divider: histogram ↔ table
@@ -604,7 +616,10 @@ function init(){
         ()=>document.getElementById('cl-hist-panel'),
         ()=>document.getElementById('cluster-panel'),
         ()=>0,
-        80, 80, ()=>{try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}});
+        80, 80, ()=>{
+            try{Plotly.Plots.resize('cl-energy-hist');}catch(e){}
+            try{Plotly.Plots.resize('cl-rawe-hist');}catch(e){}
+        });
 
     registerPlot('lms-plot', 'lms', 'LMS History');
     registerPlot('physics-plot',       'physics', null, PC_EPICS);

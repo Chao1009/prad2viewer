@@ -292,6 +292,12 @@ void AppState::init(const std::string &db_dir,
             if (bh.contains("max"))  nblocks_hist_max  = bh["max"];
             if (bh.contains("step")) nblocks_hist_step = bh["step"];
         }
+        if (hh.contains("raw_energy_hist")) {
+            auto &rh = hh["raw_energy_hist"];
+            if (rh.contains("min"))  raw_energy_hist_min  = rh["min"];
+            if (rh.contains("max"))  raw_energy_hist_max  = rh["max"];
+            if (rh.contains("step")) raw_energy_hist_step = rh["step"];
+        }
     }
 
     if (mcfg.contains("lms_monitor")) {
@@ -543,6 +549,9 @@ void AppState::init(const std::string &db_dir,
     nclusters_hist.init(nb_nclusters);
     int nb_blocks = std::max(1, (nblocks_hist_max - nblocks_hist_min) / nblocks_hist_step);
     nblocks_hist.init(nb_blocks);
+    int re_nbins = std::max(1, (int)std::ceil(
+        (raw_energy_hist_max - raw_energy_hist_min) / raw_energy_hist_step));
+    raw_energy_hist.init(re_nbins);
     cluster_energy_hist_by_ncl.assign(nb_nclusters, Histogram{});
     nblocks_hist_by_ncl.assign(nb_nclusters, Histogram{});
     for (auto &h : cluster_energy_hist_by_ncl) h.init(cl_nbins);

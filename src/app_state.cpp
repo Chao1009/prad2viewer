@@ -475,6 +475,10 @@ void AppState::processEvent(fdec::EventData &event,
     // clustering setup (stack-allocated, per-event)
     fdec::HyCalCluster clusterer(hycal);
     if (do_cluster) clusterer.SetConfig(cluster_cfg);
+    // Sum of every module's reconstructed energy this event — fed into
+    // the "Raw Energy Sum" histogram below (sum is taken before clustering
+    // so isolated hits below the cluster threshold still count).
+    float total_module_energy = 0.f;
 
     // LMS timing
     double lms_time = 0;
@@ -580,6 +584,7 @@ void AppState::processEvent(fdec::EventData &event,
                                 ? static_cast<float>(mod->energize(adc_val))
                                 : adc_val * adc_to_mev;
                             clusterer.AddHit(mod->index, energy, 0.f);
+                            total_module_energy += energy;
                         }
                     }
                 }
@@ -657,6 +662,7 @@ void AppState::processEvent(fdec::EventData &event,
             }
         }
         nclusters_hist.fill(reco_hits.size(), nclusters_hist_min, nclusters_hist_step);
+        raw_energy_hist.fill(total_module_energy, raw_energy_hist_min, raw_energy_hist_step);
         cluster_events_processed++;
 
         bool physics_accept = physics_trigger(tb);
@@ -780,9 +786,14 @@ void AppState::processReconEvent(const ReconEventData &recon)
                     ncl_bucket = b;
             }
         }
+        // Recon path has no per-module energies, so the closest analog
+        // to the raw energy sum is the sum of cluster energies (the same
+        // value the GUI shows in the cluster-tab summary as "ECl Sum").
+        float total_cluster_energy = 0.f;
         for (auto &cl : recon.clusters) {
             cluster_energy_hist.fill(cl.energy, cl_hist_min, cl_hist_step);
             nblocks_hist.fill(cl.nblocks, nblocks_hist_min, nblocks_hist_step);
+            total_cluster_energy += cl.energy;
             if (ncl_bucket >= 0) {
                 cluster_energy_hist_by_ncl[ncl_bucket].fill(
                     cl.energy, cl_hist_min, cl_hist_step);
@@ -791,6 +802,7 @@ void AppState::processReconEvent(const ReconEventData &recon)
             }
         }
         nclusters_hist.fill(recon.clusters.size(), nclusters_hist_min, nclusters_hist_step);
+        raw_energy_hist.fill(total_cluster_energy, raw_energy_hist_min, raw_energy_hist_step);
         cluster_events_processed++;
     }
 
@@ -1613,6 +1625,7 @@ void AppState::clearHistograms()
     cluster_energy_hist.clear();
     nclusters_hist.clear();
     nblocks_hist.clear();
+    raw_energy_hist.clear();
     for (auto &h : cluster_energy_hist_by_ncl) h.clear();
     for (auto &h : nblocks_hist_by_ncl)        h.clear();
     energy_angle_hist.clear();

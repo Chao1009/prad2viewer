@@ -49,6 +49,8 @@ json AppState::apiClusterHist() const
         nclusters_hist_min, nclusters_hist_max, nclusters_hist_step);
     r["nblocks"] = histToJson(nblocks_hist,
         (float)nblocks_hist_min, (float)nblocks_hist_max, (float)nblocks_hist_step);
+    r["raw_energy"] = histToJson(raw_energy_hist,
+        raw_energy_hist_min, raw_energy_hist_max, raw_energy_hist_step);
     // Per-Ncl bucket dependent histograms — bins_by_ncl[i] is the
     // bins array of the i-th bucket (same indexing as nclusters_hist).
     // Frontend uses these to redraw the energy / blocks histos when the
@@ -525,6 +527,7 @@ void AppState::fillConfigJson(json &cfg) const
     cfg["cluster_hist"] = {{"min", cl_hist_min}, {"max", cl_hist_max}, {"step", cl_hist_step}};
     cfg["nclusters_hist"] = {{"min", nclusters_hist_min}, {"max", nclusters_hist_max}, {"step", nclusters_hist_step}};
     cfg["nblocks_hist"] = {{"min", nblocks_hist_min}, {"max", nblocks_hist_max}, {"step", nblocks_hist_step}};
+    cfg["raw_energy_hist"] = {{"min", raw_energy_hist_min}, {"max", raw_energy_hist_max}, {"step", raw_energy_hist_step}};
     cfg["color_ranges"] = apiColorRanges();
     cfg["refresh_ms"] = {{"event", refresh_event_ms}, {"ring", refresh_ring_ms},
                          {"histogram", refresh_hist_ms}, {"lms", refresh_lms_ms}};

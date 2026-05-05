@@ -394,6 +394,12 @@ struct AppState {
     int      nblocks_hist_min    = 0;
     int      nblocks_hist_max    = 40;
     int      nblocks_hist_step   = 1;
+    // Raw (per-event) HyCal energy sum: total energy deposited across all
+    // modules before clustering.  Wider range than energy_hist because a
+    // single Moller event can deposit ~Eb across two clusters.
+    float    raw_energy_hist_min  = 0.f;
+    float    raw_energy_hist_max  = 6000.f;
+    float    raw_energy_hist_step = 20.f;
 
     // ---- Event filters (loaded from external JSON via loadFilter) -----------
     // trigger_type filter: if enabled, only events with trigger_type in accept pass
@@ -426,6 +432,7 @@ struct AppState {
     Histogram cluster_energy_hist;
     Histogram nclusters_hist;
     Histogram nblocks_hist;
+    Histogram raw_energy_hist;     // sum of all module energies per event
     // Per-Ncl-bucket dependent histograms.  Index = the bucket of the
     // event's Ncl in nclusters_hist (i.e. floor((Ncl - min) / step)),
     // so size matches nclusters_hist.bins.size() once init() runs.

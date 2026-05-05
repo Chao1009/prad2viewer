@@ -18,6 +18,10 @@ let clHistBins=null, clHistEvents=0;
 let clHistMin=0, clHistMax=3000, clHistStep=10;
 let currentClHist=null;  // {x:[], y:[]} for copy button
 let currentNclustHist=null, currentNblocksHist=null;
+// per-event sum of all module energies — sibling of the cluster energy hist.
+let rawEnergyBins=null;
+let rawEnergyMin=0, rawEnergyMax=6000, rawEnergyStep=20;
+let currentRawEnergyHist=null;
 
 // cluster count histograms (configurable via monitor_config.json hycal_hist section)
 let nclustBins=null, nblocksBins=null;
@@ -220,6 +224,9 @@ function initClHist(){
     nblocksBins=new Array(Math.ceil((nblocksMax-nblocksMin)/nblocksStep)).fill(0);
     currentNclustHist=null;
     currentNblocksHist=null;
+    const rebins=Math.max(1,Math.ceil((rawEnergyMax-rawEnergyMin)/rawEnergyStep));
+    rawEnergyBins=new Array(rebins).fill(0);
+    currentRawEnergyHist=null;
 }
 
 function fetchClHist(){
@@ -244,6 +251,12 @@ function fetchClHist(){
             nblocksStep=data.nblocks.step ?? 1;
             nblocksBins=data.nblocks.bins;
         }
+        if(data.raw_energy&&data.raw_energy.bins&&data.raw_energy.bins.length){
+            rawEnergyMin=data.raw_energy.min ?? 0;
+            rawEnergyMax=data.raw_energy.max ?? 6000;
+            rawEnergyStep=data.raw_energy.step ?? 20;
+            rawEnergyBins=data.raw_energy.bins;
+        }
         // Per-Ncl bucket arrays (added 2026-04 — older servers omit them,
         // in which case selection just falls back to the unfiltered hist).
         clEnergyBinsByNcl = Array.isArray(data.bins_by_ncl)
@@ -256,7 +269,7 @@ function fetchClHist(){
                 || selectedNcl >= clEnergyBinsByNcl.length)) {
             selectedNcl = -1;
         }
-        plotClHist(); plotClStatHists();
+        plotClHist(); plotClStatHists(); plotRawEnergyHist();
     }).catch(()=>{});
 }
 
@@ -336,6 +349,33 @@ function plotClHist(){
             type:document.getElementById('clhist-logy').checked?'log':'linear'},
         bargap:0.05,
         shapes:refShapes('cluster_energy'),
+    },PC2);
+}
+
+function plotRawEnergyHist(){
+    const div='cl-rawe-hist';
+    const bins=rawEnergyBins;
+    if(!bins||!bins.length){
+        currentRawEnergyHist=null;
+        Plotly.react(div,[],{...PL,title:{text:'Raw Energy Sum — No data',font:{size:10,color:THEME.textMuted}}},PC2);
+        return;
+    }
+    const x=bins.map((_,i)=>rawEnergyMin+(i+0.5)*rawEnergyStep);
+    const entries=bins.reduce((a,b)=>a+b,0);
+    const cx=[],cy=[];
+    for(let i=0;i<bins.length;i++){if(bins[i]>0){cx.push(x[i]);cy.push(bins[i]);}}
+    currentRawEnergyHist={x:cx,y:cy};
+
+    Plotly.react(div,[{
+        x,y:bins,type:'bar',marker:{color:'#ffa94d',line:{width:0}},
+        hovertemplate:'%{x:.0f} MeV: %{y}<extra></extra>',
+    }],{...PL,
+        title:{text:`Raw Energy Sum<br><span style="font-size:9px;color:var(--theme-text-dim)">${entries} evts</span>`,font:{size:10,color:THEME.textDim}},
+        xaxis:{...PL.xaxis,title:'ΣE (MeV)',range:[rawEnergyMin,rawEnergyMax]},
+        yaxis:{...PL.yaxis,title:'Counts',
+            type:document.getElementById('clrawe-logy').checked?'log':'linear'},
+        bargap:0.05,
+        shapes:refShapes('raw_energy'),
     },PC2);
 }
 

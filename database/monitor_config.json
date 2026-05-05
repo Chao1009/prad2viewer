@@ -42,7 +42,13 @@
         "reject_trigger_bits": ["LMS", "Alpha", "Pulser"],
         "energy_hist": {
             "min": 0,
-            "max": 4000,
+            "max": 5000,
+            "step": 10
+        },
+        "raw_energy_hist": {
+            "// Per-event sum of all module energies (pre-clustering).": "",
+            "min": 0,
+            "max": 5000,
             "step": 10
         },
         "nclusters_hist": {
@@ -122,7 +128,7 @@
             "angle_max": 8.0,
             "angle_step": 0.2,
             "energy_min": 0.0,
-            "energy_max": 4000.0,
+            "energy_max": 5000.0,
             "energy_step": 100.0
         },
         "moller": {

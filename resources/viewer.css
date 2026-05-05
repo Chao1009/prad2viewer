@@ -220,7 +220,8 @@ body { font-family:'Consolas','SF Mono',monospace; background:var(--bg); color:v
 .cl-resid-grid { flex:none; height:25%; min-height:130px; display:grid;
     grid-template-rows:1fr; grid-template-columns:repeat(4, 1fr); gap:2px; padding:2px; }
 .cl-resid-cell { min-width:0; min-height:0; position:relative; }
-.cl-hist-panel { flex:none; height:28%; min-height:80px; position:relative; }
+.cl-hist-row { flex:none; height:28%; min-height:80px; display:flex; flex-direction:row; }
+.cl-hist-cell { flex:1; min-width:0; position:relative; }
 .cl-stat-row { flex:none; height:18%; min-height:60px; display:flex; flex-direction:row; }
 .cl-stat-cell { flex:1; min-width:0; position:relative; }
 .cluster-info-wrap { flex:1; min-height:80px; overflow-y:auto; font-size:12px; }

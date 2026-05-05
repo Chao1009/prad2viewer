@@ -245,6 +245,10 @@ registerReportSection({id:'cluster',title:'Clustering',order:3,
         md+=await captureHist(clHistBins,clHistMin,clHistStep,
             `Cluster Energy (${clHistEvents} evts)`,'Energy (MeV)','#ff922b',
             'cluster_energy.png',800,300);
+        if(rawEnergyBins&&rawEnergyBins.some(b=>b>0))
+            md+=await captureHist(rawEnergyBins,rawEnergyMin,rawEnergyStep,
+                'Raw Energy Sum','ΣE (MeV)','#ffa94d',
+                'raw_energy_sum.png',800,300);
         md+=await captureHist(nclustBins,nclustMin,nclustStep,
             'Clusters per Event','# Clusters','#00b4d8',
             'clusters_per_event.png',500,300);
@@ -508,6 +512,10 @@ async function refreshDataForReport(){
         if(d.nblocks&&d.nblocks.bins&&d.nblocks.bins.length){
             nblocksMin=d.nblocks.min||0; nblocksMax=d.nblocks.max||40;
             nblocksStep=d.nblocks.step||1; nblocksBins=d.nblocks.bins;
+        }
+        if(d.raw_energy&&d.raw_energy.bins&&d.raw_energy.bins.length){
+            rawEnergyMin=d.raw_energy.min||0; rawEnergyMax=d.raw_energy.max||6000;
+            rawEnergyStep=d.raw_energy.step||20; rawEnergyBins=d.raw_energy.bins;
         }
     }).catch(()=>{}));
     // LMS section fetches its own data with LMS3 ref

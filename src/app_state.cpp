@@ -947,20 +947,21 @@ void AppState::processGemEvent(const ssp::SspEventData &ssp_evt)
     if (!gem_enabled || ssp_evt.nmpds == 0) return;
     prepareGemForView(ssp_evt);
 
-    // Strip-level diagnostic: fill per-detector occupancy in raw local coords
-    // so bin edges line up with the readout grid.  No target assumption is
+    // Strip-level diagnostic: fill per-detector occupancy over the active
+    // strip extent (smaller than PlaneConfig.size on the beam-hole side
+    // because pos=11 reuses pos=10 via shared_pos) so the heatmap matches
+    // the dashed detector frame drawn in the GUI.  No target assumption is
     // made here — lab-frame plots live in the matching/efficiency views.
     std::lock_guard<std::mutex> lk(data_mtx);
     const int n_dets = std::min<int>(gem_sys.GetNDetectors(),
                                      (int)gem_transforms.size());
     for (int d = 0; d < n_dets; ++d) {
-        auto &det = gem_sys.GetDetectors()[d];
-        float xSize = det.planes[0].size;
-        float ySize = det.planes[1].size;
-        float xStep = xSize / GEM_OCC_NX;
-        float yStep = ySize / GEM_OCC_NY;
+        auto xr = gem_sys.GetActiveExtent(d, 0);
+        auto yr = gem_sys.GetActiveExtent(d, 1);
+        const float xStep = (xr.second - xr.first) / GEM_OCC_NX;
+        const float yStep = (yr.second - yr.first) / GEM_OCC_NY;
         for (auto &h : gem_sys.GetHits(d))
-            gem_occupancy[d].fill(h.x, h.y, -xSize/2, xStep, -ySize/2, yStep);
+            gem_occupancy[d].fill(h.x, h.y, xr.first, xStep, yr.first, yStep);
     }
 }
 
@@ -1071,11 +1072,18 @@ nlohmann::json AppState::apiGemOccupancy() const
     json dets = json::array();
     for (int d = 0; d < gem_sys.GetNDetectors(); ++d) {
         auto &det = gem_sys.GetDetectors()[d];
+        // Active strip extent in detector-local coords (mm).  See
+        // GemSystem::GetActiveExtent — tighter than PlaneConfig.size on the
+        // inner-edge side; matches the bin range used in processGemEvent.
+        auto xr = gem_sys.GetActiveExtent(d, 0);
+        auto yr = gem_sys.GetActiveExtent(d, 1);
         json dj;
         dj["id"] = det.id;
         dj["name"] = det.name;
         dj["x_size"] = det.planes[0].size;
         dj["y_size"] = det.planes[1].size;
+        dj["x_active"] = json::array({xr.first, xr.second});
+        dj["y_active"] = json::array({yr.first, yr.second});
         dj["nx"] = GEM_OCC_NX;
         dj["ny"] = GEM_OCC_NY;
         dj["bins"] = gem_occupancy[d].bins;
@@ -1522,22 +1530,24 @@ void AppState::runGemEfficiency(int event_id,
             }
         }
         if (idx >= 0) gem_eff_num[test_d]++;
-        // Local-coord eff grid: bin the predicted point on test_d's plane.
-        // Predictions outside the active area land in the Histogram2D's
-        // out-of-range branch (no fill), keeping the heatmap aligned with
-        // the dashed detector frame drawn in the GUI.
+        // Local-coord eff grid: bin the predicted point on test_d's plane
+        // over the *active* strip extent (smaller than PlaneConfig.size on
+        // the beam-hole side because the inner-edge APV reuses strip numbers
+        // via shared_pos — see GemSystem::GetActiveExtent).  Predictions
+        // outside the active extent fall in the Histogram2D out-of-range
+        // branch (no fill), so the heatmap matches the dashed detector
+        // frame drawn in the GUI.
         if (test_d < (int)gem_eff_grid_den.size()
             && test_d < gem_sys.GetNDetectors()) {
-            const auto &det_t = gem_sys.GetDetectors()[test_d];
-            const float xSize = det_t.planes[0].size;
-            const float ySize = det_t.planes[1].size;
-            const float xStep = xSize / gem_eff_grid_nx;
-            const float yStep = ySize / gem_eff_grid_ny;
-            const float xMin  = -xSize * 0.5f;
-            const float yMin  = -ySize * 0.5f;
-            gem_eff_grid_den[test_d].fill(pred_lx, pred_ly, xMin, xStep, yMin, yStep);
+            auto xr = gem_sys.GetActiveExtent(test_d, 0);
+            auto yr = gem_sys.GetActiveExtent(test_d, 1);
+            const float xStep = (xr.second - xr.first) / gem_eff_grid_nx;
+            const float yStep = (yr.second - yr.first) / gem_eff_grid_ny;
+            gem_eff_grid_den[test_d].fill(pred_lx, pred_ly,
+                                           xr.first, xStep, yr.first, yStep);
             if (idx >= 0)
-                gem_eff_grid_num[test_d].fill(pred_lx, pred_ly, xMin, xStep, yMin, yStep);
+                gem_eff_grid_num[test_d].fill(pred_lx, pred_ly,
+                                               xr.first, xStep, yr.first, yStep);
         }
 
         // Snapshot — record the latest successful LOO test for the GUI.

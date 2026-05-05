@@ -109,21 +109,32 @@ function plotGemOccupancy(data) {
 
         // Dashed detector frame outline — visible even when no events have
         // accumulated yet (heatmap is uniformly zero), so the active area is
-        // always shown.  Plus an explicit axis range pinned to the detector
-        // size so the frame doesn't shift around when events first arrive.
+        // always shown.  Use x_active/y_active when the API provides them
+        // (true mapped strip extent; tighter than the bbox on the beam-hole
+        // side).  Falls back to ±size/2 for older responses.
         const shapes = [];
         let xRange = null, yRange = null;
-        if (det && det.x_size && det.y_size) {
+        const xa = det && det.x_active;
+        const ya = det && det.y_active;
+        const xLo = (xa && xa.length === 2) ? xa[0]
+                  : (det && det.x_size) ? -det.x_size / 2 : null;
+        const xHi = (xa && xa.length === 2) ? xa[1]
+                  : (det && det.x_size) ?  det.x_size / 2 : null;
+        const yLo = (ya && ya.length === 2) ? ya[0]
+                  : (det && det.y_size) ? -det.y_size / 2 : null;
+        const yHi = (ya && ya.length === 2) ? ya[1]
+                  : (det && det.y_size) ?  det.y_size / 2 : null;
+        if (xLo != null && xHi != null && yLo != null && yHi != null) {
             shapes.push({
                 type: 'rect', xref: 'x', yref: 'y',
-                x0: -det.x_size / 2, x1: det.x_size / 2,
-                y0: -det.y_size / 2, y1: det.y_size / 2,
+                x0: xLo, x1: xHi, y0: yLo, y1: yHi,
                 line: { color: frameColor, width: 1.2, dash: 'dash' },
                 fillcolor: 'rgba(0,0,0,0)',
             });
-            const padX = det.x_size * 0.04, padY = det.y_size * 0.04;
-            xRange = [-det.x_size / 2 - padX, det.x_size / 2 + padX];
-            yRange = [-det.y_size / 2 - padY, det.y_size / 2 + padY];
+            const padX = (xHi - xLo) * 0.04;
+            const padY = (yHi - yLo) * 0.04;
+            xRange = [xLo - padX, xHi + padX];
+            yRange = [yLo - padY, yHi + padY];
         }
 
         // scaleanchor keeps mm in x and y at the same screen scale, so the
@@ -150,12 +161,18 @@ function plotGemOccupancy(data) {
             return;
         }
 
+        // Bin midpoints over the *active* extent the server filled with.
+        // `xLo/xHi/yLo/yHi` are computed above (from x_active/y_active or
+        // the bbox fallback).
         const nx = det.nx, ny = det.ny;
-        const xStep = det.x_size / nx, yStep = det.y_size / ny;
-        const x0 = -det.x_size / 2 + xStep / 2;
-        const y0 = -det.y_size / 2 + yStep / 2;
-        const xArr = Array.from({length: nx}, (_, i) => x0 + i * xStep);
-        const yArr = Array.from({length: ny}, (_, i) => y0 + i * yStep);
+        const occxLo = (xLo != null) ? xLo : -det.x_size / 2;
+        const occxHi = (xHi != null) ? xHi :  det.x_size / 2;
+        const occyLo = (yLo != null) ? yLo : -det.y_size / 2;
+        const occyHi = (yHi != null) ? yHi :  det.y_size / 2;
+        const xStep = (occxHi - occxLo) / nx;
+        const yStep = (occyHi - occyLo) / ny;
+        const xArr = Array.from({length: nx}, (_, i) => occxLo + (i + 0.5) * xStep);
+        const yArr = Array.from({length: ny}, (_, i) => occyLo + (i + 0.5) * yStep);
 
         const trace = {
             x: xArr, y: yArr, z: g.z,
@@ -430,20 +447,32 @@ function plotGemEffGrid(data) {
         const detName = det && det.name ? det.name : ('GEM' + idx);
 
         // Always-on dashed detector frame so the active area is visible
-        // even before any event arrives.  Range is pinned to the frame.
+        // even before any event arrives.  Use x_active/y_active (true mapped
+        // strip extent) when available — tighter than the bbox on the
+        // beam-hole side.  Falls back to ±size/2 for older API responses.
         const shapes = [];
         let xRange = null, yRange = null;
-        if (det && det.x_size && det.y_size) {
+        const xa = det && det.x_active;
+        const ya = det && det.y_active;
+        const xLo = (xa && xa.length === 2) ? xa[0]
+                  : (det && det.x_size) ? -det.x_size / 2 : null;
+        const xHi = (xa && xa.length === 2) ? xa[1]
+                  : (det && det.x_size) ?  det.x_size / 2 : null;
+        const yLo = (ya && ya.length === 2) ? ya[0]
+                  : (det && det.y_size) ? -det.y_size / 2 : null;
+        const yHi = (ya && ya.length === 2) ? ya[1]
+                  : (det && det.y_size) ?  det.y_size / 2 : null;
+        if (xLo != null && xHi != null && yLo != null && yHi != null) {
             shapes.push({
                 type: 'rect', xref: 'x', yref: 'y',
-                x0: -det.x_size / 2, x1: det.x_size / 2,
-                y0: -det.y_size / 2, y1: det.y_size / 2,
+                x0: xLo, x1: xHi, y0: yLo, y1: yHi,
                 line: { color: frameColor, width: 1.2, dash: 'dash' },
                 fillcolor: 'rgba(0,0,0,0)',
             });
-            const padX = det.x_size * 0.04, padY = det.y_size * 0.04;
-            xRange = [-det.x_size / 2 - padX, det.x_size / 2 + padX];
-            yRange = [-det.y_size / 2 - padY, det.y_size / 2 + padY];
+            const padX = (xHi - xLo) * 0.04;
+            const padY = (yHi - yLo) * 0.04;
+            xRange = [xLo - padX, xHi + padX];
+            yRange = [yLo - padY, yHi + padY];
         }
 
         // scaleanchor keeps mm in x and y at the same screen scale so the
@@ -472,14 +501,26 @@ function plotGemEffGrid(data) {
             return;
         }
 
+        // Bin axis arrays: midpoints over the *active* strip extent that
+        // the server filled with.  Older responses without x_min/x_max
+        // fall back to ±size/2 (legacy behaviour, may leave inner-edge
+        // empty space).
         const nx = grid.nx, ny = grid.ny;
-        const xSize = grid.x_size || (det && det.x_size) || 0;
-        const ySize = grid.y_size || (det && det.y_size) || 0;
-        const xStep = xSize / nx, yStep = ySize / ny;
-        const x0 = -xSize / 2 + xStep / 2;
-        const y0 = -ySize / 2 + yStep / 2;
-        const xArr = Array.from({length: nx}, (_, i) => x0 + i * xStep);
-        const yArr = Array.from({length: ny}, (_, i) => y0 + i * yStep);
+        const gxLo = (typeof grid.x_min === 'number') ? grid.x_min
+                   : (xLo != null) ? xLo
+                   : -(grid.x_size || det && det.x_size || 0) / 2;
+        const gxHi = (typeof grid.x_max === 'number') ? grid.x_max
+                   : (xHi != null) ? xHi
+                   : (grid.x_size || det && det.x_size || 0) / 2;
+        const gyLo = (typeof grid.y_min === 'number') ? grid.y_min
+                   : (yLo != null) ? yLo
+                   : -(grid.y_size || det && det.y_size || 0) / 2;
+        const gyHi = (typeof grid.y_max === 'number') ? grid.y_max
+                   : (yHi != null) ? yHi
+                   : (grid.y_size || det && det.y_size || 0) / 2;
+        const xStep = (gxHi - gxLo) / nx, yStep = (gyHi - gyLo) / ny;
+        const xArr = Array.from({length: nx}, (_, i) => gxLo + (i + 0.5) * xStep);
+        const yArr = Array.from({length: ny}, (_, i) => gyLo + (i + 0.5) * yStep);
 
         // Per-bin eff = num/den.  null when den==0 so Plotly renders that
         // cell as transparent (instead of the lowest cmap color), letting

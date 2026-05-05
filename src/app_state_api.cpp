@@ -166,6 +166,15 @@ json AppState::apiGemEfficiency() const
             const auto &det = gem_sys.GetDetectors()[d];
             info["x_size"] = det.planes[0].size;
             info["y_size"] = det.planes[1].size;
+            // Active strip extent in detector-local coords (mm).  Tighter
+            // than the bbox on the inner-edge side because pos=11 shares
+            // strip numbers with pos=10 via shared_pos and doesn't extend
+            // the readout — frontend uses these to draw the dashed frame
+            // so the heatmap fits flush against it.
+            auto xr = gem_sys.GetActiveExtent(d, 0);
+            auto yr = gem_sys.GetActiveExtent(d, 1);
+            info["x_active"] = json::array({xr.first, xr.second});
+            info["y_active"] = json::array({yr.first, yr.second});
         }
         if (d < (int)gem_transforms.size()) {
             const auto &t = gem_transforms[d];
@@ -178,14 +187,17 @@ json AppState::apiGemEfficiency() const
         if (d < n_dets_runtime
             && d < (int)gem_eff_grid_num.size()
             && d < (int)gem_eff_grid_den.size()) {
-            const auto &det = gem_sys.GetDetectors()[d];
             const auto &gn  = gem_eff_grid_num[d];
             const auto &gd  = gem_eff_grid_den[d];
+            auto xr = gem_sys.GetActiveExtent(d, 0);
+            auto yr = gem_sys.GetActiveExtent(d, 1);
             info["eff_grid"] = {
                 {"nx",     gn.nx},
                 {"ny",     gn.ny},
-                {"x_size", det.planes[0].size},
-                {"y_size", det.planes[1].size},
+                {"x_min",  xr.first},
+                {"x_max",  xr.second},
+                {"y_min",  yr.first},
+                {"y_max",  yr.second},
                 {"num",    gn.bins},
                 {"den",    gd.bins},
             };

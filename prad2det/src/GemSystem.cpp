@@ -271,6 +271,49 @@ float GemSystem::GetHoleXOffset() const
 }
 
 //=============================================================================
+// GetActiveExtent — true bounding box of mapped strips in local coords
+//=============================================================================
+//
+// PlaneConfig.size = n_apvs * APV_STRIP_SIZE * pitch is the bounding box
+// assumption.  When the inner-edge APV uses `shared_pos` (e.g. pos=11 with
+// shared_pos=10 on PRAD GEMs), it doesn't extend the strip range — one APV's
+// worth of bbox stays empty.  Visualization code wants the tight extent so
+// the dashed detector frame and the eff/occupancy bins line up with the
+// real readout instead of leaving a margin at the beam-hole side.
+//
+// Strip-to-local conversion follows the same convention as
+// GemSystem::ProcessApv (line 599):
+//     pos(strip) = strip * pitch - size/2 + pitch/2
+// so the returned extent is the LEFT/BOTTOM edge of the lowest strip and
+// the RIGHT/TOP edge of the highest strip (i.e. (smin)*pitch - size/2 and
+// (smax+1)*pitch - size/2).
+
+std::pair<float, float> GemSystem::GetActiveExtent(int det_id, int plane) const
+{
+    if (plane != 0 && plane != 1) return {0.f, 0.f};
+    if (det_id < 0 || det_id >= (int)detectors_.size())
+        return {0.f, 0.f};
+    const float pitch = detectors_[det_id].planes[plane].pitch;
+    const float size  = detectors_[det_id].planes[plane].size;
+    const float full_min = -size * 0.5f;
+    const float full_max =  size * 0.5f;
+    int smin = INT_MAX, smax = INT_MIN;
+    for (size_t i = 0; i < apvs_.size(); ++i) {
+        const auto &a = apvs_[i];
+        if (a.det_id != detectors_[det_id].id) continue;
+        if (a.plane_type != plane) continue;
+        for (int ch = 0; ch < APV_STRIP_SIZE; ++ch) {
+            int s = apv_work_[i].strip_map[ch];
+            if (s >= 0) { smin = std::min(smin, s); smax = std::max(smax, s); }
+        }
+    }
+    if (smin > smax) return {full_min, full_max};
+    const float lo = smin * pitch + full_min;
+    const float hi = (smax + 1) * pitch + full_min;
+    return {lo, hi};
+}
+
+//=============================================================================
 // Clear — reset per-event data
 //=============================================================================
 

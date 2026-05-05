@@ -237,6 +237,14 @@ public:
     // Returns 0 if no match APVs found. Uses detector 0 as reference (all identical).
     float GetHoleXOffset() const;
 
+    // Active strip extent for a (det_id, plane) in detector-local coords (mm).
+    // Returns the position of the minimum and maximum mapped strip number — the
+    // tight bounding box of the real readout, which can be smaller than the
+    // PlaneConfig.size bbox when split APVs (shared_pos) reuse strip numbers
+    // and leave one APV's worth of bbox unused on the inner-edge side.
+    // Returns (-size/2, +size/2) when no strips are mapped.
+    std::pair<float, float> GetActiveExtent(int det_id, int plane) const;
+
     // Per-APV zero-suppression results (valid after ProcessEvent)
     bool  IsChannelHit(int apv_idx, int ch) const { return apv_work_[apv_idx].hit_pos[ch]; }
     bool  HasApvZsHits(int apv_idx) const {

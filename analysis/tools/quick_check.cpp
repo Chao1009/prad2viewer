@@ -57,7 +57,7 @@ static std::vector<std::string> collectRootFiles(const std::string &path);
 int main(int argc, char *argv[])
 {
     std::string output;
-    float Ebeam = 2108.f;
+    float Ebeam = 3489.f;
     int run_id = 12345;
 
     // --- geometry constants (can be made configurable) ---
@@ -153,7 +153,10 @@ int main(int argc, char *argv[])
             hit_pos->Fill(ev.cl_x[j], ev.cl_y[j]);
             h_all->Fill(ev.cl_energy[j]);
         }
-        h_tot->Fill(ev.total_energy);
+        if(ev.trigger_bits & (1u << 8) && !(ev.trigger_bits & (1u << 24))) {
+            if(ev.total_energy > 0.f)
+                h_tot->Fill(ev.total_energy);
+        }
 
         if (ev.n_clusters == 1) {
             physics.FillModuleEnergy(ev.cl_center[0], ev.cl_energy[0]);

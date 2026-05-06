@@ -28,7 +28,7 @@
             "split_thres":         14.0,
             "cross_talk_width":    2.0,
             "charac_dists":        [],
-            "match_mode":          1,
+            "match_mode":          0,
             "match_adc_asymmetry": 0.7,
             "match_time_diff":     50.0,
             "match_ts_period":     25.0

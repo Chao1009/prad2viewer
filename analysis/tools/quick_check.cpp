@@ -121,7 +121,7 @@ int main(int argc, char *argv[])
 
     // --- histograms ---
     TH2F *hit_pos = new TH2F("hit_pos",
-        "Hit positions;X (mm);Y (mm)", 250, -500, 500, 250, -500, 500);
+        "Hit positions;X (mm);Y (mm)", 1000, -500, 500, 1000, -500, 500);
     TH1F *h_1cl = new TH1F("one_cluster_energy",
         "Single-cluster energy;E (MeV);Counts", 1000, 0, 4000);
     TH1F *h_2cl = new TH1F("two_cluster_energy",

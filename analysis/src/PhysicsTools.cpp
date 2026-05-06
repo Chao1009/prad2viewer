@@ -39,18 +39,18 @@ PhysicsTools::PhysicsTools(fdec::HyCalSystem &hycal)
         nmod, 0, nmod, 2000, 0, 4000);
     h2_energy_theta_ = std::make_unique<TH2F>(
         "h2_energy_theta", "Energy vs Theta;Theta (deg);Energy (MeV)",
-        160, 0, 8, 4000, 0, 4000);
+        320, 0, 8, 10000, 0, 5000);
     h2_Nevents_moduleMap_ = std::make_unique<TH2F>(
         "h2_Nevents_moduleMap", "Number of Events per Module;Column;Row",
         34, 0.5, 34.5, 34, -34.5, -0.5);
 
     h2_moller_pos_ = std::make_unique<TH2F>(
         "h2_moller_pos", "Moller 2-arm Hit Position;X (mm);Y (mm)",
-        200, -500, 500, 200, -500, 500);
+        1000, -500, 500, 1000, -500, 500);
 
     moller_phi_diff_ = std::make_unique<TH1F>(
         "h_moller_phi_diff", "Moller Phi Difference;Phi_{e1} - Phi_{e2} (deg);Counts",
-        40, -20, 20);
+        120, -20, 20);
     moller_x_ = std::make_unique<TH1F>(
         "h_moller_x", "Moller Center X Position (HyCal);X (mm);Counts",
         100, -10, 10);

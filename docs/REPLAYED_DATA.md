@@ -1,19 +1,20 @@
 # Replayed Data Trees
 
-Each replay tool writes one main per-event tree plus two slow-control side
-trees in the same ROOT file:
+Each replay tool writes one main per-event tree, two slow-control side
+trees, and a small per-run metadata tree in the same ROOT file:
 
 | Tool | Main tree | Side trees | Contents |
 |---|---|---|---|
-| `prad2ana_replay_rawdata` | `events` | `scalers`, `epics` | Raw FADC250 waveforms + GEM strip data + optional per-channel peak analysis |
-| `prad2ana_replay_recon`   | `recon`  | `scalers`, `epics` | HyCal clusters + GEM hits (lab frame) + HyCal↔GEM matches |
-| `prad2ana_replay_filter`  | `events` *or* `recon` | `scalers`, `epics` (with `good`) | Subset of the input main tree retained by slow-control cuts; full slow streams concatenated and tagged |
+| `prad2ana_replay_rawdata` | `events` | `scalers`, `epics`, `runinfo` | Raw FADC250 waveforms + GEM strip data + raw VTP / TDC banks + optional per-channel peak analysis |
+| `prad2ana_replay_recon`   | `recon`  | `scalers`, `epics`, `runinfo` | HyCal clusters + GEM hits (lab frame) + HyCal↔GEM matches |
+| `prad2ana_replay_filter`  | `events` *or* `recon` | `scalers`, `epics` (with `good`), `runinfo` | Subset of the input main tree retained by slow-control cuts; full slow streams concatenated and tagged; `runinfo` passed through verbatim |
 
-The two side trees fire on a different cadence than the main tree
+`scalers` / `epics` fire on a different cadence than the main tree
 (typically once every 1–2 s versus per-trigger), so they share no row
 indexing with `events`/`recon`.  Join them by `event_number`
 (`event_number_at_arrival` for `epics`) — see the per-tree sections
-below.
+below.  `runinfo` is run-scoped (one row per CODA control event:
+PRESTART / GO / END), with no row-level join key.
 
 # `events` tree (raw)
 
@@ -44,6 +45,12 @@ LMS = 3100 (Pin) / 3101..3103.
 | `trigger_bits` | `uint32` | FP trigger inputs (32-bit bitmask) |
 | `timestamp`    | `int64` | 48-bit TI timestamp (250 MHz ticks) |
 | `ssp_raw`      | `vector<uint32>` | Raw 0xE10C SSP trigger bank words |
+| `vtp_roc_tags` | `vector<uint32>` | Parent ROC tag for each 0xE122 VTP bank (see "VTP raw banks" below) |
+| `vtp_nwords`   | `vector<uint32>` | Word count per VTP bank, parallel to `vtp_roc_tags` |
+| `vtp_words`    | `vector<uint32>` | Concatenated VTP bank payload — bank `i` occupies `vtp_words[Σ vtp_nwords[0..i-1] .. +vtp_nwords[i])` |
+| `tdc_roc_tags` | `vector<uint32>` | Parent ROC tag for each 0xE107 TDC bank (see "TDC raw banks" below) |
+| `tdc_nwords`   | `vector<uint32>` | Word count per TDC bank, parallel to `tdc_roc_tags` |
+| `tdc_words`    | `vector<uint32>` | Concatenated TDC bank payload (one V1190/V1290 hit per word) |
 
 ### HyCal / Veto / LMS FADC250 — always written
 
@@ -124,6 +131,121 @@ for the algorithm spec.
 | `gem.strip`       | `uint8[nch]`      | Strip number on the APV |
 | `gem.ssp_samples` | `int16[nch][6]`   | 6 SSP time samples per strip |
 
+### VTP raw banks — always written
+
+PRad-II reads up to 9 VTP banks per physics event (`0xE122`): one per
+HyCal-side ti_slave (ROCs `0x83 0x85 0x87 0x89 0x8B 0x8D 0x96`) and, on
+GEM-bearing runs, one per GEM-side VTP slave (ROCs `0x90 0x91`).  The
+banks are stored as raw 32-bit words so any new VTP record type added
+by future firmware (PRad TRIGGER `0x1D`, TAG_EXP `0x1C`, EC_PEAK /
+EC_CLUSTER for the CLAS12-style decoder, …) can be re-decoded offline
+without rerunning the replay.
+
+A flat triple-of-vectors encoding sidesteps the need for a custom ROOT
+dictionary on `vector<vector<uint32>>`:
+
+| Branch | Type | Meaning |
+|---|---|---|
+| `vtp_roc_tags` | `vector<uint32>` | Parent ROC bank tag of each VTP bank (e.g. `0x96` = `hycal1vtp`, `0x90` = `gem1vtp`) |
+| `vtp_nwords`   | `vector<uint32>` | Number of 32-bit words in each VTP bank, parallel to `vtp_roc_tags` |
+| `vtp_words`    | `vector<uint32>` | Concatenated payload across all VTP banks in this event |
+
+To iterate VTP banks for one event:
+
+```cpp
+size_t off = 0;
+for (size_t i = 0; i < ev.vtp_roc_tags.size(); ++i) {
+    uint32_t roc = ev.vtp_roc_tags[i];
+    const uint32_t *p = ev.vtp_words.data() + off;
+    size_t n = ev.vtp_nwords[i];
+    // ... decode p[0..n) here ...
+    off += n;
+}
+```
+
+Decoder reference: each defining word has bit 31 = 1 with the record
+type in bits `[30:27]` (`0x10` = BLKHDR, `0x11` = BLKTLR, `0x12` =
+EVTHDR, `0x13` = TRGTIME, `0x14` = EC_PEAK, `0x15` = EC_CLUSTER,
+`0x1C` = TAG_EXP, `0x1D` = PRad TRIGGER summary, `0x1F` = FILLER).
+See `prad2dec/src/VtpDecoder.cpp` for the bit-field layout of each
+type that's currently parsed.  PRad-II runs typically ship only
+EVTHDR + TRGTIME on most ROCs, plus TRIGGER and TAG_EXP on the
+trigger-master VTP — `evio_dump -m vtp <file>` is the quick inspector.
+
+### TDC raw banks — always written
+
+V1190/V1290 TDC hits arrive in `0xE107` banks (output of `rol2.c` — the
+raw `0xE10B` hardware stream is already stripped of TDC headers / EOB
+markers / global trailer, so the payload is a flat array of hits).  In
+PRad-II run 24386 onward there is one active TDC ROC per physics event,
+ROC `0x40` ("rf"), carrying ~10–12 hits/event on slot 16, channels 0
+and 8 — the divided CEBAF RF reference (period ≈ 131.3 ns ≈ 7.61 MHz).
+The tagger TDC (ROC `0x8E`) lands in the same branches if/when it
+comes back online; offline tools split by `tdc_roc_tags[i]`.
+
+Same flat triple-of-vectors encoding as VTP raw banks:
+
+| Branch | Type | Meaning |
+|---|---|---|
+| `tdc_roc_tags` | `vector<uint32>` | Parent ROC bank tag of each TDC bank (e.g. `0x40` = `rf`, `0x8E` = `tagger`) |
+| `tdc_nwords`   | `vector<uint32>` | Number of 32-bit words in each TDC bank, parallel to `tdc_roc_tags` |
+| `tdc_words`    | `vector<uint32>` | Concatenated payload — one hit per word |
+
+Per-hit bit layout (all words in `tdc_words`):
+
+| Bits | Field | Meaning |
+|---|---|---|
+| `[31:27]` | `slot`    | V1190/V1290 board slot (0–31) |
+| `[26]`    | `edge`    | 0 = leading, 1 = trailing |
+| `[25:19]` | `channel` | Channel within the board (0–127) |
+| `[18:00]` | `value`   | TDC tick count (LSB ≈ 24 ps after `rol2`'s V1190 → V1290 normalization) |
+
+#### Decoding — use the prad2dec helpers, not raw bit shifts
+
+The bit fields above are an implementation detail; analysis code should
+go through `prad2dec` so the calibration constant (`tdc::TDC_LSB_NS =
+0.024`) and the PRad-II RF cabling (`tdc::RF_ROC_TAG / RF_SLOT /
+RF_CH_A / RF_CH_B`) live in one place.
+
+**All TDC hits** (RF + future tagger), via `tdc::TdcDecoder::DecodeReplay`:
+
+```cpp
+#include "TdcDecoder.h"
+tdc::TdcEventData hits;
+tdc::TdcDecoder::DecodeReplay(ev.tdc_roc_tags, ev.tdc_nwords,
+                              ev.tdc_words, hits);
+for (int i = 0; i < hits.n_hits; ++i) {
+    const tdc::TdcHit &h = hits.hits[i];
+    double t_ns = h.value * tdc::TDC_LSB_NS;
+    if (h.roc_tag == tdc::RF_ROC_TAG && h.channel == tdc::RF_CH_A)
+        ; // ... RF channel A hit at t_ns ...
+}
+```
+
+**RF only** — compact per-channel ns arrays via
+`tdc::RfTimeDecoder::DecodeReplay`:
+
+```cpp
+#include "TdcDecoder.h"
+tdc::RfTimeData rf;
+tdc::RfTimeDecoder::DecodeReplay(ev.tdc_roc_tags, ev.tdc_nwords,
+                                 ev.tdc_words, rf);
+// rf.n_a / rf.ns_a[k]  — leading-edge times on RF_CH_A (already in ns)
+// rf.n_b / rf.ns_b[k]  — leading-edge times on RF_CH_B
+float t_rf = rf.nearest_a(/*trigger latency*/ 400.f);   // closest tick
+```
+
+Same helpers in Python (`prad2py.dec`):
+
+```python
+from prad2py import dec as D
+rf = D.RfTimeData()
+D.decode_rf_replay(roc_tags, nwords, words, rf)   # vectors from uproot
+t_rf = rf.nearest_a(400.0)                        # ns
+```
+
+Quick inspector for raw EVIO (no replay needed): `evio_dump -m rf <file>`.
+
 # `recon` tree (reconstructed)
 
 Written by `prad2ana_replay_recon`.  HyCal clustering, GEM hit
@@ -141,6 +263,13 @@ upstream — only physics events reach the tree.
 | `timestamp`    | `int64`          | 48-bit TI timestamp (250 MHz ticks) |
 | `total_energy` | `float`          | Σ HyCal cluster energy (MeV) |
 | `ssp_raw`      | `vector<uint32>` | Raw 0xE10C SSP trigger bank words |
+
+The recon tree intentionally does NOT carry the raw `vtp_*` and `tdc_*`
+branches that the events tree has — they're for offline reconstruction
+that hasn't landed yet (decoded VTP trigger info and an RF-time scalar).
+For now, read the raw words from a co-replayed `*_raw.root` file when
+you need them, or rerun `prad2ana_replay_rawdata` and use the events
+tree directly.
 
 ### HyCal clusters
 
@@ -293,6 +422,57 @@ during replay-time filtering).
 ROOT vector branches require a stable pointer-to-pointer for
 `SetBranchAddress`; see `prad2det/include/EventData_io.h` ::
 `SetEpicsReadBranches` for the canonical reader skeleton.
+
+# `runinfo` tree (CODA control events / DAQ config)
+
+Written by every replay tool.  One row per CODA control event encountered
+in the input EVIO stream — typically PRESTART, GO, and END once each per
+run.  `replay_filter` passes the input runinfo rows through verbatim
+(concatenated across input files; no filter applied — the whole point
+of this tree is run-scoped metadata).
+
+The PRESTART row is the one that carries the long DAQ-config text from
+the `0xE10E` STRING bank: TI / DSC2 / FADC250 / FAV3 / TDC1190 / SSP /
+VTP / TS settings, per-channel pedestals + gains, trigger masks — i.e.
+the full set of `.cnf` files CODA concatenated to start the run.  GO
+and END rows have `daq_config` empty (the bank is PRESTART-only) but
+preserve the absolute Unix time for run start/end accounting.
+
+Distinguish rows by `event_tag`: `0x11` = PRESTART, `0x12` = GO,
+`0x14` = END.  GO/END events do not always carry a populated
+`run_number` slot in the underlying CODA control bank, so `run_number`
+on those rows may be `0`; PRESTART is authoritative.
+
+| Branch | Type | Meaning |
+|---|---|---|
+| `run_number` | `uint32`  | CODA run number (PRESTART authoritative; may be 0 on GO/END) |
+| `unix_time`  | `uint32`  | Absolute Unix seconds of the control event |
+| `run_type`   | `uint8`   | CODA run type (non-zero on PRESTART; 0 on GO/END) |
+| `event_tag`  | `uint8`   | `0x11` PRESTART / `0x12` GO / `0x14` END |
+| `daq_config` | `string`  | Full DAQ configuration text from the 0xE10E bank — empty on GO/END |
+
+The `daq_config` payload is large (~70 KB raw text on PRad-II runs)
+but compresses to ~25 KB; storage cost is one-time per run.  Recipe
+for extracting the text from a replayed file:
+
+```cpp
+TTree *t = (TTree*)f->Get("runinfo");
+prad2::RawRunInfo ri;
+prad2::SetRunInfoReadBranches(t, ri);
+std::string *sp = &ri.daq_config;
+t->SetBranchAddress("daq_config", &sp);
+for (Long64_t i = 0; i < t->GetEntries(); ++i) {
+    ri.daq_config.clear();
+    t->GetEntry(i);
+    if (ri.event_tag == 0x11) {
+        // ri.daq_config is the PRESTART config text
+    }
+}
+```
+
+The DAQ config text is the same `.cnf`-style format CODA writes to
+disk; grep it for `VTP_CRATE`, `SSP_PRAD_TRGBIT`, `FAV3_TET`, etc. to
+read out the run's trigger / readout settings.
 
 # Run example
 

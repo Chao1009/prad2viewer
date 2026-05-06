@@ -948,10 +948,31 @@ int run(const std::vector<std::string> &input_files,
             prad2::SetRawReadBranches(t, ev);
             std::vector<uint32_t> *p_ssp = &ev.ssp_raw;
             if (t->GetBranch("ssp_raw")) t->SetBranchAddress("ssp_raw", &p_ssp);
+            // Vector branches need pointer-to-pointer rebinding — same
+            // dance as ssp_raw above.  Older replays without these
+            // branches just leave the pointers untouched.
+            std::vector<uint32_t> *p_vtp_roc = &ev.vtp_roc_tags;
+            std::vector<uint32_t> *p_vtp_nw  = &ev.vtp_nwords;
+            std::vector<uint32_t> *p_vtp_w   = &ev.vtp_words;
+            if (t->GetBranch("vtp_roc_tags")) t->SetBranchAddress("vtp_roc_tags", &p_vtp_roc);
+            if (t->GetBranch("vtp_nwords"))   t->SetBranchAddress("vtp_nwords",   &p_vtp_nw);
+            if (t->GetBranch("vtp_words"))    t->SetBranchAddress("vtp_words",    &p_vtp_w);
+            std::vector<uint32_t> *p_tdc_roc = &ev.tdc_roc_tags;
+            std::vector<uint32_t> *p_tdc_nw  = &ev.tdc_nwords;
+            std::vector<uint32_t> *p_tdc_w   = &ev.tdc_words;
+            if (t->GetBranch("tdc_roc_tags")) t->SetBranchAddress("tdc_roc_tags", &p_tdc_roc);
+            if (t->GetBranch("tdc_nwords"))   t->SetBranchAddress("tdc_nwords",   &p_tdc_nw);
+            if (t->GetBranch("tdc_words"))    t->SetBranchAddress("tdc_words",    &p_tdc_w);
             Long64_t n = t->GetEntries();
             n_in += n;
             for (Long64_t i = 0; i < n; ++i) {
                 ev.ssp_raw.clear();
+                ev.vtp_roc_tags.clear();
+                ev.vtp_nwords.clear();
+                ev.vtp_words.clear();
+                ev.tdc_roc_tags.clear();
+                ev.tdc_nwords.clear();
+                ev.tdc_words.clear();
                 t->GetEntry(i);
                 if (is_kept(ev.event_num)) {
                     out->cd();

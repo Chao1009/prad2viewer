@@ -25,6 +25,22 @@
 namespace tdc
 {
 
+// --- TDC tick calibration --------------------------------------------------
+// Single source of truth for converting the 19-bit TDC value to ns. Sergey
+// Boyarinov (2026-05-05) gives ~24 ps for the rol2-normalized stream; the
+// underlying V1190 LSB after the V1190→V1290 left-shift is 25 ps. Use
+// TDC_LSB_NS rather than embedding a magic constant in analysis code.
+static constexpr double TDC_LSB_NS = 0.024;
+
+// --- PRad-II RF reference cabling ------------------------------------------
+// Channels 0 and 8 of slot 16 in ROC 0x40 carry the divided CEBAF RF
+// reference (run 24386 onward, period ≈ 131.3 ns ≈ 7.61 MHz). Cabling
+// constants live here so analysis doesn't have to remember the layout.
+static constexpr uint32_t RF_ROC_TAG = 0x40;
+static constexpr uint8_t  RF_SLOT    = 16;
+static constexpr uint8_t  RF_CH_A    = 0;
+static constexpr uint8_t  RF_CH_B    = 8;
+
 // --- capacity limits --------------------------------------------------------
 // 3 boards × 128 channels × worst-case multi-hit burst × 2 edges.
 // 4096 comfortably covers a saturated tagger event without heap growth.
@@ -69,6 +85,32 @@ struct TdcEventData
             if (hits[i].slot == slot && hits[i].channel == channel) ++n;
         return n;
     }
+};
+
+// --- RF time (per event, both reference channels) --------------------------
+// Compact, analysis-friendly view of the RF reference: just the leading-edge
+// tick lists for the two PRad-II RF channels (RF_CH_A=0 and RF_CH_B=8 of
+// slot RF_SLOT in ROC RF_ROC_TAG).  Each channel carries roughly 5–6 hits
+// per trigger window (period ≈ 131.3 ns); MAX_HITS_PER_CH=16 covers the
+// observed range with margin. Units are ns (TDC_LSB_NS already applied).
+struct RfTimeData
+{
+    static constexpr int MAX_HITS_PER_CH = 16;
+
+    int   n_a = 0;
+    int   n_b = 0;
+    float ns_a[MAX_HITS_PER_CH] = {};
+    float ns_b[MAX_HITS_PER_CH] = {};
+
+    void clear() { n_a = 0; n_b = 0; }
+
+    // Pick the RF tick nearest a reference time (e.g. trigger latency).
+    // Returns NaN if the requested channel has no hits in this event.
+    float nearest_a(float t_ref_ns) const { return nearest(ns_a, n_a, t_ref_ns); }
+    float nearest_b(float t_ref_ns) const { return nearest(ns_b, n_b, t_ref_ns); }
+
+private:
+    static float nearest(const float *v, int n, float t_ref);
 };
 
 } // namespace tdc

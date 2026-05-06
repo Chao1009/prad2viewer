@@ -44,6 +44,8 @@ struct RawReadStatus {
     bool has_daq_peaks  = false;   // firmware-mode: daq_peak_*
     bool has_gem        = false;   // gem.*
     bool has_ssp_raw    = false;   // ssp_raw vector
+    bool has_vtp_raw    = false;   // vtp_roc_tags + vtp_nwords + vtp_words
+    bool has_tdc_raw    = false;   // tdc_roc_tags + tdc_nwords + tdc_words
 };
 
 struct ReconReadStatus {
@@ -130,6 +132,19 @@ inline void SetRawWriteBranches(TTree *tree, RawEventData &ev, bool with_peaks)
 
     // Raw 0xE10C SSP trigger bank words.
     tree->Branch("ssp_raw", &ev.ssp_raw);
+
+    // Raw 0xE122 VTP bank words.  Flat triple of parallel vectors so ROOT
+    // can serialize without a custom dictionary — see RawEventData for
+    // the offset/decoding convention.
+    tree->Branch("vtp_roc_tags", &ev.vtp_roc_tags);
+    tree->Branch("vtp_nwords",   &ev.vtp_nwords);
+    tree->Branch("vtp_words",    &ev.vtp_words);
+
+    // Raw 0xE107 TDC bank words (RF reference + tagger).  Same layout
+    // as the vtp_* triple — see RawEventData for the per-hit bit fields.
+    tree->Branch("tdc_roc_tags", &ev.tdc_roc_tags);
+    tree->Branch("tdc_nwords",   &ev.tdc_nwords);
+    tree->Branch("tdc_words",    &ev.tdc_words);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -203,6 +218,18 @@ inline RawReadStatus SetRawReadBranches(TTree *tree, RawEventData &ev)
     //   auto *p = &ev.ssp_raw;
     //   tree->SetBranchAddress("ssp_raw", &p);   // p must outlive GetEntry
     s.has_ssp_raw = (tree->GetBranch("ssp_raw") != nullptr);
+
+    // vtp_words / vtp_nwords / vtp_roc_tags — same vector-pointer pattern
+    // as ssp_raw.  Older replays without these branches still load
+    // (has_vtp_raw stays false).
+    s.has_vtp_raw = (tree->GetBranch("vtp_words")    != nullptr)
+                    && (tree->GetBranch("vtp_nwords")   != nullptr)
+                    && (tree->GetBranch("vtp_roc_tags") != nullptr);
+
+    // tdc_* — same vector-pointer pattern again.
+    s.has_tdc_raw = (tree->GetBranch("tdc_words")    != nullptr)
+                    && (tree->GetBranch("tdc_nwords")   != nullptr)
+                    && (tree->GetBranch("tdc_roc_tags") != nullptr);
 
     return s;
 }
@@ -284,6 +311,10 @@ inline void SetReconWriteBranches(TTree *tree, ReconEventData &ev)
 
     // Raw 0xE10C SSP trigger bank words.
     tree->Branch("ssp_raw", &ev.ssp_raw);
+
+    // Note: VTP / TDC raw words intentionally NOT written here — the
+    // recon tree is for reconstructed quantities only.  See the comment
+    // in ReconEventData for the planned offline reconstruction.
 }
 
 // ─────────────────────────────────────────────────────────────────────────

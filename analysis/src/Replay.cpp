@@ -134,6 +134,12 @@ void Replay::clearEvent(EventVars &ev)
     ev.nch = 0;
     ev.gem_nch = 0;
     ev.ssp_raw.clear();
+    ev.vtp_roc_tags.clear();
+    ev.vtp_nwords.clear();
+    ev.vtp_words.clear();
+    ev.tdc_roc_tags.clear();
+    ev.tdc_nwords.clear();
+    ev.tdc_words.clear();
     std::fill(std::begin(ev.npeaks), std::end(ev.npeaks), 0);
     std::fill(&ev.peak_height[0][0],   &ev.peak_height[0][0]   + prad2::kMaxChannels * fdec::MAX_PEAKS, 0.f);
     std::fill(&ev.peak_time[0][0],     &ev.peak_time[0][0]     + prad2::kMaxChannels * fdec::MAX_PEAKS, 0.f);
@@ -303,6 +309,60 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ssp_raw_snapshot.assign(p, p + n_e10c->data_words);
         }
 
+        // Snapshot every 0xE122 VTP bank for this read group.  Up to ~9
+        // banks per event (7 HyCal VTPs + 2 GEM VTPs in mixed-detector
+        // runs); kept verbatim along with the parent ROC tag so offline
+        // tools can re-decode TRIGGER (0x1D) / TAG_EXP (0x1C) / etc.
+        // without needing the EVIO file.  Flat encoding (parallel
+        // vector<uint32_t>) avoids needing a custom ROOT dictionary for
+        // nested STL collections.
+        std::vector<uint32_t> vtp_roc_tags_snapshot;
+        std::vector<uint32_t> vtp_nwords_snapshot;
+        std::vector<uint32_t> vtp_words_snapshot;
+        {
+            const auto &all_nodes = ch.GetNodes();
+            for (auto *n_vtp : ch.FindByTag(0xE122)) {
+                if (n_vtp->data_words == 0) continue;
+                if (n_vtp->parent >= 0
+                    && all_nodes[n_vtp->parent].type == evc::DATA_COMPOSITE)
+                    continue;
+                uint32_t roc = (n_vtp->parent >= 0)
+                    ? all_nodes[n_vtp->parent].tag : 0;
+                const uint32_t *p = ch.GetData(*n_vtp);
+                vtp_roc_tags_snapshot.push_back(roc);
+                vtp_nwords_snapshot.push_back(
+                    static_cast<uint32_t>(n_vtp->data_words));
+                vtp_words_snapshot.insert(vtp_words_snapshot.end(),
+                                          p, p + n_vtp->data_words);
+            }
+        }
+
+        // Snapshot every 0xE107 V1190/V1290 TDC bank for this read group.
+        // PRad-II currently has one TDC ROC active (0x40 = "rf", carrying
+        // the divided CEBAF RF reference on slot 16, ch 0 + ch 8).  Same
+        // raw-words pattern as VTP; per-hit bit fields are documented in
+        // RawEventData.tdc_words and prad2dec/include/TdcDecoder.h.
+        std::vector<uint32_t> tdc_roc_tags_snapshot;
+        std::vector<uint32_t> tdc_nwords_snapshot;
+        std::vector<uint32_t> tdc_words_snapshot;
+        {
+            const auto &all_nodes = ch.GetNodes();
+            for (auto *n_tdc : ch.FindByTag(daq_cfg_.tdc_bank_tag)) {
+                if (n_tdc->data_words == 0) continue;
+                if (n_tdc->parent >= 0
+                    && all_nodes[n_tdc->parent].type == evc::DATA_COMPOSITE)
+                    continue;
+                uint32_t roc = (n_tdc->parent >= 0)
+                    ? all_nodes[n_tdc->parent].tag : 0;
+                const uint32_t *p = ch.GetData(*n_tdc);
+                tdc_roc_tags_snapshot.push_back(roc);
+                tdc_nwords_snapshot.push_back(
+                    static_cast<uint32_t>(n_tdc->data_words));
+                tdc_words_snapshot.insert(tdc_words_snapshot.end(),
+                                          p, p + n_tdc->data_words);
+            }
+        }
+
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
             event->clear();
             ssp_evt->clear();
@@ -329,6 +389,12 @@ bool Replay::Process(const std::string &input_evio, const std::string &output_ro
             ev->trigger_bits      = event->info.trigger_bits;
             ev->timestamp    = event->info.timestamp;
             ev->ssp_raw      = ssp_raw_snapshot;
+            ev->vtp_roc_tags = vtp_roc_tags_snapshot;
+            ev->vtp_nwords   = vtp_nwords_snapshot;
+            ev->vtp_words    = vtp_words_snapshot;
+            ev->tdc_roc_tags = tdc_roc_tags_snapshot;
+            ev->tdc_nwords   = tdc_nwords_snapshot;
+            ev->tdc_words    = tdc_words_snapshot;
 
             // Decode FADC250 data — single pass over all channels (HyCal +
             // Veto + LMS).  Type dispatch comes from hycal_map.json's "t"
@@ -636,6 +702,11 @@ bool Replay::ProcessWithRecon(const std::string &input_evio, const std::string &
             const uint32_t *p = ch.GetData(*n_e10c);
             ssp_raw_snapshot.assign(p, p + n_e10c->data_words);
         }
+
+        // Note: 0xE122 VTP and 0xE107 TDC raw words are intentionally NOT
+        // snapshotted here.  The recon tree carries reconstructed quantities
+        // only; raw VTP / TDC words live in the events tree (see Process())
+        // and offline reconstruction will read them from there.
 
         for (int ie = 0; ie < ch.GetNEvents(); ++ie) {
             event->clear();

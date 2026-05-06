@@ -11,8 +11,11 @@
 #include "EvChannel.h"
 #include "EvStruct.h"
 #include "Fadc250Data.h"
+#include "TdcData.h"
+#include "VtpData.h"
 #include "load_daq_config.h"
 #include "InstallPaths.h"
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -422,6 +425,349 @@ static int doEpics(EvChannel &ch, int max_events)
     if (max_events > 0 && count >= max_events)
         std::cout << "; stopped at -n limit";
     std::cout << ".\n";
+    return 0;
+}
+
+// --- mode: vtp --------------------------------------------------------------
+// Walks physics events, dumps the raw 0xE122 VTP banks word-by-word with
+// per-word record-type decoding (BLKHDR/BLKTLR/EVTHDR/TRGTIME/EC_PEAK/
+// EC_CLUSTER/PRAD_TRIGGER/...), and runs ch.Vtp() to show what the current
+// decoder turns each bank into.  The raw view is the ground truth — the
+// PRad-II VTP firmware is a CLAS12 derivative, so some record types
+// (PRAD_TRIGGER 0x1D in particular) ship through the current decoder
+// unstored.  Keeping both raw and decoded side by side is what lets you
+// confirm whether plumbing more record types into VtpEventData is worth it.
+//
+// `max_events=0` falls back to 5 events.
+
+namespace {
+const char *vtp_record_name(uint8_t t)
+{
+    switch (t) {
+    case 0x10: return "BLKHDR";
+    case 0x11: return "BLKTLR";
+    case 0x12: return "EVTHDR";
+    case 0x13: return "TRGTIME";
+    case 0x14: return "EC_PEAK";
+    case 0x15: return "EC_CLUSTER";
+    case 0x16: return "HTCC";
+    case 0x17: return "FT";
+    case 0x18: return "FTOF";
+    case 0x19: return "CTOF";
+    case 0x1A: return "CND";
+    case 0x1B: return "PCU";
+    case 0x1C: return "TAG_EXP";
+    case 0x1D: return "TRIGGER";    // PRad summary
+    case 0x1E: return "DNV";
+    case 0x1F: return "FILLER";
+    default:   return "?";
+    }
+}
+} // anon
+
+static int doVtp(EvChannel &ch, int max_events)
+{
+    if (max_events <= 0) max_events = 5;
+
+    int physics_seen = 0, physics_with_vtp = 0, dumped = 0;
+    int total_blocks = 0, total_peaks = 0, total_clusters = 0;
+    std::map<uint8_t, int> rectype_counts;       // across all dumped events
+
+    while (ch.Read() == status::success) {
+        if (dumped >= max_events) break;
+        if (!ch.Scan()) continue;
+        if (ch.GetEventType() != EventType::Physics) continue;
+        ++physics_seen;
+
+        const int n_sub = ch.GetNEvents();
+        for (int ie = 0; ie < n_sub && dumped < max_events; ++ie) {
+            ch.SelectEvent(ie);
+
+            // Collect the 0xE122 banks for this sub-event (parented by a
+            // ROC bank — there are typically 7 VTP ROCs in PRad-II runs).
+            std::vector<const EvNode *> vtp_banks;
+            for (auto &n : ch.GetNodes()) {
+                if (n.tag != 0xE122 || n.data_words == 0) continue;
+                if (n.parent >= 0
+                    && ch.GetNodes()[n.parent].type == DATA_COMPOSITE) continue;
+                vtp_banks.push_back(&n);
+            }
+            if (vtp_banks.empty()) continue;
+            ++physics_with_vtp;
+            ++dumped;
+
+            const auto &info = ch.Info();
+            std::cout << "=== Physics event #" << info.event_number
+                      << " (sub " << ie << "/" << n_sub
+                      << ", trigger_type=" << int(info.trigger_type)
+                      << ", trigger_bits=0x" << std::hex << info.trigger_bits
+                      << std::dec
+                      << ", " << vtp_banks.size() << " VTP bank(s)) ===\n";
+
+            for (const EvNode *np : vtp_banks) {
+                uint32_t roc = (np->parent >= 0)
+                               ? ch.GetNodes()[np->parent].tag : 0;
+                const uint32_t *d = ch.GetData(*np);
+                std::cout << "  roc=" << hex(roc)
+                          << "  words=" << np->data_words << "\n";
+
+                // Walk every word.  Defining words have bit31=1; we print
+                // the type name and a short field summary.  Continuation
+                // words are printed indented under the most recent
+                // defining word so the structure reads top-down.
+                uint8_t cur_type = 0;
+                for (size_t i = 0; i < np->data_words; ++i) {
+                    uint32_t w = d[i];
+                    bool defining = (w >> 31) & 0x1;
+                    std::cout << "    [" << std::setw(2) << i << "] "
+                              << std::hex << std::setw(8) << std::setfill('0')
+                              << w << std::setfill(' ') << std::dec << "  ";
+                    if (defining) {
+                        cur_type = (w >> 27) & 0x1F;
+                        rectype_counts[cur_type]++;
+                        std::cout << vtp_record_name(cur_type)
+                                  << " (0x" << std::hex << int(cur_type)
+                                  << std::dec << ")";
+                        switch (cur_type) {
+                        case 0x10:  // BLKHDR
+                            std::cout << "  slot=" << ((w >> 22) & 0x1F)
+                                      << " mod=" << ((w >> 18) & 0xF)
+                                      << " blk#=" << ((w >> 8) & 0x3FF)
+                                      << " level=" << (w & 0xFF);
+                            break;
+                        case 0x11:  // BLKTLR
+                            std::cout << "  slot=" << ((w >> 22) & 0x1F)
+                                      << " nwords=" << (w & 0x3FFFFF);
+                            break;
+                        case 0x12:  // EVTHDR
+                            std::cout << "  evn=" << (w & 0x7FFFFFF);
+                            break;
+                        case 0x13:  // TRGTIME (lo 24 bits; hi in next word)
+                            std::cout << "  time_lo=" << (w & 0xFFFFFF);
+                            break;
+                        case 0x14:  // EC_PEAK (defining)
+                            std::cout << "  inst=" << ((w >> 26) & 0x1)
+                                      << " view=" << ((w >> 24) & 0x3)
+                                      << " time=" << ((w >> 16) & 0xFF);
+                            break;
+                        case 0x15:  // EC_CLUSTER (defining)
+                            std::cout << "  inst=" << ((w >> 26) & 0x1)
+                                      << " time=" << ((w >> 16) & 0xFF)
+                                      << " energy=" << (w & 0xFFFF);
+                            break;
+                        case 0x1D:  // PRad TRIGGER summary
+                            std::cout << "  payload=0x" << std::hex
+                                      << (w & 0x07FFFFFF) << std::dec;
+                            break;
+                        default:
+                            break;
+                        }
+                    } else {
+                        std::cout << "  cont(" << vtp_record_name(cur_type)
+                                  << ")";
+                        switch (cur_type) {
+                        case 0x13:  // TRGTIME hi
+                            std::cout << "  time_hi=" << (w & 0xFFFFFF);
+                            break;
+                        case 0x14:
+                            std::cout << "  coord=" << ((w >> 16) & 0x3FF)
+                                      << " energy=" << (w & 0xFFFF);
+                            break;
+                        case 0x15:
+                            std::cout << "  U=" << (w & 0x3FF)
+                                      << " V=" << ((w >> 10) & 0x3FF)
+                                      << " W=" << ((w >> 20) & 0x3FF);
+                            break;
+                        case 0x1D:
+                            std::cout << "  payload=0x" << std::hex
+                                      << w << std::dec;
+                            break;
+                        default:
+                            break;
+                        }
+                    }
+                    std::cout << "\n";
+                }
+            }
+
+            // Show what the current decoder kept.
+            const auto &v = ch.Vtp();
+            std::cout << "  decoder kept: blocks=" << v.n_blocks
+                      << " peaks=" << v.n_peaks
+                      << " clusters=" << v.n_clusters << "\n";
+            for (int b = 0; b < v.n_blocks; ++b) {
+                const auto &bk = v.blocks[b];
+                std::cout << "    block[" << b << "] roc=" << hex(bk.roc_tag)
+                          << " slot=" << int(bk.slot)
+                          << " evn="  << bk.event_number
+                          << " trgT=" << bk.trigger_time
+                          << " nwords=" << bk.nwords
+                          << " trailer=" << (bk.has_trailer ? "y" : "n")
+                          << "\n";
+                total_blocks++;
+            }
+            for (int p = 0; p < v.n_peaks; ++p) {
+                const auto &pk = v.peaks[p];
+                std::cout << "    peak[" << p << "] roc=" << hex(pk.roc_tag)
+                          << " inst=" << int(pk.inst)
+                          << " view=" << int(pk.view)
+                          << " coord=" << pk.coord
+                          << " energy=" << pk.energy << "\n";
+                total_peaks++;
+            }
+            for (int c = 0; c < v.n_clusters; ++c) {
+                const auto &cl = v.clusters[c];
+                std::cout << "    cluster[" << c << "] roc=" << hex(cl.roc_tag)
+                          << " UVW=(" << cl.coordU << "," << cl.coordV
+                          << "," << cl.coordW << ")"
+                          << " energy=" << cl.energy << "\n";
+                total_clusters++;
+            }
+            std::cout << "\n";
+        }
+    }
+
+    std::cout << "Scanned " << physics_seen << " physics events ("
+              << physics_with_vtp << " with VTP banks); dumped first "
+              << dumped << ".\n"
+              << "Decoder totals across dumped events: blocks=" << total_blocks
+              << " peaks=" << total_peaks
+              << " clusters=" << total_clusters << "\n"
+              << "Record-type tally (defining words seen):\n";
+    for (const auto &kv : rectype_counts) {
+        std::cout << "  0x" << std::hex << int(kv.first) << std::dec
+                  << " " << vtp_record_name(kv.first)
+                  << ": " << kv.second << "\n";
+    }
+    return 0;
+}
+
+// --- mode: rf ---------------------------------------------------------------
+// Inspect the RF timing TDC bank delivered by ROC 0x40, bank 0xE107 (V1190
+// hit format -- bits 31:27 slot, 26 edge, 25:19 channel, 18:0 TDC value with
+// ~24 ps LSB after rol2.c's V1190->V1290 normalization).  In run 24386 there
+// are 2 active channels (slot=16, ch=0 and ch=8), each firing roughly five
+// hits per event spaced ~131 ns apart -- a divided CEBAF RF reference.
+//
+// Per-event lines list raw TDC ticks followed by ns.  The summary tracks
+// per-channel hit counts and the mean inter-hit interval (1/period gives the
+// generator frequency seen by the TDC, useful for sanity-checking cabling).
+//
+// `max_events=0` falls back to 5; passing -n N caps the printed events while
+// the summary still scans the whole file.
+
+static constexpr double TDC_LSB_NS  = 0.024;     // Sergey: ~24 ps tick
+static constexpr uint32_t RF_ROC_TAG = 0x0040;
+
+static int doRf(EvChannel &ch, int max_events)
+{
+    if (max_events <= 0) max_events = 5;
+
+    int physics_seen = 0, with_rf = 0, dumped = 0;
+    std::map<std::pair<uint8_t,uint8_t>, uint64_t> ch_hits;   // (slot,ch) -> count
+    std::map<uint8_t, uint64_t> diff_sum;                     // ch -> sum of consecutive diffs
+    std::map<uint8_t, uint64_t> diff_n;                       // ch -> diff count
+    std::map<uint8_t, uint32_t> diff_min, diff_max;
+
+    while (ch.Read() == status::success) {
+        if (!ch.Scan()) continue;
+        if (ch.GetEventType() != EventType::Physics) continue;
+        ++physics_seen;
+        ch.SelectEvent(0);
+
+        const auto &t = ch.Tdc();
+
+        // Group hits in this event by (slot, channel) preserving arrival order;
+        // V1190 emits hits in time order within a channel, so we don't need to
+        // resort before computing inter-hit deltas.
+        std::map<std::pair<uint8_t,uint8_t>, std::vector<uint32_t>> per_chan;
+        for (int i = 0; i < t.n_hits; ++i) {
+            const auto &h = t.hits[i];
+            if (h.roc_tag != RF_ROC_TAG) continue;
+            per_chan[{h.slot, h.channel}].push_back(h.value);
+        }
+        if (per_chan.empty()) continue;
+        ++with_rf;
+
+        for (auto &kv : per_chan) {
+            ch_hits[kv.first] += kv.second.size();
+            for (size_t i = 1; i < kv.second.size(); ++i) {
+                uint32_t d = kv.second[i] - kv.second[i-1];
+                uint8_t c = kv.first.second;
+                diff_sum[c] += d;
+                diff_n[c]++;
+                if (!diff_min.count(c) || d < diff_min[c]) diff_min[c] = d;
+                if (!diff_max.count(c) || d > diff_max[c]) diff_max[c] = d;
+            }
+        }
+
+        if (dumped >= max_events) continue;
+        ++dumped;
+
+        const auto &info = ch.Info();
+        std::cout << "=== Physics event #" << info.event_number
+                  << "  ts=" << info.timestamp
+                  << "  trigger_bits=0x" << std::hex << info.trigger_bits
+                  << std::dec << " ===\n";
+        for (auto &kv : per_chan) {
+            std::cout << "  slot=" << int(kv.first.first)
+                      << " ch="    << std::setw(3) << int(kv.first.second)
+                      << "  nhits=" << kv.second.size() << "  values:";
+            for (uint32_t v : kv.second)
+                std::cout << "  " << v << "(" << std::fixed
+                          << std::setprecision(2) << v * TDC_LSB_NS << "ns)";
+            std::cout << "\n";
+            if (kv.second.size() >= 2) {
+                std::cout << "    deltas:";
+                for (size_t i = 1; i < kv.second.size(); ++i) {
+                    uint32_t d = kv.second[i] - kv.second[i-1];
+                    std::cout << "  " << d << "(" << std::fixed
+                              << std::setprecision(2) << d * TDC_LSB_NS << "ns)";
+                }
+                std::cout << "\n";
+            }
+        }
+        std::cout << std::resetiosflags(std::ios::fixed) << "\n";
+    }
+
+    std::cout << "=== RF Time Summary (ROC 0x40, bank 0xE107) ===\n";
+    std::cout << "  physics events scanned: " << physics_seen
+              << "  (" << with_rf << " carry RF hits, "
+              << std::fixed << std::setprecision(2)
+              << (physics_seen ? 100.0 * with_rf / physics_seen : 0.0)
+              << "%)" << std::resetiosflags(std::ios::fixed) << "\n\n";
+
+    std::cout << "  Per-channel hit rate:\n";
+    std::cout << "    " << std::setw(5) << "slot" << std::setw(5) << "ch"
+              << std::setw(14) << "total_hits" << std::setw(14) << "hits/event"
+              << "\n";
+    for (auto &kv : ch_hits)
+        std::cout << "    " << std::setw(5) << int(kv.first.first)
+                  << std::setw(5) << int(kv.first.second)
+                  << std::setw(14) << kv.second
+                  << std::setw(14) << std::fixed << std::setprecision(3)
+                  << (with_rf ? double(kv.second) / with_rf : 0.0) << "\n";
+
+    std::cout << std::resetiosflags(std::ios::fixed)
+              << "\n  Inter-hit interval per channel (LSB="
+              << TDC_LSB_NS << " ns):\n";
+    std::cout << "    " << std::setw(5) << "ch"
+              << std::setw(12) << "mean(ticks)" << std::setw(10) << "mean(ns)"
+              << std::setw(12) << "min(ticks)"  << std::setw(12) << "max(ticks)"
+              << std::setw(12) << "freq(MHz)"   << std::setw(10) << "N\n";
+    for (auto &kv : diff_n) {
+        if (kv.second == 0) continue;
+        double mean_ticks = double(diff_sum[kv.first]) / kv.second;
+        double mean_ns    = mean_ticks * TDC_LSB_NS;
+        double freq_mhz   = mean_ns > 0 ? 1000.0 / mean_ns : 0.0;
+        std::cout << "    " << std::setw(5) << int(kv.first)
+                  << std::setw(12) << std::fixed << std::setprecision(2) << mean_ticks
+                  << std::setw(10) << std::setprecision(3) << mean_ns
+                  << std::setw(12) << diff_min[kv.first]
+                  << std::setw(12) << diff_max[kv.first]
+                  << std::setw(12) << std::setprecision(4) << freq_mhz
+                  << std::setw(10) << kv.second << "\n";
+    }
     return 0;
 }
 
@@ -1150,6 +1496,7 @@ static int doBankDebug(EvChannel &ch, bool verbose)
         else if (tag == cfg.fadc_raw_tag)     std::cout << "-> Fadc250RawDecoder";
         else if (cfg.is_ssp_bank(tag))        std::cout << "-> SspDecoder";
         else if (tag == 0xE122)               std::cout << "-> VtpDecoder";
+        else if (tag == cfg.tdc_bank_tag)     std::cout << "-> TdcDecoder";
         else if (tag == cfg.adc1881m_bank_tag) std::cout << "-> Adc1881mDecoder";
         else if (tag == cfg.daq_config_tag)   std::cout << "-> skip (config string)";
         else {
@@ -1176,7 +1523,7 @@ static int doBankDebug(EvChannel &ch, bool verbose)
         if (tag == cfg.ti_bank_tag || tag == cfg.run_info_tag ||
             tag == cfg.fadc_composite_tag || tag == cfg.fadc_raw_tag ||
             cfg.is_ssp_bank(tag) || tag == cfg.adc1881m_bank_tag ||
-            tag == 0xE122)
+            tag == cfg.tdc_bank_tag || tag == 0xE122)
             dispatched_d2 += s.count;
         else if (tag == cfg.daq_config_tag ||
                  (findBankInfo(tag) && std::string(findBankInfo(tag)->status) == "info"))
@@ -1216,6 +1563,8 @@ static void usage(const char *prog)
         << "  -m tree       Print bank tree\n"
         << "  -m tags       List all unique bank tags with stats\n"
         << "  -m epics      Dump all EPICS event text\n"
+        << "  -m vtp        Decode 0xE122 VTP banks (blocks / EC peaks / EC clusters)\n"
+        << "  -m rf         Decode RF time TDC hits (ROC 0x40, bank 0xE107)\n"
         << "  -m event      Detailed dump of a single record\n"
         << "  -m triggers   List trigger bit counts (add -v for per-event detail)\n"
         << "  -m trig-debug Cross-correlate event tags, TI event type, and FP trigger bits\n"
@@ -1289,6 +1638,8 @@ int main(int argc, char *argv[])
     else if (mode == "tree")       rc = doTree(ch, num);
     else if (mode == "tags")       rc = doTags(ch);
     else if (mode == "epics")      rc = doEpics(ch, num);
+    else if (mode == "vtp")        rc = doVtp(ch, num);
+    else if (mode == "rf")         rc = doRf(ch, num);
     else if (mode == "triggers")   rc = doTriggers(ch, verbose);
     else if (mode == "trig-debug") rc = doTrigDebug(ch, verbose);
     else if (mode == "bank-debug") rc = doBankDebug(ch, verbose);
@@ -1296,7 +1647,7 @@ int main(int argc, char *argv[])
     else if (mode == "summary")    rc = doSummary(ch);
     else {
         std::cerr << "Error: unknown mode '" << mode << "'.\n"
-                  << "Valid modes: summary, tree, tags, epics, event, "
+                  << "Valid modes: summary, tree, tags, epics, vtp, rf, event, "
                      "triggers, trig-debug, bank-debug.\n";
         ch.Close();
         return 1;

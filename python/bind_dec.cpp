@@ -32,6 +32,7 @@
 #include "SspData.h"
 #include "VtpData.h"
 #include "TdcData.h"
+#include "TdcDecoder.h"
 #include "SyncData.h"
 #include "EpicsStore.h"
 
@@ -910,6 +911,59 @@ void bind_tdc(py::module_ &m)
             "value <u4.  Use this for bulk per-event loops to avoid "
             "per-attribute Python-to-C++ call overhead.")
         .def("clear", &tdc::TdcEventData::clear);
+
+    // Module-level constants — single source of truth for the TDC LSB +
+    // PRad-II RF cabling. Mirror the C++ constexpr names from TdcData.h.
+    m.attr("TDC_LSB_NS") = tdc::TDC_LSB_NS;
+    m.attr("RF_ROC_TAG") = tdc::RF_ROC_TAG;
+    m.attr("RF_SLOT")    = tdc::RF_SLOT;
+    m.attr("RF_CH_A")    = tdc::RF_CH_A;
+    m.attr("RF_CH_B")    = tdc::RF_CH_B;
+
+    // Compact RF-time view per event.
+    py::class_<tdc::RfTimeData, std::shared_ptr<tdc::RfTimeData>>(m, "RfTimeData")
+        .def(py::init<>())
+        .def_readonly("n_a", &tdc::RfTimeData::n_a)
+        .def_readonly("n_b", &tdc::RfTimeData::n_b)
+        .def_property_readonly("ns_a", [](const tdc::RfTimeData &r) {
+            return py::array(py::dtype("<f4"), (py::ssize_t)r.n_a, r.ns_a);
+        }, "Leading-edge times (ns) on RF_CH_A — fresh copy, length n_a.")
+        .def_property_readonly("ns_b", [](const tdc::RfTimeData &r) {
+            return py::array(py::dtype("<f4"), (py::ssize_t)r.n_b, r.ns_b);
+        }, "Leading-edge times (ns) on RF_CH_B — fresh copy, length n_b.")
+        .def("nearest_a", &tdc::RfTimeData::nearest_a, py::arg("t_ref_ns"),
+             "RF_CH_A tick nearest the reference time (ns); NaN if no hits.")
+        .def("nearest_b", &tdc::RfTimeData::nearest_b, py::arg("t_ref_ns"),
+             "RF_CH_B tick nearest the reference time (ns); NaN if no hits.")
+        .def("clear", &tdc::RfTimeData::clear);
+
+    // Free helpers — use as `prad2py.dec.decode_tdc_replay(roc_tags, nwords,
+    // words, evt)` and `prad2py.dec.decode_rf_replay(roc_tags, nwords,
+    // words, rf)`. Inputs are array-likes of uint32 (numpy is fine — we
+    // copy into vectors at the C++ boundary).
+    m.def("decode_tdc_replay",
+        [](std::vector<uint32_t> roc_tags,
+           std::vector<uint32_t> nwords,
+           std::vector<uint32_t> words,
+           tdc::TdcEventData &out) {
+            return tdc::TdcDecoder::DecodeReplay(roc_tags, nwords, words, out);
+        },
+        py::arg("roc_tags"), py::arg("nwords"),
+        py::arg("words"),    py::arg("out"),
+        "Decode the replay tree's flat-triple TDC representation into a "
+        "TdcEventData. `out` is cleared first; returns the hit count.");
+
+    m.def("decode_rf_replay",
+        [](std::vector<uint32_t> roc_tags,
+           std::vector<uint32_t> nwords,
+           std::vector<uint32_t> words,
+           tdc::RfTimeData &out) {
+            tdc::RfTimeDecoder::DecodeReplay(roc_tags, nwords, words, out);
+        },
+        py::arg("roc_tags"), py::arg("nwords"),
+        py::arg("words"),    py::arg("out"),
+        "Decode the replay tree's TDC vectors directly into RfTimeData "
+        "(filtered to RF_ROC_TAG / RF_SLOT, leading edges only).");
 }
 
 // -------------------------------------------------------------------------

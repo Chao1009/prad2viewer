@@ -32,7 +32,7 @@
         "fadc_raw":        "0xE109",
         "tdc":             "0xE107"
     },
-    
+
     "roc_tags": [
         {"tag": "0x80", "name": "adchycal1", "crate": 0,  "type": "roc"},
         {"tag": "0x81", "name": "tihycal1",  "crate": 0,  "type": "ti_slave"},
@@ -49,8 +49,12 @@
         {"tag": "0x8C", "name": "adchycal7", "crate": 6,  "type": "roc"},
         {"tag": "0x8D", "name": "tihycal7",  "crate": 6,  "type": "ti_slave"},
         {"tag": "0x8E", "name": "tagger",    "crate": 7,  "type": "tdc"},
+        {"tag": "0x40", "name": "rf",        "crate": 64, "type": "tdc"},
+        {"tag": "0x90", "name": "gem1vtp",   "crate": 8,  "type": "ti_slave"},
+        {"tag": "0x91", "name": "gem2vtp",   "crate": 9,  "type": "ti_slave"},
         {"tag": "0x92", "name": "gem_1",     "crate": 146, "type": "gem"},
-        {"tag": "0x93", "name": "gem_2",     "crate": 147, "type": "gem"}
+        {"tag": "0x93", "name": "gem_2",     "crate": 147, "type": "gem"},
+        {"tag": "0x96", "name": "hycal1vtp", "crate": 10, "type": "ti_slave"}
     ],
 
     "bank_structure": {

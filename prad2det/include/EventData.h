@@ -137,6 +137,37 @@ struct RawEventData {
 
     // Raw 0xE10C SSP trigger bank words (one variable-length entry per event)
     std::vector<uint32_t> ssp_raw;
+
+    // Raw 0xE122 VTP bank words across every VTP ROC in this event.
+    // Stored as a flat triple of vectors (parallel arrays) so ROOT can
+    // serialize without a custom dictionary for nested vectors:
+    //   vtp_roc_tags[i] — parent ROC bank tag of bank i (e.g. 0x96 for
+    //                     hycal1vtp, 0x90 for gem1vtp).
+    //   vtp_nwords[i]   — number of 32-bit words in bank i.
+    //   vtp_words       — concatenated payload, bank i occupies
+    //                     vtp_words[off..off+vtp_nwords[i]) where off =
+    //                     Σ vtp_nwords[0..i-1].
+    // Stored raw so future record-type additions (or the still-
+    // unspecified PRad TRIGGER 0x1D / TAG_EXP 0x1C bit fields) can be
+    // re-decoded offline without rerunning the replay.
+    std::vector<uint32_t> vtp_roc_tags;
+    std::vector<uint32_t> vtp_nwords;
+    std::vector<uint32_t> vtp_words;
+
+    // Raw 0xE107 V1190/V1290 TDC bank words across every TDC ROC in this
+    // event.  Same flat-triple-of-vectors layout as vtp_*; offset of
+    // bank i is Σ tdc_nwords[0..i-1].  In current PRad-II runs there
+    // is one TDC ROC per event, ROC 0x40 ("rf"), carrying ~10–12 hits
+    // (slot 16, channels 0 and 8 — the divided CEBAF RF reference).
+    // Each word packs one hit:
+    //   bits 31:27 slot  bit 26 edge (0=lead, 1=trail)
+    //   bits 25:19 chan  bits 18:00 TDC value (LSB ≈ 24 ps after rol2
+    //                                          V1190→V1290 normalization)
+    // Tagger TDC (ROC 0x8E) — when re-enabled — lands in the same
+    // branches with its own roc_tag; offline tools split by tag.
+    std::vector<uint32_t> tdc_roc_tags;
+    std::vector<uint32_t> tdc_nwords;
+    std::vector<uint32_t> tdc_words;
 };
 
 // ── Reconstructed replay ("recon" tree) ──────────────────────────────────
@@ -208,6 +239,12 @@ struct ReconEventData {
 
     // Raw 0xE10C SSP trigger bank words (one variable-length entry per event)
     std::vector<uint32_t> ssp_raw;
+
+    // Note: 0xE122 VTP and 0xE107 TDC raw words live only in the `events`
+    // (raw) tree.  The recon tree should carry reconstructed quantities
+    // (trigger info from the VTP banks, an RF-time scalar from the TDC
+    // banks); those are TODO and will be added once the offline VTP /
+    // RF-time reconstruction modules exist.
 };
 
 // ── Scaler ("scalers" tree) ──────────────────────────────────────────────
